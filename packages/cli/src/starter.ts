@@ -58,7 +58,7 @@ export default defineDaemonExtension({
 })
 `
 
-const toolTest = (name: string) => `// ${name}, tested as it runs: a scripted model calls the tool in a real daemon, and the transcript has its answer.
+const toolTest = (name: string) => `// ${name}, tested as it runs: a scripted model calls the tool in a real daemon, and the call has its answer.
 // Run with \`superego extension test ${name}\`.
 import { afterEach, expect, it } from 'vitest'
 import { callTool, say, testDaemon, type TestDaemon } from 'superego/testing'
@@ -70,9 +70,9 @@ afterEach(async () => { await daemon?.close() })
 it('counts the words it is given', async () => {
   daemon = await testDaemon({ profile, model: [callTool('${snake(name)}_count', { text: 'one two three' }), say('Three words.')] })
   const thread = await daemon.thread('How many words?')
-  const transcript = await daemon.transcript(thread.id)
-  expect(transcript).toContain('3 words')
-  expect(transcript).toContain('Three words.')
+  expect(await daemon.toolCalls(thread)).toMatchObject([
+    { name: '${snake(name)}_count', args: { text: 'one two three' }, result: { isError: false, text: '3 words' } },
+  ])
 })
 `
 
@@ -106,14 +106,13 @@ import { afterEach, expect, it } from 'vitest'
 import { fakeMachine, mountUi, testThread, type TestWindow } from 'superego/testing'
 import ui from './ui.tsx'
 
-// The profile it's in: its UI draws only in that profile's threads.
-const profile = { scope: 'user' as const, name: 'default', dir: new URL('..', import.meta.url).pathname }
 let shown: TestWindow | undefined
 afterEach(async () => { await shown?.unmount() })
 
 it('draws the thread it is beside', async () => {
-  const thread = testThread({ title: 'Fix the tests', cwd: '/work/app', profile })
-  shown = await mountUi({ machines: [fakeMachine({ threads: [thread] })], profile: { ref: profile, extensions: [ui] } })
+  // A thread of this profile (the one under test), and its UI as that profile's: drawn only in its threads.
+  const thread = testThread({ title: 'Fix the tests', cwd: '/work/app' })
+  shown = await mountUi({ machines: [fakeMachine({ threads: [thread] })], profile: { extensions: [ui] } })
   const pane = await shown.render({ pane: { kind: '${name}' }, thread: thread.id })
   expect(pane.text()).toContain('Fix the tests')
   expect(pane.text()).toContain('/work/app')
@@ -187,14 +186,13 @@ it('marks the thread whose last command failed, and not the other', async () => 
   })
   const failing = await daemon.thread('Run the failing one')
   const working = await daemon.thread('Run the working one')
-  // The fact, as clients are told it (toolCalls hears a call after it ends: wait for it).
-  const factOf = async (id: string) => (await daemon!.call<{ id: string; facts?: Record<string, unknown> }[]>('thread.list', {})).find((t) => t.id === id)?.facts?.[about.name]
-  await daemon.until(async () => (await factOf(failing.id)) !== undefined, 'the failed command')
-  expect(await factOf(failing.id)).toEqual({ command: 'exit 3' })
-  expect(await factOf(working.id)).toBeUndefined()
+  // The fact, as clients are told it (toolCalls hears a call just after it ends: wait for it).
+  await daemon.until(async () => about.name in await daemon!.facts(failing), 'the failed command')
+  expect((await daemon.facts(failing))[about.name]).toEqual({ command: 'exit 3' })
+  expect((await daemon.facts(working))[about.name]).toBeUndefined()
 
   // The mark, as the sidebar draws it.
-  shown = await mountUi({ machines: [daemonMachine(daemon)], profile: { ref: failing.profile!, extensions: [ui] } })
+  shown = await mountUi({ machines: [daemonMachine(daemon)], profile: { extensions: [ui] } })
   const marked = await shown.render({ slot: 'thread.badge', thread: failing.id })
   await shown.until(() => marked.find('[aria-label="a command failed"]') !== null, 'the mark')
   expect(marked.find('[aria-label="a command failed"]')?.getAttribute('title')).toBe('Failed: exit 3')
@@ -292,7 +290,7 @@ it('adds an item to the thread that asked, and to no other', async () => {
   daemon = await testDaemon({ profile, model: [callTool('${snake(name)}_add', { text: 'first' }), say('Added it.')] })
   const thread = await daemon.thread('Add one')
   const other = await daemon.thread()
-  expect(await daemon.transcript(thread.id)).toContain('Added it.')
+  expect(await daemon.toolCalls(thread)).toMatchObject([{ name: '${snake(name)}_add', result: { isError: false, text: 'Added: first' } }])
   expect((await daemon.watch<Item[]>(ITEMS, { scope: thread.id })).value.map((item) => item.text)).toEqual(['first'])
   expect((await daemon.watch<Item[]>(ITEMS, { scope: other.id })).value).toEqual([])
 })
@@ -300,7 +298,7 @@ it('adds an item to the thread that asked, and to no other', async () => {
 it('draws the thread\\'s items in its pane, and removes one', async () => {
   daemon = await testDaemon({ profile, model: [callTool('${snake(name)}_add', { text: 'first' }), say('Added it.')] })
   const thread = await daemon.thread('Add one')
-  shown = await mountUi({ machines: [daemonMachine(daemon)], profile: { ref: thread.profile!, extensions: [ui] } })
+  shown = await mountUi({ machines: [daemonMachine(daemon)], profile: { extensions: [ui] } })
   const pane = await shown.render({ pane: { kind: '${name}' }, thread: thread.id })
   await shown.until(() => pane.text().includes('first'), 'the item')
   await pane.click('Remove')
