@@ -2,9 +2,10 @@
 // holds the threads started there, worktrees and all. The machine is a fact about the project, not a level above it.
 // One order for every place that walks them (the sidebar, its rail, the navigator, ⌘⇧[ and ⌘⇧]): the rows the sidebar
 // shows, top to bottom, whether it's open or not; pinned threads first (see pins.ts), then each project's (its pinned
-// at its top, again). The sidebar's sections (Pinned, each project) and the threads with others under them fold,
-// as the window was left (`folded`); ⌘⇧[ and ⌘⇧] go down the rows still shown, the selected one always among them. The sort (the window's own setting, `app.sort`, which the sidebar's
-// menu changes) sets it; a thread another started sits right under it.
+// at its top, again). The sidebar's sections (Pinned, each project) and the threads with others under them fold, as
+// the window was left (`folded`); ⌘⇧[ and ⌘⇧] go down the rows still shown, the selected one always among them. The
+// sort (an app setting, `app.sort`, which the sidebar's menu changes) sets it; a thread another started sits right
+// under it.
 import { useMemo } from 'react'
 import { rollup, statusRank, unreadThreads, type Status, type ThreadInfo } from '@superego/protocol'
 import type { MachineEntry } from '../shared/bridge.ts'
@@ -45,7 +46,6 @@ export type Sidebar = { pinned: PinnedThread[]; projects: Project[]; folded: rea
 
 /** The sidebar of `projects`, with `pins` taken to the top. Pins of threads not among them (archived, on a machine off) aren't listed. */
 export function pinnedFirst(projects: Project[], pins: readonly Pin[], folded: readonly string[] = []): Sidebar {
-  if (!pins.length) return { pinned: [], projects, folded }
   const pinned: PinnedThread[] = []
   for (const pin of pins) {
     const project = projects.find((p) => p.machine.id === pin.machine && p.threads.some((t) => t.id === pin.thread))
@@ -127,14 +127,10 @@ export function shownRows(sidebar: Sidebar, selection?: At): { pinned: ShownSect
 /** The sidebar's threads, top to bottom, each once: the pinned, then each project's others; of those, the rows shown (see `shownRows`). */
 export function sidebarOrder(sidebar: Sidebar, selection?: At) {
   const { pinned, projects } = shownRows(sidebar, selection)
-  const seen = new Set<string>()
-  return [pinned, ...projects].flatMap((s) => s.rows).map(({ project, thread }) => ({ machine: project.machine.id, thread: thread.id }))
-    .filter(({ machine, thread }) => {
-      const key = `${machine}/${thread}`
-      if (seen.has(key)) return false
-      seen.add(key)
-      return true
-    })
+  // By key, in the order first listed: a pinned thread again under its project keeps its place among the pinned.
+  const order = new Map([pinned, ...projects].flatMap((s) => s.rows)
+    .map(({ project, thread }) => [`${project.machine.id}/${thread.id}`, { machine: project.machine.id, thread: thread.id }] as const))
+  return [...order.values()]
 }
 
 /**
@@ -143,7 +139,6 @@ export function sidebarOrder(sidebar: Sidebar, selection?: At) {
  */
 export function wayTo(sidebar: Sidebar, selection: { machine: string; thread: string }): string[] {
   if (sidebarOrder(sidebar).some((at) => isAt(at, selection.machine, selection.thread))) return []
-  const folded = new Set(sidebar.folded)
   if (sidebar.pinned.some(({ project, thread }) => isAt(selection, project.machine.id, thread.id))) return [fold.pinned]
   const project = sidebar.projects.find((p) => p.machine.id === selection.machine && p.threads.some((t) => t.id === selection.thread))
   if (!project) return []
@@ -156,7 +151,7 @@ export function wayTo(sidebar: Sidebar, selection: { machine: string; thread: st
     const d = project.depth[above.id] ?? 0
     if (d < depth) { way.push(fold.thread(project.machine.id, above.id)); depth = d }
   }
-  return way.filter((key) => folded.has(key))
+  return way.filter((key) => sidebar.folded.includes(key))
 }
 
 /**

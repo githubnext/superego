@@ -70,7 +70,7 @@ it('lists pinned threads first, in the order they were pinned, across projects a
   const order = ['local/stray', 'local/parent', 'local/solo', 'box/far', 'box/far-child', 'local/child', 'local/grandchild', 'local/site']
   expect(sidebarOrder(later).map((t) => `${t.machine}/${t.thread}`)).toEqual(order)
   expect(visits(projects, order.length, 1, [{ machine: 'local', thread: 'stray' }, { machine: 'local', thread: 'parent' }, { machine: 'local', thread: 'solo' }])).toEqual(order)
-  expect(pinnedFirst(projects, []).projects).toBe(projects)
+  expect(pinnedFirst(projects, []).projects).toEqual(projects)
 })
 
 /** Each section's rows as shown: `machine/id` (with a ▸ when folded, and how many out of sight under it). */

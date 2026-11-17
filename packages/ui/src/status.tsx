@@ -36,7 +36,8 @@ const arc = (small: boolean, still = false) => (
 )
 const ring = (r: number, width: number, dash?: string) => <circle cx="8" cy="8" r={r} fill="none" stroke="currentColor" strokeWidth={width} strokeDasharray={dash} />
 
-const SHAPES: Record<Exclude<GlyphShape, 'working' | 'connecting'>, ReactNode> = {
+/** Every shape but working, whose spinner is smaller for the quiet. */
+const SHAPES: Record<Exclude<GlyphShape, 'working'>, ReactNode> = {
   idle: <circle cx="8" cy="8" r="1.9" />,
   done: <circle cx="8" cy="8" r="3.4" />,
   question: <><circle cx="8" cy="8" r="2.6" />{ring(5.6, 1.4)}</>,
@@ -47,6 +48,7 @@ const SHAPES: Record<Exclude<GlyphShape, 'working' | 'connecting'>, ReactNode> =
   stalled: arc(false, true),
   landed: <path d="M4 8.4l2.6 2.6 5.4-5.6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />,
   offline: ring(3.4, 1.3),
+  connecting: arc(true),
 }
 
 /**
@@ -59,14 +61,14 @@ export function Glyph({ shape, quiet = false, label, className = '' }: { shape: 
   return (
     <span className={classes('superego-status', `superego-status--${shape}`, quiet && 'is-quiet', className)}
       {...(label ? { role: 'img', 'aria-label': label, title: label } : { 'aria-hidden': true })}>
-      <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden>{shape === 'working' ? arc(quiet) : shape === 'connecting' ? arc(true) : SHAPES[shape]}</svg>
+      <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden>{shape === 'working' ? arc(quiet) : SHAPES[shape]}</svg>
     </span>
   )
 }
 
 /** A thread's status as its mark (`Glyph`); `quiet`, for a thread that reports to another: grey while it works, and nothing unread once it's done. */
-export function StatusGlyph({ status, quiet = false, className }: { status: Status; quiet?: boolean; className?: string }) {
-  return <Glyph shape={statusShape(status, quiet)} quiet={quiet} label={statusLabel(status, quiet)} {...(className ? { className } : {})} />
+export function StatusGlyph({ status, quiet = false, className = '' }: { status: Status; quiet?: boolean; className?: string }) {
+  return <Glyph shape={statusShape(status, quiet)} quiet={quiet} label={statusLabel(status, quiet)} className={className} />
 }
 
 /**

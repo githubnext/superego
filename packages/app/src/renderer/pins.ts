@@ -1,5 +1,5 @@
-// Pinned threads: kept at the top of the sidebar, across projects and machines, in the order they were pinned. Pins
-// are yours, not a thread's: an app setting (`app.pins`), the same in every window, each a thread's machine and id. A
+// Pinned threads: in the sidebar's Pinned section, across projects and machines, in the order they were pinned, and at
+// the top of their projects (see projects.ts's `pinnedFirst`). Pins are yours, not a thread's: an app setting (`app.pins`), the same in every window, each a thread's machine and id. A
 // thread that stops being listed (archived) leaves them.
 import type { ThreadInfo } from '@superego/protocol'
 import type { MachineEntry } from '../shared/bridge.ts'

@@ -1,11 +1,13 @@
 // threads: the Threads space in the sidebar. The pinned threads first, from every project and machine, then projects (a
 // repository or folder on a machine) and the threads in each, its pinned at its top; the machine is said on the project,
-// where it isn't this computer (Pinned can be hidden from the ··· menu: they still top their projects). Pinned, each project and each thread with others under it fold, by their carets or ← and →
-// (the folds are the window's: projects.ts). Its views:
-// - the list (`threads.list`), a space: sorted recently active, newest first, needs you first or alphabetically (an app setting); with
-//   the sidebar hidden, a rail of status glyphs; the key to go anywhere (⌘L) beside its heading, while pointed at. A row's title is followed by other extensions' marks (the
-//   `thread.badge` slot: a worktree's branch, say); a right-click on it pins or unpins it, or archives it. Pinned
-//   rows are dragged to reorder them, and a project's row dragged among them is pinned there
+// where it isn't this computer (Pinned can be hidden from the ··· menu: they still top their projects). Pinned, each
+// project and each thread with others under it fold, by their carets or ← and → (the folds are the window's:
+// projects.ts). Its views:
+// - the list (`threads.list`), a space: sorted recently active, newest first, needs you first or alphabetically (an app
+//   setting); with the sidebar hidden, a rail of status glyphs; the key to go anywhere (⌘L) beside its heading, while
+//   pointed at. A row's title is followed by other extensions' marks (the `thread.badge` slot: a worktree's branch,
+//   say); a right-click on it pins or unpins it, or archives it. Pinned rows are dragged to reorder them, and a
+//   project's row dragged among them is pinned there
 // - details (`threads.details`): what the thread runs with, spent and touched, then what other extensions say of it (the
 //   `details.section` slot: its MCP servers, say); beside it or not, ⌘I
 // - the model (`threads.model`), in the title bar: a button that shows or hides the details
@@ -97,7 +99,7 @@ function Threads() {
           {section.rows.length > 0 && (
             <List>
               {section.rows.map((row) => (
-                <ThreadRow key={row.thread.id} machine={project.machine} thread={row.thread} level={row.depth} row={row}
+                <ThreadRow key={row.thread.id} machine={project.machine} thread={row.thread} row={row}
                   selected={selection?.machine === project.machine.id && selection.thread === row.thread.id} />
               ))}
             </List>
@@ -156,22 +158,16 @@ function Pinned({ section, where }: { section: ShownSection; where(project: Proj
         <button className="threads-project__name" onClick={() => setFold([section.fold], !section.folded)}>Pinned</button>
         <Caret {...section} label="Pinned" section />
       </div>
-      {section.folded ? section.rows.length > 0 && (
+      {section.rows.length > 0 && (
         <List>
-          {section.rows.map(({ project, thread }) => (
-            <ThreadRow key={`${project.machine.id}/${thread.id}`} machine={project.machine} thread={thread} where={where(project)} selected
-              className={project.machine.state !== 'connected' ? 'is-stale' : ''} />
+          {/* Folded, only the selected one shows, and it isn't a place to drop. */}
+          {section.rows.map(({ project, thread }, index) => (
+            <ThreadRow key={`${project.machine.id}/${thread.id}`} machine={project.machine} thread={thread} where={where(project)}
+              selected={selection?.machine === project.machine.id && selection.thread === thread.id}
+              className={`${project.machine.state !== 'connected' ? 'is-stale' : ''} ${!section.folded && gap === index ? 'is-drop-before' : ''} ${!section.folded && gap === index + 1 && index === section.rows.length - 1 ? 'is-drop-after' : ''}`}
+              {...(section.folded ? {} : { 'data-pin': index })} />
           ))}
         </List>
-      ) : (
-      <List>
-        {sidebar.pinned.map(({ project, thread }, index) => (
-          <ThreadRow key={`${project.machine.id}/${thread.id}`} machine={project.machine} thread={thread} where={where(project)}
-            selected={selection?.machine === project.machine.id && selection.thread === thread.id}
-            className={`${project.machine.state !== 'connected' ? 'is-stale' : ''} ${gap === index ? 'is-drop-before' : ''} ${gap === index + 1 && index === sidebar.pinned.length - 1 ? 'is-drop-after' : ''}`}
-            data-pin={index} />
-        ))}
-      </List>
       )}
     </section>
   )
@@ -184,9 +180,10 @@ function Pinned({ section, where }: { section: ShownSection; where(project: Proj
  * the threads under it (`Rollup`). Its marks (`thread.badge`) follow the title; among the pinned, where it is too;
  * under its project, pinned, a pin. A right-click pins or unpins it, or archives it; it can be dragged into the pinned.
  */
-function ThreadRow({ machine, thread, selected, level = 0, row, where, className = '', ...data }: {
-  machine: MachineEntry; thread: ThreadInfo; selected: boolean; level?: number; row?: ShownRow; where?: string; className?: string; 'data-pin'?: number
+function ThreadRow({ machine, thread, selected, row, where, className = '', ...data }: {
+  machine: MachineEntry; thread: ThreadInfo; selected: boolean; row?: ShownRow; where?: string; className?: string; 'data-pin'?: number
 }) {
+  const level = row?.depth ?? 0
   const setFold = useFold()
   const { select } = useSelection()
   const { pins } = useProjects()
