@@ -2,42 +2,43 @@
 
 ## Unreleased
 
-- Upgrade: CSS in a profile or extension that draws its own status dots with `--superego-status-dot` needs changing:
-  that variable is gone. Draw them with 'superego/ui''s `Glyph` or `StatusGlyph` instead (`api: '^3.1'`).
-- Threads read like a mail inbox: an unread title is bold, with a mark before it, and the row says what's wanted in a
-  word: Question, Permission, Sign in or Failed. A working thread has a spinner before its title, and every spinner
-  turns in step, so many at once move as one (still with reduced motion). The words are the same in the title bar, ⌘U, the menu bar, `superego threads` and
-  `superego unread`, and notifications ("Release notes — Permission").
-- Each state has its own shape, so none is told apart by colour alone, in the highlighted row of ⌘U and ⌘L too.
-- A thread working for another (quiet) shows a smaller grey spinner while it works, and nothing new once it's done: the
-  unread count already left it out. A collapsed thread sums up what's under it: a spinner while any works, then what
-  needs you, or how many are new.
-- A machine that's offline shows its threads at half strength, their spinners still; Settings no longer marks it as failed.
-- Collapse parts of the sidebar: Pinned, a project, or the threads another thread started, from the caret beside its
-  name (or ← and →). Collapsed, it shows how many threads it holds and whether any needs you. ⌘⌥↑ and ⌘⌥↓ skip what's
-  collapsed, and going to a thread inside opens the way to it. ⌘K has Collapse all threads and Expand all threads.
-- Suggestions over the composer no longer turn see-through on hover: the transcript stays hidden behind them.
-- Sort the sidebar alphabetically (from its ··· menu or ⌘K): projects by name, threads by title, "Wave 2" before
-  "Wave 10".
-- Hide the sidebar's Pinned section from its ··· menu (Show pinned). Pinned threads stay pinned, at the top of their
-  projects.
-- Preview shows a page as your browser does, not framed in the window: signing in, redirects to another port or site,
-  and cookies work there, and pages that refuse to be framed load. It has back and forward (also ⌘[ and ⌘]), ⌘R
-  reloads the page, and the header shows where the page is now. Links that open a new window open in your browser;
-  downloads go to Downloads. Artifacts show the same way. In a browser (Web access) pages are still framed, and the
-  pane says what that can't do.
-- Focusing a Preview or Artifact pane (⌃Tab, its tab) no longer puts you in the page: press Return to use the page, or
-  click into it. The pane's header says so while it waits.
-- ⌘U lists the unread threads, what needs you first, with each one's question or recap: type a few letters and
-  press Enter to go there. The bell opens the same list. Change its key in Settings → Keyboard.
-- Type `@` to mention another thread (on any machine) or a file in the thread's folder: pick it from the list, and the
-  agent is told what it is and how to read it. In the sent message, a mentioned thread shows by its title and opens on
-  a click; a file opens beside the thread.
-- Pin a thread to keep it at the top of the sidebar, under Pinned, whichever project or machine it's on, and at the
-  top of its own project: from its row's right-click menu, the pin in the title bar, or "Pin thread" in ⌘K. Drag
-  pinned threads to reorder them, or drag a thread among them to pin it there. Pins are the same in every window; an
-  archived thread leaves them.
-- With the sidebar hidden, the rail's dots and the navigator (⌘L) list pinned threads first.
+## 0.1.4
+
+**Upgrading:** CSS in a profile or extension that draws its own status dots with `--superego-status-dot` needs
+changing: that variable is gone. Use `superego/ui`'s `Glyph` or `StatusGlyph` instead (`api: '^3.1'`).
+
+### Thread states
+
+- Threads read like an inbox: an unread title is bold with a mark before it, and the row names what's wanted in a
+  word: Question, Permission, Sign in or Failed. The same words appear in the title bar, ⌘U, the menu bar,
+  `superego threads` and `superego unread`, and notifications.
+- A working thread has a spinner before its title, and all spinners turn in step (still under reduced motion).
+- Every state has its own shape, so none is told apart by colour alone.
+- A thread working quietly for another shows a small grey spinner, and nothing new once it's done.
+- An offline machine's threads show at half strength; Settings no longer marks the machine as failed.
+
+### Sidebar
+
+- Pin a thread from its right-click menu, the title bar or ⌘K: it sits under Pinned at the top, across projects and
+  machines, and at the top of its own project. Drag to reorder. Hide Pinned from the sidebar's ··· menu.
+- Collapse Pinned, a project, or a thread's sub-threads from the caret beside it (or ← and →). A collapsed group says
+  how many it holds and whether any needs you.
+- Sort the sidebar alphabetically.
+
+### Finding threads
+
+- ⌘U lists the unread threads, what needs you first, with each one's question or recap. The bell opens the same list.
+- Type `@` in the composer to mention another thread or a file: the agent is told what it is and how to read it.
+
+### Preview
+
+- Preview shows a page as your browser does: sign-in, redirects and cookies work, and pages that refuse to be framed
+  load. It has back, forward and reload, and shows where the page is now. Artifacts show the same way.
+- Focusing a Preview or Artifact pane no longer puts you in the page: press Return, or click into it.
+
+### Fixes
+
+- Suggestions over the composer no longer turn see-through on hover.
 
 ## 0.1.3
 
