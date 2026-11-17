@@ -97,6 +97,18 @@ function driver(contentsOf, name, shotsDir) {
       if (!at) throw new Failure(`${name}: nothing to click at ${selector}`)
       for (const type of ['mouseDown', 'mouseUp']) contents().sendInputEvent({ type, button, clickCount: 1, ...at })
     },
+    /** The mouse moved over the middle of the first element `selector` matches (whose text is `text`, if given): Chromium's own pointer events. */
+    async hover(selector, text) {
+      const at = await run(`(() => {
+        const el = [...document.querySelectorAll(${JSON.stringify(selector)})].find((el) => ${text === undefined ? 'true' : `el.textContent.trim() === ${JSON.stringify(text)}`})
+        const r = el?.getBoundingClientRect()
+        return r && { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) }
+      })()`)
+      if (!at) throw new Failure(`${name}: nothing to hover at ${selector}${text === undefined ? '' : ` saying "${text}"`}`)
+      // From beside it first: a move within the same point wouldn't be one.
+      contents().sendInputEvent({ type: 'mouseMove', x: at.x - 4, y: at.y })
+      contents().sendInputEvent({ type: 'mouseMove', ...at })
+    },
     /** Type into a field as React hears it (its native setter, then an input event); `enter` presses Enter after. */
     type(selector, value, { enter = false } = {}) {
       return run(`(() => {

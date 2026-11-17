@@ -86,6 +86,20 @@ export default async function panes(t, s) {
   // The header's pane menu opens one too.
   await t.click('.thread__panes')
   await t.until(`[...document.querySelectorAll('.superego-menu__item')].some((i) => i.textContent === 'Changes')`, 'pane menu offers Changes')
+  // Its items highlight as any menu's do, under the mouse and from the keyboard, with each its view's menu on a right-click.
+  const highlighted = `document.querySelector('.superego-menu__item[data-highlighted]')?.textContent`
+  await t.hover('.superego-menu__item', 'Changes')
+  await t.until(`${highlighted} === 'Changes'`, 'the pane menu highlights the item under the mouse')
+  if (await t.run(`document.querySelectorAll('.superego-menu__item').length`) > 1) {
+    t.key('Down', [])
+    await t.until(`${highlighted} && ${highlighted} !== 'Changes'`, 'the pane menu highlights the next item from the keyboard')
+  }
+  await t.mouse('.superego-menu__item[data-view="diff"]', { button: 'right' })
+  await t.until(`document.querySelector('.view-menu [data-remove]')?.textContent === 'Remove from pane menu'`, "a pane menu item's own menu on a right-click")
+  t.key('Escape', [])
+  await t.until(`!document.querySelector('.view-menu')`, "the item's menu closed")
+  if (!await t.run(`Boolean(document.querySelector('.superego-menu__item[data-view="diff"]'))`)) await t.click('.thread__panes')
+  await t.until(`Boolean(document.querySelector('.superego-menu__item[data-view="diff"]'))`, 'pane menu open again')
   await t.click('.superego-menu__item', 'Changes')
   await t.until(`document.querySelector('.panes__tab')?.textContent.startsWith('Changes')`, 'pane menu opened Changes')
   t.key('w')

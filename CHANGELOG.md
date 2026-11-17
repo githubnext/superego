@@ -9,6 +9,9 @@
 - A remote machine can run a release instead of main: `scripts/install-machine.sh --release` installs the release's app
   on a Mac (no checkout needed), or checks out the release's tag on Linux. Updating such a machine moves it to the
   newest release.
+- ⌘⇧P opens a pane beside the thread: pick one of the pane menu's by typing a few letters. Change its key in
+  Settings → Keyboard.
+- The pane menu in the title bar highlights its items under the mouse and from the keyboard again.
 
 ## 0.1.2
 

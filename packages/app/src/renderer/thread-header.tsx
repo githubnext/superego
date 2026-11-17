@@ -7,7 +7,7 @@ import { IconButton, Menu, PencilSimpleIcon, PanePlusIcon, StatusGlyph } from '@
 import type { MachineEntry } from '../shared/bridge.ts'
 import { useRegistry } from './registry.tsx'
 import { paneMenu, PlacedViews, Slot, useLayout } from './placement.tsx'
-import { ViewContextMenu, withContextMenu } from './view-menu.tsx'
+import { ViewContextPopup, withContextMenu } from './view-menu.tsx'
 import { ThreadRef } from './thread-ref.tsx'
 import { ArchiveButton, UnarchiveButton } from './thread-actions.tsx'
 import { ProfileChip } from './profile-card.tsx'
@@ -95,7 +95,7 @@ export function PaneMenu({ machine, thread }: { machine: MachineEntry; thread: T
   const where = { machine: machine.id, thread }
   const kinds = paneMenu(registry, useLayout(where).placed, where)
   if (!kinds.length) return null
-  const open = (kind: string) => void registry.router.dispatch('pane.open', { thread: thread.id, kind }, { machine: machine.id, source: 'header' })
+  const open = (kind: string) => void registry.router.dispatch('pane.open', { thread: thread.id, kind }, { machine: machine.id, source: 'header' }).catch((error) => console.error(error))
   return (
     <Menu.Root>
       <Menu.Trigger render={<IconButton label="Open a pane beside" className="thread__panes" />}>
@@ -103,7 +103,8 @@ export function PaneMenu({ machine, thread }: { machine: MachineEntry; thread: T
       </Menu.Trigger>
       <Menu.Popup align="end">
         {kinds.map(({ kind, title }) => (
-          <ViewContextMenu key={kind} view={kind} place="pane" machine={machine.id} thread={thread}><Menu.Item onClick={() => open(kind)}>{title}</Menu.Item></ViewContextMenu>
+          <Menu.Item key={kind} data-view={kind} onClick={() => open(kind)}
+            contextPopup={<ViewContextPopup view={kind} place="pane" machine={machine.id} thread={thread} />}>{title}</Menu.Item>
         ))}
       </Menu.Popup>
     </Menu.Root>

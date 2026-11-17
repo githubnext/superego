@@ -37,8 +37,20 @@ function CheckboxItem({ children, hint, ...props }: ComponentProps<typeof Base.C
   )
 }
 
-function Item({ children, hint, ...props }: ComponentProps<typeof Base.Item> & { hint?: ReactNode }) {
-  return <Base.Item className="superego-menu__item" {...props}><span className="superego-menu__text">{children as ReactNode}</span>{hint && <span className="superego-menu__hint">{hint}</span>}</Base.Item>
+/**
+ * An item; with `contextPopup` (a `ContextMenu.Popup`), a menu of its own on a right-click or a long press. That menu's
+ * root goes inside the item, around the element it draws: a `ContextMenu.Root` is a menu root, so an item inside one
+ * would belong to it, not to the menu it's shown in, and never be highlighted there.
+ */
+function Item({ children, hint, contextPopup, ...props }: ComponentProps<typeof Base.Item> & { hint?: ReactNode; contextPopup?: ReactNode }) {
+  const content = <><span className="superego-menu__text">{children as ReactNode}</span>{hint && <span className="superego-menu__hint">{hint}</span>}</>
+  if (!contextPopup) return <Base.Item className="superego-menu__item" {...props}>{content}</Base.Item>
+  return (
+    <Base.Item className="superego-menu__item" {...props}
+      render={(item) => <BaseContext.Root><BaseContext.Trigger render={<div {...item} />} />{contextPopup}</BaseContext.Root>}>
+      {content}
+    </Base.Item>
+  )
 }
 
 /** An item that opens a menu of its own beside it (in a `SubmenuRoot`, with its `Popup` after). */

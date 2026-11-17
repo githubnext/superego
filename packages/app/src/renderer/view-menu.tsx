@@ -1,7 +1,7 @@
 // A view's menu where it's shown: move it to another place it fits, take it out of this one, or edit the layout's text.
 // A right-click (or a long press) on a view in the rail, the title bar, the drawer, the thread's header or the menu
-// that opens panes; the ··· of a view beside the thread. A pane's tab has a menu of its own (panes.tsx), with Move to
-// from here. All of it through `layout.place`, as the user's layout keeps it.
+// that opens panes (an item there: `ViewContextPopup` as its `contextPopup`); the ··· of a view beside the thread. A
+// pane's tab has a menu of its own (panes.tsx), with Move to from here. All of it through `layout.place`, as the user's layout keeps it.
 import type { ReactNode } from 'react'
 import type { ThreadInfo } from '@superego/protocol'
 import { ContextMenu, DotsThreeIcon, IconButton, Menu } from '@superego/ui'
@@ -99,12 +99,15 @@ export function PaneMoveTo({ menu, ...props }: Omit<ViewMenuProps, 'place'> & { 
   )
 }
 
-/** A view with its menu on a right-click or a long press. */
+/** A view's menu where the right-click (or the long press) was: a `ContextMenu.Root`'s, or a `Menu.Item`'s `contextPopup`. */
+export const ViewContextPopup = (props: ViewMenuProps) => <ContextMenu.Popup className="view-menu"><ViewMenuItems {...props} /></ContextMenu.Popup>
+
+/** A view with its menu on a right-click or a long press. Not an item of a menu: that's `Menu.Item`'s `contextPopup`. */
 export function ViewContextMenu({ children, ...props }: ViewMenuProps & { children: ReactNode }) {
   return (
     <ContextMenu.Root>
       <ContextMenu.Trigger data-view={props.view}>{children}</ContextMenu.Trigger>
-      <ContextMenu.Popup className="view-menu"><ViewMenuItems {...props} /></ContextMenu.Popup>
+      <ViewContextPopup {...props} />
     </ContextMenu.Root>
   )
 }

@@ -81,6 +81,42 @@ it('moves a view from its menu: beside the thread to a pane, and back', async ()
   expect(ui.placed('beside', { thread: thread.id })).toContain('notes.view')
 })
 
+/** Two more views that open as panes, for ⌘⇧P to pick between. */
+const boards = defineUiExtension({
+  name: 'boards',
+  setup(superego) {
+    superego.view('boards.todo', { title: 'Todos', context: 'thread', fits: ['pane'], component: () => 'the todos' })
+    superego.view('boards.timeline', { title: 'Timeline', context: 'thread', fits: ['pane'], component: () => 'the timeline' })
+  },
+})
+
+it('picks a pane to open with ⌘⇧P, from those the pane menu has, and only with a thread shown', async () => {
+  const thread = await daemon.thread(undefined, { title: 'paned' })
+  ui = await mountUi({ window: true, extensions: [notes, boards], machines: [daemon], layout: { place: { 'notes.view': 'pane', 'boards.todo': 'pane', 'boards.timeline': 'pane' } } })
+  // No thread shown: nothing to open a pane beside.
+  await ui.key('mod+shift+p')
+  await ui.settle()
+  expect($('.pane-picker')).toBeNull()
+
+  await ui.select({ thread: thread.id })
+  await ui.until(() => titled() === 'paned', 'the thread shown')
+  await ui.key('mod+shift+p')
+  await ui.until(() => Boolean($('.pane-picker .palette__input')), 'the pane picker')
+  const listed = () => $$('.pane-picker .palette__list li').map((li) => li.textContent)
+  expect(listed()).toEqual(expect.arrayContaining(['Notes', 'Todos', 'Timeline']))
+  await ui.type('.pane-picker .palette__input', 'tim')
+  await ui.until(() => listed().join() === 'Timeline', 'narrowed to Timeline')
+  await ui.key('enter')
+  await ui.until(() => !$('.pane-picker') && $('.panes__column:not(.panes__column--thread)')?.textContent?.includes('the timeline') === true, 'Timeline open beside the thread')
+
+  // Its key is the user's to change.
+  await ui.dispatch('app.settings.set', { key: 'app.keys', value: { 'pane.pick': 'mod+shift+o' } })
+  await ui.key('mod+shift+o')
+  await ui.until(() => Boolean($('.pane-picker')), 'the pane picker on its new key')
+  await ui.key('escape')
+  await ui.until(() => !$('.pane-picker'), 'the pane picker closed')
+})
+
 it('logs what ran through the router, with where it came from', async () => {
   await daemon.thread(undefined, { title: 'logged' })
   ui = await mountUi({ window: true, machines: [daemon] })

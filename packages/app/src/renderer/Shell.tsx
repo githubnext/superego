@@ -31,6 +31,7 @@ import { useSidebarEdge } from './sidebar-edge.tsx'
 import { SettingsView } from './SettingsView.tsx'
 import { Palette } from './Palette.tsx'
 import { Navigator } from './Navigator.tsx'
+import { PanePicker } from './pane-picker.tsx'
 import { ActionLog, runsBare } from './actions.tsx'
 import { performed } from './perform.ts'
 import { NewThreadDialog } from './NewThread.tsx'
@@ -48,6 +49,7 @@ export function Shell() {
   const registry = useRegistry()
   const [palette, setPalette] = useState(false)
   const [navigator, setNavigator] = useState(false)
+  const [panePicker, setPanePicker] = useState(false)
   const sidebar = useSidebar()
   const { projects, lastThread } = useProjects()
   const [log, setLog] = useState(false)
@@ -91,14 +93,15 @@ export function Shell() {
   const threadPlaced = useLayout(where).placed
   // Where the thread's columns show their tabs: in the title bar, wide.
   const [strip, setStrip] = useState<HTMLElement | null>(null)
-  useEffect(() => { setDrawer(false); setSheet(false) }, [selection?.machine, selection?.thread, narrow])
+  useEffect(() => { setDrawer(false); setSheet(false); setPanePicker(false) }, [selection?.machine, selection?.thread, narrow])
   // The installed fonts take seconds to list: read them in the background, for Settings' font pickers.
   useEffect(refreshFontsSoon, [])
   // Actions read the shell as it is when they run.
   registry.router.setContext({
     app: registry.app, machines, selection, select, openSettings, newThread: openNewThread,
-    togglePalette: () => { setNavigator(false); setPalette((open) => !open) },
-    toggleNavigator: () => { setPalette(false); setNavigator((open) => !open) },
+    togglePalette: () => { setNavigator(false); setPanePicker(false); setPalette((open) => !open) },
+    toggleNavigator: () => { setPalette(false); setPanePicker(false); setNavigator((open) => !open) },
+    togglePanePicker: () => { setPalette(false); setNavigator(false); setPanePicker((open) => !open) },
     showLog: () => setLog(true),
     // With the panes it shows (not those of an extension it goes without), as the window has it.
     // The selected one too while it's not among them (Ego's, hidden; an archived one).
@@ -213,6 +216,7 @@ export function Shell() {
       {narrow && settings.open && <SettingsView machines={machines} onClose={settings.close} />}
       {palette && <Palette onClose={() => setPalette(false)} />}
       {navigator && <Navigator onClose={() => setNavigator(false)} />}
+      {panePicker && where && <PanePicker machine={where.machine} thread={where.thread} onClose={() => setPanePicker(false)} />}
       <Slot name="overlay" props={{}} />
       <LayoutViews />
       <LayoutEditor />

@@ -36,6 +36,8 @@ export type WindowContext = {
   lastThread: Record<string, string>
   toggleSidebar(): void
   toggleNavigator(): void
+  /** The picker of panes to open beside the selected thread (⌘⇧P). */
+  togglePanePicker(): void
   /** The rail's tabs that ⌘1–⌘9 go to, as the rail is now (none on a phone, which has no rail). */
   railTabs(): RailTab[]
   /** Back and forward through the threads (and Settings) this window has shown. */
@@ -151,6 +153,12 @@ declare const __SUPEREGO_DEV_SERVER__: string | undefined
 export const coreActions = (app: AppConfig): WindowAction[] => [
   defineWindowAction({ id: 'app.palette', title: 'Commands', keys: 'mod+k', run: (_p, c) => c.togglePalette() }),
   defineWindowAction({ id: 'app.navigator', title: 'Go to a project, thread or pane', keys: 'mod+l', run: (_p, c) => c.toggleNavigator() }),
+  // The panes the selected thread can open, as its pane menu has them: only while one is shown.
+  defineWindowAction({
+    id: 'pane.pick', title: 'Open a pane…', keys: 'mod+shift+p',
+    when: (c) => Boolean(c.selection && c.threadOf(c.selection)),
+    run: (_p, c) => { if (c.selection && c.threadOf(c.selection)) c.togglePanePicker() },
+  }),
   defineWindowAction({ id: 'app.sidebar', title: 'Show or hide sidebar', keys: 'mod+/', run: (_p, c) => c.toggleSidebar() }),
   // ⌘1–⌘9: the rail's tabs in its order (see rail-tabs.ts).
   ...Array.from({ length: RAIL_TABS }, (_, i) => defineWindowAction({
