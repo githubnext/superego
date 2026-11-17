@@ -32,7 +32,14 @@ bin=${SUPEREGO_BIN:-$HOME/.local/bin}
 repo=${SUPEREGO_REPO:-githubnext/superego}
 
 restart() {
-  if "$bin/superego" daemon status | grep -q '^Running'; then "$bin/superego" daemon restart ${SUPEREGO_RESTART_NOW:+--now}; fi
+  "$bin/superego" daemon status | grep -q '^Running' || return 0
+  "$bin/superego" daemon restart ${SUPEREGO_RESTART_NOW:+--now}
+  # A restart runs the daemon's own command again: one this didn't install (a checkout's, on moving to a release's app)
+  # still runs the old code, so it's stopped, and this install's started.
+  if "$bin/superego" daemon status | grep -q '^An update is installed'; then
+    "$bin/superego" daemon stop
+    "$bin/superego" daemon restart
+  fi
 }
 
 if [[ -n $release && $(uname -s) == Darwin ]]; then
