@@ -1,6 +1,6 @@
 // A project's build queue, data-only: the agent queues commands, they run one at a time in the thread's folder, and the
 // thread's queue shows beside it, drawn by the window from data. Copy this folder to <project>/.superego/profiles/builds
-// (then `superego profile allow builds`), or start from `superego extension new builds`.
+// (then `superego profile allow builds`), or start from `superego extension new builds` (a tool).
 import { defineProfile } from 'superego'
 
 export default defineProfile({

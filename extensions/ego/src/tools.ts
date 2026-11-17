@@ -105,7 +105,7 @@ What ${name} is:
     })
   A project's profile is code from that repo: it runs only once the user allows it, and again after its files change.
   Allowing is the user's alone, never an agent's (yours or a thread's): in the window (Settings → Profiles, or Allow
-  where a thread with it asks), or \`${id} profile allow\` in their own terminal. Tell them when one needs it. \`${id} extension new\` adds an extension, making the profile if
+  where a thread with it asks), or \`${id} profile allow\` in their own terminal. Tell them when one needs it. \`${id} extension new\` adds an extension in the job's shape (an agent tool; --ui a pane; --badge a sidebar mark; --tool --ui a tool and its pane), making the profile if
   needed; \`${id} profile new [name]\` makes a bare one.
 - Skills live in ${agentsDir}/skills/<name>/SKILL.md: front matter with name and description (and
   disable-model-invocation: true to offer it only when named), then the instructions. Every agent is told about them; a

@@ -40,15 +40,17 @@ Each topic fits in one read: `superego --skill <topic>`, or the file beside this
 
 ## Extending Superego: start with `extension new`
 
-To give agents a tool, or the window a pane or a view, scaffold a working extension and change it. Don't start from a
-blank file.
+To give agents a tool, or the window a pane or a mark, scaffold a working extension in the shape of the job and change
+it. Don't start from a blank file.
 
 **No Node needed.** `superego extension test` is the type checker and the test runner. Don't look for `node`, `npx`,
 `tsc` or `bun`: plain Node can't import `superego`.
 
 ```sh
-superego extension new orders           # in this project's default profile (.superego/profiles/default), made if there's none
-superego extension new orders --ui      # with a UI half (ui.tsx) that draws its view itself
+superego extension new orders           # an agent tool, in this project's default profile (.superego/profiles/default), made if there's none
+superego extension new orders --ui      # a pane, UI half only (ui.tsx)
+superego extension new orders --badge   # a mark in the sidebar: a daemon half sets a thread's fact, a UI half draws it
+superego extension new orders --tool --ui   # an agent tool, and a pane of what it did
 superego extension new orders --user    # in your own profile (~/.superego/profiles/default), for every folder
 superego extension test orders          # check its types and run its tests
 superego extension reload               # load the profile's changes now, and say why if it doesn't load
@@ -57,8 +59,8 @@ superego extensions                     # every extension here: where it's from,
 
 Each says which profile it uses. `superego <command> --help` gives any command's options.
 
-`new` writes `<profile>/orders/`: a tool, each thread's items as a scoped value, actions, a view beside the thread,
-`shared.ts` (its name, `version` and `api`), a test on `superego/testing`, a README, and the profile's types. Then:
+`new` writes `<profile>/orders/`: the smallest working extension of that shape, with its `version` and `api`, a test on
+`superego/testing` that passes as made, and a README; and it gives the profile its types. Then:
 
 - **A thread keeps the profile it started with.** A profile made after a thread started doesn't reach it: not your own
   thread, nor the user's open ones. Start a new thread to use it (`superego -p "…"`), and tell the user to.

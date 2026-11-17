@@ -124,6 +124,21 @@ Allowing records the user's consent, so only the user does it: an agent's comman
 which `SUPEREGO_THREAD` marks) is refused `profile allow`, `profile allow-ui`, `machines trust`, `web pair` and every
 action marked `consent`. As an agent, tell the user what to allow and where.
 
+## Extensions
+
+```sh
+superego extension new <name>              # an agent tool, in a daemon half, in this project's default profile
+superego extension new <name> --ui         # a pane, UI half only
+superego extension new <name> --badge      # a sidebar mark: a daemon half sets a thread's fact, a UI half draws it
+superego extension new <name> --tool --ui  # an agent tool, and a pane of what it did
+superego extension test [name]             # check the profile's types and run its tests (or one extension's)
+superego extension reload                  # load the profile's changes now
+superego extensions [--thread <thread>]    # every extension here, and what it registered
+```
+
+Each takes `-P <profile>` (default: `default`) and `--user` (yours, in `~/.superego/profiles`). Each shape `new` makes
+passes `extension test` as made. See `superego --skill guide`.
+
 ## Machines
 
 ```sh

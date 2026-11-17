@@ -17,6 +17,7 @@ import { setUpProfileTypes, type ProfileTypes } from '@superego/client/author-ty
 import { formatReport } from './inspect.ts'
 import { readThread } from './read.ts'
 import { skill } from './skill.ts'
+import { KIND_SAYS, starterKind } from './starter.ts'
 import { commandHelp, commandNames, help } from './usage.ts'
 import type { CliCommand, CliContext } from './command.ts'
 import {
@@ -685,19 +686,19 @@ async function extensionsCommand(values: { machine?: string; thread?: string }) 
   return print(report, () => console.log(formatReport(report, machine.label, app.id)))
 }
 
-async function extensionCommand(sub: string | undefined, rest: string[], values: { profile?: string; user?: boolean; ui?: boolean; machine?: string; timeout?: string }) {
+async function extensionCommand(sub: string | undefined, rest: string[], values: { profile?: string; user?: boolean; ui?: boolean; tool?: boolean; badge?: boolean; machine?: string; timeout?: string }) {
   if (sub === 'new') {
     const name = rest[0]
-    if (!name) throw new RpcError('usage', `${app.id} extension new <name> [--ui] [-P profile] [--user]`)
+    if (!name) throw new RpcError('usage', `${app.id} extension new <name> [--tool] [--ui] [--badge] [-P profile] [--user]`)
+    const kind = starterKind(values)
     const profile = await profileHere(values, 'new', true)
     const { dir } = profile
-    const kind = values.ui ? 'ui' : 'data-only'
     const { written, madeProfile, missing, notes } = newExtension(dir, name, kind, await authorTypes(dataDir, options.types))
     // You wrote it, so it may run: a project's profile is allowed as it is now. An agent's waits for the user's Allow.
     const project = profile.scope === 'project'
     if (project && !agentThread()) await on(resolveMachine(undefined), (call) => call('action.run', { id: 'profile.allow', params: { cwd: dir, name: profile.name }, exposure: 'cli' }))
     return print({ dir, written, madeProfile, missing }, () => {
-      console.log(`Made ${name} (${kind === 'ui' ? 'a daemon half and a UI half' : 'data-only'}) in ${dir}${madeProfile ? ', a new profile' : ''}:`)
+      console.log(`Made ${name} (${KIND_SAYS[kind]}) in ${dir}${madeProfile ? ', a new profile' : ''}:`)
       for (const file of written) console.log(`  ${file}`)
       if (missing.length) console.log(`Add to its profile.ts's defineProfile({ … }): ${missing.join(', ')}`)
       for (const note of notes) console.log(note)
@@ -907,7 +908,7 @@ async function main() {
   // The core's options, and the app's commands' own (typed as Record: the core's code reads only its own).
   const core = {
     machine: { type: 'string', short: 'm' }, prompt: { type: 'string', short: 'p' }, json: { type: 'boolean' }, profile: { type: 'string', short: 'P' }, worktree: { type: 'boolean', short: 'w' },
-    user: { type: 'boolean' }, archived: { type: 'boolean' }, ui: { type: 'boolean' }, thread: { type: 'string' },
+    user: { type: 'boolean' }, archived: { type: 'boolean' }, ui: { type: 'boolean' }, tool: { type: 'boolean' }, badge: { type: 'boolean' }, thread: { type: 'string' },
     all: { type: 'boolean' }, name: { type: 'string' }, command: { type: 'string' }, via: { type: 'string' },
     start: { type: 'boolean' }, update: { type: 'boolean' }, now: { type: 'boolean' }, help: { type: 'boolean', short: 'h' }, skill: { type: 'boolean' },
     wait: { type: 'boolean' }, timeout: { type: 'string' }, count: { type: 'boolean' },

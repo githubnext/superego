@@ -38,19 +38,22 @@ Everything else in the [cheat sheet](cheatsheet.md) is stable.
 ## Starting one
 
 ```sh
-superego extension new notes          # data-only: a daemon half whose view the window draws from data
-superego extension new notes --ui     # with a UI half that draws it itself
-superego extension test notes         # check its types and run its tests
+superego extension new notes              # an agent tool, in a daemon half
+superego extension new notes --ui         # a pane, UI half only
+superego extension new notes --badge      # a sidebar mark: a daemon half sets a fact, a UI half draws it
+superego extension new notes --tool --ui  # a tool, and a pane of what it did
+superego extension test notes             # check its types and run its tests
 ```
 
 `new` makes the extension in a folder of its own in this project's profile (`.superego/profiles/default`; `-P name`
 for another, `--user` for yours in `~/.superego/profiles`), making the profile if there's none, and lists it there.
-It's a working one to change: a tool that adds an item to the thread's list, the thread's items as a scoped value, an
-action to clear them, and a view of them beside the thread; `shared.ts` with its `version` and the extension `api` it
-needs; a test on [`superego/testing`](#testing); a README; and the profile's types, as `superego profile types`
-gives them: a `tsconfig.json`, and `node_modules` linked to `~/.superego/types`, the declarations of `'superego'`,
-`'superego/ui'`, `'superego/testing'`, React and vitest built from this Superego's own source, so `test` (and an editor)
-checks the types. Send one of the profile's threads a message and it's there; after an edit, the next turn loads it
+It's the smallest working one of its shape to change: a tool that counts words; a pane of the thread it's beside
+(described to the agent in the profile's `panes`); a mark on threads whose last command failed (`toolCalls` → `state` →
+`facts` → `thread.badge`); or a tool that adds to the thread's items and a pane of them (`about.panes`). Each has its
+`version` and the extension `api` it needs, a test on [`superego/testing`](#testing) that passes as made, a README, and
+the profile's types, as `superego profile types` gives them: a `tsconfig.json`, and `node_modules` linked to
+`~/.superego/types`, the declarations of `'superego'`, `'superego/ui'`, `'superego/testing'`, React and vitest built
+from this Superego's own source, so `test` (and an editor) checks the types. Send one of the profile's threads a message and it's there; after an edit, the next turn loads it
 again (`superego extension reload` loads it now). A project's profile runs as it was allowed: the user allows it again
 after an edit (`superego profile allow`, or in the window). That's their consent: an agent's is refused, so ask them.
 

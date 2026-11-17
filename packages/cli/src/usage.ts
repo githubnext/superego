@@ -60,9 +60,15 @@ function groups(id: string, name: string, added: CliCommand[]): Entry[][] {
         options: [['    --thread <thread>', 'What that thread goes without, and why']],
       },
       {
-        use: 'extension new <name> [--ui] [-P profile] [--user]', does: "Make an extension in this project's profile (or yours): data-only, or with a UI half",
-        options: [['    --ui', 'With a UI half (ui.tsx) beside its daemon half'], extensionProfile, user],
-        examples: [`${id} extension new weather --user`, `${id} extension new board --ui --user`],
+        use: 'extension new <name> [--tool] [--ui] [--badge] [-P profile] [--user]',
+        does: "Make an extension in this project's profile (or yours), in the shape of the job, with a test that\npasses as made: an agent tool (the default), a pane, a sidebar mark, or a tool and a pane",
+        options: [
+          ['    --tool', 'An agent tool, in a daemon half (the default)'],
+          ['    --ui', 'A pane, UI half only (ui.tsx); with --tool, a pane of what the tool did'],
+          ['    --badge', 'A mark in the sidebar from a fact: a daemon half that sets it, a UI half that draws it'],
+          extensionProfile, user,
+        ],
+        examples: [`${id} extension new weather --user`, `${id} extension new board --ui --user`, `${id} extension new failed --badge`, `${id} extension new todos --tool --ui`],
       },
       {
         use: 'extension test [extension] [-P profile] [--user] [--timeout s]', does: "Check the profile's types and run its tests (superego/testing), or one\nextension's (its folder) or test file's. It's the type checker and runtime: no Node needed",
