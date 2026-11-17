@@ -229,6 +229,12 @@ export type MachineEntry = {
   remote?: { route: string; enabled: boolean; /** Reached with ssh, so it can log in. */ ssh: boolean }
 }
 
+/** The machine `name` names among `machines`: by its id, else by its name or hostname, in any case. */
+export function machineNamed<M extends Pick<MachineEntry, 'id' | 'label' | 'machine'>>(machines: readonly M[], name: string): M | undefined {
+  const wanted = name.toLowerCase()
+  return machines.find((m) => m.id === name) ?? machines.find((m) => m.label.toLowerCase() === wanted || m.machine?.hostname.toLowerCase() === wanted)
+}
+
 export type Methods = {
   /**
    * `label` names this client in others' client lists: the app and CLI send their computer's hostname. `from`: the thread

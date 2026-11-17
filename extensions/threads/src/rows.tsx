@@ -3,6 +3,7 @@
 // so a thread whose agent goes without the tools (Ego, with a thread_read and a thread_start of its own) still shows
 // them, and a message naming a thread still links to it.
 import { ThreadRef, useMachines, type MachineEntry, type ToolRowCall, type UiApi } from '@superego/app/ui'
+import { machineNamed } from '@superego/protocol'
 import { ArchiveIcon, ArrowElbowDownRightIcon, ChatCircleIcon, ChatsCircleIcon } from '@superego/ui'
 
 const THREAD = 'thread:'
@@ -37,9 +38,7 @@ export function linkedThread(href: string, here: string | undefined, machines: r
   const rest = href.slice(THREAD.length)
   const slash = rest.lastIndexOf('/')
   if (slash < 0) return here ? { machine: here, id: rest } : undefined
-  const name = rest.slice(0, slash)
-  const wanted = name.toLowerCase()
-  const machine = machines.find((m) => m.id === name) ?? machines.find((m) => m.label.toLowerCase() === wanted || m.machine?.hostname.toLowerCase() === wanted)
+  const machine = machineNamed(machines, rest.slice(0, slash))
   return machine && { machine: machine.id, id: rest.slice(slash + 1) }
 }
 

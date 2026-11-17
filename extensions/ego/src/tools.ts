@@ -194,9 +194,8 @@ export function egoTools({ dir, secrets = () => [], dispatch, actions, snapshot,
       async execute({ key, value }) {
         // What lets outside agents or devices in is the user's consent to give (one could be asking): theirs to change.
         const { sections } = await snapshot()
-        const section = sections.find((s) => s.settings.some((setting) => setting.key === key))
-        const setting = section?.settings.find((s) => s.key === key)
-        if (setting?.consent) throw new Error(`Only the user changes ${key}, in Settings → ${section!.title}: it's their consent to give.`)
+        const section = sections.find((s) => s.settings.some((setting) => setting.key === key && setting.consent))
+        if (section) throw new Error(`Only the user changes ${key}, in Settings → ${section.title}: it's their consent to give.`)
         await dispatch('settings.set', { key, value: (value ?? null) as Json })
         return text(`Set ${key} to ${JSON.stringify(value ?? null)}.`)
       },

@@ -17,11 +17,11 @@ export type Offer =
   | { kind: 'file'; path: string; insert: string }
 
 /** How many of each are offered: threads first, then files to fill the menu. */
-export const THREADS = 5
-export const ALL = 10
+const THREADS = 5
+const ALL = 10
 
 /** A machine as a mention names it: by its name, where that is one word; else by its id. */
-export const machineName = (machine: MachineEntry) => /^[\w.-]+$/.test(machine.label) ? machine.label : machine.id
+const machineName = (machine: MachineEntry) => /^[\w.-]+$/.test(machine.label) ? machine.label : machine.id
 
 /** A file by its name before its path (as quick open ranks them). */
 const fileScore = (path: string, query: string) => Math.max(score(path.split('/').at(-1)!, query) * 2, score(path, query))

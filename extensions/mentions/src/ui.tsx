@@ -7,9 +7,6 @@ import { FileIcon, StatusGlyph } from '@superego/ui'
 import { mentionAt, offers } from './complete.ts'
 import { about, mentionLinks, sentMentions, type SentMention } from './shared.ts'
 
-/** The files list of the files extension: `{ files }` for `{ thread }`. */
-const FILES = 'files.list'
-
 /**
  * The thread's files, read once for each word being typed (where it starts in which thread) and filtered as it grows.
  * None where the machine has no files extension; a failure to read them is logged, and threads are still offered.
@@ -21,7 +18,7 @@ const filesFor = ({ machine, thread }: ComposerWhere, start: number) => {
     listed = {
       key,
       files: has(machine, 'ext:files')
-        ? call<{ files: string[] }>(machine.id, FILES, { thread: thread.id }).then((list) => list.files, (error: unknown) => {
+        ? call<{ files: string[] }>(machine.id, 'files.list', { thread: thread.id }).then((list) => list.files, (error: unknown) => {
           console.error(`Listing ${thread.cwd} to mention a file failed`, error)
           return []
         })

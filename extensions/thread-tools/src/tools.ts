@@ -7,7 +7,7 @@
 // Plain tools on a host, so Ego's own (`thread_read`, `thread_list`, its `thread_start`) are built from the same parts.
 import { defineExtension, defineTool, section } from '@earendil-works/pi-durable'
 import { bool, obj, opt, str } from '@earendil-works/pi-schema'
-import { linkTo, offers, type Json, type MachineEntry, type ThreadInfo } from '@superego/protocol'
+import { linkTo, machineNamed, offers, type Json, type MachineEntry, type ThreadInfo } from '@superego/protocol'
 
 /** A thread to start, as `thread.start` takes it. */
 type NewChild = { prompt: string; title?: string; cwd?: string; profile?: string; options?: Record<string, Json> }
@@ -77,7 +77,7 @@ function placeOf(host: Pick<ThreadsHost, 'info' | 'list' | 'answer' | 'hostname'
   const wanted = machine?.trim().toLowerCase()
   if (!wanted || wanted === 'local' || wanted === host.hostname?.().toLowerCase()) return local
   const all = host.machines?.() ?? []
-  const found = all.find((m) => m.id === machine) ?? all.find((m) => m.label.toLowerCase() === wanted || m.machine?.hostname.toLowerCase() === wanted)
+  const found = machineNamed(all, machine!.trim())
   if (!found || !host.remote) throw new Error(`No machine ${machine} here${all.length ? `: ${all.map((m) => m.label).join(', ')}` : '; this machine reaches no others'}`)
   if (found.state !== 'connected') throw new Error(`${found.label} is ${found.state}${found.error ? ` (${found.error})` : ''}`)
   const call = <T,>(method: string, params: unknown) => host.remote!(found.id, method, params) as Promise<T>

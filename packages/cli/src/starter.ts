@@ -357,7 +357,7 @@ export default defineProfile({
 `
 
 /** The files of a new extension `name` in a profile, by path from the profile's folder. */
-export function starterFiles(name: string, kind: StarterKind): Record<string, string> {
+function starterFiles(name: string, kind: StarterKind): Record<string, string> {
   const files: Record<StarterKind, Record<string, string>> = {
     tool: { 'daemon.ts': toolDaemon(name), [`${name}.test.ts`]: toolTest(name) },
     ui: { 'ui.tsx': paneUi(name), [`${name}.test.tsx`]: paneTest(name) },

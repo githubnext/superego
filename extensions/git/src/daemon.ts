@@ -24,8 +24,8 @@ export async function changesIn(cwd: string, asked?: Base): Promise<Changes> {
   // Each base offered, with the commit it measures from.
   const offered: (BaseChoice & { ref: string })[] = [{ base: 'uncommitted', ref: start }, { base: 'staged', ref: start }]
   const since = async (base: Base, branch: string | undefined) => {
-    const ref = head && branch ? await maybe(['merge-base', 'HEAD', branch]) : undefined
-    if (branch && ref) offered.push({ base, branch, ref })
+    const ref = head && branch && await maybe(['merge-base', 'HEAD', branch])
+    if (ref) offered.push({ base, branch: branch!, ref })
   }
   if (main && current !== main.name) await since('branch', main.ref)
   if (upstream !== main?.ref) await since('upstream', upstream)

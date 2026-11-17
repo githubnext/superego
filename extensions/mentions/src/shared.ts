@@ -64,7 +64,7 @@ export const fileRef = (path: string) => /[\s"'`()[\]{}<>,;]/.test(path) || /[.:
 export const threadRef = (id: string, machine?: string) => `@thread:${machine ? `${machine}/` : ''}${id}`
 
 /** The block sent with a message that mentions something: opens with this line. */
-export const OPEN = '<mentions>'
+const OPEN = '<mentions>'
 const CLOSE = '</mentions>'
 /** A line of it: the mention as written, then what it is. */
 const LINE = /^(@thread:\S+|@"[^"\n]+"|@\S+) is an? (thread|file|folder)\b/

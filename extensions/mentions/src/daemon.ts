@@ -5,7 +5,7 @@
 import { stat } from 'node:fs/promises'
 import { isAbsolute, resolve } from 'node:path'
 import { defineDaemonExtension, type DaemonApi } from '@superego/daemon'
-import { statusLabel, type ThreadInfo } from '@superego/protocol'
+import { machineNamed, statusLabel, type ThreadInfo } from '@superego/protocol'
 import { about, mentionsBlock, mentionsIn, type Mention } from './shared.ts'
 
 /** A string as the agent would pass it to a tool. */
@@ -22,9 +22,7 @@ async function threadLine(superego: DaemonApi, mention: Extract<Mention, { kind:
     ? `${ref} is a thread${where}: ${q(thread.title)} (${short(statusLabel(thread.status))}${thread.archived ? ', archived' : ''}). ${how}`
     : `${ref} is a thread${where}, thread ${id}, which isn't there.`
   if (!machine) return said(await superego.threads.get(id).catch(() => undefined), '')
-  const wanted = machine.toLowerCase()
-  const all = superego.machines.list()
-  const found = all.find((m) => m.id === machine) ?? all.find((m) => m.label.toLowerCase() === wanted || m.machine?.hostname.toLowerCase() === wanted)
+  const found = machineNamed(superego.machines.list(), machine)
   if (!found) return `${ref} is a thread on ${machine}, a machine this one doesn't reach.`
   try {
     const list = async (archived: boolean) => (await superego.machines.call(found.id, 'thread.list', archived ? { archived } : {}) as ThreadInfo[]).find((t) => t.id === id)
@@ -47,7 +45,6 @@ export default defineDaemonExtension({
   setup(superego) {
     // The block goes after the message's own content.
     superego.beforeSend(async ({ thread, text, content }) => {
-      if (!text.includes('@')) return
       const mentions = mentionsIn(text)
       if (!mentions.length) return
       const lines = await Promise.all(mentions.map((mention) => mention.kind === 'thread' ? threadLine(superego, mention) : fileLine(thread.cwd, mention)))

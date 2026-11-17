@@ -37,10 +37,8 @@ function ChangesPane({ machine, thread, pane }: PaneProps) {
     const kind = fileKind(registry, { machine: machine.id, thread }, path)
     if (kind) void dispatch('pane.open', { thread: thread.id, kind, params: { path } }, { machine: machine.id, source: 'git' })
   }
-  const pick = (next: Base) => {
-    const params: ChangesParams = { base: next }
-    void dispatch('pane.update', { thread: thread.id, pane: pane.id, params }, { machine: machine.id, source: 'git' })
-  }
+  const pick = (next: Base) =>
+    void dispatch('pane.update', { thread: thread.id, pane: pane.id, params: { base: next } satisfies ChangesParams }, { machine: machine.id, source: 'git' })
   return (
     <div className="git-changes">
       <PaneHeader>
@@ -61,14 +59,13 @@ function ChangesPane({ machine, thread, pane }: PaneProps) {
 
 /** In the header: the base the changes are measured from, a menu of the ones the folder offers. */
 function BasePicker({ bases, base, onPick }: { bases: BaseChoice[]; base: Base; onPick(base: Base): void }) {
-  const current = bases.find((b) => b.base === base) ?? { base }
   return (
     <Menu.Root>
       <Menu.Trigger className="pane-header__button git-base" aria-label="Changes from">
-        {baseLabel(current)}<CaretDownIcon size={10} weight="bold" aria-hidden />
+        {baseLabel(bases.find((b) => b.base === base)!)}<CaretDownIcon size={10} weight="bold" aria-hidden />
       </Menu.Trigger>
       <Menu.Popup>
-        <Menu.RadioGroup value={base} onValueChange={(value: Base) => onPick(value)}>
+        <Menu.RadioGroup value={base} onValueChange={onPick}>
           {bases.map((b) => <Menu.RadioItem key={b.base} value={b.base} closeOnClick>{baseLabel(b)}</Menu.RadioItem>)}
         </Menu.RadioGroup>
       </Menu.Popup>
