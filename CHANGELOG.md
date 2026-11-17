@@ -43,7 +43,6 @@ changing: that variable is gone. Use `superego/ui`'s `Glyph` or `StatusGlyph` in
   from their next message.
 - Preview and Artifact panes keep their page when you switch threads, open Settings or rearrange panes, and an
   artifact reloads when its file changes.
-
 - Suggestions over the composer no longer turn see-through on hover.
 
 ## 0.1.3
