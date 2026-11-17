@@ -768,7 +768,8 @@ a.pane-header__url:hover { color: var(--superego-accent); }
 /* What an extension offers for the word being typed (skills, say), floating above the composer. */
 .completions { position: absolute; left: 0; right: 0; bottom: calc(100% + 8px); max-height: 50vh; overflow: auto; padding: 4px; background: var(--superego-raised); border-radius: var(--superego-radius-lg); box-shadow: var(--superego-shadow-float); font-size: var(--superego-text-ui); }
 .dock:not(:focus-within) .completions { display: none; }
-.completions__item { display: flex; align-items: baseline; gap: var(--superego-space-3); padding: 6px 10px; border-radius: var(--superego-radius); cursor: default; }
+/* Concentric with the menu: its radius less its padding. */
+.completions__item { display: flex; align-items: baseline; gap: var(--superego-space-3); padding: 6px 10px; border-radius: calc(var(--superego-radius-lg) - 4px); cursor: default; }
 .completions__item.is-active { background: var(--superego-selected); }
 /* Its icon, when a menu offers things of several kinds: a thread's status, a file. */
 .completions__icon { flex: none; align-self: center; display: inline-flex; color: var(--superego-muted); }
