@@ -185,7 +185,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
 
   // The core's own, then the bundled ones: for the daemon's life, each giving every thread its agent parts unless the
   // thread goes without it.
-  const core = coreExtensions({ agentsDir: host.agentsDir, where: () => whereYouRun(machine.hostname, clients.windows()), panesOf: extensions.panesOf, openPane: threads.openPane })
+  const core = coreExtensions({ agentsDir: host.agentsDir, where: () => whereYouRun(machine.hostname, clients.windows()), panesOf: extensions.panesOf, openPane: threads.openPane, images: agent.images.processor, note: threads.note })
   for (const extension of core) daemonLife.add(await extensions.setUpBuiltin(extension, 'core'))
   for (const extension of options.extensions ?? []) daemonLife.add(await extensions.setUpBuiltin(extension, 'bundled'))
   extensions.registerSwitches()

@@ -12,9 +12,12 @@ import { anthropicProvider } from '@earendil-works/pi-ai/providers/anthropic'
 import { openaiProvider } from '@earendil-works/pi-ai/providers/openai'
 import { registerBunOAuthFlows } from '@earendil-works/pi-ai/bun-oauth'
 import type { ModelRef } from '@earendil-works/pi-durable'
+import { createNodePhotonImages } from '@earendil-works/pi-durable/images/node'
 import { RpcError, type AppConfig, type AuthEvent, type ModelCatalog, type AuthPrompt, type ProviderAuthInfo, type SettingOption } from '@superego/protocol'
 import type { SettingsRegistry } from '@superego/settings'
 import { appEnv } from './paths.ts'
+import { sniff } from './image-kind.ts'
+import { createModelImages, type ModelImages } from './model-images.ts'
 import { replayProvider, withRecording } from './replay.ts'
 import { authFailure, Rejections, rejectionSummary, WAITING } from './provider-auth.ts'
 import { watchFiles } from './watch-files.ts'
@@ -122,9 +125,26 @@ export const heldRejections: (() => void)[] = []
 /** Tests: each change to auth.json the daemon heard (the providers it changed for), once it has acted on it. */
 export const heardCredentials: string[][] = []
 
+/** What the scripted model answers to an image Anthropic would refuse: over 8000 px a side, or a PNG cut short. */
+function refusedImage(messages: readonly { content?: unknown }[]) {
+  for (const [m, message] of messages.entries()) {
+    if (!Array.isArray(message.content)) continue
+    for (const [b, block] of (message.content as { type: string; data?: string }[]).entries()) {
+      if (block.type !== 'image' || block.data === undefined) continue
+      const bytes = Buffer.from(block.data, 'base64')
+      const kind = sniff(bytes)
+      const problem = kind?.width && kind.height && Math.max(kind.width, kind.height) > 8000 ? 'At least one of the image dimensions exceed max allowed size: 8000 pixels'
+        : kind?.mimeType === 'image/png' && bytes.lastIndexOf('IEND') < 0 ? 'Could not process image' : undefined
+      if (problem) return `400 {"type":"error","error":{"type":"invalid_request_error","message":"messages.${m}.content.${b}.image.source.base64.data: ${problem}"}}`
+    }
+  }
+  return undefined
+}
+
 /**
  * A scripted model that echoes the last user message: tests and demos, with `<ID>_MODEL=faux`. A key stored for it
- * (`faux` in auth.json) that starts with "reject" makes it answer as a provider rejecting the key.
+ * (`faux` in auth.json) that starts with "reject" makes it answer as a provider rejecting the key; an image Anthropic
+ * would refuse, it refuses as Anthropic does.
  */
 function echoProvider() {
   const faux = fauxProvider()
@@ -132,6 +152,8 @@ function echoProvider() {
     faux.appendResponses([echo])
     if (options?.apiKey?.startsWith('reject-held')) await new Promise<void>((resolve) => heldRejections.push(resolve))
     if (options?.apiKey?.startsWith('reject')) return fauxAssistantMessage('', { stopReason: 'error', errorMessage: REJECTED })
+    const refused = refusedImage(context.messages)
+    if (refused) return fauxAssistantMessage('', { stopReason: 'error', errorMessage: refused })
     const last = [...context.messages].reverse().find((message) => message.role === 'user')
     const text = typeof last?.content === 'string' ? last.content : last?.content.map((part) => part.type === 'text' ? part.text : '').join('') ?? ''
     return fauxAssistantMessage(`echo: ${text}`)
@@ -146,6 +168,8 @@ function echoProvider() {
 
 export type AgentSettings = {
   models: Models
+  /** How images are fitted to the model: every request's (see model-images.ts), and those `read` gives it. */
+  images: ModelImages
   /** What a thread runs with now; `model` is absent when no provider is signed in. */
   /**
    * What a turn runs with: the thread's own choices (`override`) where it made them, else this machine's settings.
@@ -181,11 +205,13 @@ export async function createAgentSettings(settings: SettingsRegistry, dataDir: s
   const models = createModels({ credentials })
   const credentialListeners = new Set<(provider: string) => void>()
   const rejections = new Rejections(join(dataDir, 'auth-rejected.json'))
-  // <ID>_RECORD keeps every answer for replaying later; see replay.ts. Every provider is refused while rejected.
+  const images = createModelImages(dataDir, await createNodePhotonImages())
+  // <ID>_RECORD keeps every answer for replaying later; see replay.ts. Every provider is refused while rejected, and is
+  // sent only images its model takes (model-images.ts).
   const record = env('RECORD')
   const recorded = <T extends Provider>(provider: T) => {
     const blocks = () => rejections.blocks(provider.id) ? rejections.get(provider.id)!.summary : undefined
-    return gated(record ? withRecording(provider, record) : provider, blocks)
+    return images.wrap(gated(record ? withRecording(provider, record) : provider, blocks))
   }
   models.setProvider(recorded(anthropicProvider()))
   models.setProvider(recorded(withServiceTier(openaiProvider(), () => settings.get<boolean>(KEYS.fast) && FAST.has(chosen()?.provider ?? ''))))
@@ -329,7 +355,7 @@ export async function createAgentSettings(settings: SettingsRegistry, dataDir: s
   }
 
   return {
-    models,
+    models, images,
     resolve(override) {
       const own = parse(override?.model)
       const ownModel = own && models.getModel(own.provider, own.modelId)
@@ -397,7 +423,7 @@ export async function createAgentSettings(settings: SettingsRegistry, dataDir: s
     async close() {
       clearTimeout(reread)
       watcher?.close()
-      await Promise.all([credentials.settled(), keepingDeviceId])
+      await Promise.all([credentials.settled(), keepingDeviceId, images.settled()])
     },
   }
 }

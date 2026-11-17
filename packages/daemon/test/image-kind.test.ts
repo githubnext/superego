@@ -1,6 +1,6 @@
 import { expect, it } from 'vitest'
-import { sniff } from '../src/image.ts'
-import { gif, jpeg, png, webp } from './fixtures.ts'
+import { sniff } from '../src/image-kind.ts'
+import { gif, jpeg, png, webp } from './image-fixtures.ts'
 
 it('tells an image by its bytes, with its size in pixels', () => {
   expect(sniff(png(40, 30))).toEqual({ mimeType: 'image/png', ext: 'png', width: 40, height: 30 })

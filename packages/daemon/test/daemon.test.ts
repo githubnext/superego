@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { applyImmutable, type Op } from '@earendil-works/chord/delta'
 import type { ConversationView } from '@earendil-works/pi-durable'
-import { defineApp, MESSAGE_ENTRY, PROTOCOL_VERSION, versionOf, type ActionInfo, type ActionLogEntry, type AuthEvent, type Hello, type ModelCatalog, type Notifications, type ProviderAuthInfo, type RpcPeer, type ThreadInfo, type SettingsSnapshot } from '@superego/protocol'
+import { defineApp, MESSAGE_ENTRY, NOTE_ENTRY, PROTOCOL_VERSION, versionOf, type ActionInfo, type ActionLogEntry, type AuthEvent, type Hello, type ModelCatalog, type Notifications, type ProviderAuthInfo, type RpcPeer, type ThreadInfo, type SettingsSnapshot } from '@superego/protocol'
 import { MemorySettingsStore } from '@superego/settings'
 import { connectSocket, defineDaemonExtension, listen, openDaemon } from '../src/index.ts'
 import { until } from './until.ts'
@@ -410,6 +410,36 @@ describe('record and replay', () => {
     // A message can be files alone; nothing at all is refused.
     await peer.call('thread.send', { thread: thread.id, text: '', attachments: [{ name: 'a.txt', mimeType: 'text/plain', data: '' }] })
     await expect(peer.call('thread.send', { thread: thread.id, text: '  ' })).rejects.toMatchObject({ kind: 'invalid' })
+    await close()
+  })
+
+  it('sends the model a pasted image too large for it scaled down, and leaves out one it refuses, saying so in the thread', async () => {
+    const { readFile } = await import('node:fs/promises')
+    const { png } = await import('./image-fixtures.ts')
+    const { peer, close } = await open()
+    const thread = await peer.call<ThreadInfo>('thread.start', { cwd: dir })
+    type Entry = { kind: string; data?: { text?: string }; model?: { role: string; content: unknown }[] }
+    const entries = async () => (await peer.call<{ value: ConversationView }>('thread.watch', { thread: thread.id })).value.entries as unknown as Entry[]
+    const answers = async () => (await entries()).flatMap((e) => e.model?.[0]?.role === 'assistant' ? [JSON.stringify(e.model[0].content)] : [])
+    const notes = async () => (await entries()).flatMap((e) => e.kind === NOTE_ENTRY ? [e.data!.text!] : [])
+    // Over 8000 px tall, which the scripted model refuses as Anthropic does: it's sent scaled down, and kept whole.
+    const tall = Buffer.from(png(100, 9000)).toString('base64')
+    await peer.call('thread.send', { thread: thread.id, text: 'look', attachments: [{ name: 'long.png', mimeType: 'image/png', data: tall }] })
+    await until(async () => (await answers()).length === 1)
+    expect((await answers())[0]).toContain('echo: look')
+    expect(await readFile(join(dir, 'attachments', thread.id, 'long.png'), 'base64')).toBe(tall)
+    // One it can't read, which no fitting foresees: refused, asked again without it, and the user told.
+    const broken = Buffer.from(png(10, 10).subarray(0, 33)).toString('base64')
+    await peer.call('thread.send', { thread: thread.id, text: 'and this?', attachments: [{ name: 'broken.png', mimeType: 'image/png', data: broken }] })
+    await until(async () => (await answers()).length === 2)
+    expect((await answers())[1]).toMatch(/echo: and this\?.*\[image omitted: refused by the model: Could not process image \(33 bytes, 10×10\)\]/)
+    await until(async () => (await notes()).length === 1)
+    expect(await notes()).toEqual(['Left an image out of what the model is sent (33 bytes, 10×10): refused by the model: Could not process image. Asked it again without it.'])
+    // The history still holds it, and the thread goes on: left out at once, said only the once.
+    await peer.call('thread.send', { thread: thread.id, text: 'still there?' })
+    await until(async () => (await answers()).length === 3)
+    expect((await answers())[2]).toContain('echo: still there?')
+    expect(await notes()).toHaveLength(1)
     await close()
   })
 

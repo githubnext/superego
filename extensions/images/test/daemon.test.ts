@@ -8,7 +8,7 @@ import type { Json } from '@superego/protocol'
 import { callTool, say, testDaemon } from '@superego/sdk/testing'
 import images, { MAX_BYTES } from '../src/daemon.ts'
 import type { ShowDetails } from '../src/shared.ts'
-import { png } from './fixtures.ts'
+import { png } from '@superego/daemon/image-fixtures'
 
 let dir: string
 afterEach(async () => { await rm(dir, { recursive: true, force: true }) })

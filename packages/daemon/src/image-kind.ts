@@ -1,5 +1,6 @@
 // What a file is, by its bytes rather than its name: PNG, JPEG, GIF, WebP or SVG, and how big it is in pixels where
-// the header says (so the thread can keep the image's place before it loads).
+// the header says: so a thread can keep a shown image's place before it loads, and an image sent to the model is decoded
+// only when it's too big for it (model-images.ts).
 
 export type Sniffed = { mimeType: string; ext: string; width?: number; height?: number }
 

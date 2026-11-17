@@ -8,8 +8,7 @@ import { homedir } from 'node:os'
 import { basename, join, resolve } from 'node:path'
 import { defineExtension, defineTool, section } from '@earendil-works/pi-durable'
 import { arr, obj, oneOf, opt, str } from '@earendil-works/pi-schema'
-import { defineDaemonExtension } from '@superego/daemon'
-import { sniff } from './image.ts'
+import { defineDaemonExtension, sniff } from '@superego/daemon'
 import { about, LAYOUTS, TOOL, layoutFor, type Layout, type ShowDetails, type Shown } from './shared.ts'
 
 /** How big one image may be, and how many one call shows. */

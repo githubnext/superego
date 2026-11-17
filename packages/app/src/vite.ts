@@ -18,6 +18,8 @@ export function superegoConfig(root: string) {
   const cli = resolve(root, 'src/cli.ts')
   // With it, what `<id> extension test` runs (out/main/author-test.js): the SDK's type checker and test runner.
   const entries: Record<string, string> = existsSync(cli) ? { cli, 'author-test': authorTest(root) } : {}
+  // The worker the daemon fits images for the model in (pi-durable's): beside the bundle, where it looks for it.
+  entries['node-worker'] = resolve(dirname(imagesOf(root).resolve('@earendil-works/pi-durable/images/node')), 'node-worker.js')
   // Which build of the main process and preload a window runs beside (see main-build.ts).
   const stamp = buildStamp()
   return defineConfig({
@@ -72,12 +74,18 @@ const skill = (root: string) => resolve(dirname(createRequire(resolve(root, 'pac
 /** Native modules an app may depend on, loaded at run time from out/node_modules: the terminal's PTY. */
 const NATIVE = ['@lydell/node-pty']
 
+/** A `require` from where the daemon's images are fitted (pi-durable's, through @superego/daemon). */
+const imagesOf = (root: string) => createRequire(createRequire(createRequire(resolve(root, 'package.json')).resolve('@superego/daemon')).resolve('@earendil-works/pi-durable/images/node'))
+
 /**
  * Each native module the app at `root` depends on, and those of its optional dependencies installed here (the build for
- * this platform), copied into `into` as packages, so the bundle resolves them beside itself.
+ * this platform), copied into `into` as packages, so the bundle resolves them beside itself. Photon too, whose
+ * WebAssembly the daemon's image worker reads from its package as it runs.
  */
 function copyNative(root: string, into: string) {
   rmSync(into, { recursive: true, force: true })
+  const photon = dirname(realpathSync(imagesOf(root).resolve('@silvia-odwyer/photon/photon_rs_bg.wasm')))
+  cpSync(photon, resolve(into, '@silvia-odwyer/photon'), { recursive: true, dereference: true })
   const from = createRequire(resolve(root, 'package.json'))
   for (const name of NATIVE) {
     const dir = packageDir(from, name)

@@ -1,10 +1,11 @@
 // The core's own agent parts, as extensions like any other: each optional (but Markdown), so a machine can turn it off
 // and a profile can do without it. Set up first, through the same API as the bundled ones.
-import { defineExtension, defineTool, section } from '@earendil-works/pi-durable'
-import { createCodingTools } from '@earendil-works/pi-durable/tools'
+import { defineExtension, defineTool, GenerationTask, hook, section } from '@earendil-works/pi-durable'
+import { createCodingTools, type ImageProcessor } from '@earendil-works/pi-durable/tools'
 import { obj, opt, str, type Json, type Pane } from '@superego/protocol'
 import { agentsInstructions } from './agents-md.ts'
 import type { DaemonExtension } from './extension.ts'
+import { describe, IMAGE_OMITTED, type OmittedImage } from './model-images.ts'
 
 /** How the window shows an agent's messages (Markdown.tsx), so it writes for that. */
 const MARKDOWN_PROMPT = [
@@ -12,7 +13,14 @@ const MARKDOWN_PROMPT = [
   'Fenced code blocks are syntax-highlighted by their language tag (```ts, ```bash, ```diff, …), so always tag the language.',
 ].join('\n')
 
-export function coreExtensions({ agentsDir, where, panesOf, openPane }: {
+/** What a thread's transcript says of the images left out of what its model was sent (see model-images.ts). */
+export function omittedNote(omitted: readonly OmittedImage[]) {
+  const asked = omitted.some((image) => image.refused) ? `Asked it again without ${omitted.length === 1 ? 'it' : 'them'}.` : ''
+  if (omitted.length === 1) return [`Left an image out of what the model is sent (${describe(omitted[0]!)}): ${omitted[0]!.reason}.`, asked].filter(Boolean).join(' ')
+  return [`Left ${omitted.length} images out of what the model is sent:`, ...omitted.map((image) => `- ${describe(image)}: ${image.reason}`), asked].filter(Boolean).join('\n')
+}
+
+export function coreExtensions({ agentsDir, where, panesOf, openPane, images, note }: {
   /** The folder agents share: standing instructions in its AGENTS.md (see agents-md.ts). */
   agentsDir: string
   /** Where the agent runs, when the user's window is on another computer (see where.ts); nothing on one computer. */
@@ -20,6 +28,10 @@ export function coreExtensions({ agentsDir, where, panesOf, openPane }: {
   /** The pane kinds a thread's agent is told of, and what each shows. */
   panesOf(thread: string): { kind: string; about: string }[]
   openPane(thread: string, pane: Omit<Pane, 'id'>): Promise<Pane>
+  /** What fits the images `read` gives the model. */
+  images: ImageProcessor
+  /** Say a line in a thread's transcript, for the user. */
+  note(thread: string, text: string): Promise<void>
 }): DaemonExtension[] {
   // Panes: the agent opens them beside its thread (a file, another thread, an extension's or a profile's own), from the
   // kinds its instructions list.
@@ -43,7 +55,21 @@ export function coreExtensions({ agentsDir, where, panesOf, openPane }: {
     })],
   })
   return [
-    { name: 'coding-tools', version: '1.0.0', api: '^3', title: 'Coding tools', description: 'Read, write and edit files, and run commands.', setup: (s) => s.agent(createCodingTools()) },
+    { name: 'coding-tools', version: '1.0.0', api: '^3', title: 'Coding tools', description: 'Read, write and edit files, and run commands.', setup: (s) => s.agent(createCodingTools({ images })) },
+    {
+      // An image the model was refused is left out of what it's sent from then on: the user is told, in the thread.
+      name: 'model-images', version: '1.0.0', api: '^3', title: 'Images for the model', description: 'Say in the thread when an image is left out of what the model is sent.', required: true,
+      setup: (s) => s.agent(defineExtension({
+        name: 'model-images',
+        hooks: [hook(GenerationTask, {
+          async afterResponse(message, api) {
+            const omitted = (message.diagnostics ?? []).filter((d) => d.type === IMAGE_OMITTED).map((d) => d.details as OmittedImage)
+            const thread = omitted.length ? s.threads.of(Number(api.conversationId)) : undefined
+            if (thread) await note(thread, omittedNote(omitted))
+          },
+        })],
+      })),
+    },
     {
       // How messages show is the window's, not something to turn off.
       name: 'markdown', version: '1.0.0', api: '^3', title: 'Markdown', description: 'Know how the thread shows messages, and write for it.', required: true,

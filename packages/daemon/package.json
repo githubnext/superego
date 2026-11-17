@@ -6,6 +6,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./client": "./src/client.ts",
+    "./image-fixtures": "./test/image-fixtures.ts",
     "./module-graph": "./src/module-graph.ts",
     "./sdk": "./src/sdk.ts"
   },

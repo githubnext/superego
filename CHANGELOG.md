@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- An image too big for the model (a long pasted screenshot, a large photo, one an agent reads or a tool returns) no
+  longer breaks its thread: it's sent scaled down, and the file you attached stays as it was. One the model still
+  refuses is left out from then on, the thread says so, and the message is sent again without it. Threads stuck on such
+  an image work again from their next message.
+
 ## 0.1.4
 
 **Upgrading:** CSS in a profile or extension that draws its own status dots with `--superego-status-dot` needs
