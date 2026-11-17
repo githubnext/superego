@@ -4,6 +4,9 @@
 
 - Changes can show what's uncommitted, what's staged, everything since the branch left main, or since its upstream:
   pick it in the pane's header. A thread on a branch opens on "Since main".
+- A remote machine can run a release instead of main: `scripts/install-machine.sh --release` installs the release's app
+  on a Mac (no checkout needed), or checks out the release's tag on Linux. Updating such a machine moves it to the
+  newest release.
 
 ## 0.1.2
 

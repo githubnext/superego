@@ -13,7 +13,33 @@ pnpm release 0.1.0 --no-publish  # the same up to the notarized zip; nothing is 
 pnpm bundle                      # this checkout as it is, notarized into app/dist (the version in app/package.json)
 ```
 
-## Once per Mac
+## Machines on releases
+
+A machine the app reaches over ssh can run a release instead of main:
+[`scripts/install-machine.sh --release [version]`](../scripts/install-machine.sh), the newest by default.
+
+- **macOS:** it downloads the release's zip with `gh` (signed in there, with access to the repository), puts
+  `Superego.app` in `~/Applications` (replacing an older one), and writes `~/.local/bin/superego` to run the app's CLI.
+  It needs no checkout, pnpm or Node.
+- **Linux** (there's no Linux build): the checkout checks out the release's tag instead of pulling main, and installs as
+  for main.
+
+Either way it restarts a running daemon, unless agents are working there: `SUPEREGO_RESTART_NOW=1` restarts it anyway
+(they resume after). Before, check with `ssh <host> '~/.local/bin/superego threads'`.
+
+To move a machine to releases, from a checkout of the repository anywhere (it reads the script from stdin; on Linux it
+installs the checkout at `~/dev/superego`, or `SUPEREGO_DIR`), or there with its own checkout's script:
+
+```sh
+ssh <host> 'bash -s -- --release' < scripts/install-machine.sh
+ssh <host> '~/dev/superego/scripts/install-machine.sh --release'
+```
+
+After a release, update each machine the same way, or with Update in the app (`superego machines update <host>`): a
+Mac on releases runs main's install-machine.sh from GitHub, a checkout at a release's tag checks out the newest tag. A
+Mac's ssh command stays `~/.local/bin/superego connect --start`. To bring a Linux machine back to main, run its
+install-machine.sh without `--release`.
+
 
 Signing and notarizing need two things in the keychain. `pnpm bundle` says which one is missing.
 

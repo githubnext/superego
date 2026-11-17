@@ -176,6 +176,9 @@ an index of topics, each printed by `superego --skill <topic>`: `guide`, `cli`, 
 gh repo clone githubnext/superego ~/dev/superego && ~/dev/superego/scripts/install-machine.sh   # again to update
 ```
 
+Or a release (`--release`; see [releasing](releasing.md#machines-on-releases)): on a Mac the release's app, with no
+checkout, on Linux the checkout at the release's tag.
+
 It installs `~/.local/bin/superego`, which a non-interactive ssh shell may not have on its PATH; then add the machine with
 that command: `superego machines add <host> --command '~/.local/bin/superego connect --start'`. A machine whose Superego is
 older (or newer) than this computer's gets a dot beside its name in the sidebar and in Settings → Machines; Update there

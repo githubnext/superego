@@ -107,7 +107,8 @@ client agrees.
 ## Open
 
 - **Remote install.** A machine runs a checkout installed by `scripts/install-machine.sh`, and Update (or
-  `superego machines update`) runs it again over ssh. Later: install over ssh without a checkout.
+  `superego machines update`) runs it again over ssh. With `--release`, a Mac runs the release's app instead, with no
+  checkout, and Linux a checkout at the release's tag.
 - **The service's lifecycle.** `superego daemon install` runs the daemon as a systemd user unit or a launchd agent,
   brought back after a crash or a restart (exit 75), not after a stop. A service starts the daemon with the unit's
   environment only, so a restart leaves its own in `restart-env.json` (0600) for the successor. Such a daemon has no

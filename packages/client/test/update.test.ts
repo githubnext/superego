@@ -28,16 +28,18 @@ describe('updating a machine', () => {
   beforeAll(() => {
     origin = mkdtempSync(join(tmpdir(), 'superego-update-origin-'))
     mkdirSync(join(origin, 'scripts'), { recursive: true })
-    writeFileSync(join(origin, 'scripts/install-machine.sh'), '#!/bin/sh\necho "installed $(git rev-parse --short HEAD) now=${SUPEREGO_RESTART_NOW:-}"\n')
+    writeFileSync(join(origin, 'scripts/install-machine.sh'), '#!/bin/sh\necho "installed $(git rev-parse --short HEAD) now=${SUPEREGO_RESTART_NOW:-} args=$*"\n')
     chmodSync(join(origin, 'scripts/install-machine.sh'), 0o755)
     writeFileSync(join(origin, 'scripts/machine-path.sh'), 'PATH="$HOME/bin:$PATH"; export PATH\n')
     git(origin, 'init', '-q', '-b', 'main')
     git(origin, 'add', '-A')
     git(origin, 'commit', '-qm', 'one')
     git(origin, 'tag', 'one')
+    git(origin, 'tag', 'v0.1.0')
     writeFileSync(join(origin, 'NEW'), 'x')
     git(origin, 'add', '-A')
     git(origin, 'commit', '-qm', 'two')
+    git(origin, 'tag', 'v0.2.0')
     clone = mkdtempSync(join(tmpdir(), 'superego-update-clone-'))
     git(clone, 'clone', '-q', origin, 'superego')
     git(join(clone, 'superego'), 'reset', '-q', '--hard', 'one')
@@ -68,6 +70,25 @@ describe('updating a machine', () => {
     expect(out).toContain(`installed ${git(checkout, 'rev-parse', '--short', 'HEAD').trim()} now=1`)
     expect(readFileSync(join(checkout, 'NEW'), 'utf8')).toBe('x')
   }, SCRIPTED)
+
+  it('moves a checkout at a release tag to the newest tag, and runs its install script for a release', () => {
+    const checkout = cloned()
+    git(checkout, 'checkout', '-q', '--detach', 'v0.1.0')
+    const { ok, out } = run(updateScript({ dir: checkout }))
+    expect(ok).toBe(true)
+    expect(out).toContain(`Updating ${checkout} to v0.2.0`)
+    expect(out).toContain(`installed ${git(origin, 'rev-parse', '--short', 'v0.2.0').trim()} now= args=--release`)
+  }, SCRIPTED)
+
+  it('updates a release app by the install script from GitHub', () => {
+    mkdirSync(join(home, '.local/bin'), { recursive: true })
+    writeFileSync(join(home, '.local/bin/superego'), "#!/bin/sh\n# Written by scripts/install-machine.sh --release\nELECTRON_RUN_AS_NODE=1 exec '/x/Superego.app/Contents/MacOS/Superego' x \"$@\"\n")
+    writeFileSync(join(home, '.local/bin/gh'), '#!/bin/sh\necho "echo fetched $1 $4; echo now=\\$SUPEREGO_RESTART_NOW args=\\$*"\n')
+    chmodSync(join(home, '.local/bin/gh'), 0o755)
+    const { ok, out } = run(updateScript({ wrapper: wrapperOf('~/.local/bin/superego connect --start') }, true))
+    expect(ok).toBe(true)
+    expect(out).toContain('fetched api repos/githubnext/superego/contents/scripts/install-machine.sh\nnow=1 args=--release')
+  })
 
   it('refuses a checkout with changes, a pull that fails, and a wrapper it did not write', () => {
     const checkout = cloned()

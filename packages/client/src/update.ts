@@ -1,22 +1,34 @@
 // Updating Superego on another machine: run that machine's own scripts/install-machine.sh (pull, install, build, restart
 // its daemon), reached the way the machine is. Over ssh, a script finds the checkout from the `superego` wrapper the
 // install wrote; through a `via` command, its `connect --start` becomes `connect --update`, which does the same there.
+// A machine on releases updates to the newest: a checkout at a release's tag checks out the newest tag; a Mac running
+// the release's app (no checkout) runs the install script from GitHub, which downloads it.
 import { spawn } from 'node:child_process'
 import { remoteCommand, RpcError, type AppConfig } from '@superego/protocol'
 import type { MachineConfig } from './shared.ts'
 
+/** Where releases and the install script are, for a machine on releases without a checkout. */
+const REPO = 'githubnext/superego'
+
 /**
  * A POSIX sh script updating the checkout at `dir`, or the one whose `wrapper` (as a shell word) install-machine.sh
- * wrote. It refuses a checkout with changes and a pull that fails, before the install script (which only warns) runs;
- * `now` lets the install restart the daemon though threads are working there.
+ * wrote, or the release app that wrapper runs. It refuses a checkout with changes and a pull that fails, before the
+ * install script (which only warns) runs; `now` lets the install restart the daemon though threads are working there.
  */
 export function updateScript(where: { dir: string } | { wrapper: string }, now = false): string {
   const quote = (text: string) => `'${text.replaceAll("'", `'\\''`)}'`
+  const restartNow = now ? 'SUPEREGO_RESTART_NOW=1 ' : ''
   return [
     'fail() { echo "superego update: $*" >&2; exit 1; }',
     ...'dir' in where ? [`d=${quote(where.dir)}`] : [
       `w=${where.wrapper}`,
       '[ -f "$w" ] || fail "no $w here: install Superego there with scripts/install-machine.sh"',
+      'if grep -qx "# Written by scripts/install-machine.sh --release" "$w"; then',
+      '  PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"',
+      '  echo "Updating to the newest release"',
+      `  s=$(gh api -H "Accept: application/vnd.github.raw" repos/${REPO}/contents/scripts/install-machine.sh) || fail "could not fetch scripts/install-machine.sh from ${REPO} with gh"`,
+      `  ${restartNow}exec bash -c "$s" install-machine.sh --release`,
+      'fi',
       `d=$(sed -n 's|^# Written by \\(.*\\)/scripts/install-machine\\.sh$|\\1|p' "$w" | head -n 1)`,
       '[ -n "$d" ] || fail "$w was not written by scripts/install-machine.sh: update it by hand"',
     ],
@@ -25,10 +37,18 @@ export function updateScript(where: { dir: string } | { wrapper: string }, now =
     // Where git and its credential helper are, as the install script finds them.
     '. "$d/scripts/machine-path.sh"',
     'cd "$d" || fail "no checkout at $d"',
-    'echo "Updating $d"',
     '[ -z "$(git status --porcelain --untracked-files=no)" ] || fail "$d has uncommitted changes: commit or discard them there first"',
+    // At a release's tag: to the newest, whose install script runs (an older one only warns that it can't pull).
+    'if ! git symbolic-ref -q HEAD >/dev/null && git describe --tags --exact-match --match "v*" >/dev/null 2>&1; then',
+    '  git fetch --tags --force || fail "git fetch failed in $d"',
+    '  t=$(git tag --list "v*" --sort=-v:refname | head -n 1)',
+    '  echo "Updating $d to $t"',
+    '  git -c advice.detachedHead=false checkout --quiet "$t" || fail "could not check out $t in $d"',
+    `  ${restartNow}exec "$d/scripts/install-machine.sh" --release`,
+    'fi',
+    'echo "Updating $d"',
     'git pull --ff-only || fail "git pull failed in $d"',
-    `${now ? 'SUPEREGO_RESTART_NOW=1 ' : ''}exec "$d/scripts/install-machine.sh"`,
+    `${restartNow}exec "$d/scripts/install-machine.sh"`,
   ].join('\n')
 }
 
