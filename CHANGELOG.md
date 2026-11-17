@@ -16,6 +16,7 @@
 - Collapse parts of the sidebar: Pinned, a project, or the threads another thread started, from the caret beside its
   name (or ← and →). Collapsed, it shows how many threads it holds and whether any needs you. ⌘⌥↑ and ⌘⌥↓ skip what's
   collapsed, and going to a thread inside opens the way to it. ⌘K has Collapse all threads and Expand all threads.
+- Suggestions over the composer no longer turn see-through on hover: the transcript stays hidden behind them.
 - Sort the sidebar alphabetically (from its ··· menu or ⌘K): projects by name, threads by title, "Wave 2" before
   "Wave 10".
 - Hide the sidebar's Pinned section from its ··· menu (Show pinned). Pinned threads stay pinned, at the top of their

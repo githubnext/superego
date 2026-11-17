@@ -1,7 +1,8 @@
 /* What you might send next: quiet pills over the composer, wrapping when they don't fit. */
 .suggestions { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 2px; }
 .suggestions__item { font: inherit; font-size: var(--superego-text-sm); height: 26px; color: var(--superego-muted); background: var(--superego-bg); border: 0; box-shadow: inset 0 0 0 1px light-dark(rgb(0 0 0 / .12), rgb(255 255 255 / .12)); border-radius: 999px; padding: 0 10px; cursor: default; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.suggestions__item:hover { color: var(--superego-text); background: var(--superego-hover); }
+/* The hover tint laid over the pill's own ground: --superego-hover alone is see-through, and the transcript scrolls under. */
+.suggestions__item:hover { color: var(--superego-text); background: linear-gradient(var(--superego-hover), var(--superego-hover)) var(--superego-bg); }
 .suggestions__item:first-child { color: var(--superego-text); }
 .suggestions__item.is-picked { color: var(--superego-text); box-shadow: 0 0 0 1.5px var(--superego-accent); }
 /* Its key, ⌃1–⌃9: quieter than the words. */

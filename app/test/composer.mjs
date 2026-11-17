@@ -58,11 +58,24 @@ await openApp({ name: 'composer', timeout: 180_000 }, async (t) => {
 
   // Idle, with what to send next offered.
   const idle = await create('Dates land a day early')
+  // A busy transcript first, to run behind the suggestions when scrolled.
+  await submit(idle, Array.from({ length: 12 }, (_, i) => `Line ${i + 1}: the importer reads each row's date as UTC midnight, then formats it in local time, so every date lands a day early.`).join('\n\n'))
+  await until(`${state(idle)}.then((s) => s === 'done')`, 'busy transcript answered')
   await submit(idle, 'What next? ["Run the tests", "Commit this", "Check the Nordea export too"]')
   await until(`${state(idle)}.then((s) => s === 'done')`, 'idle thread answered')
   await open('Dates land a day early')
   await until(`document.querySelectorAll('.suggestions__item').length === 3`, 'suggestions')
   await both('idle-suggestions')
+  // One hovered, the transcript scrolled to run behind them: the pill stays solid over it.
+  for (const theme of ['light', 'dark']) {
+    await t.theme(theme)
+    await t.hover('.suggestions__item:nth-child(2)')
+    await run(`document.querySelectorAll('.thread__scroll').forEach((el) => el.dispatchEvent(new WheelEvent('wheel', { deltaY: -1, bubbles: true })))`)
+    await run(`document.querySelectorAll('.thread__scroll').forEach((el) => { el.scrollTop = el.scrollHeight - el.clientHeight - 150 })`)
+    await until(`Boolean(document.querySelector('.suggestions__item:hover'))`, 'a suggestion hovered')
+    await t.shot(`idle-suggestion-hover-${theme}`)
+  }
+  await t.hover('.composer textarea')
   // A file waiting to go, with words typed.
   await run(`(() => {
     const input = document.querySelector('.dock input[type=file]')
