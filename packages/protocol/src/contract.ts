@@ -40,11 +40,12 @@ import type { ExtensionAbout } from './app.ts'
  * 4.0: a tool call's `result.images` (`ToolCallProps`) are `ImageItem`s: where each image is in the transcript, its type
  * and size, not its pixels (a window reads those with `image.read` as it shows one: `ImageFrame`, `Lightbox`). A
  * transcript's images come to windows without their pixels.
+ * 4.1: the thread hook `stopped(thread, { withdrawn })`: a stop withdrew messages others had queued for it.
  * Minor: something added (an extension that uses it asks for `^3.<minor>`); major: something an extension could rely
  * on changed or went, from 2.5 on without exception. An extension whose `api` range this doesn't satisfy is refused
  * when it's set up.
  */
-export const EXTENSION_API = '4.0.0'
+export const EXTENSION_API = '4.1.0'
 
 /** What a machine says of an extension set up there: `hello.extensions` and `features.changed` carry one each. */
 export type ExtensionManifest = Pick<ExtensionAbout, 'name' | 'version' | 'api'>

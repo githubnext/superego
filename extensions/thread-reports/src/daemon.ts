@@ -1,7 +1,8 @@
 // thread-reports: report-back. When a thread started by another (a child) ends a run (answered, failed or
 // stopped) or comes to wait on a question, its parent gets a message saying so, from it, with the first lines of its
 // answer: "From [child](thread:<id>): finished.", like thread_send's, or "replied." when the run answered a thread_send
-// of the parent's. Reports close together go as one message. While the parent is in a run, they wait here (not in its
+// of the parent's, or "was stopped" when a stop withdrew messages others had queued for it, saying how many were the
+// parent's. Reports close together go as one message. While the parent is in a run, they wait here (not in its
 // queue) until that run ends, and what goes is decided then: one about a child the parent has read since (thread_read,
 // waiting on it, say), or one that has been archived, isn't sent at all.
 //
@@ -51,27 +52,35 @@ export function excerpt(answer: string) {
   return cut.length < answer.trim().length ? `${cut}\n\n(thread_read has the rest.)` : cut
 }
 
-type Report = { thread: ThreadInfo; text: string }
+type Report = { thread: ThreadInfo; text: string; how: How }
 
 /** Whether a thread hears its children's reports: it's there, in use, and not without them. */
 const hears = (parent: ThreadInfo | undefined): parent is ThreadInfo => Boolean(parent && !parent.archived && !parent.without?.includes(reportsAbout.name))
 /** Whether its children are quiet: it hears them, and the user follows it (it's listed, not hidden like Ego's). */
 const speaksFor = (parent: ThreadInfo | undefined) => hears(parent) && !parent.hidden
 
+/**
+ * How a report came: the run answered the parent's thread_send (`replied`); it was stopped, withdrawing `withdrawn` of
+ * the parent's messages queued for it (`stopped`).
+ */
+type How = { replied?: boolean; stopped?: { withdrawn: number } }
+
 /** A thread's run ended, or it waits on a question, as its parent hears it. */
-async function describe(thread: ThreadInfo, host: ReportsHost, replied: boolean): Promise<string> {
+async function describe(thread: ThreadInfo, host: ReportsHost, { replied, stopped }: How): Promise<string> {
   const from = `From ${linkTo(thread)}:`
   const { state, msg } = thread.status
   if (state === 'blocked') return `${from} is waiting on a question${msg ? `:\n\n${excerpt(msg)}` : '.'}`
   if (state === 'error') return `${from} errored${msg ? ` (${msg.split('\n')[0]!.slice(0, 200)})` : ''}.`
   const answer = await host.answer(thread.id)
-  const ended = replied ? 'replied' : 'finished'
+  const ended = stopped
+    ? `was stopped${stopped.withdrawn ? `, withdrawing ${stopped.withdrawn === 1 ? 'the message' : `the ${stopped.withdrawn} messages`} you'd queued for it` : ''}`
+    : replied ? 'replied' : 'finished'
   return answer ? `${from} ${ended}.\n\n${excerpt(answer)}` : `${from} ${ended}, with no answer.`
 }
 
 /**
- * Reports, batched by parent. `report` a child's run ending or its question (`replied`: the run answered its parent's
- * thread_send); `idle` says a parent's run ended, sending what waited for it; `stop` drops what's waiting.
+ * Reports, batched by parent. `report` a child's run ending, its stop or its question (`How`); `idle` says a parent's
+ * run ended, sending what waited for it; `stop` drops what's waiting.
  */
 export function reporter(host: ReportsHost, { quietMs, maxMs }: Batching = BATCHING) {
   /**
@@ -105,17 +114,20 @@ export function reporter(host: ReportsHost, { quietMs, maxMs }: Batching = BATCH
   const flushing = (parent: string) => { flush(parent).catch((error) => console.error(`thread-reports: to ${parent}:`, error)) }
 
   return {
-    async report(thread: ThreadInfo, { replied = false } = {}) {
+    async report(thread: ThreadInfo, how: How = {}) {
       const parent = thread.parent
       // Waiting for sign-in, it hasn't finished: it reports when it goes on and does.
       if (!parent || thread.status.state === 'working' || waitingForSignIn(thread.status)) return
-      // Its answer as it is now, before it moves on.
-      const text = await describe(thread, host, replied)
       let batch = batches.get(parent)
       if (!batch) batches.set(parent, batch = { reports: new Map(), first: Date.now() })
-      // A later report of the same thread says where it stands now.
+      // A later report of the same thread says where it stands now, keeping how the run it reports ended: a stop is
+      // told after the run's end (or before, while the run's end is still being told).
+      const was = batch.reports.get(thread.id)?.how
+      const now: How = { ...(how.replied || was?.replied ? { replied: true } : {}), ...(how.stopped ?? was?.stopped ? { stopped: how.stopped ?? was!.stopped } : {}) }
+      // Its answer as it is now, before it moves on.
+      const text = await describe(thread, host, now)
       batch.reports.delete(thread.id)
-      batch.reports.set(thread.id, { thread, text })
+      batch.reports.set(thread.id, { thread, text, how: now })
       // Due already: it goes with the rest when the parent's run ends.
       if (batch.due) return
       clearTimeout(batch.timer)
@@ -176,8 +188,8 @@ export const threadReports = (batching: Batching = BATCHING) => defineDaemonExte
         await working.set(thread.id, true)
       }
     })
-    const report = async (thread: ThreadInfo, replied = false) => {
-      if (thread.parent && await working.get(thread.id) === true) await reports.report(thread, { replied })
+    const report = async (thread: ThreadInfo, how: Parameters<typeof reports.report>[1] = {}) => {
+      if (thread.parent && await working.get(thread.id) === true) await reports.report(thread, how)
     }
     s.thread({
       started: (thread) => { if (thread.parent) fresh.add(thread.id) },
@@ -187,8 +199,10 @@ export const threadReports = (batching: Batching = BATCHING) => defineDaemonExte
         // Its own children's reports waited for this.
         reports.idle(thread.id)
         const replied = asked.delete(thread.id)
-        await report(thread, replied)
+        await report(thread, { replied })
       },
+      // What of the parent's it withdrew goes with the report of the run it stopped, told before this or after.
+      stopped: (thread, { withdrawn }) => report(thread, { stopped: { withdrawn: withdrawn.filter((origin) => origin.from === thread.parent).length } }),
       blocked: (thread) => report(thread),
       // Told before it shows archived: its children are settled, not checked (they'd find it in use still).
       archived: async (thread) => { for (const child of await childrenOf(thread.id)) settle(child.id, false) },

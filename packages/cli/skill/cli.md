@@ -65,7 +65,7 @@ Useful ones:
 |---|---|
 | `thread.start` `cwd? title? prompt? profile? model? parent? options?` | start a thread; `options: { worktrees: true }` gives it a git worktree of its own |
 | `thread.send` `thread text whenBusy?=steer\|followUp` | send a message |
-| `thread.stop` `thread` | stop the agent |
+| `thread.stop` `thread` | stop the agent, and the messages waiting their turn: answers `{ returned }`, the user's own (each its `content` and `attachments`), to write again; another thread's or an extension's are withdrawn, and the transcript says so |
 | `thread.rename` `thread title`, `thread.archive` `thread`, `thread.unarchive` `thread` | `thread.archive` answers `{ notes }`, what extensions did (its worktree removed, say). Ego is never archived |
 | `pane.open` `thread kind title? params?` | open a pane beside a thread (`editor`, `thread`; `diff` from git, `browser` (`{ url }` or `{ path }`) from browser; a profile's own) |
 | `pane.close` `thread pane`, `pane.focus` `thread pane?` | |

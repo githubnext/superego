@@ -163,6 +163,13 @@ export type Attachment = { name: string; mimeType: string; /** Base64. */ data: 
 /** An attachment as a message carries it: inline, or by an upload on the same connection. */
 export type AttachmentRef = Attachment | { name: string; mimeType: string; upload: string }
 
+/**
+ * A message of yours that was waiting its turn when its thread was stopped, to write again: as the agent would have
+ * had it (`content`: its words, what extensions put in, its files' tags; images without their pixels), and its files,
+ * read back (`gone`: those that couldn't be, by name).
+ */
+export type ReturnedMessage = { content: string | { type: string; text?: string; mimeType?: string }[]; attachments: Attachment[]; gone?: string[] }
+
 /** What a new thread starts with. Unset: this machine's defaults. */
 export type NewThread = {
   cwd?: string
@@ -311,7 +318,12 @@ export type Methods = {
    */
   'thread.setProfile': { params: { thread: ThreadId; profile?: string }; result: ProfileRef | null }
   'thread.send': { params: { thread: ThreadId; text: string; attachments?: AttachmentRef[]; requestId?: string; whenBusy?: 'steer' | 'followUp' }; result: { submission: string } }
-  'thread.stop': { params: { thread: ThreadId }; result: null }
+  /**
+   * Stop a thread: its run, and the messages waiting their turn. Yours (a window's, the command line's: no `by` or
+   * `from`) come back, in order, to be written again; others' (another thread's `thread_send`, an extension's) are
+   * withdrawn, and the thread's transcript says so.
+   */
+  'thread.stop': { params: { thread: ThreadId }; result: { returned: ReturnedMessage[] } }
   /** Take back a message sent while the agent was busy, still waiting its turn (an item of the thread's `pi.inbox`). */
   'thread.withdraw': { params: { thread: ThreadId; submission: string }; result: null }
   /**

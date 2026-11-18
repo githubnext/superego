@@ -5,11 +5,11 @@ import { randomUUID } from 'node:crypto'
 import { stat } from 'node:fs/promises'
 import { hostname } from 'node:os'
 import { basename, dirname } from 'node:path'
-import type { ConversationId, ConversationRecord, ConversationView, Cursor, EntryId, EntryRecord, Harness, LiveState } from '@earendil-works/pi-durable'
-import { deriveStatus, MESSAGE_ENTRY, NOTE_ENTRY, RpcError, type Attachment, type Exposure, type Json, type MessageOrigin, type NewThread, type Pane, type ProviderRejection, type ThreadInfo } from '@superego/protocol'
-import { attachmentsDir, contentOf } from './attachments.ts'
+import { InboxDoc, type ConversationId, type ConversationRecord, type ConversationView, type Cursor, type EntryId, type EntryRecord, type Harness, type InboxItem, type LiveState } from '@earendil-works/pi-durable'
+import { deriveStatus, MESSAGE_ENTRY, NOTE_ENTRY, RpcError, type Attachment, type Exposure, type Json, type MessageOrigin, type NewThread, type Pane, type ProviderRejection, type ReturnedMessage, type ThreadInfo } from '@superego/protocol'
+import { attachmentsDir, attachmentsIn, contentOf } from './attachments.ts'
 import type { ExtensionHost } from './extension-host.ts'
-import type { ArchiveNote, ArchiveNotes, DaemonApi, MessageBlock, OutgoingMessage, ThreadDraft, ThreadStarting } from './extension.ts'
+import type { ArchiveNote, ArchiveNotes, DaemonApi, MessageBlock, OutgoingMessage, ThreadDraft, ThreadStarting, ThreadStop } from './extension.ts'
 import { git } from './git.ts'
 import { Catalog, clone, context, shortPath, stateOf, ThreadDoc, type Host, type Mounted, type ThreadMeta } from './host.ts'
 import { titleOf } from './names.ts'
@@ -386,11 +386,24 @@ export function createThreads(host: Host, { harness, extensions, profiles }: { h
       }
     }
   }
-  /** Turns as the hooks hear them: in order for each thread, one after another, never holding up the run. */
+  /**
+   * Turns as the hooks hear them: in order for each thread, one after another, never holding up the run. A stop
+   * (`stopped`) too, in turn: the run's end it brought may be told before or after it, as the thread's watch hears it.
+   */
   const told = new Map<string, Promise<void>>()
-  function tellLater(hook: 'turnStart' | 'turnEnd' | 'blocked', id: string) {
+  function tellLater(hook: 'turnStart' | 'turnEnd' | 'blocked', id: string): void
+  function tellLater(hook: 'stopped', id: string, stop: ThreadStop): void
+  function tellLater(hook: 'turnStart' | 'turnEnd' | 'blocked' | 'stopped', id: string, stop?: ThreadStop) {
     if (!extensions.hears(hook)) return
-    const next = (told.get(id) ?? Promise.resolve()).then(async () => { await tell(hook, id) }).catch(() => {})
+    const telling = async () => {
+      if (hook !== 'stopped') return void await tell(hook, id)
+      const m = await get(id)
+      for (const { value, owner } of hooksOf(id, m)) {
+        try { await value.stopped?.(info(id, m), clone(stop!)) } catch (error) { console.error(`Extension ${owner}: stopped of thread ${id} failed:`, error) }
+      }
+    }
+    // tell() logs each hook's failure itself; a failure to reach the thread at all (gone meanwhile) leaves nothing to tell.
+    const next = (told.get(id) ?? Promise.resolve()).then(telling).catch(() => {})
     told.set(id, next)
     void next.then(() => { if (told.get(id) === next) told.delete(id) })
   }
@@ -703,6 +716,59 @@ export function createThreads(host: Host, { harness, extensions, profiles }: { h
       await note(id, `Couldn't archive this thread: ${error instanceof Error ? error.message : String(error)}`)
     }).catch((error) => console.error(`Couldn't archive thread ${id}:`, error)).finally(() => archiving.delete(id))
   }
+  /**
+   * Stop a thread (`thread.stop`): its run, and what waits its turn. The queue is taken out first, in one commit, so
+   * none of it goes in meanwhile. The user's messages (a window's, the command line's: no `by` or `from`) come back,
+   * in order, to be written again: they're the user's to send or not. Others' are withdrawn: said in the transcript,
+   * and told to the extensions (`stopped`), so the sender hears it (thread-reports' report to a parent).
+   */
+  async function stop(id: string): Promise<{ returned: ReturnedMessage[] }> {
+    const m = await get(id)
+    const taken = await m.conversation.commit(async (tx) => {
+      const items = (await tx.doc(InboxDoc, m.conversation.id)).items
+      const inputs: InboxItem[] = []
+      // Queued writes (a note) stay, to be placed as ever.
+      for (let index = 0; index < items.length;) {
+        const item = items[index]!
+        if (item.mode === 'write') { index++; continue }
+        inputs.push(clone(item))
+        tx.settleSubmission(item.id, { status: 'unanswered', reason: 'aborted' })
+        items.splice(index, 1)
+      }
+      return inputs
+    }, context)
+    await m.conversation.abort(context)
+    const dir = attachmentsDir(options.dataDir, id)
+    const returned: ReturnedMessage[] = []
+    const withdrawn: MessageOrigin[] = []
+    for (const item of taken) {
+      if (item.mode === 'write') continue
+      const origin = item.entry?.kind === MESSAGE_ENTRY ? originOf((item.entry.data ?? {}) as MessageOrigin) : undefined
+      if (origin && !origin.by && !origin.from) {
+        const content = item.content as ReturnedMessage['content']
+        const { attachments, gone } = await attachmentsIn(dir, content)
+        // Its images' pixels are in its attachments: not twice.
+        const words = typeof content === 'string' ? content : content.map((block) => block.type === 'image' ? { type: 'image', mimeType: block.mimeType } : block)
+        returned.push({ content: words, attachments, ...(gone.length ? { gone } : {}) })
+      } else withdrawn.push(origin ?? {})
+    }
+    if (withdrawn.length) {
+      await note(id, `Stopped: ${await withdrawnFrom(withdrawn)} withdrawn.`)
+      tellLater('stopped', id, { withdrawn })
+    }
+    return { returned }
+  }
+  /** Who the messages withdrawn at a stop came from, as a transcript says it: "2 queued messages from Lead and 1 from …". */
+  async function withdrawnFrom(withdrawn: MessageOrigin[]) {
+    const counts = new Map<string, number>()
+    for (const { by, from } of withdrawn) {
+      // A thread gone since is named by its id.
+      const sender = from ? await get(from).then((m) => info(from, m).title, () => `thread ${from}`) : by ? `the ${by} extension` : 'Superego'
+      counts.set(sender, (counts.get(sender) ?? 0) + 1)
+    }
+    const parts = [...counts].map(([sender, n], index) => `${n}${index ? '' : ` queued message${n === 1 ? '' : 's'}`} from ${sender}`)
+    return parts.length > 1 ? `${parts.slice(0, -1).join(', ')} and ${parts.at(-1)}` : parts[0]!
+  }
   /** A line in a thread's transcript from Superego itself, not the agent's (`superego.note`): for the user, not the model. */
   async function note(id: string, text: string) {
     await (await get(id)).conversation.submit({ type: 'write', entry: { kind: NOTE_ENTRY, data: { text } } }, context)
@@ -777,7 +843,7 @@ export function createThreads(host: Host, { harness, extensions, profiles }: { h
   }
 
   return {
-    list, get, updateMeta, editState, heedStatus, rebound, letGoOf, note, tellPaneClosed, submit, startThread, archive, unarchive, openPane, history, lastAnswer: answerOf, read,
+    list, get, updateMeta, editState, heedStatus, rebound, letGoOf, note, tellPaneClosed, submit, stop, startThread, archive, unarchive, openPane, history, lastAnswer: answerOf, read,
     watchTranscript, imageBlock, apiFor, retrySignIn, rejectedNow, learnConversations, threadOf,
   }
 }

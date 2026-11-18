@@ -1,7 +1,7 @@
 // What's sent with a message: each file kept in its thread's folder on this machine (attachments/<thread>/) and named
 // to the agent by its path, a small text file inline too, an image also given to the model as an image.
-import { mkdir, stat, writeFile } from 'node:fs/promises'
-import { basename, join } from 'node:path'
+import { mkdir, readFile, stat, writeFile } from 'node:fs/promises'
+import { basename, join, relative } from 'node:path'
 import { obj, RpcError, str, type Attachment } from '@superego/protocol'
 import { quote } from './agents-md.ts'
 import { UPLOAD_LIMIT } from './connection.ts'
@@ -45,4 +45,32 @@ export async function contentOf(dir: string, text: string, attachments: Attachme
     } else blocks.push({ type: 'text', text: `${tag} />` })
   }
   return blocks
+}
+
+const TAG = /^<attachment name="([^"]*)" type="([^"]*)" path="([^"]*)"/
+const unquote = (value: string) => value.replace(/&#(\d+);/g, (_m, code: string) => String.fromCharCode(Number(code)))
+
+/**
+ * The files a message's `content` (as `contentOf` made it) was sent with, read back from `dir` (its thread's
+ * `attachmentsDir`), in order: to be sent again. A tag naming a file outside `dir` isn't one of them (a message may
+ * say anything). One that can't be read (removed since) is `gone`, by name.
+ */
+export async function attachmentsIn(dir: string, content: string | readonly { type: string; text?: string }[]): Promise<{ attachments: Attachment[]; gone: string[] }> {
+  const found: Attachment[] = []
+  const gone: string[] = []
+  if (typeof content === 'string') return { attachments: found, gone }
+  for (const block of content) {
+    const tag = block.type === 'text' ? TAG.exec(block.text ?? '') : null
+    if (!tag) continue
+    const path = unquote(tag[3]!)
+    const inside = relative(dir, path)
+    if (!inside || inside.startsWith('..') || inside.startsWith('/')) continue
+    try {
+      found.push({ name: unquote(tag[1]!), mimeType: unquote(tag[2]!), data: (await readFile(path)).toString('base64') })
+    } catch (error) {
+      console.error(`Couldn't read back an attachment to send again: ${path}`, error)
+      gone.push(unquote(tag[1]!))
+    }
+  }
+  return { attachments: found, gone }
 }

@@ -7,13 +7,14 @@ import type { Attachment, ThreadInfo } from '@superego/protocol'
 import { ArrowDownIcon, ArrowElbowRightIcon, ArrowUpIcon, Button, FileIcon, IconButton, ListIcon, PaperclipIcon, TextArea, XIcon } from '@superego/ui'
 import type { MachineEntry } from '../shared/bridge.ts'
 import { useRegistry } from './registry.tsx'
-import { completionsIn } from './lookups.ts'
+import { completionsIn, sentWithIn } from './lookups.ts'
 import { Slot } from './placement.tsx'
 import { useShell } from './state.tsx'
 import { ctrlDigit } from '../shared/shortcuts.ts'
 import { useLocalState } from './local-state.ts'
 import { readAttachment, splitMessage } from './attachments.ts'
-import { askFor, complete, completing, menuFor, type Completion, type Offered } from './composer.ts'
+import { askFor, complete, completing, menuFor, readSent, type Completion, type Offered } from './composer.ts'
+import { onGivenBack, takeBack } from './returned.ts'
 import { ProfileSwitch } from './profile-pick.tsx'
 import { UnarchiveButton } from './thread-actions.tsx'
 import type { Message } from './transcript.tsx'
@@ -124,6 +125,27 @@ export function ComposerView({ machine, thread, busy, inbox, onJump }: { machine
   const [dragging, setDragging] = useState(false)
   const picker = useRef<HTMLInputElement>(null)
   useEffect(() => { setFiles([]) }, [thread.id])
+  // Messages you'd queued, given back as the thread was stopped from this window: after what's typed, each its own
+  // paragraph, in order, their files with them. Their words as the transcript shows them: without what extensions
+  // put in (a skill named) or the files' tags.
+  const registry = useRegistry()
+  useEffect(() => {
+    const take = () => {
+      const returned = takeBack(machine.id, thread.id)
+      if (!returned.length) return
+      const readers = sentWithIn(registry, { machine: machine.id, thread })
+      const words = returned.map(({ content }) => {
+        const blocks = typeof content === 'string' ? [{ type: 'text', text: content }] : content
+        return splitMessage(readSent(readers, blocks).rest).text.trim()
+      })
+      setText((typed) => [typed.trim() ? typed.trimEnd() : '', ...words].filter(Boolean).join('\n\n'))
+      setFiles((was) => [...was, ...returned.flatMap((message) => message.attachments)])
+      const gone = returned.flatMap((message) => message.gone ?? [])
+      if (gone.length) setError({ message: `Couldn't bring back ${gone.join(', ')}: ${gone.length === 1 ? 'it was' : 'they were'} sent with a message you'd queued.` })
+    }
+    take()
+    return onGivenBack(take)
+  }, [machine.id, thread.id])
   const attach = async (list: FileList | File[]) => {
     try {
       const read = await Promise.all([...list].map(readAttachment))
@@ -136,7 +158,6 @@ export function ComposerView({ machine, thread, busy, inbox, onJump }: { machine
   // the message for when it's done.
   // Completing a word as it's typed, as extensions offer (`$co` → a skill, see composer.ts): ↑↓ pick, ⇥ or ⏎ takes
   // one, esc leaves the word as typed.
-  const registry = useRegistry()
   useSyncExternalStore(registry.subscribe, () => registry.version)
   const [caret, setCaret] = useState(0)
   const [pick, setPick] = useState(0)

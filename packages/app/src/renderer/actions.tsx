@@ -4,7 +4,7 @@
 import { useEffect, useState } from 'react'
 import { createRouter, int, lit, obj, opt, str, type Router, union, type ActionDef, type ActionInfo, type ActionLogEntry, type AppConfig, type Exposure, type Json, type JsonSchema, type Static } from '@superego/protocol'
 import { Dialog } from '@superego/ui'
-import type { ThreadInfo } from '@superego/protocol'
+import type { ReturnedMessage, ThreadInfo } from '@superego/protocol'
 import type { MachineEntry } from '../shared/bridge.ts'
 import { APP, PANE_LAYOUT, type PaneLayout } from '../shared/app-settings.ts'
 import type { NewThreadStart, Selection } from './state.tsx'
@@ -14,6 +14,7 @@ import { focusBeside, focusColumn, focusPrompt, focusThread } from './focus.ts'
 import { scrollHalfPage } from './scroll.ts'
 import { startRename } from './rename.ts'
 import { setLocalState, windowState } from './local-state.ts'
+import { giveBack } from './returned.ts'
 import { clearProblem, reportProblem } from './machine-problems.ts'
 import { showOnboarding } from './Onboarding.tsx'
 import { maximizedPane, maximizedStore, toggleMaximized } from './maximized.ts'
@@ -107,6 +108,12 @@ export function createWindowRouter() {
     const ran = router.track(id, filled, `${source} → ${target}`, () => window.superego.call(target, 'action.run', { id, params: filled }))
     // A pane opened from this window was asked for here: the focus goes into it. (The agent's open beside, unfocused.)
     if (id === 'pane.open') void ran.then((pane) => { const opened = (pane as { id?: string } | null)?.id; if (opened) focusColumn(opened) }, () => {})
+    // A stop from this window gives the messages you'd queued back to the thread's composer here, to write again: this
+    // window's, as it pressed Stop (one window, so they come back once). An older daemon answers null: they're gone.
+    if (id === 'thread.stop' && typeof filled.thread === 'string') {
+      const thread = filled.thread
+      void ran.then((stopped) => giveBack(target, thread, (stopped as { returned?: ReturnedMessage[] } | null)?.returned ?? []), () => {})
+    }
     return ran
   }
 

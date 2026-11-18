@@ -109,6 +109,9 @@ superego.thread<{ path: string; branch: string }>({   // the state its starting 
 - `turnStart` and `turnEnd` are per run, not per message: a message steered or queued into a run that's going is part
   of it. A run resumed after a restart had started already, so it ends with a `turnEnd` alone; one that ended while
   the daemon was down gets neither.
+- `stopped(thread, { withdrawn })` is told when a stop (`thread.stop`) withdrew messages others had queued for the
+  thread (another thread's `thread_send`, an extension's): each one's origin, in order. The `turnEnd` of the run it stopped may be told
+  before or after it. The user's own aren't withdrawn: they come back to them to write again. (`api: '^4.1'`.)
 - `blocked` is told when a thread comes to need the user mid-run (an extension's `status`: `agent-ui`'s question), once
   each time: when the extension whose status it is calls `invalidate()`.
 - A thread archiving itself mid-turn is `threads.archive(id, { whenIdle: true })`: archived once its run ends, even

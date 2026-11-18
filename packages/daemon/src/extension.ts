@@ -158,6 +158,13 @@ export type ThreadHooks<S extends Json = Json> = {
   /** Its run ended: answered, failed or stopped. Not for one that ended while the daemon was down. */
   turnEnd?(thread: ThreadInfo): void | Promise<void>
   /**
+   * It was stopped (`thread.stop`), withdrawing messages others had queued for it (another thread's `thread_send`, an
+   * extension's), which `withdrawn` says the origins of, one each, in order. The user's own come back to them to write
+   * again, and aren't here. Told in turn with its other hooks: the `turnEnd` of the run it stopped may be told before
+   * or after it.
+   */
+  stopped?(thread: ThreadInfo, stop: ThreadStop): void | Promise<void>
+  /**
    * It came to need the user (an extension's `status` says so: a question), mid-run: once each time, as the extension
    * whose status it is calls `invalidate()`.
    */
@@ -183,6 +190,8 @@ export type ThreadHooks<S extends Json = Json> = {
   /** A pane beside it closed: closed by someone, or gone as the thread was cleared. What the pane held can go. */
   paneClosed?(thread: ThreadInfo, pane: Pane): void | Promise<void>
 }
+/** What a thread's stop withdrew of others' messages, as `stopped` hears it. */
+export type ThreadStop = { withdrawn: MessageOrigin[] }
 /** What a `starting` hook gives a new thread: the folder it works in instead, and this extension's state with it. */
 export type ThreadStarting<S extends Json = Json> = { cwd?: string; state?: S }
 /** What archiving a thread did, in a line, from an extension's `archiving` or `archived`. */

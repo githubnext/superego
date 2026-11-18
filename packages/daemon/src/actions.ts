@@ -58,9 +58,9 @@ export function registerCoreActions(host: Host, { harness, machine, threads, pro
   }))
   router.register(defineAction({
     id: 'thread.stop', title: 'Stop the agent', expose: ['ui', 'cli', 'outside'], ...thread,
-    description: 'Stop a thread\'s agent mid-turn. The thread stays, and takes messages again.',
+    description: 'Stop a thread\'s agent mid-turn, and the messages waiting their turn. The thread stays, and takes messages again. `returned`: the user\'s own waiting messages (none of another thread\'s or an extension\'s, which are withdrawn), in order, to write again: each its `content` and `attachments`.',
     params: obj({ thread: str() }),
-    async run({ thread: id }) { await (await threads.get(id)).conversation.abort(context); return null },
+    run: ({ thread: id }) => threads.stop(id),
   }))
   router.register(defineAction({
     id: 'thread.withdraw', title: 'Take back a message waiting its turn', expose: ['ui', 'cli'], ...thread,

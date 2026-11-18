@@ -208,6 +208,22 @@ it("says a run that answered the parent's thread_send replied", async () => {
   expect(sent).toEqual([['1', 'From [Icons](thread:3): replied.\n\nIcons swapped.']])
 })
 
+it('says a child was stopped, and how many of the messages its parent queued for it the stop withdrew, whichever is told first', async () => {
+  const { h, sent, find } = host()
+  const reports = reporter(h, { quietMs: 10, maxMs: 10 })
+  // The run's end, then its stop.
+  await reports.report(find('3'))
+  await reports.report(find('3'), { stopped: { withdrawn: 2 } })
+  // The stop told first.
+  await reports.report(find('2'), { stopped: { withdrawn: 1 } })
+  await reports.report(find('2'), { replied: true })
+  await vi.advanceTimersByTimeAsync(10)
+  expect(sent).toEqual([['1', [
+    "From [Icons](thread:3): was stopped, withdrawing the 2 messages you'd queued for it.\n\nIcons swapped.",
+    "From [Dates](thread:2): was stopped, withdrawing the message you'd queued for it.\n\nDates are UTC now.\nAll tests pass.",
+  ].join('\n\n---\n\n')]])
+})
+
 it('keeps a long answer to its first lines', () => {
   expect(excerpt('a\nb')).toBe('a\nb')
   expect(excerpt('1\n2\n3\n4\n5\n6\n7\n8')).toBe('1\n2\n3\n4\n5\n6\n\n(thread_read has the rest.)')
