@@ -53,11 +53,11 @@ describe('holdWebView', () => {
 
   it("keeps a pane's page as it was when it's drawn again, and tells its last state", async () => {
     const { holdWebView } = await load()
-    const first = holdWebView(pane('p'), { src: 'http://a/', partition: 'preview' }, () => {})
+    const first = holdWebView(pane('p'), { src: 'http://a/', partition: 'browser' }, () => {})
     opened[0]!.tell(at('http://a/next'))
     first.release()
     const events: WebViewEvent[] = []
-    const again = holdWebView(pane('p'), { src: 'http://a/', partition: 'preview' }, (event) => events.push(event))
+    const again = holdWebView(pane('p'), { src: 'http://a/', partition: 'browser' }, (event) => events.push(event))
     expect(again.view).toBe(first.view)
     expect(opened).toHaveLength(1)
     expect(opened[0]!.loads).toEqual(['http://a/'])
@@ -66,26 +66,26 @@ describe('holdWebView', () => {
 
   it('goes where its pane points it, and reloads as what it shows changes', async () => {
     const { holdWebView } = await load()
-    const held = holdWebView(pane('p'), { src: 'http://a/', partition: 'preview', revision: '1' }, () => {})
-    held.ask({ src: 'http://a/', partition: 'preview', revision: '1' })
+    const held = holdWebView(pane('p'), { src: 'http://a/', partition: 'browser', revision: '1' }, () => {})
+    held.ask({ src: 'http://a/', partition: 'browser', revision: '1' })
     expect(opened[0]!.reloads).toBe(0)
-    held.ask({ src: 'http://a/', partition: 'preview', revision: '2' })
+    held.ask({ src: 'http://a/', partition: 'browser', revision: '2' })
     expect(opened[0]!.reloads).toBe(1)
     held.release()
     // Pointed elsewhere while it wasn't drawn: it goes there as it's drawn again.
-    holdWebView(pane('p'), { src: 'http://b/', partition: 'preview', revision: '2' }, () => {})
+    holdWebView(pane('p'), { src: 'http://b/', partition: 'browser', revision: '2' }, () => {})
     expect(opened[0]!.loads).toEqual(['http://a/', 'http://b/'])
   })
 
   it('keeps only the most recently shown, and opens one closed for room where it was', async () => {
     const { holdWebView, KEPT_WEB_VIEWS } = await load()
     for (let i = 0; i <= KEPT_WEB_VIEWS; i++) {
-      const held = holdWebView(pane(`p${i}`), { src: `http://${i}/`, partition: 'preview' }, () => {})
+      const held = holdWebView(pane(`p${i}`), { src: `http://${i}/`, partition: 'browser' }, () => {})
       opened[i]!.tell(at(`http://${i}/moved`))
       held.release()
     }
     expect(opened.map((v) => v.closed)).toEqual([true, ...Array(KEPT_WEB_VIEWS).fill(false)])
-    holdWebView(pane('p0'), { src: 'http://0/', partition: 'preview' }, () => {})
+    holdWebView(pane('p0'), { src: 'http://0/', partition: 'browser' }, () => {})
     expect(opened.at(-1)!.url).toBe('http://0/moved')
     // That one shown, the least recently shown of the rest went.
     expect(opened[1]!.closed).toBe(true)
@@ -93,8 +93,8 @@ describe('holdWebView', () => {
 
   it('never shares a view drawn twice at once, and closes a pane-less one as it goes', async () => {
     const { holdWebView } = await load()
-    const one = holdWebView(pane('p'), { src: 'http://a/', partition: 'preview' }, () => {})
-    const two = holdWebView(pane('p'), { src: 'http://a/', partition: 'preview' }, () => {})
+    const one = holdWebView(pane('p'), { src: 'http://a/', partition: 'browser' }, () => {})
+    const two = holdWebView(pane('p'), { src: 'http://a/', partition: 'browser' }, () => {})
     expect(two.view).not.toBe(one.view)
     two.release()
     expect(opened[1]!.closed).toBe(true)
@@ -106,9 +106,9 @@ describe('holdWebView', () => {
 
   it('closes the page of a pane that is gone, not of one not known yet', async () => {
     const { holdWebView, pruneWebViews } = await load()
-    holdWebView(pane('gone'), { src: 'http://a/', partition: 'preview' }, () => {}).release()
-    holdWebView(pane('unknown'), { src: 'http://b/', partition: 'preview' }, () => {}).release()
-    const shown = holdWebView(pane('shown'), { src: 'http://c/', partition: 'preview' }, () => {})
+    holdWebView(pane('gone'), { src: 'http://a/', partition: 'browser' }, () => {}).release()
+    holdWebView(pane('unknown'), { src: 'http://b/', partition: 'browser' }, () => {}).release()
+    const shown = holdWebView(pane('shown'), { src: 'http://c/', partition: 'browser' }, () => {})
     pruneWebViews((p) => p.pane === 'gone' ? false : p.pane === 'unknown' ? undefined : false)
     expect(opened.map((v) => v.closed)).toEqual([true, false, false])
     shown.release()

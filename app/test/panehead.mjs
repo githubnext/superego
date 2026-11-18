@@ -1,4 +1,4 @@
-// Panes' heads (run by `test/look.sh <dir> panehead`): an editor (its bar under its tab), a folder and a Preview (its
+// Panes' heads (run by `test/look.sh <dir> panehead`): an editor (its bar under its tab), a folder and a Browser pane (its
 // toolbar), at rest and with what's under each scrolled up beneath it, light and dark, cropped to the window's top,
 // into $SUPEREGO_SHOWCASE_OUT. Checks on the way that a head shades only while what's right under it is scrolled.
 import { createServer } from 'node:http'
@@ -24,8 +24,8 @@ await openApp({ name: 'panehead', timeout: 240_000 }, async (t) => {
   await until(`!!document.querySelector('.file-editor .cm-content')`, 'editor')
   await run(`window.superego.call('local', 'pane.open', { thread: '${id}', kind: 'folder', params: { path: 'entries' } })`)
   await until(`!!document.querySelector('.files-tree__row')`, 'folder')
-  await run(`window.superego.call('local', 'pane.open', { thread: '${id}', kind: 'preview', params: { url: 'http://localhost:${server.address().port}/' } })`)
-  await until(`!!document.querySelector('.web-panes-address__text')`, 'preview')
+  await run(`window.superego.call('local', 'pane.open', { thread: '${id}', kind: 'browser', params: { url: 'http://localhost:${server.address().port}/' } })`)
+  await until(`!!document.querySelector('.browser-address__text')`, 'browser')
   await t.settled()
   // All in view at once: narrower columns than they'd open at.
   await run(`document.querySelectorAll('.panes > .panes__column').forEach((c, i) => { c.style.width = i ? '560px' : '420px' }); document.querySelector('.panes').scrollLeft = 0`)

@@ -371,7 +371,7 @@ function useAppearance() {
 
 /**
  * Key presses to the actions bound to them, and the shortcuts bound now told to the main process: a page in a pane
- * (Preview, an artifact) that has the keyboard gets key presses before this window could, so the main process takes
+ * (a Browser pane's) that has the keyboard gets key presses before this window could, so the main process takes
  * these ones first and hands them back (`app.key`, see useAppEvents). Answers `runKeys`, which runs the action bound
  * to a shortcut, through the same router the palette and other code dispatch through; with two on one shortcut, the
  * first registered wins (Settings → Keyboard shows the clash). It says whether one ran.

@@ -1,4 +1,4 @@
-// Preview's site permissions: what's asked for, asked once per site and permission, answered by the user alone, kept,
+// Web pages' site permissions: what's asked for, asked once per site and permission, answered by the user alone, kept,
 // and forgotten; and how the asks are said.
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -147,7 +147,7 @@ describe("a site's permissions", () => {
 describe('the answers on disk', () => {
   it('are kept between launches; a file that cannot be read is said, and starts empty', () => {
     const dir = mkdtempSync(join(tmpdir(), 'sites-'))
-    const path = join(dir, 'preview-sites.json')
+    const path = join(dir, 'browser-sites.json')
     expect(fileStore(path).load()).toEqual({})
     fileStore(path).save({ [OKTA]: { notifications: 'granted' } })
     expect(fileStore(path).load()).toEqual({ [OKTA]: { notifications: 'granted' } })

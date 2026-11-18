@@ -336,10 +336,10 @@ describe('record and replay', () => {
     const { peer, close } = await open()
     const thread = await peer.call<ThreadInfo>('thread.start', { title: 'panes' })
     const diff = await peer.call<{ id: string }>('pane.open', { thread: thread.id, kind: 'diff' })
-    const preview = await peer.call<{ id: string }>('pane.open', { thread: thread.id, kind: 'preview', params: { url: 'http://localhost:3000' } })
+    const preview = await peer.call<{ id: string }>('pane.open', { thread: thread.id, kind: 'browser', params: { url: 'http://localhost:3000' } })
     expect((await peer.call<{ id: string }>('pane.open', { thread: thread.id, kind: 'diff' })).id).toBe(diff.id)
     let info = (await threads(peer)).find((s) => s.id === thread.id)!
-    expect(info.panes?.map((p) => p.kind)).toEqual(['diff', 'preview'])
+    expect(info.panes?.map((p) => p.kind)).toEqual(['diff', 'browser'])
     expect(info.pane).toBeUndefined()
     await peer.call('pane.focus', { thread: thread.id, pane: diff.id })
     expect((await threads(peer)).find((s) => s.id === thread.id)!.pane).toBe(diff.id)

@@ -1,5 +1,6 @@
-// The browser toolbar of Preview and Artifact (run by `test/look.sh <dir> toolbar`): a page with no history yet, one
-// with history to go back, the pane holding the keyboard (its "↩ to use the page" hint), and an artifact. Light and dark,
+// The Browser pane's toolbar, a web page's and an HTML file's (run by `test/look.sh <dir> toolbar`): a page with no history yet, one
+// with history to go back, its address bar being typed in, the pane holding the keyboard (its "↩ to use the page"
+// hint), an HTML file, and a blank page. Light and dark,
 // each cropped to the pane's top, into $SUPEREGO_SHOWCASE_OUT.
 import { webContents } from 'electron'
 import { writeFileSync } from 'node:fs'
@@ -22,7 +23,7 @@ await openApp({ name: 'toolbar', timeout: 180_000 }, async (t) => {
   await t.emulateFocus()
 
   // The pane's top: its tab and its toolbar, with a little of what's under it.
-  const top = `(() => { const r = document.querySelector('.panes__column:has(.web-panes-frame)').getBoundingClientRect(); return { getBoundingClientRect: () => ({ x: r.x, y: r.y, width: r.width, height: 96 }) } })()`
+  const top = `(() => { const r = document.querySelector('.panes__column:has(.browser-frame)').getBoundingClientRect(); return { getBoundingClientRect: () => ({ x: r.x, y: r.y, width: r.width, height: 96 }) } })()`
   const both = async (name, before) => {
     for (const theme of ['light', 'dark']) {
       await t.theme(theme)
@@ -30,10 +31,10 @@ await openApp({ name: 'toolbar', timeout: 180_000 }, async (t) => {
       await t.shot(`toolbar-${name}-${theme}`, top)
     }
   }
-  const address = `document.querySelector('.web-panes-address__text')?.textContent`
+  const address = `document.querySelector('.browser-address__text')?.textContent`
   const url = `http://localhost:${server.address().port}/`
 
-  await run(`window.superego.call('local', 'pane.open', { thread: '${id}', kind: 'preview', params: { url: ${JSON.stringify(url)} } })`)
+  await run(`window.superego.call('local', 'pane.open', { thread: '${id}', kind: 'browser', params: { url: ${JSON.stringify(url)} } })`)
   await until(`${address} === ${JSON.stringify(url)}`, 'the page shown')
   await both('fresh')
   // A link followed: back is offered.
@@ -41,15 +42,29 @@ await openApp({ name: 'toolbar', timeout: 180_000 }, async (t) => {
   await view.loadURL(`${url}invoices/2024?draft=1`)
   await until(`${address}.endsWith('/invoices/2024?draft=1') && !document.querySelector('button[aria-label="Back"]').disabled`, 'back offered')
   await both('history')
+  // The address bar clicked: a field, the address selected.
+  await both('editing', async () => {
+    if (!await run(`Boolean(document.querySelector('input.browser-address'))`)) await t.click('button.browser-address')
+    await until(`document.activeElement?.matches('input.browser-address')`, 'the address bar a field')
+  })
+  await run(`document.querySelector('input.browser-address').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`)
+  await until(`!document.querySelector('input.browser-address')`, 'the address bar a pill again')
   // The pane holding the keyboard: Return passes it to the page, and it says so.
-  await both('hint', () => until(`(() => { const el = document.querySelector('.web-panes-frame .web-view'); el.focus({ preventScroll: true }); return Boolean(document.querySelector('.web-panes-hint')) })()`, 'the hint'))
+  await both('hint', () => until(`(() => { const el = document.querySelector('.browser-frame .web-view'); el.focus({ preventScroll: true }); return Boolean(document.querySelector('.browser-hint')) })()`, 'the hint'))
   await run(`document.activeElement?.blur()`)
 
   const preview = await run(`window.superego.call('local', 'thread.list', {}).then((l) => l.find((t) => t.id === '${id}').panes.at(-1).id)`)
   await run(`window.superego.call('local', 'pane.close', { thread: '${id}', pane: '${preview}' })`)
-  await until(`!document.querySelector('.web-panes-frame')`, 'the preview closed')
-  await run(`window.superego.call('local', 'pane.open', { thread: '${id}', kind: 'artifact', params: { path: 'report.html' } })`)
+  await until(`!document.querySelector('.browser-frame')`, 'the web page closed')
+  await run(`window.superego.call('local', 'pane.open', { thread: '${id}', kind: 'browser', params: { path: 'report.html' } })`)
   await until(`${address} === 'report.html'`, 'the artifact shown')
   await both('artifact')
+  // A blank page, opened from the pane menu or ⌘T: its address bar waiting.
+  const file = await run(`window.superego.call('local', 'thread.list', {}).then((l) => l.find((t) => t.id === '${id}').panes.at(-1).id)`)
+  await run(`window.superego.call('local', 'pane.close', { thread: '${id}', pane: '${file}' })`)
+  await until(`!document.querySelector('.browser-frame')`, 'the file closed')
+  await run(`window.superego.call('local', 'pane.open', { thread: '${id}', kind: 'browser' })`)
+  await until(`Boolean(document.querySelector('input.browser-address'))`, 'a blank page')
+  await both('blank')
   server.close()
 })

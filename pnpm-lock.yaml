@@ -221,6 +221,9 @@ importers:
       '@superego/app':
         specifier: workspace:*
         version: link:../packages/app
+      '@superego/browser':
+        specifier: workspace:*
+        version: link:../extensions/browser
       '@superego/cli':
         specifier: workspace:*
         version: link:../packages/cli
@@ -278,9 +281,6 @@ importers:
       '@superego/unread':
         specifier: workspace:*
         version: link:../extensions/unread
-      '@superego/web-panes':
-        specifier: workspace:*
-        version: link:../extensions/web-panes
       '@superego/worktrees':
         specifier: workspace:*
         version: link:../extensions/worktrees
@@ -321,6 +321,28 @@ importers:
       '@superego/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol
+    devDependencies:
+      '@superego/sdk':
+        specifier: workspace:*
+        version: link:../../packages/sdk
+      '@types/react':
+        specifier: ^19
+        version: 19.3.0
+      react:
+        specifier: ^19
+        version: 19.3.1
+
+  extensions/browser:
+    dependencies:
+      '@superego/app':
+        specifier: workspace:*
+        version: link:../../packages/app
+      '@superego/protocol':
+        specifier: workspace:*
+        version: link:../../packages/protocol
+      '@superego/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
     devDependencies:
       '@superego/sdk':
         specifier: workspace:*
@@ -743,28 +765,6 @@ importers:
         version: 19.3.1(react@19.3.1)
 
   extensions/unread:
-    dependencies:
-      '@superego/app':
-        specifier: workspace:*
-        version: link:../../packages/app
-      '@superego/protocol':
-        specifier: workspace:*
-        version: link:../../packages/protocol
-      '@superego/ui':
-        specifier: workspace:*
-        version: link:../../packages/ui
-    devDependencies:
-      '@superego/sdk':
-        specifier: workspace:*
-        version: link:../../packages/sdk
-      '@types/react':
-        specifier: ^19
-        version: 19.3.0
-      react:
-        specifier: ^19
-        version: 19.3.1
-
-  extensions/web-panes:
     dependencies:
       '@superego/app':
         specifier: workspace:*

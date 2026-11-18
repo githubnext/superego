@@ -23,8 +23,11 @@ import { holdWebView, type HeldWebView, type PaneRef, type WebViewAsk } from './
  */
 export const OVERLAYS = '.superego-layer, .superego-dialog__backdrop, .superego-dialog, .lightbox, .app__scrim, .thread-sheet, .pair-gate, [data-superego-overlay]'
 
-/** What a pane does to its page: go back and forward, reload it, show a file it saved, answer what it asks (its state's `ask`). */
-export type WebViewHandle = { go(by: -1 | 1): void; reload(): void; reveal(path: string): void; answer(allow: boolean): void }
+/**
+ * What a pane does to its page: take it somewhere (where it is already: again), go back and forward, reload it, give it
+ * the keyboard, show a file it saved, answer what it asks (its state's `ask`).
+ */
+export type WebViewHandle = { load(url: string): void; go(by: -1 | 1): void; reload(): void; focus(): void; reveal(path: string): void; answer(allow: boolean): void }
 
 /** A page to show: its address, and whose cookies it keeps (`partition`). */
 export type WebViewProps = {
@@ -58,7 +61,7 @@ export const hasWebViews = () => Boolean(window.superego?.webView)
  * framing allowed, back and forward), in a browser an iframe. The window's overlays (`OVERLAYS`) stay above it.
  *
  * ```tsx
- * <WebView src="http://localhost:5173" partition="preview" title="Preview" sandbox="allow-scripts allow-forms" />
+ * <WebView src="http://localhost:5173" partition="browser" title="Browser" sandbox="allow-scripts allow-forms" />
  * ```
  */
 export function WebView(props: WebViewProps) {
@@ -81,7 +84,7 @@ function useWaiting(waiting: boolean, onWaiting: WebViewProps['onWaiting']) {
   useEffect(() => () => listener.current?.(false), [])
 }
 
-function FramedWebView({ src, title, sandbox, revision, onWaiting, ref }: WebViewProps) {
+function FramedWebView({ src, partition, title, sandbox, revision, onWaiting, ref }: WebViewProps) {
   const [key, setKey] = useState(0)
   // What it shows changed: loaded again.
   const shown = useRef(revision)
@@ -94,14 +97,19 @@ function FramedWebView({ src, title, sandbox, revision, onWaiting, ref }: WebVie
   // The box itself has the focus (the page has it once the frame does).
   const [held, setHeld] = useState(false)
   useWaiting(held, onWaiting)
-  useImperativeHandle(ref, () => ({ go: () => {}, reload: () => setKey((k) => k + 1), reveal: () => {}, answer: () => {} }), [])
+  // A framed page's own moves aren't seen: going somewhere is going to `src`, as the pane points it there.
+  useImperativeHandle(ref, () => ({
+    load: () => setKey((k) => k + 1), go: () => {}, reload: () => setKey((k) => k + 1), focus: () => frame.current?.focus(), reveal: () => {}, answer: () => {},
+  }), [])
   return (
     <div className="web-view web-view--framed" tabIndex={-1} data-focus onKeyDown={onReturn(() => frame.current?.focus())}
       onFocus={(event) => setHeld(event.target === event.currentTarget)} onBlur={(event) => { if (event.target === event.currentTarget) setHeld(false) }}>
       <iframe ref={frame} key={key} src={src} title={title} sandbox={sandbox} />
-      <p className="web-view__framed">
-        Framed here: a page that refuses frames, or signs in with cookies, may not work. <a href={src} target="_blank" rel="noreferrer">Open in a new tab</a>
-      </p>
+      {partition === 'browser' && (
+        <p className="web-view__framed">
+          Framed here, where many sites refuse to show or to sign in. <a href={src} target="_blank" rel="noreferrer">Open in a new tab</a>
+        </p>
+      )}
     </div>
   )
 }
@@ -169,15 +177,19 @@ function NativeWebView({ src, partition, revision, onEvent, onWaiting, ref }: We
   }, [paneKey, partition])
   useEffect(() => { held.current?.ask(asked.current) }, [src, revision])
   useImperativeHandle(ref, () => ({
-    go: (by) => view()?.go(by), reload: () => view()?.reload(), reveal: (path) => view()?.reveal(path), answer: (allow) => view()?.answer(allow),
+    load: (url) => view()?.load(url), go: (by) => view()?.go(by), reload: () => view()?.reload(), focus: () => enterRef.current(),
+    reveal: (path) => view()?.reveal(path), answer: (allow) => view()?.answer(allow),
   }), [])
 
   // Return gives the page the keyboard; the focus moving on to something else in the window takes it back. The window
   // losing the focus (to the page itself, or another app) isn't that.
   const enter = () => {
+    host.current?.focus({ preventScroll: true })
     setInPage(true)
     view()?.focus(true)
   }
+  const enterRef = useRef(enter)
+  enterRef.current = enter
   const blur = (event: ReactFocusEvent) => {
     setHasFocus(false)
     if (!event.relatedTarget) return

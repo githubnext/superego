@@ -136,7 +136,7 @@ first handler that claims it, asked in this order:
    (`threads` claims `thread:<id>`, and `thread:<machine>/<id>` for one on another machine, by its name or id);
 3. **the core's**, the defaults: files a thread names (relative links, inline code that reads as a path, and
    `wikilink:`), which open in the pane kind that takes the file, and web pages (`http:`, `https:`, `mailto:`), which
-   open in the browser, or beside in a pane that shows web pages (`urls: true`, `web-panes`' Preview).
+   open in the browser, or beside in a pane that shows web pages (`urls: true`, `browser`'s Browser).
 
 A link no handler claims opens in the browser; an HTML link of a scheme none claims there is dropped. So to open
 links your own way, claim them: nothing else to switch off. `[[Note#Heading|alias]]` reaches handlers as
@@ -159,7 +159,7 @@ superego.link({
 
 Return (or resolve to) a string to say why it couldn't: the link is struck through with it. Claiming files is the
 same with a test: `match: (href, kind) => /\.md$/.test(href)` takes Markdown links and paths in code alike, ahead of
-the core's. The core's file and web handlers stay the core's rather than `files`' or `web-panes'`: both extensions
+the core's. The core's file and web handlers stay the core's rather than `files`' or `browser`'s: both extensions
 are optional, and a link to a file or a page has to work in a thread that goes without them.
 
 ## Hearing the window

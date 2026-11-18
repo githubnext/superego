@@ -113,8 +113,8 @@ export type PaneKind = {
   component: ComponentType<PaneProps>
   /** Its glyph on the pane's tab in the strip. */
   icon?: ComponentType<{ size?: number; 'aria-hidden'?: boolean }>
-  /** Its title is a file's name: the strip shows it as one (cut from the start, in the mono face). */
-  file?: boolean
+  /** Its title is a file's name (always, or for the panes it says): the strip shows it as one (cut from the start, in the mono face). */
+  file?: boolean | ((pane: Pane) => boolean)
   /** Offered in the thread's pane menu: it shows something without being given params. */
   menu?: boolean
   /** Files it shows, given `{ path }`: a file opened from the thread opens in the first kind that takes it. */

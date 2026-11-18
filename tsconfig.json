@@ -23,7 +23,7 @@
     { "path": "extensions/images" },
     { "path": "extensions/mentions" },
     { "path": "extensions/skills" },
-    { "path": "extensions/web-panes" },
+    { "path": "extensions/browser" },
     { "path": "extensions/unread" },
     { "path": "extensions/worktrees" },
     { "path": "extensions/ego" },

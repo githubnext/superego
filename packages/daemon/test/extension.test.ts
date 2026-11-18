@@ -69,13 +69,13 @@ it("tells the agent the pane kinds extensions describe, beside the core's: a dae
   const notes = defineDaemonExtension({ name: 'notes', panes: { graph: 'the notes as a graph; no params' } })
   const { peer, close } = await open([notes])
   // One whose work is all in the window describes its panes as the window declares it.
-  await peer.call('extension.declare', { extensions: [{ name: 'web-panes', panes: { preview: '{ url }: a web page', bad: 3 } }] })
+  await peer.call('extension.declare', { extensions: [{ name: 'browser', panes: { browser: '{ url }: a web page', bad: 3 } }] })
   const thread = await peer.call<ThreadInfo>('thread.start', { prompt: 'hi' })
   await until(async () => (await peer.call<ThreadInfo[]>('thread.list', {}))[0]!.status.state === 'done')
   const { value } = await peer.call<{ value: { entries: { model?: { role?: string; content?: unknown }[] }[]; docs: Record<string, unknown> } }>('thread.watch', { thread: thread.id })
   const prompt = JSON.stringify(value)
   expect(prompt).toContain('\\"graph\\": the notes as a graph; no params')
-  expect(prompt).toContain('\\"preview\\": { url }: a web page')
+  expect(prompt).toContain('\\"browser\\": { url }: a web page')
   expect(prompt).not.toContain('\\"bad\\"')
   expect(prompt).toContain('\\"editor\\": { path }: a file')
   // Changes is git's to describe: without it, no "diff".

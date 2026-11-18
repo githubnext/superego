@@ -3,7 +3,7 @@
 // peer behind a dead link doesn't keep its watches. One that never pings (the CLI, a script) is never hung up on.
 // Uploads come on channels (see @superego/protocol's channels.ts), are held in memory for this connection only, and are
 // put back into a message's attachments as inline data when one names them; anything left goes when the connection does.
-// A `forward` channel is a TCP connection to a port on this machine's loopback (a window previewing a dev server here).
+// A `forward` channel is a TCP connection to a port on this machine's loopback (a window's Browser pane showing a dev server here).
 import { connect } from 'node:net'
 import { attachmentsIn, Channels, FORWARD, isLoopback, pipeForward, PROTOCOL_VERSION, RpcError, withAttachments, type AppConfig, type AttachmentRef, type RpcPeer } from '@superego/protocol'
 

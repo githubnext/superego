@@ -89,7 +89,7 @@ export function registerAppActions(router: Router<AppActionContext>, { app: appC
   app: AppConfig
   settings: SettingsRegistry
   cli: ReturnType<typeof commandLine>
-  /** What sites in Preview may use: forgotten from Settings. Granted only in a page's pane, never by an action. */
+  /** What sites in Browser panes may use: forgotten from Settings. Granted only in a page's pane, never by an action. */
   sites: Pick<SitePermissionsHandle<unknown>, 'forget'>
   service: Pick<Service, 'state' | 'act'>
   layoutFile: LayoutFile
@@ -113,7 +113,7 @@ export function registerAppActions(router: Router<AppActionContext>, { app: appC
     run() { cli.uninstall(); settings.invalidate(); return null },
   }))
   router.register(defineAction({
-    id: 'app.sites.forget', title: 'Forget what a site in Preview may use', runs: 'app', expose: ['ui'],
+    id: 'app.sites.forget', title: 'Forget what a site may use', runs: 'app', expose: ['ui'],
     params: obj({ origin: str() }),
     run({ origin }) { sites.forget(origin); return null },
   }))

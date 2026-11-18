@@ -191,7 +191,7 @@ export default async function session(t, s) {
   })()`, `only ${label} ringed`)
   const front = (label) => t.until(`(document.querySelector('.panes__tab.is-active .panes__label')?.textContent ?? 'thread') === ${JSON.stringify(label)}`, `${label} brought forward`)
   const closeBeside = () => t.run(`window.superego.call('local', 'pane.close', { thread: '${other}', pane: document.querySelector('[data-column]:not([data-column="thread"])').dataset.column })`)
-  await t.call('pane.open', { thread: other, kind: 'preview', params: { url: `http://127.0.0.1:${another.address().port}/` } })
+  await t.call('pane.open', { thread: other, kind: 'browser', params: { url: `http://127.0.0.1:${another.address().port}/` } })
   await t.until(() => pageAt(`http://127.0.0.1:${another.address().port}/`), 'a page beside the thread')
   await t.run(`document.querySelector('.composer textarea').focus()`)
   await ringed('thread')
@@ -202,10 +202,10 @@ export default async function session(t, s) {
   shown.focus = function () { given++; return giveFocus.call(this) }
   t.key('Right', ['meta', 'alt'])
   await t.until(`document.activeElement?.matches('.web-view')`, 'cmd+alt+right into the pane')
-  await ringed('Preview')
-  await front('Preview')
+  await ringed('Browser')
+  await front('Browser')
   // The pane has the keyboard, not the page, and says so; Return passes it in.
-  const hint = `[...document.querySelectorAll('.web-panes-hint')].some((h) => h.textContent === '↩ to use the page')`
+  const hint = `[...document.querySelectorAll('.browser-hint')].some((h) => h.textContent === '↩ to use the page')`
   await t.until(hint, 'the hint in the pane\'s header')
   await t.settled()
   if (given) t.fail('the page took the keyboard as its pane was focused')
@@ -220,8 +220,8 @@ export default async function session(t, s) {
   await front('thread')
   clickInto(t, pageAt(`http://127.0.0.1:${another.address().port}/`))
   await t.until(`document.activeElement?.matches('.web-view')`, 'a click into the page')
-  await ringed('Preview')
-  await front('Preview')
+  await ringed('Browser')
+  await front('Browser')
   await closeBeside()
   another.close()
   // ⌘⇧D: Changes (git's), beside the thread, its tab in the strip.

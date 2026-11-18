@@ -51,7 +51,7 @@ it("keeps its own agent as one hidden thread per machine, in its data folder, kn
   // The optional extensions it tells of are this machine's (here, the core's own agent parts and Ego).
   const optional = /optional extensions it does without: ([^\\]*)/.exec(transcript)![1]!.split(', ')
   expect(optional).toEqual(expect.arrayContaining(['coding-tools', 'ego']))
-  expect(optional).not.toContain('web-panes')
+  expect(optional).not.toContain('browser')
   // No extension here keeps keys in the data folder but the core: the prompt names no other's files.
   expect(transcript).toContain('auth.json hold sign-ins and keys')
   expect(transcript).not.toContain('mcp-servers.json')

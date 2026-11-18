@@ -54,7 +54,7 @@ export default async function panes(t, s) {
   await t.until(`document.querySelector('.file-editor__rendered h1')?.textContent === 'Notes'`, 'back to the notes')
   await t.click('.file-editor__mode button', 'Live')
   await t.until(`!document.querySelector('.file-editor__rendered') && !document.querySelector('.file-editor__host').hidden && document.querySelector('.cm-content')?.textContent.includes('three')`, 'live again, with the change')
-  await t.call('pane.open', { thread: paned, kind: 'artifact', params: { path: 'page.html' } })
+  await t.call('pane.open', { thread: paned, kind: 'browser', params: { path: 'page.html' } })
   await t.until(async () => await pageAt('superego-artifact:')?.executeJavaScript('document.body?.dataset.ok') === 'yes', 'the artifact ran')
   await t.check(`document.querySelectorAll('.panes__tab').length === 3`, 'not three pane tabs')
 
@@ -72,7 +72,7 @@ export default async function panes(t, s) {
   // one with the focus, from inside the page too: the window takes its shortcuts before a frame.
   await t.check(`!document.querySelector('.panes__tab.is-active')`, 'a pane the window did not open took the focus')
   await t.emulateFocus()
-  await t.run(`document.querySelector('.web-panes-frame .web-view').focus()`)
+  await t.run(`document.querySelector('.browser-frame .web-view').focus()`)
   await t.until(`document.querySelector('.panes__tab.is-active')?.textContent.startsWith('page.html')`, 'focus into the page brings it forward')
   for (let left = 2; left >= 0; left--) {
     t.key('w')

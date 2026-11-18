@@ -346,7 +346,7 @@ source, at `extensions/<name>/src`, so only a checkout has them.
 | `agent-ui` | tools that wait on you (one queue, a `scopedValue` per thread, `status` while it asks, an action to answer, one `composer.above` card claiming the composer), tools that draw blocks (`tool` views, some `{ fold: false }`), a pane kind drawn from its `state` with each thread, published per thread (`state({ publish })`), and a prompt section the tools' descriptions point to |
 | `images` | a tool with `{ fold: false }`, files kept with `threads.attachments` |
 | `git` | Changes: a `method` (a read), a `pane` the agent is told of, built on the kit's `Diff`, an `action` with keys |
-| `web-panes` | two pane kinds and nothing else, described in `about.panes` (so no daemon half: the daemon lists its `about`); `urls: true` makes web links open in one |
+| `browser` | a pane kind, described in `about.panes` (so no daemon half: the daemon lists its `about`); `urls: true` makes web links open in it, `menu: true` offers it in the pane menu, an app setting (its search engine) and an action with keys (`⌘T`) |
 | `skills` | a prompt section, a `beforeSend` transform, a `method`; `composer.complete` and `composer.sentWith` |
 | `mentions` | a `beforeSend` transform; `composer.complete` (with `superego.window`'s threads and `files.list`) and `composer.sentWith`'s `words` |
 | `files` | a `method`, a `pane` the agent is told of, an `overlay`, `store`s, `when` |

@@ -6,7 +6,7 @@ import { serveDaemon } from '@superego/daemon'
 import { machineHub } from '@superego/client'
 // Every bundled extension, by its daemon half, in the order the window lists their UI halves. One whose work is all in
 // the window is here by its `about` alone, so this machine knows it from the start, window or not: its pane kinds told
-// to agents (web-panes' preview and artifact), its switch in Settings, a profile doing without it. All but the sidebar
+// to agents (browser's pane), its switch in Settings, a profile doing without it. All but the sidebar
 // (`threads`, required, whose name is the core's namespace: nothing to switch or do without). Whether each is required
 // or optional is its own declaration (`about`), not decided here.
 import agentUi from '@superego/agent-ui/daemon'
@@ -25,7 +25,7 @@ import terminal from '@superego/terminal/daemon'
 import threadReports from '@superego/thread-reports/daemon'
 import threadTools from '@superego/thread-tools/daemon'
 import { about as unread } from '@superego/unread/shared'
-import { about as webPanes } from '@superego/web-panes/shared'
+import { about as browser } from '@superego/browser/shared'
 import worktrees from '@superego/worktrees/daemon'
 import app from '../superego.config.ts'
 
@@ -39,7 +39,7 @@ const skills = skillsExtension({ own: [SKILL_DIR] })
 // them to browsers and agents (see the daemon's relay.ts).
 serveDaemon({
   app, defaultCwd: homedir(), extensions: [
-    worktrees, agentUi, ego, files, git, images, links, mcpServers, mentions, skills, suggestions, tasks, terminal, threadTools, threadReports, unread, webPanes,
+    worktrees, agentUi, ego, files, git, images, links, mcpServers, mentions, skills, suggestions, tasks, terminal, threadTools, threadReports, unread, browser,
   ], ...(webRoot ? { webRoot } : {}),
   reach: (dataDir, self) => machineHub({ app, dataDir, self }),
 }).catch((error) => {

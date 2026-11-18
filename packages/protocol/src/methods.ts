@@ -123,7 +123,7 @@ export type ModelCatalog = {
 }
 
 /**
- * A pane: a view beside a thread (a diff, an editor, a preview, a profile's graph, another thread). `kind` names what
+ * A pane: a view beside a thread (a diff, an editor, a web page, a profile's graph, another thread). `kind` names what
  * draws it; `params` are its own. Kept with the thread, so it follows the thread to every client.
  */
 export type Pane = { id: string; kind: string; title?: string; params?: Json }

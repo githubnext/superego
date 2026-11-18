@@ -53,7 +53,7 @@ export default async function threads(t, s) {
   await t.call('thread.send', { thread: s.hello, text: `see ${page}` })
   await t.until(`Boolean(document.querySelector('.md a[href="${page}"] + .md__pane-link'))`, 'pane button beside a web link')
   await t.click(`.md a[href="${page}"] + .md__pane-link`)
-  await t.until(`Boolean(document.querySelector('.web-panes-frame .web-view'))`, 'link opened in a preview pane')
+  await t.until(`Boolean(document.querySelector('.browser-frame .web-view'))`, 'link opened in a Browser pane')
   await t.until(() => pageAt(page)?.isLoading() === false && pageAt(page).getTitle() === 'framed page', 'a page that refuses framing, loaded in its pane')
   site.close()
   // ⌃O lists the links the thread drew (each claimed by what opens it): the web page and the thread it names.

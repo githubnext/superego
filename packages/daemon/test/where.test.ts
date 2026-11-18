@@ -46,7 +46,7 @@ it('tells the agent where it runs when the user\'s window is on another computer
   await until(async () => !JSON.stringify(await cli.peer.call('clients.watch', {})).includes(hostname()))
   const remote = await told()
   expect(remote).toContain(`You run on ${hostname()}. The user's window is on another computer (the-mac), so \`localhost\` here isn't \`localhost\` for them.`)
-  expect(remote).toContain('open the preview pane on its localhost address')
+  expect(remote).toContain('open the browser pane on its localhost address')
 
   // The window gone (asleep), it's still where it was.
   there.close()
@@ -70,6 +70,6 @@ it('counts windows, not agents\' command lines or other daemons, and tells a bro
   clients.hello(clients.add(peer, { via: 'tailscale', label: 'me@example.com', elsewhere: true }), 'web', undefined)
   expect(clients.windows()).toEqual({ here: false, elsewhere: [], browser: true })
   expect(whereYouRun('workbox', clients.windows())).toContain('ask how they reach this machine')
-  expect(whereYouRun('workbox', clients.windows())).not.toContain('preview pane')
+  expect(whereYouRun('workbox', clients.windows())).not.toContain('browser pane')
   expect(whereYouRun('workbox', { here: true, elsewhere: [], browser: false })).toBeUndefined()
 })

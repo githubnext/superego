@@ -3,7 +3,7 @@
 // as defaults: a thread's profile is asked first, then the extensions, so either can claim these its own way (the
 // obsidian profile's notes). The threads extension claims threads (`thread:<id>`). Messages, a file's rendered text and
 // the editor's live preview all follow links through the same handlers (`linkHandler`, `follow`).
-// They stay the core's, not the files' or web-panes' extensions': both are optional, and a link to a file or a page
+// They stay the core's, not the files' or browser extensions': both are optional, and a link to a file or a page
 // must work in a thread that goes without them (a file opens in the core's editor, a page in the browser).
 // A thread's transcript keeps the links it draws, in order, for ⌃O's list (`transcriptLinks`).
 import { createContext, useCallback, useContext, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'

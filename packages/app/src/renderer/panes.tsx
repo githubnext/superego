@@ -12,7 +12,7 @@
 // Either way, a pane can be maximized for a while: over the thread and the rest, which stay as they were under it (see
 // maximized.ts). ⌃Tab moves the focus along. On a phone each column is the screen's width, and a swipe moves between them.
 // Built in: editor and thread. Extensions and profiles add kinds with superego.pane(kind, …) (Changes is git's; a web
-// page and an artifact, web-panes'). A pane of a kind only an extension the thread goes without draws isn't shown.
+// page or an HTML file, browser's). A pane of a kind only an extension the thread goes without draws isn't shown.
 import { createContext, Fragment, useContext, useEffect, useLayoutEffect, useRef, useState, type ButtonHTMLAttributes, type ReactNode, type RefObject } from 'react'
 import { createPortal, flushSync } from 'react-dom'
 import type { Pane, ThreadInfo } from '@superego/protocol'
@@ -279,6 +279,10 @@ function useColumnWidths(row: RefObject<HTMLDivElement | null>, { keys, kindShar
   return { rowWidth, widths, threadWidth, stackWidth, drag, reset }
 }
 
+/** Whether a pane's title is a file's name, as its kind says. */
+const isFile = (kind: Pick<PaneKind, 'file'> | undefined, pane: Pane | undefined) =>
+  typeof kind?.file === 'function' ? Boolean(pane && kind.file(pane)) : Boolean(kind?.file)
+
 /** A column's tab in the strip: the thread's (no `id`) or a pane's, and how much of its column is in view. */
 type StripTab = {
   id: string | undefined; label: string; kind: Pick<PaneKind, 'icon' | 'file'> | undefined; pane: Pane | undefined
@@ -312,7 +316,7 @@ function PaneStrip({ tabs, current, stacked, narrow, onShow }: { tabs: StripTab[
               title={full}
               onClick={() => onShow(tab.pane)}>
               {Icon && <Icon size={14} aria-hidden />}
-              <span className={`strip__label ${tab.kind?.file ? 'strip__label--file' : ''}`}>{tab.label}</span>
+              <span className={`strip__label ${isFile(tab.kind, tab.pane) ? 'strip__label--file' : ''}`}>{tab.label}</span>
               {tab.id && tab.note && <span className="strip__note">{tab.note}</span>}
               {tab.away === 'right' && <ArrowRightIcon className="strip__away" size={11} aria-hidden />}
             </button>

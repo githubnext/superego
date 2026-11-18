@@ -15,8 +15,8 @@ import tasks from '@superego/tasks/ui'
 import terminal from '@superego/terminal/ui'
 import threads from '@superego/threads/ui'
 import unread from '@superego/unread/ui'
-import webPanes from '@superego/web-panes/ui'
+import browser from '@superego/browser/ui'
 import worktrees from '@superego/worktrees/ui'
 import app from '../../superego.config.ts'
 
-mountApp(app, { extensions: [threads, worktrees, agentUi, ego, files, git, images, links, mcpServers, mentions, skills, suggestions, tasks, terminal, unread, webPanes] })
+mountApp(app, { extensions: [threads, worktrees, agentUi, ego, files, git, images, links, mcpServers, mentions, skills, suggestions, tasks, terminal, unread, browser] })

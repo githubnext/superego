@@ -72,10 +72,10 @@ export type BridgeChannel = {
 }
 
 /**
- * Whose cookies and storage a web view has: Preview's pages share theirs, kept between launches (`persist:preview`), as
- * a browser keeps a profile's; an artifact's are its own, gone as the app quits.
+ * Whose cookies and storage a web view has: web pages share theirs, kept between launches (`persist:browser`), as a
+ * browser keeps a profile's; an artifact's (an HTML file of a thread's) are its own, gone as the app quits.
  */
-export type WebViewPartition = 'preview' | 'artifact'
+export type WebViewPartition = 'browser' | 'artifact'
 
 /** A box in the window's page, in its CSS pixels. */
 export type WebViewRect = { x: number; y: number; width: number; height: number }
@@ -89,12 +89,12 @@ export type WebViewState = {
   canGoForward: boolean
   /** Why the page last asked for didn't load (it isn't there, a certificate refused), or that it crashed. */
   error?: { code: number; description: string; url: string }
-  /** What the page asks the user for now (Preview's), until they answer (`BridgeWebView.answer`). */
+  /** What the page asks the user for now (a web page's), until they answer (`BridgeWebView.answer`). */
   ask?: PermissionAsk
 }
 
 /**
- * What a page in Preview may ask the user for: to reach apps on this computer (its loopback addresses) or devices on
+ * What a web page in a Browser pane may ask the user for: to reach apps on this computer (its loopback addresses) or devices on
  * its network, the camera, the microphone, to show notifications. Anything else is refused.
  */
 export type SitePermission = 'loopback-network' | 'local-network' | 'camera' | 'microphone' | 'notifications'
@@ -105,13 +105,15 @@ export type SiteAnswer = 'granted' | 'denied'
 export type SitePermissions = Record<string, Partial<Record<SitePermission, SiteAnswer>>>
 
 /**
- * What a web view tells its pane: where it is now; that it took the keyboard (Return, a click into it); a file it saved (to the
- * Downloads folder, as a browser does); something it asked for that was refused (geolocation, or anything an artifact
- * asks for), or that the system keeps from the app.
+ * What a web view tells its pane: where it is now; that it took the keyboard (Return, a click into it); that ⌘L was
+ * pressed in it (its pane's address bar takes the keyboard); a file it saved (to the Downloads folder, as a browser does);
+ * something it asked for that was refused (geolocation, or anything an artifact asks for), or that the system keeps from
+ * the app.
  */
 export type WebViewEvent =
   | { type: 'state'; state: WebViewState }
   | { type: 'focus' }
+  | { type: 'address' }
   | { type: 'download'; name: string; path: string; state: 'progressing' | 'completed' | 'cancelled' | 'interrupted' }
   | { type: 'denied'; permission: string }
   /** The user allowed the site the camera or microphone, but the system doesn't let the app use it. */

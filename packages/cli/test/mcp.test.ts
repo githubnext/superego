@@ -93,13 +93,13 @@ it('serves the actions exposed to outside agents as tools, and logs their runs a
   expect((await client.callTool({ name: 'settings_set', arguments: { key: 'agent.model', value: 'x' } })).isError).toBe(true)
 
   // A pane beside it; archived, and back.
-  await client.callTool({ name: 'pane_open', arguments: { thread: created.id, kind: 'preview', params: { url: 'https://example.com' } } })
+  await client.callTool({ name: 'pane_open', arguments: { thread: created.id, kind: 'browser', params: { url: 'https://example.com' } } })
   await client.callTool({ name: 'thread_archive', arguments: { thread: created.id } })
   const archived = JSON.parse(text(await client.callTool({ name: 'thread_read', arguments: { thread: created.id } })))
   expect(archived.thread).toMatchObject({ archived: true })
   await client.callTool({ name: 'thread_unarchive', arguments: { thread: created.id } })
   const back = await direct<{ id: string; panes?: { kind: string }[] }[]>('thread.list', {})
-  expect(back.find((t) => t.id === created.id)?.panes).toEqual([expect.objectContaining({ kind: 'preview' })])
+  expect(back.find((t) => t.id === created.id)?.panes).toEqual([expect.objectContaining({ kind: 'browser' })])
 
   // The same log as the window's and the command line's, from outside, by a client named for the MCP client.
   const { peer, socket } = await connectSocket(socketPath({ id: 'superego', name: 'Superego' }, home))

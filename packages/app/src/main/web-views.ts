@@ -1,4 +1,4 @@
-// Web views: a pane's web page (Preview's, an artifact) as a page of its own, laid over the pane in its window: a
+// Web views: a Browser pane's page (a web page, or an artifact: an HTML file of a thread's) as a page of its own, laid over the pane in its window: a
 // top-level page, as a browser tab has it, so its cookies are first-party (a sign-in through another port, or another
 // site, holds), and a page that refuses to be framed loads. Each is a WebContentsView in the window, held for its page
 // (AppWindow.views) and closed as that page loads again or the window closes. The page places it (renderer/web-view.tsx):
@@ -6,11 +6,11 @@
 // over it.
 //
 // What a page in one may do: what a browser tab may, short of the app's powers (no Node, no preload, sandboxed,
-// isolated). A page in Preview asks the user, in its pane, for the local network, the camera, the microphone and to
+// isolated). A web page asks the user, in its pane, for the local network, the camera, the microphone and to
 // show notifications, as a browser does, and has them once they allow it (site-permissions.ts); anything else is
 // refused, and its pane says so. An artifact is the agent's file, not a website: it's refused everything.
-// A link that opens a window opens in the user's browser; a file it saves goes to the Downloads folder. Preview's pages
-// share cookies and storage, kept between launches (`persist:preview`); an artifact's are its own, gone as the app quits.
+// A link that opens a window opens in the user's browser; a file it saves goes to the Downloads folder. Web pages share
+// cookies and storage, kept between launches (`persist:browser`); an artifact's are its own, gone as the app quits.
 import { existsSync } from 'node:fs'
 import { join, parse } from 'node:path'
 import { app, ipcMain, session, shell, systemPreferences, WebContentsView, type Input, type IpcMainEvent, type IpcMainInvokeEvent, type Session, type WebContents } from 'electron'
@@ -21,8 +21,8 @@ import { SCHEME as ARTIFACT_SCHEME, serveArtifacts } from './artifacts.ts'
 import { asked, checkAsks, originOf, type SitePermissionsHandle } from './site-permissions.ts'
 import type { Link } from '@superego/client'
 
-/** The sessions' partitions: Preview's kept on disk, an artifact's in memory. */
-export const PARTITIONS: Record<WebViewPartition, string> = { preview: 'persist:preview', artifact: 'superego-artifact' }
+/** The sessions' partitions: web pages' kept on disk, an artifact's in memory. */
+export const PARTITIONS: Record<WebViewPartition, string> = { browser: 'persist:browser', artifact: 'superego-artifact' }
 
 /** What a page may have without asking anyone: putting text on the clipboard (a page's Copy button). */
 const GRANTED = new Set(['clipboard-sanitized-write'])
@@ -45,13 +45,16 @@ export function savePath(dir: string, name: string, exists: (path: string) => bo
   }
 }
 
-/** A browser's own keys in a page: ⌘R reloads it, ⌘[ and ⌘] go back and forward (Ctrl elsewhere). */
-export function browserKey(input: Pick<Input, 'type' | 'key' | 'meta' | 'control' | 'alt' | 'shift'>, mac: boolean): 'reload' | 'back' | 'forward' | undefined {
+/**
+ * A browser's own keys in a page: ⌘L goes to its address bar, ⌘R reloads it, ⌘[ and ⌘] go back and forward (Ctrl
+ * elsewhere). ⌘L is the page's before the window's (the navigator's, outside a page).
+ */
+export function browserKey(input: Pick<Input, 'type' | 'key' | 'meta' | 'control' | 'alt' | 'shift'>, mac: boolean): 'address' | 'reload' | 'back' | 'forward' | undefined {
   if (input.type !== 'keyDown' || input.alt || input.shift || !(mac ? input.meta && !input.control : input.control && !input.meta)) return undefined
-  return ({ r: 'reload', '[': 'back', ']': 'forward' } as const)[input.key.toLowerCase() as 'r' | '[' | ']']
+  return ({ l: 'address', r: 'reload', '[': 'back', ']': 'forward' } as const)[input.key.toLowerCase() as 'l' | 'r' | '[' | ']']
 }
 
-/** A view as Preview's permissions know it: told what its page asks the user now. */
+/** A view as web pages' permissions know it: told what its page asks the user now. */
 export type AskingView = { asking(ask: PermissionAsk | undefined): void }
 
 type Held = AskingView & {
@@ -62,7 +65,7 @@ export type WebViewsOptions = {
   /** The open window whose page this is. */
   windowOf(contents: WebContents): AppWindow | undefined
   linkOf(machine: string): Link | undefined
-  /** What Preview's pages may use, as the user said. */
+  /** What web pages may use, as the user said. */
   sites: SitePermissionsHandle<AskingView>
 }
 
@@ -115,7 +118,7 @@ export function serveWebViews({ windowOf, linkOf, sites }: WebViewsOptions) {
 
   function setUpSession(ses: Session, partition: WebViewPartition) {
     ses.setDevicePermissionHandler(() => false)
-    if (partition === 'preview') {
+    if (partition === 'browser') {
       // What the user is asked for (site-permissions.ts), asked in the page's pane; anything else is refused, and said.
       ses.setPermissionRequestHandler((contents, permission, callback, details) => {
         if (GRANTED.has(permission)) return callback(true)
@@ -206,10 +209,15 @@ export function serveWebViews({ windowOf, linkOf, sites }: WebViewsOptions) {
       if (opensOutside(to)) void shell.openExternal(to)
     })
     contents.on('will-redirect', (event, to) => { if (!mayNavigate(partition, to)) event.preventDefault() })
-    // The window's shortcuts first (⌘W closes the pane, from inside it too), then a browser's own.
+    // ⌘L to the pane's address bar; then the window's shortcuts (⌘W closes the pane, from inside it too), then a
+    // browser's own.
     contents.on('before-input-event', (event, input) => {
-      if (window.takeKey(input)) return event.preventDefault()
       const key = browserKey(input, process.platform === 'darwin')
+      if (key === 'address') {
+        event.preventDefault()
+        return tell(entry, { type: 'address' })
+      }
+      if (window.takeKey(input)) return event.preventDefault()
       if (!key) return
       event.preventDefault()
       if (key === 'reload') reload(entry)

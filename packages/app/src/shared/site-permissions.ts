@@ -1,4 +1,4 @@
-// How Preview's site permissions are said: in a page's pane as it asks (web-panes), and in Settings → Site permissions.
+// How web pages' site permissions are said: in a Browser pane as its page asks (the browser extension), and in Settings → Site permissions.
 import type { PermissionAsk, SitePermission } from './bridge.ts'
 
 /** A site as the user knows it: its host (and port), from its origin. */

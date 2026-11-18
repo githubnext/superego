@@ -6,14 +6,14 @@
 #   page, ⌘N's dialog, Settings and its Keyboard;
 # - `focus`: each region holding the focus;
 # - `panes`: a thread's panes scrolled and stacked;
-# - `panehead`: panes' heads (a tab, an editor's bar, Preview's toolbar) at rest and with what's under them scrolled;
+# - `panehead`: panes' heads (a tab, an editor's bar, the Browser pane's toolbar) at rest and with what's under them scrolled;
 # - `composer`: the composer and what's around it;
 # - `images`: an agent's images in a thread, the lightbox, a message's own images, on a phone too;
 # - `mcp`: Settings → MCP servers, a thread's MCP calls, its chip and details;
 # - `web`: Settings → Web access, pairing and devices and each Tailscale state (a stub `tailscale` on PATH: the machine's
 #   own is never touched);
 # - `terminal`: the terminal pane, reloaded, and in a browser;
-# - `toolbar`: Preview's and Artifact's browser toolbar, with and without history, with its hint;
+# - `toolbar`: the Browser pane's toolbar, a web page's and an HTML file's, with and without history, with its hint;
 # - `titlebar`: the title bar, a profile's card, the sidebar's heading;
 # - `pins`: pinned threads at the top of the sidebar, a row's menu, the rail's dots.
 # - `folds`: the sidebar with a project and a thread's offshoots folded.

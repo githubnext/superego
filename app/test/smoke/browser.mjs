@@ -1,14 +1,17 @@
-// Preview as a browser tab: a page of its own over its pane. A sign-in that sets a SameSite=Lax cookie on one port and
-// redirects to another holds, and still does after a reload; the header follows the page's address and goes back; a page
-// that refuses frames loads; a link to a new window goes to the browser. The view follows its pane: hidden (a still in its
+// Browser as a browser tab: a page of its own over its pane. A sign-in that sets a SameSite=Lax cookie on one port and
+// redirects to another holds, and still does after a reload; the header follows the page's address and goes back; ⌘L in
+// the page goes to its address bar, where a bare host typed goes there, an HTML file's path shows the file (with its own
+// cookies), and the web page again is still signed in; a page that refuses frames loads; a link to a new window goes to the browser. The view follows its pane: hidden (a still in its
 // place) under a dialog, hidden at the back of a stack. It's kept for its pane: drawn again, it's as it was.
+import { writeFileSync } from 'node:fs'
 import { createServer } from 'node:http'
-import { shell } from 'electron'
+import { join } from 'node:path'
+import { session, shell, webContents } from 'electron'
 import { clickInto, home, openRow, pageAt } from './common.mjs'
 
 const listen = (handler) => new Promise((resolve) => { const server = createServer(handler).listen(0, '127.0.0.1', () => resolve(server)) })
 
-export default async function preview(t) {
+export default async function browser(t) {
   // The app (as a dev server is): signed in by its session cookie, which only the sign-in server sets.
   const app = await listen((req, res) => {
     const signedIn = /(^|;\s*)session=mikker/.test(req.headers.cookie ?? '')
@@ -36,17 +39,17 @@ export default async function preview(t) {
   await t.until(`[...document.querySelectorAll('.superego-list-item')].some((li) => li.textContent.includes('signing in'))`, 'the thread listed')
   await t.run(`[...document.querySelectorAll('.superego-list-item')].find((li) => li.textContent.includes('signing in')).click()`)
   await t.until(`document.querySelector('.thread__title')?.textContent === 'signing in'`, 'the thread open')
-  await t.call('pane.open', { thread, kind: 'preview', params: { url: signInUrl } })
+  await t.call('pane.open', { thread, kind: 'browser', params: { url: signInUrl } })
   const page = () => pageAt(appUrl)
   const title = async () => page()?.isLoading() === false && page().getTitle()
   await t.until(async () => await title() === 'signed in as mikker', 'signed in, through the redirect, by the cookie')
   // Its address in the header is the page's, now the app's; and it's shown over its pane.
-  await t.until(`document.querySelector('.panes__column:has(.web-view) .web-panes-address__text')?.textContent.startsWith(${JSON.stringify(`${appUrl}/`)})`, "the header shows the page's address")
+  await t.until(`document.querySelector('.panes__column:has(.web-view) .browser-address__text')?.textContent.startsWith(${JSON.stringify(`${appUrl}/`)})`, "the header shows the page's address")
   // Shown over its pane, once it's whole in view (given the focus, it's scrolled to): not put out of sight, as it is
   // while something's over it or it's cut short.
   const viewShown = () => t.win().contentView.children.some((v) => v.webContents === page() && v.getVisible() && v.getBounds().x >= 0 && v.getBounds().y >= 0)
-  const previewPane = () => t.call('thread.list').then((list) => list.find((x) => x.id === thread).panes.find((p) => p.kind === 'preview').id)
-  await t.call('pane.focus', { thread, pane: await previewPane() })
+  const browserPane = () => t.call('thread.list').then((list) => list.find((x) => x.id === thread).panes.find((p) => p.kind === 'browser').id)
+  await t.call('pane.focus', { thread, pane: await browserPane() })
   await t.until(viewShown, 'the page shown over its pane')
   const box = await t.run(`(() => { const r = document.querySelector('.web-view').getBoundingClientRect(); return [r.x, r.y, r.width, r.height].map(Math.round) })()`)
   const bounds = t.win().contentView.children.find((v) => v.webContents === page()).getBounds()
@@ -58,10 +61,38 @@ export default async function preview(t) {
   await t.until(async () => page()?.isLoading() === false && await title() === 'signed in as mikker', 'still signed in after a reload')
   // Its own links, then back: the header follows.
   await page().executeJavaScript(`document.getElementById('next').click()`, true)
-  await t.until(`document.querySelector('.panes__column:has(.web-view) .web-panes-address__text')?.textContent === ${JSON.stringify(`${appUrl}/next`)}`, 'the header follows a link')
+  await t.until(`document.querySelector('.panes__column:has(.web-view) .browser-address__text')?.textContent === ${JSON.stringify(`${appUrl}/next`)}`, 'the header follows a link')
   await t.until(`!document.querySelector('.panes__column:has(.web-view) button[aria-label="Back"]').disabled`, 'back offered')
   await t.click('.panes__column:has(.web-view) button[aria-label="Back"]')
-  await t.until(`document.querySelector('.panes__column:has(.web-view) .web-panes-address__text')?.textContent === ${JSON.stringify(`${appUrl}/`)}`, 'back again')
+  await t.until(`document.querySelector('.panes__column:has(.web-view) .browser-address__text')?.textContent === ${JSON.stringify(`${appUrl}/`)}`, 'back again')
+
+  // ⌘L in the page: its pane's address bar, not the navigator, the address selected to type over.
+  for (const type of ['keyDown', 'keyUp']) page().sendInputEvent({ type, keyCode: 'l', modifiers: ['meta'] })
+  const field = 'input.browser-address'
+  await t.until(`document.activeElement?.matches(${JSON.stringify(field)}) && document.activeElement.selectionEnd === document.activeElement.value.length && document.activeElement.selectionStart === 0`, 'cmd+L in the page focuses the address bar, its address selected')
+  await t.check(`!document.querySelector('.navigator')`, 'cmd+L in the page opened the navigator')
+  // A bare host goes there, over http as it's this computer's, and the pane points there.
+  const paneParams = async () => (await t.call('thread.list')).find((x) => x.id === thread).panes.find((p) => p.kind === 'browser').params
+  await t.type(field, `127.0.0.1:${app.address().port}/next`, { enter: true })
+  await t.until(async () => (await paneParams())?.url === `${appUrl}/next`, 'the pane pointed at the address typed')
+  await t.until(`document.querySelector('.panes__column:has(.web-view) .browser-address__text')?.textContent === ${JSON.stringify(`${appUrl}/next`)}`, 'the page at the address typed')
+  await t.until(async () => page()?.isLoading() === false && await title() === 'signed in as mikker', 'still signed in there')
+  // An HTML file in the working folder, by its path: shown from its own origin, with cookies of its own.
+  writeFileSync(join(home, 'typed.html'), '<title>typed</title>')
+  const typed = () => webContents.getAllWebContents().find((c) => !c.isDestroyed() && c.getURL().startsWith('superego-artifact:') && c.getURL().endsWith('/typed.html'))
+  await t.click('.panes__column:has(.web-view) button.browser-address')
+  await t.until(`document.activeElement?.matches(${JSON.stringify(field)})`, 'the address bar, clicked')
+  await t.type(field, 'typed.html', { enter: true })
+  await t.until(async () => (await paneParams())?.path === 'typed.html', 'the pane pointed at the file')
+  await t.until(() => typed()?.isLoading() === false && typed().getTitle() === 'typed', 'the file shown')
+  if (typed().session !== session.fromPartition('superego-artifact')) t.fail("the file shown in the web's session")
+  await t.until(`document.querySelector('.panes__column:has(.web-view) .browser-address__text')?.textContent === 'typed.html' && [...document.querySelectorAll('.panes__tab')].some((tab) => tab.textContent.includes('typed.html'))`, 'its address and tab its path')
+  // And back to the web: a page of the web's session again, still signed in.
+  await t.click('.panes__column:has(.web-view) button.browser-address')
+  await t.type(field, `${appUrl}/`, { enter: true })
+  await t.until(async () => page()?.isLoading() === false && await title() === 'signed in as mikker', 'back on the web, still signed in')
+  await t.until(() => !typed(), "the file's page closed")
+  if (page().session !== session.fromPartition('persist:browser')) t.fail("the web page not in the web's session")
 
   // Under a dialog, the page is hidden, a still of it in its place; back once it's gone.
   t.key('n')
@@ -74,7 +105,7 @@ export default async function preview(t) {
   // A click into the page focuses its pane, and brings it forward.
   clickInto(t, page())
   await t.until(`document.activeElement?.matches('.web-view')`, 'a click into the page focuses its pane')
-  await t.until(`document.querySelector('.panes__tab.is-active')?.textContent.startsWith('Preview')`, 'and brings it forward')
+  await t.until(`document.querySelector('.panes__tab.is-active')?.textContent.startsWith('Browser')`, 'and brings it forward')
 
   // A link to a new window opens in the browser.
   const opened = []
@@ -104,16 +135,16 @@ export default async function preview(t) {
     res.end('<title>counted</title><a id="on" href="/on">on</a>')
   })
   const countingUrl = `http://127.0.0.1:${counting.address().port}/`
-  await t.call('pane.update', { thread, pane: await previewPane(), params: { url: countingUrl } })
+  await t.call('pane.update', { thread, pane: await browserPane(), params: { url: countingUrl } })
   await t.until(async () => pageAt(countingUrl)?.isLoading() === false && pageAt(countingUrl).getTitle() === 'counted', 'a page that counts its loads')
   const counter = pageAt(countingUrl)
   // Placed over its pane: live, or (the pane cut short, as the row's scroll isn't kept as it's drawn again) a still of it.
   const counterPlaced = () => t.win().contentView.children.some((v) => v.webContents === counter && v.getVisible())
   const counterShown = () => t.win().contentView.children.some((v) => v.webContents === counter && v.getVisible() && v.getBounds().x >= 0 && v.getBounds().y >= 0)
   await counter.executeJavaScript(`document.getElementById('on').click()`, true)
-  const header = (url) => `document.querySelector('.panes__column:has(.web-view) .web-panes-address__text')?.textContent === ${JSON.stringify(url)}`
+  const header = (url) => `document.querySelector('.panes__column:has(.web-view) .browser-address__text')?.textContent === ${JSON.stringify(url)}`
   await t.until(header(`${countingUrl}on`), 'taken along a link')
-  await t.call('pane.focus', { thread, pane: await previewPane() })
+  await t.call('pane.focus', { thread, pane: await browserPane() })
   await t.until(counterShown, 'shown')
   const [width, height] = t.win().getSize()
   await t.resize(width - 120, height - 60)
@@ -145,7 +176,7 @@ export default async function preview(t) {
   await t.until(`document.activeElement?.matches('.web-view')`, 'the pane focused again')
 
   // A page that refuses frames loads: it isn't framed.
-  await t.call('pane.update', { thread, pane: await previewPane(), params: { url: refusingUrl } })
+  await t.call('pane.update', { thread, pane: await browserPane(), params: { url: refusingUrl } })
   await t.until(async () => pageAt(refusingUrl)?.isLoading() === false && pageAt(refusingUrl).getTitle() === 'no frames', 'a page that refuses frames, loaded')
   // The window's shortcuts work from inside the page: ⌘W closes its pane, and the page with it.
   const key = (keyCode) => { for (const type of ['keyDown', 'keyUp']) pageAt(refusingUrl).sendInputEvent({ type, keyCode, modifiers: ['meta'] }) }

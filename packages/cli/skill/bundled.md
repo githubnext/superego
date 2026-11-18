@@ -66,7 +66,7 @@ Optional is the default, and almost always right: a machine can turn it off (Set
 `title` and `description`), a profile can leave it out (`without: ['orders']`), and the app works without it. A thread
 that goes without it gets none of its agent parts or pane kinds, and the window draws none of its UI for that thread
 (`ThreadInfo.without`): its panes already open are kept with the thread but not shown, its actions not offered. `required: true` is for what the app is (the sidebar): never listed, never left out. Nothing
-else decides this. An extension whose work is all in the window needs no daemon half (`links` and `web-panes` have none):
+else decides this. An extension whose work is all in the window needs no daemon half (`links` and `browser` have none):
 the daemon lists its `about` alone (from its `shared.ts`, which has no UI code), so every machine knows it from the
 start, window or not: lists it in Settings, tells the agent of its `panes`, and lets profiles do without it. A window
 also declares its extensions to each machine it connects to (`extension.declare`), for a daemon that doesn't bundle

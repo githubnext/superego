@@ -128,8 +128,8 @@ Inside a pane: `<PaneHeader>` puts small things in the pane's header beside its 
 (Loading…, an error). `useTabNote(note, key)` shows a note on its tab in the strip (Changes shows
 `<DiffStat added removed />`, +3 −1).
 
-A web page in a pane: `<WebView src partition="preview" title sandbox onEvent ref>` shows it as Preview does, as a browser
-tab on the desktop (its own cookies, back and forward through `ref`'s `go(-1)`, `reload()`; `onEvent` hears where it is
+A web page in a pane: `<WebView src partition="browser" title sandbox onEvent ref>` shows it as Browser does, as a browser
+tab on the desktop (its own cookies, back and forward through `ref`'s `go(-1)`, `reload()`, `load(url)`, `focus()`; `onEvent` hears where it is
 now, a file it saved, what it was refused), framed in a browser (`sandbox` is the frame's). `hasWebViews()` says which.
 Focused, the pane keeps the keyboard until Return (or a click) passes it into the page; `onWaiting(waiting)` says when
 it's waiting for that, for a hint.
@@ -152,7 +152,7 @@ Opening things:
 <!-- check: ui; declare const dispatch: import('superego/ui').Dispatch, thread: ThreadInfo -->
 ```ts
 dispatch('pane.open', { thread: thread.id, kind: 'editor', params: { path: 'notes/a.md', line: 12 } }, { machine: machine.id })
-dispatch('pane.open', { thread: thread.id, kind: 'preview', params: { url: 'http://localhost:3000' } }, { machine: machine.id })
+dispatch('pane.open', { thread: thread.id, kind: 'browser', params: { url: 'http://localhost:3000' } }, { machine: machine.id })
 dispatch('thread.send', { thread: thread.id, text: 'Ship it' }, { machine: machine.id })
 ```
 

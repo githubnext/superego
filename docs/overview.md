@@ -50,8 +50,9 @@ project    a git repository (its worktrees too) or a folder, on a machine
   them too (`pane_open`). One can be maximized for a while (its tab's button, a double click on its title, `⌘⇧↩`):
   over the thread and the rest, in this window only, until Esc, Restore, or another pane or thread.
   Built in: the file editor (Markdown rendered, in live preview as Obsidian shows it, or as source) and another thread.
-  Bundled extensions add Changes (git's diff, `git`), Preview (a web page, as a browser tab shows it; another machine's `localhost` forwarded here) and Artifact (an HTML file the agent wrote,
-  sandboxed) (`web-panes`); a pane of an extension a thread goes without isn't shown.
+  Bundled extensions add Changes (git's diff, `git`) and Browser (`browser`: a web page, as a browser tab shows it,
+  another machine's `localhost` forwarded here; or an HTML file the agent wrote, sandboxed; an address bar to go
+  anywhere, `⌘L` in the pane; `⌘T` opens a blank one); a pane of an extension a thread goes without isn't shown.
 - **Files** named in a thread (`[[Note]]`, a relative link, `` `src/app.ts` ``) open beside it; the `files` extension
   adds a tree beside the editor and quick open.
 - **Messages** take files: attach, drop or paste them into the composer. Images go to the model as images; every file
@@ -129,7 +130,7 @@ Focus is always visible: the region holding it (the sidebar, the thread, a pane)
 | `extensions/ego` | Ego, Superego's own agent: one hidden thread per machine, its prompt and tools that read and set up; other work goes to threads it starts, which report back to it yet show top-level; the rail's lifebuoy (a phone's drawer's too), *Ask Ego* in ⌘K, *Clear* (daemon + UI) |
 | `extensions/agent-ui` | the agent's ways to ask and show: `ask_user` (a question, with options) and `ask_ui` (blocks) wait above the composer, one at a time, oldest first, the thread blocked meanwhile; `show_ui` (blocks in the transcript, out of the run's fold, pressed later as a message); `open_ui`/`update_ui` (blocks in a `ui` pane beside the thread, kept with the thread across restarts). The blocks guide is one prompt section (daemon + UI) |
 | `extensions/git` | Changes (`⌘⇧D`): the thread's folder's changes by git, file by file, +N −N on its tab; the agent opens it too (daemon + UI) |
-| `extensions/web-panes` | Preview, a web page beside the thread (a link it names, opened beside), and Artifact, an HTML file the agent wrote, sandboxed (UI only; the window tells each machine its panes) |
+| `extensions/browser` | Browser, a page beside the thread: a web page (a link it names, opened beside; anything typed in its address bar, a search otherwise) or an HTML file the agent wrote, sandboxed (UI only; the window tells each machine its panes) |
 | `extensions/files` | the file tree beside the editor and quick open (`⌘P`) (daemon + UI) |
 | `extensions/images` | a `show_images` tool; the images in the thread, as one, a grid or a carousel, and a lightbox to zoom (daemon + UI) |
 | `extensions/unread` | what agents have for you that you haven't seen, most pressing first: `⌘U` lists it to pick from, as does the bell (in the rail when the sidebar isn't there, beside Settings on a phone); `⌘.` to the next, everywhere or in this project (UI only) |
@@ -229,21 +230,21 @@ isn't the user's, and `curl` there proves only what that machine reaches. The da
 over ssh names another computer in its `hello`, a browser through Tailscale is elsewhere; with no window connected, it
 keeps what it last saw. On one computer, nothing is said.
 
-A Preview of `localhost:<port>` on another machine loads from that machine's: the app listens on this computer's
+A Browser pane at `localhost:<port>` on another machine loads from that machine's: the app listens on this computer's
 loopback, at the same port when it's free here (else another, which the pane's header says), and carries each
 connection over the machine's link on a `forward` channel to that port on its loopback (`main/forwards.ts`,
 `@superego/protocol`'s `forward.ts`). Cookies and redirects to `localhost:<port>` work as they would there, and the
 user's browser on this computer reaches the forward too, while the app runs. What doesn't: the page calling another of
-the machine's ports (an API on `:3000` behind a page on `:5173`: preview that one too, so it's forwarded), absolute
+the machine's ports (an API on `:3000` behind a page on `:5173`: open that one too, so it's forwarded), absolute
 links to the machine's port when it was taken here, anything that must reach the machine from outside (a third party's
 webhook or OAuth callback to a public address), and a browser on Web access, which can't listen: there the agent asks
 how the user reaches the machine.
 
-On the desktop, Preview and Artifact show their page as a browser tab does: a page of its own laid over the pane (a
+On the desktop, a Browser pane shows its page as a browser tab does: a page of its own laid over the pane (a
 WebContentsView, `main/web-views.ts`), not a frame in the window, so its cookies are first-party (a sign-in on one port
-that redirects to another holds), and a page that refuses frames loads. Preview's pages share one session kept between
-launches (`persist:preview`); an artifact's is in memory. A page there has no app powers (sandboxed, isolated, no
-preload). A Preview page asks for the local network, the camera, the microphone and notifications as in a browser:
+that redirects to another holds), and a page that refuses frames loads. Web pages share one session kept between
+launches (`persist:browser`); an HTML file's (an artifact's, served from `superego-artifact://`) is in memory. A page
+there has no app powers (sandboxed, isolated, no preload). A web page asks for the local network, the camera, the microphone and notifications as in a browser:
 its pane asks the user, whose answer is kept per site (`main/site-permissions.ts`; Settings → Site permissions forgets
 it), and only the user gives it, never an agent; anything else it asks for, and everything an artifact asks for, is
 refused and its pane says so. A new window opens in the browser; a file it saves goes to Downloads. The view draws above the window's page, so the pane places it
@@ -252,8 +253,12 @@ under a maximized pane), and while any of the window's overlays is over it (a me
 an extension's `data-superego-overlay`), or the pane is partly out of view, a still of the page stands in its place. A
 page is kept for its pane, not for what draws it (`renderer/kept-web-views.ts`): leaving the thread (or opening
 Settings) hides it as it was, and coming back shows it again, where the user had taken it; a window keeps the 8 most
-recently shown, and the pane's closing or its thread's archiving closes its page. An artifact reloads when its file
-changes. In a browser (Web access) the page is framed, and the pane says what that can't do.
+recently shown, and the pane's closing or its thread's archiving closes its page. An HTML file's page reloads when the
+file changes. The address bar (`extensions/browser/src/address.ts`) takes a URL, a bare host (`https://`, or `http://`
+for this computer and its network), an HTML file's path in the working folder, or else searches (Settings → Browser's
+search engine); Return points the pane there (`pane.update`). `⌘L` in the pane, its page too, goes to it rather than
+to the navigator (the main process tells the pane, `browserKey`). In a browser (Web access) the page is framed, with
+the same address bar, and the pane says many sites refuse that.
 
 The daemon takes model keys from the providers' own variables (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, …) when none is
 stored in Settings. A restart keeps the environment it was started with and adds that of the shell asking for it. Where

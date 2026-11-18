@@ -1,5 +1,5 @@
-// What a page in Preview may use, as the user said: per site (its origin), per permission. Asked in the page's pane
-// (web-panes' Preview), answered there by the user alone, never by an agent: a window's click comes over the IPC, and
+// What a web page in a Browser pane may use, as the user said: per site (its origin), per permission. Asked in the
+// page's pane (the browser extension's), answered there by the user alone, never by an agent: a window's click comes over the IPC, and
 // no action grants anything (Settings → Site permissions only forgets). Nothing is granted until then.
 //
 // A page asks in two ways. A request (Notification.requestPermission, getUserMedia) waits for the answer. A check
@@ -84,7 +84,7 @@ export type SitePermissionsOptions<V> = {
 }
 
 /**
- * Preview's permissions: the answers, and what each view waits on. A view asks one thing at a time (`asking`), the
+ * Web pages' permissions: the answers, and what each view waits on. A view asks one thing at a time (`asking`), the
  * first it asked; another view's ask for the same is answered with it.
  */
 export function createSitePermissions<V>({ store, asking, changed }: SitePermissionsOptions<V>) {

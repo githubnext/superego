@@ -37,7 +37,7 @@ export type PackageOptions = {
 const BUILDER = 'electron-builder@26'
 
 /**
- * Electron's V8 writes executable memory, in the app and in the daemon it runs as Node; and a page in Preview may use
+ * Electron's V8 writes executable memory, in the app and in the daemon it runs as Node; and a page in a Browser pane may use
  * the camera and microphone once the user allows it (and macOS does: the hardened runtime refuses them without these).
  */
 const ENTITLEMENTS = `<?xml version="1.0" encoding="UTF-8"?>
@@ -50,10 +50,10 @@ const ENTITLEMENTS = `<?xml version="1.0" encoding="UTF-8"?>
 </dict></plist>
 `
 
-/** What macOS says as it first asks to let the app use the camera or microphone: for a site the user allowed in Preview. */
+/** What macOS says as it first asks to let the app use the camera or microphone: for a site the user allowed in a Browser pane. */
 const USAGE = {
-  NSCameraUsageDescription: 'So a site you allow in Preview can use the camera.',
-  NSMicrophoneUsageDescription: 'So a site you allow in Preview can use the microphone.',
+  NSCameraUsageDescription: 'So a site you allow in a Browser pane can use the camera.',
+  NSMicrophoneUsageDescription: 'So a site you allow in a Browser pane can use the microphone.',
 }
 
 export async function packageApp(root: string, app: AppConfig, options: PackageOptions = {}): Promise<string[]> {

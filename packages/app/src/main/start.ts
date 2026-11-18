@@ -61,8 +61,8 @@ export function startApp(appConfig: AppConfig) {
     id: 'command-line', title: 'Command line', order: 80, ui: 'command-line', settings: [],
     data: () => cli.info(),
   })
-  // What sites in Preview may use, as the user said (site-permissions.ts), and Settings' list of them to forget.
-  const siteStore = fileStore(join(dataDir, 'preview-sites.json'))
+  // What sites in Browser panes may use, as the user said (site-permissions.ts), and Settings' list of them to forget.
+  const siteStore = fileStore(join(dataDir, 'browser-sites.json'))
   const sites = createSitePermissions<AskingView>({ store: siteStore, asking: (view, ask) => view.asking(ask), changed: () => settings.invalidate() })
   settings.register({
     id: 'sites', title: 'Site permissions', order: 75, ui: 'sites', settings: [],

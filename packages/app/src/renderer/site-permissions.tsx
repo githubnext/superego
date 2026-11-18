@@ -1,4 +1,4 @@
-// Settings → Site permissions: what each site in Preview was allowed or not, as the user answered in its pane, and a
+// Settings → Site permissions: what each site in a Browser pane was allowed or not, as the user answered in its pane, and a
 // way to forget it, so the site asks again.
 import { useState } from 'react'
 import type { SectionInfo } from '@superego/protocol'
@@ -28,7 +28,7 @@ export function SitePermissions({ section }: { target: string; section: SectionI
     <>
       {problem && <p className="setting__error">{problem}</p>}
       {error && <p className="setting__error">{error}</p>}
-      {!origins.length && <p className="settings__note">Sites in Preview you allow or block show here.</p>}
+      {!origins.length && <p className="settings__note">Sites you allow or block in a Browser pane show here.</p>}
       {origins.map((origin) => {
         const allowed = named(sites[origin]!, 'granted')
         const blocked = named(sites[origin]!, 'denied')

@@ -67,7 +67,7 @@ Useful ones:
 | `thread.send` `thread text whenBusy?=steer\|followUp` | send a message |
 | `thread.stop` `thread` | stop the agent |
 | `thread.rename` `thread title`, `thread.archive` `thread`, `thread.unarchive` `thread` | `thread.archive` answers `{ notes }`, what extensions did (its worktree removed, say). Ego is never archived |
-| `pane.open` `thread kind title? params?` | open a pane beside a thread (`editor`, `thread`; `diff` from git, `preview` and `artifact` from web-panes; a profile's own) |
+| `pane.open` `thread kind title? params?` | open a pane beside a thread (`editor`, `thread`; `diff` from git, `browser` (`{ url }` or `{ path }`) from browser; a profile's own) |
 | `pane.close` `thread pane`, `pane.focus` `thread pane?` | |
 | `profile.list` `cwd? user?`, `profile.allow` `cwd? name?` | `user`: yours only, wherever they come from |
 | `profile.sources`, `profile.install` `source`, `profile.remove` `source`, `profile.update` `source?` | profile sources (`install` is the user's consent) |

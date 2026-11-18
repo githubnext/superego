@@ -82,7 +82,7 @@ export function coreExtensions({ agentsDir, where, panesOf, openPane, images, no
     },
     {
       name: 'panes', version: '1.0.0', api: '^4', title: 'Panes', description: 'Open panes beside a thread: files, other threads, and the kinds extensions add.',
-      // The window's built-in kinds (its panes.tsx); extensions describe their own (git's Changes, web-panes').
+      // The window's built-in kinds (its panes.tsx); extensions describe their own (git's Changes, browser's).
       panes: { editor: '{ path }: a file, for the user to read and edit', thread: '{ thread }: another conversation' },
       setup: (s) => s.agent(panesPart),
     },

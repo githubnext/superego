@@ -102,15 +102,15 @@ describe('optional and required extensions', () => {
 
   it("hides the open panes of an optional extension a thread goes without, keeping the core's and unknown kinds", () => {
     const Page = () => null
-    const web = defineUiExtension({ name: 'web-panes', setup(superego) { superego.pane('preview', { title: 'Preview', component: Page, urls: true }) } })
+    const web = defineUiExtension({ name: 'browser', setup(superego) { superego.pane('browser', { title: 'Browser', component: Page, urls: true }) } })
     const registry = createRegistry(app, [web], (core) => core.pane('editor', { title: 'Editor', component: Page }))
-    const panes = [{ id: 'a', kind: 'preview' }, { id: 'b', kind: 'editor' }, { id: 'c', kind: 'order' }]
+    const panes = [{ id: 'a', kind: 'browser' }, { id: 'b', kind: 'editor' }, { id: 'c', kind: 'order' }]
     const with_ = { machine: 'local', thread: { ...thread(false), panes } }
-    const without = { machine: 'local', thread: { ...thread(false), panes, without: ['web-panes'] } }
+    const without = { machine: 'local', thread: { ...thread(false), panes, without: ['browser'] } }
     expect(shownPanes(registry, with_).map((p) => p.id)).toEqual(['a', 'b', 'c'])
     expect(shownPanes(registry, without).map((p) => p.id)).toEqual(['b', 'c'])
     // Web links open in the kind that shows web pages, while there is one.
-    expect(urlKind(registry, with_)).toBe('preview')
+    expect(urlKind(registry, with_)).toBe('browser')
     expect(urlKind(registry, without)).toBeUndefined()
   })
 

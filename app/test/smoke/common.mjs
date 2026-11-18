@@ -3,7 +3,7 @@ import { webContents } from 'electron'
 
 export const home = process.env.SUPEREGO_HOME
 
-/** The page in a pane's web view (Preview's, an artifact's) whose address starts with `prefix`. */
+/** The page in a pane's web view (a Browser pane's: a web page's, an artifact's) whose address starts with `prefix`. */
 export const pageAt = (prefix) => webContents.getAllWebContents().find((c) => !c.isDestroyed() && c.getURL().startsWith(prefix))
 
 /** A click into a pane's web page, at `x`, `y` in it. A hidden window's view never has the system's focus: the click's, as it comes. */
