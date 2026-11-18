@@ -76,6 +76,7 @@ which doesn't type-check them: `superego extension test` does.
 | `superego.slot(slot, component, { order? })` | put a component in a slot whose place behaviour decides (below) |
 | `superego.signal` | an `AbortSignal`, aborted when this UI is torn down (its profile's files changed, it was revoked): for timers, listeners and fetches of its own. `setup` may also return a cleanup, run then. Registering after that throws. Each component it draws is drawn apart: one that throws shows "<name> failed to draw" with Retry, in its place |
 | `superego.on(event, listener)` | hear what happens in the window, in the desktop app and a browser alike; returns a function that stops it (teardown does too). `'thread.status'`: `{ machine, thread, before }`, a thread's status changed (`before` undefined the first time the window sees it; only your profile's threads). `'select'`: `{ selection, before }`, the thread shown changed. `'focus'`: `{ focused }`. `'visibility'`: `{ visible }`. `superego.window` is how things are now: `{ focused, visible, selection, thread, machines, threads }` (`threads`: each machine's threads in use, by machine id) |
+| `superego.style(css)` | bring CSS, scoped to what this profile draws ([Styling](#styling)). Gone at teardown; also returns a function that takes it out sooner (`api: '^4.2'`) |
 | `superego.appSetting(key)` | one of the app's settings as it is now, outside React (`useAppSetting` in components) |
 | `superego.entry(kind, component)` | draw transcript entries of a kind an extension writes |
 | `superego.settings(ui, component)` | draw below the settings section (of its daemon half) that names `ui` |
@@ -247,16 +248,30 @@ Every machine's instead: `Object.entries(useAllThreads())`, with `useMachines()`
 
 ## Styling
 
-Bring styles with a `<style>` element added in `setup` (a profile's UI can't import CSS), and use the theme's
-variables so it follows light and dark mode and the user's accent:
+Bring styles with `superego.style(css)` in `setup` (a profile's UI can't import CSS), and use the theme's variables so
+they follow light and dark mode and the user's accent:
 
-<!-- check: skip -->
+<!-- check: ui -->
 ```ts
-const style = document.createElement('style')
-style.textContent = `.order-pane { padding: var(--superego-space-3); color: var(--superego-muted); border-radius: var(--superego-radius); }`
-document.head.append(style)
-return () => style.remove()   // setup's cleanup: gone with the UI, reloaded or revoked
+superego.style(`.order-pane { padding: var(--superego-space-3); color: var(--superego-muted); border-radius: var(--superego-radius); }`)
 ```
+
+They go with the UI when it's reloaded or revoked. An extension that uses it asks for `api: '^4.2'`. They apply only to what your profile draws on its machine: its panes,
+views, slots, tool rows, entries, links and settings, with the menus, popovers, dialogs and `PaneHeader` contents those
+open. The window's own UI and other profiles' don't get them, and neither does the same profile from another machine at
+another version. So two profiles, or two versions of one, can use the same class names.
+
+What that means for your CSS:
+
+- `:root`, `html` and `body` don't match: style your own elements. `:scope` matches the box-less element your component
+  is drawn in.
+- `@media`, `@supports`, `@container` and nesting work as usual. `@import` doesn't.
+- `@keyframes`, `@font-face` and `@property` names are still the window's: prefix them with your extension's name.
+- An element you portal yourself (`createPortal` to `document.body`) is outside your UI and doesn't get them. Portal
+  through the window's components (`Menu`, `Popover`, `Dialog`, `Tooltip`, `PaneHeader`) instead.
+
+A `<style>` you append to `document.head` yourself still works, but it styles the whole window, every profile's threads
+included. Use it only for something truly window-wide.
 
 Useful variables: `--superego-bg`, `--superego-raised`, `--superego-border`, `--superego-muted`, `--superego-faint`,
 `--superego-accent`, `--superego-hover`, `--superego-selected`, `--superego-font`, `--superego-mono`,

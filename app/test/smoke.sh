@@ -42,6 +42,9 @@ export default defineUiExtension({
       if (!globalThis.__smokeFixed) throw new Error('smoke crash')
       return h('span', { className: 'smoke-fixed' }, 'fixed')
     } })
+    // A mark on its threads' rows, styled by a rule the second machine's default brings too, for its own.
+    superego.style('.smoke-scoped { color: rgb(0, 128, 0); }')
+    superego.slot('thread.badge', () => h('span', { className: 'smoke-scoped' }))
   },
 })
 UI
@@ -70,7 +73,11 @@ import { defineUiExtension, h } from 'superego/ui'
 import { label } from './label.ts'
 export default defineUiExtension({
   name: 'remote-badge',
-  setup(superego) { superego.view('remote-badge.label', { title: 'Remote badge', context: 'thread', fits: ['header'], default: 'header', component: () => h('span', { className: 'remote-badge' }, label) }) },
+  setup(superego) {
+    superego.view('remote-badge.label', { title: 'Remote badge', context: 'thread', fits: ['header'], default: 'header', component: () => h('span', { className: 'remote-badge' }, label) })
+    superego.style('.smoke-scoped { color: rgb(255, 0, 0); }')
+    superego.slot('thread.badge', () => h('span', { className: 'smoke-scoped' }))
+  },
 })
 UI
 printf "export const label: string = 'remote ui'\n" > "$SUPEREGO_HOME/second/profiles/default/ui/label.ts"

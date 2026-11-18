@@ -156,7 +156,7 @@ function Sent({ entry, blocks, className, children }: { entry: number; blocks: S
       {text && <Markdown text={sentWords(found, text)} breaks />}
       {(drawn.length > 0 || files.length > 0) && (
         <div className="msg__files">
-          {drawn.map(({ reader: { component: Component, owner }, items }) => <Contained key={`${owner.profile ?? ''}/${owner.extension}`} name={owner.extension} inline>{Component && <Component {...here} items={items} />}</Contained>)}
+          {drawn.map(({ reader: { component: Component, owner }, items }) => <Contained key={`${owner.profile ?? ''}/${owner.extension}`} name={owner.extension} scope={owner.profile} inline>{Component && <Component {...here} items={items} />}</Contained>)}
           <Files files={files} entry={entry} />
         </div>
       )}
@@ -297,7 +297,7 @@ function Entry({ entry }: { entry: EntryRecord }) {
   const registry = useRegistry()
   const where = { machine: here.machine.id, thread: here.thread }
   const custom = entryView(registry, entry.kind, where)
-  if (custom) { const Custom = custom; return <Contained name={entryOwner(registry, entry.kind, where) ?? entry.kind}><Custom {...here} entry={{ id: entry.id, kind: entry.kind, data: entry.data }} /></Contained> }
+  if (custom) { const Custom = custom; const owner = entryOwner(registry, entry.kind, where); return <Contained name={owner?.extension ?? entry.kind} scope={owner?.profile}><Custom {...here} entry={{ id: entry.id, kind: entry.kind, data: entry.data }} /></Contained> }
   const message = entry.model?.[0] as Message | undefined
   if (message?.role === 'user') {
     return <Sent className="msg msg--user" entry={Number(entry.id)} blocks={blocks(message)} />
@@ -426,9 +426,10 @@ function ToolCall({ block, result, slot }: { block: Block; result: ToolResult | 
   const call = callOf(here, block, result, slot)
   const Custom = toolView(registry, call.call.name, where)
   // Its row's parts are the extension's code too: drawn apart, whole or described.
-  const name = toolOwner(registry, call.call.name, where) ?? call.call.name
-  if (Custom) { const { state: _state, ...props } = call; return <Contained name={name}><Custom {...props} /></Contained> }
-  return <Contained name={name}><DescribedCall row={toolRow(registry, call.call.name, where)} call={call} /></Contained>
+  const owner = toolOwner(registry, call.call.name, where)
+  const name = owner?.extension ?? call.call.name
+  if (Custom) { const { state: _state, ...props } = call; return <Contained name={name} scope={owner?.profile}><Custom {...props} /></Contained> }
+  return <Contained name={name} scope={owner?.profile}><DescribedCall row={toolRow(registry, call.call.name, where)} call={call} /></Contained>
 }
 
 /** A call, its result and how it runs, as tool rows (and an extension's view of the call) see them. */

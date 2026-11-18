@@ -135,7 +135,7 @@ function ViewRow({ view, machine, thread }: { view: Registry['views'][number]; m
   return (
     <OverflowRow icon={view.icon}>
       {Item
-        ? <ViewScopeProvider value={{ machine: machine.id, thread }}><Contained name={view.owner.extension} inline><Item place="header" machine={machine} thread={thread} /></Contained></ViewScopeProvider>
+        ? <ViewScopeProvider value={{ machine: machine.id, thread }}><Contained name={view.owner.extension} scope={view.owner.profile} inline><Item place="header" machine={machine} thread={thread} /></Contained></ViewScopeProvider>
         : <ShownText id={`view:${view.id}`} title={view.title} />}
     </OverflowRow>
   )

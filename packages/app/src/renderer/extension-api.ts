@@ -378,6 +378,13 @@ export type UiApi = {
    * with the extension's name. `run` gets its parameters and the window's context.
    */
   action(action: WindowAction): void
+  /**
+   * Bring CSS: in the window while this extension is set up, gone at its teardown (or with the function returned). A
+   * profile's applies only to what that profile draws (its panes, views, slots, tool rows, entries, links, and the menus,
+   * popovers, dialogs and `PaneHeader` they open), on its machine: not to the window, nor to the same profile from
+   * another machine. An app's extension's applies to the whole window.
+   */
+  style(css: string): () => void
   /** Run any action (window, app or machine) through the window's router, outside React. In components: `useDispatch`. */
   dispatch: Dispatch
   /**

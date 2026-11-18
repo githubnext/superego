@@ -8,7 +8,7 @@ import type { MachineEntry } from '../shared/bridge.ts'
 import { useSettings, useValue } from './client.ts'
 import { Contained } from './contained.tsx'
 import { useRegistry } from './registry.tsx'
-import { settingsView } from './lookups.ts'
+import { settingsEntry } from './lookups.ts'
 import { useLocalState } from './local-state.ts'
 import { Setting } from './settings/controls.tsx'
 import { AllMachines, machineGlyph, Machines } from './settings/machines.tsx'
@@ -63,7 +63,8 @@ export function SettingsView({ machines, onClose, pane = false }: { machines: Ma
 function Section({ machine, target, section, values }: { machine: MachineEntry | undefined; target: string; section: SectionInfo; values: SettingsSnapshot['values'] }) {
   const registry = useRegistry()
   const dispatch = registry.router.dispatch
-  const Custom = section.ui ? settingsView(registry, section.ui, target) : undefined
+  const custom = section.ui ? settingsEntry(registry, section.ui, target) : undefined
+  const Custom = custom?.component
   // Drawn from a live value: that's its data, kept current.
   const live = useValue<Json>(section.value ? machine : undefined, section.value ?? '')
   return (
@@ -74,7 +75,7 @@ function Section({ machine, target, section, values }: { machine: MachineEntry |
         <Setting key={setting.key} setting={setting} value={values[setting.key] ?? null}
           apply={(value) => dispatch(target === APP ? 'app.settings.set' : 'settings.set', { key: setting.key, value }, { machine: target, source: 'settings' })} />
       ))}
-      {Custom && <Contained name={section.ui!}><Custom target={target} section={section.value ? { ...section, ...(live != null ? { data: live } : {}) } : section} /></Contained>}
+      {Custom && <Contained name={section.ui!} scope={custom!.owner.profile}><Custom target={target} section={section.value ? { ...section, ...(live != null ? { data: live } : {}) } : section} /></Contained>}
     </section>
   )
 }

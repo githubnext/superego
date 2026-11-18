@@ -99,8 +99,10 @@
 /* An item of the bar: its own width, never squeezed. Gone, it's still drawn, at the bar's end under the ···, unseen: it
    measures as it would show, and a click on it from the menu opens what it opens there. */
 .titlebar__item { display: inline-flex; align-items: center; flex: none; white-space: nowrap; }
-/* One that draws nothing (a view with nothing to say for this thread) takes no room, nor a gap. */
-.titlebar__item:empty, .titlebar__item:has(> .superego-context:empty):not(:has(> :not(.superego-context))) { display: none; }
+/* One that draws nothing (a view with nothing to say for this thread) takes no room, nor a gap: empty, or holding only
+   box-less marks (a context menu's trigger, a profile's scope) with nothing in them. */
+.titlebar__item:empty, .titlebar__item:has(> .superego-context:empty):not(:has(> :not(.superego-context))),
+.titlebar__item:has(.profile-scope:empty):not(:has(:not(.superego-context, .profile-scope))) { display: none; }
 .app__titlebar [data-out] { position: absolute; top: 50%; right: 12px; translate: 0 -50%; visibility: hidden; pointer-events: none; }
 /* A tab shrunk: its glyph alone (its parts out of the flow, still measured). */
 .app__titlebar [data-compact]:not([data-out]) .overflow-part { position: absolute; visibility: hidden; }
@@ -136,7 +138,7 @@
 .profile-card__problems { color: var(--superego-warning, #b45309); }
 .app__beside { width: 280px; flex: none; min-height: 0; overflow: auto; background: var(--superego-bg); box-shadow: inset 1px 0 0 var(--superego-line); }
 /* Hidden while every view in it draws nothing: then each holds only its ···. */
-.app__beside:empty, .app__beside:not(:has(> .placed-view > :not(.view-menu__button))) { display: none; }
+.app__beside:empty, .app__beside:not(:has(> .placed-view > :not(.view-menu__button, .profile-scope:empty))) { display: none; }
 .app__empty { margin: auto; color: var(--superego-muted); padding: var(--superego-space-5); }
 .thread-picker { display: flex; gap: var(--superego-space-2); align-items: center; }
 .app__footer { position: sticky; bottom: 0; margin-top: auto; padding: var(--superego-space-2) 0 0; background: inherit; }
@@ -174,7 +176,7 @@
 .msg--user:not(:first-child) { margin-top: 18px; }
 .turn-end + .msg--user { margin-top: 30px; }
 .msg__text + .msg--user, .steps + .msg--user { margin-top: 40px; }
-.msg--user + * { margin-top: var(--superego-space-1); }
+.msg--user + *, .msg--user + .profile-scope > * { margin-top: var(--superego-space-1); }
 /* Your words as Markdown, each newline kept: compact, with code tinted over the bubble rather than on the page's grey. */
 .msg--user .md { white-space: normal; }
 .msg--user .md :is(p, ul, ol, blockquote, .md__table, .md__code) { margin-bottom: var(--superego-space-2); }
@@ -317,7 +319,8 @@ details[open] > .row > .row__chevron { transform: rotate(90deg); }
 .md--clamped .md__copy { display: none; }
 
 .dock { position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%); width: calc(var(--superego-column) + 2 * var(--superego-space-4)); max-width: calc(100% - 2 * var(--superego-space-4)); display: flex; flex-direction: column; }
-.dock__above:not(:empty) { margin-bottom: 10px; }
+/* Apart from the box when something's above it: not a profile's slot that drew nothing (its scope's mark, empty). */
+.dock__above:not(:empty, :has(> .profile-scope:empty):not(:has(> :not(.profile-scope:empty)))) { margin-bottom: 10px; }
 /* The box: the words, what goes with them, and one button at their end. White on the sheet, a hairline and a soft shadow. */
 .dock__box { position: relative; background: light-dark(#ffffff, #252527); border-radius: 12px; box-shadow: 0 0 0 .5px light-dark(rgb(0 0 0 / .16), rgb(255 255 255 / .1)), 0 4px 16px light-dark(rgb(0 0 0 / .08), rgb(0 0 0 / .3)); padding: 9px 9px 9px 16px; }
 /* Above the box, something can join it (`dock__join`: an agent's question with its options): one card, a hairline between. */
@@ -404,7 +407,7 @@ details[open] > .row > .row__chevron { transform: rotate(90deg); }
 /* A view beside the thread, with its ··· at its top right. */
 .placed-view { position: relative; }
 /* A view that draws nothing (for this thread) takes no room: nor does its ···. */
-.placed-view:not(:has(> :not(.view-menu__button))) { display: none; }
+.placed-view:not(:has(> :not(.view-menu__button, .profile-scope:empty))) { display: none; }
 .placed-view > .view-menu__button { position: absolute; top: 6px; right: 6px; z-index: 1; }
 .view-menu__button { width: 24px; height: 24px; min-height: 24px; box-shadow: none; background: none; color: var(--superego-faint); }
 .view-menu__button:hover, .view-menu__button[data-popup-open] { background: var(--superego-hover); color: var(--superego-text); }
@@ -543,7 +546,7 @@ button.app__mobiletitle > svg { flex: none; color: var(--superego-faint); }
 .thread-sheet__panes { display: flex; flex-direction: column; align-items: stretch; }
 .thread-sheet__pane.superego-button { justify-content: flex-start; height: 40px; min-height: 40px; padding: 0 8px; }
 .thread-sheet__beside { margin: 0 calc(-1 * var(--superego-space-4)); border-top: 1px solid var(--superego-line); }
-.thread-sheet__beside:not(:has(> .placed-view > :not(.view-menu__button))) { display: none; }
+.thread-sheet__beside:not(:has(> .placed-view > :not(.view-menu__button, .profile-scope:empty))) { display: none; }
 .app__mobilebar .superego-button { min-width: 36px; min-height: 32px; }
 .app__scrim { position: fixed; inset: 0; z-index: 20; background: rgb(0 0 0 / .3); }
 .app.is-narrow { background: var(--superego-bg); }
@@ -807,7 +810,8 @@ a.pane-header__url:hover { color: var(--superego-accent); }
 .dock__bar { position: absolute; left: 0; right: 0; bottom: calc(100% + 14px); display: flex; justify-content: center; pointer-events: none; }
 .dock__bar > * { pointer-events: auto; }
 .dock:has(.completions) .dock__bar { display: none; }
-.dock:has(.dock__above:not(:empty)) .dock__bar { bottom: calc(100% + 8px); }
+/* (One :has can't hold another: what's above is told by its elements here.) */
+.dock:has(.dock__above > :not(.profile-scope:empty)) .dock__bar { bottom: calc(100% + 8px); }
 .dock__pill { height: 26px; padding: 0 10px 0 8px; gap: 5px; font-weight: 400; color: var(--superego-muted); background: var(--superego-raised); box-shadow: var(--superego-shadow-float); border-radius: 999px; }
 .dock__pill:hover { color: var(--superego-text); }
 .dock__pill kbd { font: var(--superego-text-xs) var(--superego-mono); color: var(--superego-faint); }
@@ -906,6 +910,8 @@ a.pane-header__url:hover { color: var(--superego-accent); }
 .layout-editor__text { width: 100%; min-height: 12em; font: var(--superego-text-sm) var(--superego-mono); }
 .layout-editor__actions { display: flex; justify-content: flex-end; margin-top: var(--superego-space-3); }
 
+/* What a profile draws is inside its scope's mark (contained.tsx), for its styles: no box of its own. */
+.profile-scope { display: contents; }
 /* What an extension draws that threw: a quiet line in its own place, with the error and a retry (contained.tsx). */
 .extension-failed { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px var(--superego-space-2); padding: var(--superego-space-2) var(--superego-space-3); color: var(--superego-muted); font-size: var(--superego-text-sm); min-width: 0; }
 .extension-failed--inline { display: inline-flex; padding: 0 4px; flex-wrap: nowrap; }

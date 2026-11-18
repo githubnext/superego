@@ -30,10 +30,14 @@ export default async function remote(t, s) {
   await t.until(`document.querySelector('.profile-source')?.textContent.includes("remote ui")`, 'its source shown, read-only, in a pane')
   await t.click('.profile-ui-notice button', 'Allow')
   await t.until(`document.querySelector('.remote-badge')?.textContent === 'remote ui' && !document.querySelector('.profile-ui-notice')`, 'the remote profile UI runs once allowed')
+  // The same profile on both machines, each styling one class its way: each one's rule reaches only its own threads.
+  const scopedColours = `[...document.querySelectorAll('.app__sidebar .superego-list-item')].flatMap((li) => [...li.querySelectorAll('.smoke-scoped')].map((el) => (li.textContent.includes('over on second') ? 'second ' : 'local ') + getComputedStyle(el).color))`
+  await t.until(`(() => { const seen = ${scopedColours}; return seen.includes('second rgb(255, 0, 0)') && seen.some((c) => c.startsWith('local ')) && seen.every((c) => c === 'second rgb(255, 0, 0)' || c === 'local rgb(0, 128, 0)') })()`, "each machine's profile styles only its own threads")
   // Changed there: it stops, and the window asks again.
   writeFileSync(`${home}/second/profiles/default/ui/label.ts`, "export const label: string = 'changed ui'\n")
   await t.call('thread.send', { thread: onSecond, text: 'after the change' }, s.second)
   await t.until(`!document.querySelector('.remote-badge') && Boolean(document.querySelector('.profile-ui-notice'))`, 'a changed profile UI stops until allowed again')
+  await t.check(`!document.querySelector('style[data-extension="remote-badge"]')`, "a stopped profile UI's styles stayed")
   // Not now: remembered on this computer for these sources, and the header says so quietly; a click asks again.
   await t.click('.profile-ui-notice button', 'Not now')
   await t.until(`!document.querySelector('.profile-ui-notice') && document.querySelector('.profile-ui-marker')?.textContent === 'UI not allowed'`, 'put off: a marker in the header')

@@ -1,6 +1,7 @@
 import type { ReactElement, ReactNode } from 'react'
 import { Popover as Base } from '@base-ui/react/popover'
 import { Tooltip } from '@base-ui/react/tooltip'
+import { usePortalAttributes } from './portal.tsx'
 
 /**
  * A popover (Base UI) anchored to `trigger`, portalled above everything, closing on Escape or a click outside. With
@@ -11,6 +12,7 @@ export function Popover({ trigger, children, open, onOpenChange, side = 'bottom'
   trigger: ReactElement; children: ReactNode; open?: boolean; onOpenChange?(open: boolean): void
   side?: 'top' | 'bottom' | 'left' | 'right'; align?: 'start' | 'center' | 'end'; tooltip?: ReactNode; hover?: boolean; className?: string
 }) {
+  const marked = usePortalAttributes()
   const opener = <Base.Trigger render={trigger} {...(hover ? { openOnHover: true, delay: 400 } : {})} />
   return (
     <Base.Root {...(open !== undefined ? { open } : {})} onOpenChange={(next) => onOpenChange?.(next)}>
@@ -18,14 +20,14 @@ export function Popover({ trigger, children, open, onOpenChange, side = 'bottom'
         <Tooltip.Root>
           <Tooltip.Trigger render={opener} />
           <Tooltip.Portal>
-            <Tooltip.Positioner className="superego-layer" side={side} sideOffset={8}>
+            <Tooltip.Positioner {...marked} className="superego-layer" side={side} sideOffset={8}>
               <Tooltip.Popup className="superego-tooltip">{tooltip}</Tooltip.Popup>
             </Tooltip.Positioner>
           </Tooltip.Portal>
         </Tooltip.Root>
       )}
       <Base.Portal>
-        <Base.Positioner className="superego-layer" side={side} align={align} sideOffset={6}>
+        <Base.Positioner {...marked} className="superego-layer" side={side} align={align} sideOffset={6}>
           <Base.Popup className={`superego-popover ${className}`}>{children}</Base.Popup>
         </Base.Positioner>
       </Base.Portal>

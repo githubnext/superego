@@ -29,6 +29,12 @@ export default defineUiExtension({
   ...about,
   setup(superego) {
     superego.view(VIEW, { title: 'Builds', context: 'thread', fits: ['beside', 'pane'], default: 'beside', component: Queue })
+    // Its look, in the theme's variables: only what this profile draws gets it.
+    superego.style(`
+      .builds { list-style: none; margin: 0; padding: var(--superego-space-3); }
+      .builds__build { display: flex; align-items: center; gap: var(--superego-space-2); }
+      .builds__state { color: var(--superego-muted); }
+    `)
     // In this profile's threads: the queue beside the thread, or not.
     superego.action(defineAction({
       id: 'builds.toggle', title: 'Show or hide the build queue', keys: 'mod+shift+b',

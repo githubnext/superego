@@ -2,7 +2,8 @@
 // each with its owner. Everything an extension registers is owned by it, and its teardown removes all of it at once (a
 // `Lifetime`: its signal aborts, its setup's cleanup runs, and what it registers after is refused). What it draws is
 // drawn apart (`Contained`): a component that throws takes only its own place. A profile's UI is owned by that profile
-// on its machine too, and draws only in that profile's threads there (`seenIn`).
+// on its machine too, and draws only in that profile's threads there (`seenIn`); its styles reach only what it draws
+// (profile-style.ts).
 import { createContext, useContext, type ComponentType, type ReactNode } from 'react'
 import { contractProblem, Lifetime, parseVersion, UNVERSIONED } from '@superego/protocol'
 import type { AppConfig, DataViewInfo, DeclaredSection, ExtensionAbout, ExtensionManifest, ProfileRef, SettingsSnapshot, ThreadInfo } from '@superego/protocol'
@@ -13,6 +14,7 @@ import { APP } from '../shared/app-settings.ts'
 import { PLACES, THREAD_PLACES } from '../shared/layout.ts'
 import type { CompletionProvider, SentWith } from './composer.ts'
 import { dataIcon, DataViewBody } from './data-views.tsx'
+import { addStyle } from './profile-style.ts'
 import type {
   BehaviourSlot, EntryProps, LinkHandler, NewThreadField, PaneKind, PaneProps, SettingsComponentProps, SlotProps, ToolCallProps, ToolRow, UiApi,
   UiExtension, View, ViewProps, WindowEvent, WindowEvents, WindowState, WorkPart, WorkRun,
@@ -304,6 +306,13 @@ export function createRegistry(app: AppConfig, extensions: UiExtension[], core: 
         if (profile) return console.warn(`Profile extension ${extension.name}: New thread fields from a profile's UI aren't supported yet`)
         unique(registry.newThreadFields, 'name', { ...field, name: extension.name }, 'New thread field')
       },
+      style(css) {
+        life.live('a style')
+        // A profile's is scoped to what it draws (profile-style.ts); an app's is the window's.
+        const remove = addStyle(css, { extension: extension.name, scope: profile })
+        life.add(remove, 'a style')
+        return remove
+      },
       dispatch: (id, params, options) => registry.router.dispatch(id, params, { source: extension.name, ...options }),
       action(action) {
         own(action.id, 'actions')
@@ -403,6 +412,9 @@ export function useRegistry(): Registry {
 
 /** The extension a registration is of, by name: what "<extension> failed to draw" says. */
 export const whose = (entry: object | undefined, otherwise = 'An extension') => (entry as { owner?: Owner } | undefined)?.owner?.extension ?? otherwise
+
+/** The profile's scope a registration is of, if a profile's: what it draws is marked with, for its styles (`Contained`). */
+export const scopeOfEntry = (entry: object | undefined) => (entry as { owner?: Owner } | undefined)?.owner?.profile
 
 /** The registry, where there is one (Markdown drawn outside the app has none). */
 export const useOptionalRegistry = () => useContext(RegistryContext)

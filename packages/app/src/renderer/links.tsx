@@ -11,7 +11,7 @@ import type { ThreadInfo } from '@superego/protocol'
 import { SquareSplitHorizontalIcon } from '@superego/ui'
 import { machine as client } from './client.ts'
 import type { LinkAttributes, LinkHandler, LinkProps, LinkWhere, UiApi } from './extension-api.ts'
-import { useRegistry, whose } from './registry.tsx'
+import { scopeOfEntry, useRegistry, whose } from './registry.tsx'
 import { fileKind, folderKind, urlKind } from './lookups.ts'
 import { Contained } from './contained.tsx'
 import { looksLikePath, resolve } from './markdown-html.ts'
@@ -180,7 +180,7 @@ export function Claimed({ handler, href, kind, text, title, attributes, children
   const Render = handler.render ?? PlainLink
   // Drawn apart: a handler's drawing that throws takes only its own link.
   const drawn = (
-    <Contained name={whose(handler)} inline>
+    <Contained name={whose(handler)} scope={scopeOfEntry(handler)} inline>
       <Render href={href} code={kind === 'code'} where={where} open={open} {...(title ? { title } : {})} {...(attributes ? { attributes } : {})}>{children}</Render>
     </Contained>
   )

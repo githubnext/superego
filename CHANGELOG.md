@@ -7,6 +7,10 @@
   come back as the window widens. Nothing in it overlaps or wraps any more.
 - The MCP chip says how many servers were left out when a thread has none ("2 left out"), not "0 servers".
 - Extensions: a `header` view can say what its row in the title bar's ··· menu shows (`menuItem`).
+- A profile's styles no longer leak into the rest of the window: with `superego.style(css)` they reach only what that
+  profile draws, on its machine. The same profile from two machines at different versions, or two profiles with the
+  same class names, no longer restyle each other's threads. A profile that appends a `<style>` to `document.head`
+  still works, but styles the whole window: move it to `superego.style` (`api: '^4.2'`).
 
 ## 0.1.7
 

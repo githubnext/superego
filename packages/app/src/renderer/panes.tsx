@@ -16,7 +16,7 @@
 import { createContext, Fragment, useContext, useEffect, useLayoutEffect, useRef, useState, type ButtonHTMLAttributes, type ReactNode, type RefObject } from 'react'
 import { createPortal, flushSync } from 'react-dom'
 import type { Pane, ThreadInfo } from '@superego/protocol'
-import { ArrowRightIcon, CardsIcon, ChatTextIcon, ColumnsPlusRightIcon, CornersInIcon, CornersOutIcon, DotsThreeIcon, FileTextIcon, IconButton, Menu, SegmentedControl, XIcon, type SegmentedOption } from '@superego/ui'
+import { ArrowRightIcon, CardsIcon, ChatTextIcon, ColumnsPlusRightIcon, CornersInIcon, CornersOutIcon, DotsThreeIcon, FileTextIcon, IconButton, Menu, SegmentedControl, usePortalAttributes, XIcon, type SegmentedOption } from '@superego/ui'
 import { PANE_LAYOUT, type PaneLayout } from '../shared/app-settings.ts'
 import { useAppSetting } from './client.ts'
 import type { PaneKind, PaneProps, UiApi } from './extension-api.ts'
@@ -372,7 +372,9 @@ const HeaderSlot = createContext<HTMLElement | null>(null)
 /** Shown in the pane's header, beside its title, rather than in its body. */
 export function PaneHeader({ children }: { children: ReactNode }) {
   const at = useContext(HeaderSlot)
-  return at ? createPortal(children, at) : <div className="pane-bar">{children}</div>
+  // Portalled out of the pane's tree: still marked as what drew it is (a profile's), so its styles reach.
+  const marked = usePortalAttributes()
+  return at ? createPortal(Object.keys(marked).length ? <span className="profile-scope" {...marked}>{children}</span> : children, at) : <div className="pane-bar">{children}</div>
 }
 
 /**
@@ -476,7 +478,7 @@ export function PaneBody({ machine, thread, pane }: PaneProps) {
   return (
     <ViewScopeProvider value={{ machine: machine.id, thread }}>
       <WebViewPane.Provider value={{ machine: machine.id, thread: thread.id, pane: pane.id }}>
-        <Contained name={whose(kind, pane.kind)}><Component machine={machine} thread={thread} pane={pane} /></Contained>
+        <Contained name={whose(kind, pane.kind)} scope={kind.owner.profile}><Component machine={machine} thread={thread} pane={pane} /></Contained>
       </WebViewPane.Provider>
     </ViewScopeProvider>
   )

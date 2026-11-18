@@ -21,7 +21,7 @@ export function Slot<S extends BehaviourSlot>({ name, props, frame }: { name: S;
   const entries = seenIn(registry.slots[name] as Owned<{ component: ComponentType<SlotProps[S]> }>[], machine && thread ? { machine: machine.id, thread } : undefined)
   return <>{entries.map(({ component: Component, owner }, index) => {
     const key = `${owner.profile ?? ''}/${owner.extension}-${index}`
-    const drawn = <Contained key={key} name={owner.extension} inline={name === 'header.chips' || name === 'thread.badge' || name === 'editor.bar'}><Component {...props} /></Contained>
+    const drawn = <Contained key={key} name={owner.extension} scope={owner.profile} inline={name === 'header.chips' || name === 'thread.badge' || name === 'editor.bar'}><Component {...props} /></Contained>
     return frame ? <Fragment key={key}>{frame(key, drawn)}</Fragment> : drawn
   })}</>
 }
@@ -84,7 +84,7 @@ export function PlacedViews({ place, machine, thread, frame }: {
   // A view that needs a thread isn't drawn without one.
   return <>{viewsIn(registry, placed, place, where).filter((view) => view.context === 'window' || where).map((view) => {
     const Component = view.component as ComponentType<ViewProps>
-    const drawn = <ViewScope.Provider value={where}><Contained name={view.owner.extension} inline={place === 'header' || place === 'titlebar' || place === 'rail'}><Component place={place} {...(machine && thread ? { machine, thread } : {})} /></Contained></ViewScope.Provider>
+    const drawn = <ViewScope.Provider value={where}><Contained name={view.owner.extension} scope={view.owner.profile} inline={place === 'header' || place === 'titlebar' || place === 'rail'}><Component place={place} {...(machine && thread ? { machine, thread } : {})} /></Contained></ViewScope.Provider>
     return <Fragment key={`${view.owner.profile ?? ''}/${view.id}`}>{frame ? frame(view, drawn) : drawn}</Fragment>
   })}</>
 }

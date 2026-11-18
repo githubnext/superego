@@ -32,8 +32,8 @@ function toolEntry(registry: Registry, name: string, where: Where) {
 /** How calls to the tool `name` are drawn for `where`, if an extension draws them whole. */
 export const toolView = (registry: Registry, name: string, where: Where) => toolEntry(registry, name, where)?.component
 
-/** The extension that says how calls to the tool `name` look for `where`, if one does. */
-export const toolOwner = (registry: Registry, name: string, where: Where) => toolEntry(registry, name, where)?.owner.extension
+/** Whose word it is how calls to the tool `name` look for `where`, if an extension's. */
+export const toolOwner = (registry: Registry, name: string, where: Where) => toolEntry(registry, name, where)?.owner
 
 /** How calls to the tool `name` are described for `where`: what an extension (or the core) said, else nothing (the defaults). */
 export const toolRow = (registry: Registry, name: string, where: Where): ToolRow => toolEntry(registry, name, where)?.row ?? {}
@@ -67,16 +67,19 @@ export const linkSchemes = (registry: Registry, where: LinkWhere) => [...new Set
 /** How entries of `kind` are drawn for `where`, if an extension draws them. */
 export const entryView = (registry: Registry, kind: string, where: Where) => lookUp(registry.entries, where, (e) => e.kind === kind)?.component
 
-/** The extension that draws entries of `kind` for `where`, if one does. */
-export const entryOwner = (registry: Registry, kind: string, where: Where) => lookUp(registry.entries, where, (e) => e.kind === kind)?.owner.extension
+/** Who draws entries of `kind` for `where`, if an extension does. */
+export const entryOwner = (registry: Registry, kind: string, where: Where) => lookUp(registry.entries, where, (e) => e.kind === kind)?.owner
 
 /**
  * The component under the settings section that names `ui`, on `target` (a machine, or `APP`): a profile's there first,
  * as lookups take it; an app's UI half only where it speaks with the machine's half.
  */
-export function settingsView(registry: Registry, ui: string, target: string) {
+export const settingsView = (registry: Registry, ui: string, target: string) => settingsEntry(registry, ui, target)?.component
+
+/** The settings section's registration that `settingsView` draws, with its owner. */
+export function settingsEntry(registry: Registry, ui: string, target: string) {
   const here = (s: Registry['settings'][number]) => s.owner.profile ? scopeIsOn(s.owner.profile, target) : s.owner.speaks?.(target) !== false
-  return preferProfile(registry.settings.filter((s) => s.ui === ui && here(s)))?.component
+  return preferProfile(registry.settings.filter((s) => s.ui === ui && here(s)))
 }
 
 /** A run of work in parts, as the first extension (that `where` has) that divides it says; else whole. */
@@ -91,7 +94,7 @@ export function divideWork(registry: Registry, where: Where, run: WorkRun): Work
 }
 
 /** The pane kind `kind` as `where` sees it: its profile's own first, else the app's. */
-export const paneKind = (registry: Registry, kind: string, where: Where): PaneKind | undefined => lookUp(registry.panes, where, (p) => p.kind === kind)
+export const paneKind = (registry: Registry, kind: string, where: Where): Registry['panes'][number] | undefined => lookUp(registry.panes, where, (p) => p.kind === kind)
 
 /** A pane's title: its own, else its kind's. */
 export function paneTitle(registry: Registry, pane: Pane, where: Where): string {

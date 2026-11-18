@@ -96,6 +96,8 @@ export default defineUiExtension({
   ${fields(name)},
   setup(superego) {
     superego.pane('${name}', { title: '${title(name)}', icon: ListIcon, menu: true, component: Pane })
+    // Its look: only what this profile draws gets it, so its class names can't clash with another's.
+    superego.style(\`.${name} { padding: var(--superego-space-4); }\`)
   },
 })
 `

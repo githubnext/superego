@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { Dialog as Base } from '@base-ui/react/dialog'
 import { IconButton } from './button.tsx'
+import { usePortalAttributes } from './portal.tsx'
 
 /**
  * A modal dialog (Base UI): the page behind it is inert, focus stays inside, and it closes on Escape, on a click on
@@ -19,11 +20,12 @@ export function Dialog({ open = true, onClose, title, actions, children, classNa
   /** The accessible name when there is no `title`. */
   label?: string
 }) {
+  const marked = usePortalAttributes()
   return (
     <Base.Root open={open} onOpenChange={(next) => { if (!next) onClose() }}>
       <Base.Portal>
-        <Base.Backdrop className="superego-dialog__backdrop" />
-        <Base.Popup className={`superego-dialog superego-dialog--${size} ${className}`} aria-label={label}>
+        <Base.Backdrop {...marked} className="superego-dialog__backdrop" />
+        <Base.Popup {...marked} className={`superego-dialog superego-dialog--${size} ${className}`} aria-label={label}>
           <div className="superego-dialog__frame">
             {(title || actions) && (
               <header className="superego-dialog__header">

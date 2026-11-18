@@ -3,15 +3,17 @@
 import type { ComponentProps, ReactNode } from 'react'
 import { Menu as Base } from '@base-ui/react/menu'
 import { ContextMenu as BaseContext } from '@base-ui/react/context-menu'
+import { usePortalAttributes } from './portal.tsx'
 import { CaretRightIcon } from '@phosphor-icons/react/dist/csr/CaretRight'
 
 /** The menu's surface: portal, positioner and popup in one. */
 function Popup({ children, side = 'bottom', align = 'start', className = '' }: {
   children: ReactNode; side?: 'top' | 'bottom' | 'left' | 'right'; align?: 'start' | 'center' | 'end'; className?: string
 }) {
+  const marked = usePortalAttributes()
   return (
     <Base.Portal>
-      <Base.Positioner className="superego-layer" side={side} align={align} sideOffset={6}>
+      <Base.Positioner {...marked} className="superego-layer" side={side} align={align} sideOffset={6}>
         <Base.Popup className={`superego-menu ${className}`}>{children}</Base.Popup>
       </Base.Positioner>
     </Base.Portal>
@@ -65,9 +67,10 @@ function SubmenuTrigger({ children, ...props }: ComponentProps<typeof Base.Subme
 
 /** A submenu's surface: beside the item that opens it. */
 function SubmenuPopup({ children, className = '' }: { children: ReactNode; className?: string }) {
+  const marked = usePortalAttributes()
   return (
     <Base.Portal>
-      <Base.Positioner className="superego-layer" side="right" align="start" sideOffset={2} alignOffset={-5}>
+      <Base.Positioner {...marked} className="superego-layer" side="right" align="start" sideOffset={2} alignOffset={-5}>
         <Base.Popup className={`superego-menu ${className}`}>{children}</Base.Popup>
       </Base.Positioner>
     </Base.Portal>
@@ -85,9 +88,10 @@ export const Menu = {
 
 /** A context menu's surface: where the pointer was (or the long press). */
 function ContextPopup({ children, className = '' }: { children: ReactNode; className?: string }) {
+  const marked = usePortalAttributes()
   return (
     <BaseContext.Portal>
-      <BaseContext.Positioner className="superego-layer">
+      <BaseContext.Positioner {...marked} className="superego-layer">
         <BaseContext.Popup className={`superego-menu ${className}`}>{children}</BaseContext.Popup>
       </BaseContext.Positioner>
     </BaseContext.Portal>

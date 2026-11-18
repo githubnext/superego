@@ -10,7 +10,7 @@ import type { MachineEntry } from '../shared/bridge.ts'
 import { ACCENT, APP, INTERFACE_FONT, KEYMAP, MONO_FONT, TEXT_SIZE, textScale } from '../shared/app-settings.ts'
 import { useSettings, watched } from './client.ts'
 import type { SpaceRailProps, View, ViewProps } from './extension-api.ts'
-import { useRegistry, whose } from './registry.tsx'
+import { scopeOfEntry, useRegistry, whose } from './registry.tsx'
 import { shownPanes } from './lookups.ts'
 import { paneMenu, PlacedViews, Slot, useLayout, viewsIn } from './placement.tsx'
 import { Contained } from './contained.tsx'
@@ -258,7 +258,7 @@ function BackForward() {
  */
 function SpaceButton({ view, open, sidebarHidden, show, narrow = false }: { view: View; narrow?: boolean } & SpaceRailProps) {
   const keys = useRailShortcut()
-  if (view.railButton && !narrow) return <Contained name={whose(view)} inline><view.railButton open={open} sidebarHidden={sidebarHidden} show={show} /></Contained>
+  if (view.railButton && !narrow) return <Contained name={whose(view)} scope={scopeOfEntry(view)} inline><view.railButton open={open} sidebarHidden={sidebarHidden} show={show} /></Contained>
   const Icon = view.icon
   const shown = open && !sidebarHidden
   return (
@@ -316,7 +316,7 @@ function ThreadSheet({ machine, thread, onClose }: { machine: MachineEntry; thre
 function SpaceView({ view, machine, thread }: { view: View; machine?: MachineEntry; thread?: ThreadInfo }) {
   const Component = view.component as ComponentType<ViewProps>
   if (view.context === 'thread' && !(machine && thread)) return null
-  return <Contained name={whose(view)}><Component place="space" {...(machine && thread ? { machine, thread } : {})} /></Contained>
+  return <Contained name={whose(view)} scope={scopeOfEntry(view)}><Component place="space" {...(machine && thread ? { machine, thread } : {})} /></Contained>
 }
 
 /** Without a space (the core's `core.picker`, at the title bar's start): every thread in a menu, and a new one. */
