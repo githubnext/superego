@@ -838,8 +838,9 @@ a.pane-header__url:hover { color: var(--superego-accent); }
    small control reached from the keyboard (see @superego/ui's styles). */
 .app__sidebar, .panes > .panes__column { border: 2px solid transparent; }
 :is(.app__sidebar, .panes > .panes__column):focus-within { border-color: var(--superego-ring); }
-/* Narrow, one region shows at a time: no ring to say which. */
+/* None on a phone or under a finger: one region shows at a time, and what's tapped is where you are. */
 .app.is-narrow :is(.app__sidebar, .panes > .panes__column) { border: 0; }
+@media (pointer: coarse) { :is(.app__sidebar, .panes > .panes__column) { border: 0; } }
 
 /* Over the row: a tab for the thread and each pane (the focused one tinted, those out of view faint, with which way
    they are), the row in small, and + for another pane. */
