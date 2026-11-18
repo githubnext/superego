@@ -84,6 +84,11 @@ export type Daemon = {
    * transport knows of it. `hangUp` closes the transport, for a peer that stopped answering its heartbeat.
    */
   serve(peer: RpcPeer, transport?: { via?: Via; hangUp?: () => void }): () => void
+  /**
+   * Settles once the profiles of the threads in use, loaded in the background as it starts, are loaded (or failed to,
+   * which is logged): from then on, what it offers (`hello`'s extensions) has theirs.
+   */
+  profilesLoaded: Promise<void>
   close(): Promise<void>
 }
 
@@ -238,6 +243,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   const daemon: Daemon = {
     machine,
     settings,
+    profilesLoaded: loadingProfiles,
     serve: (peer, transport = {}) => serveClient(peer, transport, {
       host, machine, keepsRunning: kept, clients, relay, extensions, profiles, threads, files, images, outsideMayStart,
     }),

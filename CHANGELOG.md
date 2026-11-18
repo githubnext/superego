@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- A window reconnecting to a restarted daemon no longer misses what a profile's extensions bring (their panes and
+  views) when the profile loads just as it connects.
 - Profile sources: install your own profiles from a git repo or a folder, as Pi installs packages.
   `superego profile install git:github.com/<owner>/<repo>` clones it (a folder, `~/…`, is read in place), and its
   `profiles/<name>` are yours, after `~/.superego/profiles`. `profile update` pulls them, `profile remove` drops one,

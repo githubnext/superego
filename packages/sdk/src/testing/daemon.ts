@@ -231,12 +231,24 @@ export async function testDaemon(options: TestDaemonOptions = {}): Promise<TestD
       ...(options.setupTimeout ? { setupTimeout: options.setupTimeout } : {}),
       ...(options.agentPartsLimit ? { agentPartsLimit: options.agentPartsLimit } : {}),
     })
+    // Its threads' profiles loaded first, as a window reconnecting finds them once the app's daemon is up a moment: what
+    // the test checks right after a start or `restart` (its extensions, a profile's values) is there, not on its way.
+    await daemon.profilesLoaded
     const socket = join(dataDir, `d${opened}.sock`)
     const server = await listen(daemon, socket)
     const { peer, socket: connection } = await connectSocket(socket)
+    // Heard from before hello answers: what changes right after is told as the answer arrives, and would be missed by a
+    // listener added once it's read.
+    let offered: Pick<Hello, 'features' | 'extensions'> | undefined
+    let ready: Running | undefined
+    peer.on('features.changed', ({ features, extensions }: Notifications['features.changed']) => {
+      offered = { features, extensions }
+      if (ready) ready.hello = { ...ready.hello, ...offered }
+    })
+    const hello = await peer.call<Hello>('hello', { client: 'superego/testing', version: PROTOCOL_VERSION })
     const running: Running = {
       peer, socket, others: new Set(),
-      hello: await peer.call<Hello>('hello', { client: 'superego/testing', version: PROTOCOL_VERSION }),
+      hello: { ...hello, ...offered },
       async stop() {
         for (const other of running.others) other.destroy()
         connection.destroy()
@@ -246,7 +258,7 @@ export async function testDaemon(options: TestDaemonOptions = {}): Promise<TestD
         delete process.env[envName(app, 'REPLAY_SPEED')]
       },
     }
-    peer.on('features.changed', ({ features, extensions }: Notifications['features.changed']) => { running.hello = { ...running.hello, features, extensions } })
+    ready = running
     return running
   }
 

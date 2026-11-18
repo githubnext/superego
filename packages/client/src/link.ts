@@ -113,14 +113,22 @@ export class Link {
       try {
         const transport = await this.#options.open()
         this.#transport = transport
+        // What it offers as this connection last heard, from before hello answers too: a change told right behind the
+        // answer (a profile's extensions, loading as a restarted daemon starts) arrives before the answer is read. The
+        // last told is the newest, the answer's included.
+        let offered: Notifications['features.changed'] | undefined
+        let answered = false
         transport.peer.onAny((method, params) => {
           // Channels are this connection's own business, not news for the windows.
           if (method.startsWith('ch.')) return
           // What it offers changed since hello (an extension set up, torn down, switched off): `has` follows.
-          if (method === 'features.changed' && this.hello) {
+          if (method === 'features.changed') {
             const { features, extensions } = params as Notifications['features.changed']
-            this.hello = { ...this.hello, features, extensions }
-            this.#set(this.state)
+            offered = { features, extensions }
+            if (answered && this.hello) {
+              this.hello = { ...this.hello, ...offered }
+              this.#set(this.state)
+            }
           }
           this.#options.onEvent(method, params)
         })
@@ -134,7 +142,8 @@ export class Link {
           throw new RpcError('version_mismatch', `${hello.machine.hostname} speaks protocol generation ${hello.version}, this client ${PROTOCOL_VERSION}`, { hint: 'Update the side that is older.' })
         }
         this.#options.verify?.(hello)
-        this.hello = hello
+        this.hello = { ...hello, ...offered }
+        answered = true
         this.#delay = 500
         this.#set('connected')
         let silent = false

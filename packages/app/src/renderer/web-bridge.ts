@@ -99,6 +99,9 @@ export function webBridge(): SuperegoBridge {
         return false
       })
       ws.onmessage = (message) => next.receive(String(message.data))
+      // What it offers as this connection last heard, from before its entry is made from hello too: the last told is
+      // the newest (a profile's extensions, loading as a restarted daemon starts, told right behind hello's answer).
+      let offered: Pick<MachineEntry, 'features' | 'extensions'> | undefined
       next.onAny((method, params) => {
         // Channels are this connection's own business, not news for the window.
         if (method.startsWith('ch.')) return
@@ -115,7 +118,8 @@ export function webBridge(): SuperegoBridge {
         // What it offers changed since hello: `has` follows.
         if (method === 'features.changed') {
           const { features, extensions } = params as Notifications['features.changed']
-          setEntry({ features, extensions })
+          offered = { features, extensions }
+          setEntry(offered)
         }
         emit({ machine: 'local', method, params })
       })
@@ -135,7 +139,7 @@ export function webBridge(): SuperegoBridge {
           }
           const { sub, value } = await next.call<{ sub: string; value: MachineEntry[] }>('machines.watch', {})
           machinesSub = sub
-          setEntries(value.map((m) => m.id === 'local' ? self : m))
+          setEntries(value.map((m) => m.id === 'local' ? { ...self, ...offered } : m))
           peer = next
           retry = 500
           resolve(next)

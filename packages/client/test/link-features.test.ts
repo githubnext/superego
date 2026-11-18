@@ -49,3 +49,23 @@ it("meets a newer daemon: an extension a major ahead isn't one this window speak
   expect(link.has('ext:ask-user@^1')).toBe(false)
   link.stop()
 })
+
+it("keeps a change told right behind hello's answer, before the answer is read (a restarted daemon's profiles loading)", async () => {
+  let daemon!: RpcPeer
+  const client: RpcPeer = new RpcPeer((line) => queueMicrotask(() => daemon.receive(line)))
+  // Both lines in one go, as one read of the socket would bring them.
+  let pending: string[] = []
+  daemon = new RpcPeer((line) => {
+    pending.push(line)
+    if (pending.length === 1) queueMicrotask(() => { const lines = pending; pending = []; for (const l of lines) client.receive(l) })
+  })
+  daemon.handle('hello', async () => {
+    queueMicrotask(() => daemon.notify('features.changed', { features: [], extensions: [{ name: 'queue', version: '1.0.0' }] }))
+    return { version: PROTOCOL_VERSION, machine: { id: 'm1', hostname: 'box' }, features: [], extensions: [], methods: [] } as unknown as Hello
+  })
+  const link = new Link({ id: 'm', label: 'box', open: async () => ({ peer: client, closed: new Promise(() => {}), close() {} }), onEvent: () => {} })
+  link.start()
+  for (let i = 0; i < 20 && link.state !== 'connected'; i++) await settle()
+  expect(link.has('ext:queue')).toBe(true)
+  link.stop()
+})
