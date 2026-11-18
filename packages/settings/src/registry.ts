@@ -14,6 +14,8 @@ export type SettingSpec = {
   hidden?: () => boolean
   /** It records the user's consent: only the user changes it, never an agent (see `SettingInfo.consent`). */
   consent?: true
+  /** Why a value of the right type is still refused, if it is: a hostname that isn't one. */
+  validate?: (value: Json) => string | undefined
 }
 
 export type SectionSpec = {
@@ -150,6 +152,8 @@ export class SettingsRegistry {
     const disabled = spec.disabled?.()
     if (disabled) throw new RpcError('setting_disabled', `${spec.title}: ${disabled}`)
     check(spec, value)
+    const invalid = spec.validate?.(value)
+    if (invalid) throw new RpcError('invalid_setting', `${spec.title}: ${invalid}`)
     if (this.#closed) throw new RpcError('closing', `Settings are closed: ${key} wasn't changed`)
     this.#values = { ...this.#values, [key]: value }
     const saving = this.#store.save(this.#values)

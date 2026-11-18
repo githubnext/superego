@@ -9,6 +9,9 @@
   `profiles/<name>` are yours, after `~/.superego/profiles`. `profile update` pulls them, `profile remove` drops one,
   `profile sources` lists them. A profile shadowed by one of the same name is shown as a problem, and Settings →
   Profiles says which source each comes from.
+- Web access: choose the host it's reached at (Settings → Web access → Host, or `web.host`), for the address, pairing
+  links and QR codes; and on a machine running more than one tailscaled, which tailnet serves it (Tailnet,
+  `web.tailscale.socket`). A `tailscale serve` you set up by hand for its port is taken over rather than reported busy.
 - A profile linked into `~/.superego/profiles` and then linked somewhere else loads from its new place. Before, it kept
   failing with "no such file" for the old one until the daemon restarted.
 

@@ -3,13 +3,15 @@
 // through serve (a stub `tailscale` on PATH stands in for the real one).
 import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { request as httpRequest } from 'node:http'
+import { createServer as createNetServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { defineApp, PROTOCOL_VERSION, type Hello, type SettingsSnapshot } from '@superego/protocol'
 import { MemorySettingsStore } from '@superego/settings'
 import { connectSocket, listen, openDaemon } from '../src/index.ts'
-import { serveWeb, type ServedByTailscale, type WebServer } from '../src/web.ts'
+import { serveWeb, webOrigin, type ServedByTailscale, type WebServer } from '../src/web.ts'
+import { otherInstances } from '../src/tailscale.ts'
 import { DEVICE_TTL, FAILURES, TICKET_TTL, WebDevices, deviceName } from '../src/web-devices.ts'
 import { until } from './until.ts'
 
@@ -100,6 +102,7 @@ describe('the web server', () => {
   let web: WebServer
   let devices: WebDevices
   let ts: ServedByTailscale | undefined
+  let chosen: string | undefined
   let served: number
   beforeEach(async () => {
     const root = join(dir, 'root')
@@ -107,9 +110,10 @@ describe('the web server', () => {
     await writeFile(join(root, 'index.html'), '<h1>app</h1>')
     devices = new WebDevices(dir)
     ts = undefined
+    chosen = undefined
     served = 0
     web = await serveWeb({
-      root, port: 0, devices, tailscale: () => ts,
+      root, port: 0, devices, tailscale: () => ts, origin: () => chosen,
       serve: () => { served++; return () => {} },
       artifact: async (thread, path) => Buffer.from(`${thread}/${path}`),
     })
@@ -196,6 +200,39 @@ describe('the web server', () => {
     stays.ws.close()
   })
 
+  it('is served at the host chosen for it too, from that origin, and still only to paired devices', async () => {
+    const host = 'workbox.tail1ffbc8.ts.net'
+    expect((await http(web.port, '/', { headers: { host } })).status).toBe(403)
+    chosen = `https://${host}`
+    expect((await http(web.port, '/', { headers: { host } })).body).toBe('<h1>app</h1>')
+    expect((await http(web.port, '/', { headers: { host: `${host}:443` } })).status).toBe(200)
+    expect((await http(web.port, '/', { headers: { host: `${host}:8443` } })).status).toBe(403)
+    // A proxy of the user's own is no Tailscale serve of the daemon's: its identity headers count for nothing.
+    expect((await http(web.port, '/rpc', { headers: { host, 'tailscale-user-login': 'me@example.com' } })).status).toBe(401)
+    const response = await pairWith(web.port, { ticket: devices.pair().ticket }, { host, origin: `https://${host}` })
+    expect(response.status).toBe(200)
+    expect(String(response.headers['set-cookie'])).toContain('; Secure')
+    const cookie = cookieFrom(response)
+    expect((await socket(web.port, { cookie, host, origin: `https://${host}` })).result).toBe('open')
+    expect((await socket(web.port, { cookie, host, origin: `http://${host}` })).result).toBe('403')
+    expect((await pairWith(web.port, { ticket: devices.pair().ticket }, { host, origin: `http://${host}` })).status).toBe(403)
+    // Loopback's names still are.
+    expect((await socket(web.port, { cookie })).result).toBe('open')
+  })
+
+  it('takes a hostname, or an origin, for the host', () => {
+    expect(webOrigin('')).toBeUndefined()
+    expect(webOrigin('  ')).toBeUndefined()
+    expect(webOrigin('workbox.tail1ffbc8.ts.net')).toBe('https://workbox.tail1ffbc8.ts.net')
+    expect(webOrigin('Box.LAN:8443')).toBe('https://box.lan:8443')
+    expect(webOrigin('http://box.lan:7777/')).toBe('http://box.lan:7777')
+    expect(webOrigin('https://box.lan:443')).toBe('https://box.lan')
+    expect(webOrigin('100.103.115.1')).toBe('https://100.103.115.1')
+    for (const bad of ['ftp://box.lan', 'https://box.lan/path', 'box.lan?x=1', 'https://me:pw@box.lan', 'box_lan', 'has space.lan', 'box.lan:99999', '-box.lan', 'https://']) {
+      expect(() => webOrigin(bad), bad).toThrow()
+    }
+  })
+
   describe('through Tailscale serve', () => {
     const name = 'box.tail1234.ts.net'
     const through = (headers: Record<string, string> = {}) => ({ host: name, 'x-forwarded-for': '100.64.0.7', 'x-forwarded-proto': 'https', 'tailscale-user-login': 'me@example.com', 'tailscale-user-name': 'Me', ...headers })
@@ -236,6 +273,25 @@ describe('the web server', () => {
   })
 })
 
+describe('other tailscaleds', () => {
+  it('are found by their sockets, but for the default one', async () => {
+    // A socket's path must be short (104 bytes on macOS): not in the long per-user temp dir.
+    const short = await mkdtemp('/tmp/se-')
+    const run = join(short, 'run')
+    const listening = []
+    for (const name of ['tailscale', 'tailscale-personal', 'tailscale-empty', 'other']) {
+      await mkdir(join(run, name), { recursive: true })
+      if (name === 'tailscale-empty') continue
+      const server = createNetServer()
+      await new Promise<void>((resolve, reject) => server.once('error', reject).listen(join(run, name, 'tailscaled.sock'), resolve))
+      listening.push(server)
+    }
+    expect(otherInstances([run, join(dir, 'nowhere')]).map((s) => s.slice(s.indexOf('/run/')))).toEqual(['/run/tailscale-personal/tailscaled.sock'])
+    for (const server of listening) server.close()
+    await rm(short, { recursive: true, force: true })
+  })
+})
+
 describe('the daemon’s web access', () => {
   const app = defineApp({ name: 'superego', id: 'superego' })
   const open = async (values: Record<string, never> = {}) => {
@@ -273,6 +329,34 @@ describe('the daemon’s web access', () => {
     await close()
   })
 
+  it('pairs at the host chosen for it, and refuses a host that isn’t one, or one set from an agent’s shell', async () => {
+    const port = 20000 + Math.floor(Math.random() * 20000)
+    const { peer, section, close } = await open({ 'web.access': 'local' as never, 'web.port': port as never })
+    await until(async () => Boolean((await section()).data))
+    expect((await http(port, '/', { headers: { host: 'box.lan:7000' } })).status).toBe(403)
+    await peer.call('settings.set', { key: 'web.host', value: 'http://box.lan:7000' })
+    expect((await peer.call<{ link: string }>('web.pair', {})).link).toMatch(/^http:\/\/box\.lan:7000\/#pair=[\w-]+$/)
+    expect((await section()).data).toMatchObject({ url: 'http://box.lan:7000' })
+    expect((await http(port, '/', { headers: { host: 'box.lan:7000' } })).status).toBe(200)
+    const { code } = await peer.call<{ code: string }>('web.pair', {})
+    expect((await pairWith(port, { code }, { host: 'box.lan:7000', origin: `http://127.0.0.1:${port}` })).status).toBe(403)
+    expect((await pairWith(port, { code }, { host: 'box.lan:7000', origin: 'http://box.lan:7000' })).status).toBe(200)
+    await expect(peer.call('settings.set', { key: 'web.host', value: 'https://box.lan/app' })).rejects.toMatchObject({ kind: 'invalid_setting', message: expect.stringContaining('no path') })
+    await expect(peer.call('settings.set', { key: 'web.host', value: 'box lan' })).rejects.toMatchObject({ kind: 'invalid_setting' })
+    // Back to automatic.
+    await peer.call('settings.set', { key: 'web.host', value: '' })
+    expect((await peer.call<{ link: string }>('web.pair', {})).link).toMatch(new RegExp(`^http://127\\.0\\.0\\.1:${port}/#pair=`))
+    expect((await http(port, '/', { headers: { host: 'box.lan:7000' } })).status).toBe(403)
+    // An agent's shell: the user's consent, not the agent's.
+    const agent = await connectSocket(join(dir, 'superego.sock'))
+    await agent.peer.call('hello', { client: 'cli', version: PROTOCOL_VERSION, from: 't1' })
+    for (const [key, value] of [['web.host', 'evil.example'], ['web.tailscale.socket', '']] as const) {
+      await expect(agent.peer.call('settings.set', { key, value })).rejects.toMatchObject({ kind: 'consent' })
+    }
+    agent.socket.destroy()
+    await close()
+  })
+
   it('refuses to pair while web access is off', async () => {
     const { peer, close } = await open()
     await expect(peer.call('web.pair', {})).rejects.toMatchObject({ kind: 'web_off' })
@@ -288,9 +372,11 @@ describe('the daemon’s web access', () => {
       log = join(dir, 'tailscale.log')
       await writeFile(join(dir, 'status.json'), JSON.stringify(status))
       await writeFile(join(dir, 'serve.json'), '{}')
-      // `status --json`, `serve status --json`, `serve --bg … <target>` (kept in serve.json), `serve --https=443 off`.
+      // `status --json`, `serve status --json`, `serve --bg … <target>` (kept in serve.json), `serve --https=443 off`;
+      // any of them for another tailscaled, after --socket=<its socket>.
       await writeFile(join(bin, 'tailscale'), `#!/bin/sh
 echo "$@" >> ${JSON.stringify(log)}
+case "$1" in --socket=*) shift ;; esac
 case "$1 $2" in
   "status --json") cat ${JSON.stringify(join(dir, 'status.json'))} ;;
   "serve status") cat ${JSON.stringify(join(dir, 'serve.json'))} ;;
@@ -360,6 +446,27 @@ esac
       expect((await section()).data).toMatchObject({ tailscale: { state: 'missing' } })
       await close()
       process.env.PATH = saved
+    })
+
+    it('serves through the tailscaled chosen, and takes over a serve that already reaches its port', async () => {
+      await stub(running)
+      const port = 20000 + Math.floor(Math.random() * 20000)
+      // Set up by hand, without the prefix: it reached the daemon, as a plain loopback client.
+      await writeFile(join(dir, 'serve.json'), JSON.stringify({ Web: { 'box.tail1234.ts.net:443': { Handlers: { '/': { Proxy: `http://127.0.0.1:${port}` } } } } }))
+      const { peer, section, close } = await open({ 'web.access': 'tailscale' as never, 'web.port': port as never, 'web.tailscale.socket': '/run/tailscale-personal/tailscaled.sock' as never })
+      await until(async () => ((await section()).data as { tailscale?: { state: string } }).tailscale?.state === 'serving')
+      const lines = (await readFile(log, 'utf8')).trim().split('\n')
+      expect(lines.length).toBeGreaterThan(0)
+      for (const line of lines) expect(line).toMatch(/^--socket=\/run\/tailscale-personal\/tailscaled\.sock /)
+      expect(lines.some((line) => line.includes(' serve --bg '))).toBe(true)
+      // Back to the default one: the chosen one's serve goes, and the default one's comes, without --socket.
+      await writeFile(log, '')
+      await peer.call('settings.set', { key: 'web.tailscale.socket', value: '' })
+      await until(async () => (await readFile(log, 'utf8')).includes('\nserve --bg') || (await readFile(log, 'utf8')).startsWith('serve --bg'))
+      const after = await readFile(log, 'utf8')
+      expect(after).toContain('--socket=/run/tailscale-personal/tailscaled.sock serve --https=443 off')
+      expect(after).toMatch(/^serve --bg /m)
+      await close()
     })
 
     it('leaves someone else’s serve alone', async () => {

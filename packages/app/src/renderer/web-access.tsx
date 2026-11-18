@@ -63,6 +63,7 @@ export function WebAccess({ target, section }: { target: string; section: Sectio
     <div className="web-access">
       {error && <p className="setting__error">{error}</p>}
       {tailscale && <TailscaleState tailscale={tailscale} />}
+      {tailscale?.state === 'serving' && url && url !== tailscale.url && <p className="settings__note">Tailscale serves it at {tailscale.url}.</p>}
       {url && (
         <div className="web-access__row">
           <code className="web-access__url">{url}</code>

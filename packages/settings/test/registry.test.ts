@@ -14,6 +14,7 @@ describe('SettingsRegistry', () => {
       { key: 'flag', title: 'Flag', default: false, type: { type: 'boolean' } },
       { key: 'pick', title: 'Pick', default: null, type: () => ({ type: 'choice', nullable: true, options: options.map((value) => ({ value, label: value })) }) },
       { key: 'n', title: 'N', default: 1, type: { type: 'number', min: 0, max: 3 } },
+      { key: 'word', title: 'Word', default: '', type: { type: 'string' }, validate: (v) => / /.test(String(v)) ? 'one word' : undefined },
     ] })
     await flush()
     changes = 0
@@ -28,12 +29,13 @@ describe('SettingsRegistry', () => {
     await expect(settings.set('flag', 'yes')).rejects.toMatchObject({ kind: 'invalid_setting' })
     await expect(settings.set('n', 9)).rejects.toMatchObject({ kind: 'invalid_setting' })
     await expect(settings.set('pick', 'c')).rejects.toMatchObject({ kind: 'invalid_setting' })
+    await expect(settings.set('word', 'two words')).rejects.toMatchObject({ kind: 'invalid_setting', message: 'Word: one word' })
     options = ['a', 'b', 'c']
     await settings.set('pick', 'c')
     await expect(settings.set('missing', 1)).rejects.toMatchObject({ kind: 'unknown_setting' })
 
     const snapshot = await settings.snapshot()
-    expect(snapshot.values).toEqual({ flag: true, pick: 'c', n: 1 })
+    expect(snapshot.values).toEqual({ flag: true, pick: 'c', n: 1, word: '' })
     expect(snapshot.sections[0]!.settings[1]).toMatchObject({ type: 'choice', options: [{ value: 'a' }, { value: 'b' }, { value: 'c' }] })
   })
 

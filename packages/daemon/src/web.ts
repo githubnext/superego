@@ -6,7 +6,9 @@
 // Who may: a paired device (web-devices.ts), by its HttpOnly cookie; and through serve, the machine's owner by their
 // Tailscale login. Nothing secret is ever in an address. Every request must name a host the daemon is served at (so a
 // DNS-rebound page can't reach it), and a WebSocket must come from the page's own origin (so another site can't ride the
-// cookie).
+// cookie). The hosts are loopback's, Tailscale serve's while it serves, and the one the `web.host` setting names: a name
+// it's reached at some other way (a proxy of the user's own), whose requests are plain loopback ones, so pairing still
+// decides who gets in through it.
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto'
 import { existsSync } from 'node:fs'
 import { readFile, stat } from 'node:fs/promises'
@@ -68,10 +70,37 @@ const cookieOf = (request: IncomingMessage) => {
 }
 const header = (request: IncomingMessage, name: string) => { const value = request.headers[name]; return Array.isArray(value) ? value[0] : value }
 const hostname = (host: string) => host.startsWith('[') ? host.slice(0, host.indexOf(']') + 1) : host.split(':')[0]!
+/** Whether a Host header names `origin`'s host (its port as the scheme has it by default, when left out). */
+const sameHost = (origin: string, host: string) => {
+  try { return new URL(`${new URL(origin).protocol}//${host}`).host === new URL(origin).host } catch { return false }
+}
+
+/**
+ * The origin a `web.host` value names: a hostname (`box.example.ts.net`, over HTTPS), with a port (`box.lan:8080`), or a
+ * whole origin (`http://box.lan:7777`). Empty is none (the address Web access works out itself); anything else, an error
+ * saying what's wrong with it.
+ */
+export function webOrigin(value: string): string | undefined {
+  const given = value.trim()
+  if (!given) return undefined
+  const bad = (why: string): never => { throw new Error(why) }
+  const scheme = /^([a-z][a-z0-9+.-]*):\/\//i.exec(given)?.[1]?.toLowerCase()
+  if (scheme && scheme !== 'http' && scheme !== 'https') bad(`${scheme}: isn't a web address: use http or https`)
+  let url: URL
+  try { url = new URL(scheme ? given : `https://${given}`) } catch { return bad(`${JSON.stringify(given)} isn't a hostname or an origin`) }
+  if (url.username || url.password) bad('no user or password: just the hostname')
+  if (url.pathname !== '/' || url.search || url.hash || /[?#]/.test(given)) bad('no path: just the hostname, and a port if it has one')
+  const name = url.hostname
+  const ip = name.startsWith('[') || /^\d+(\.\d+){3}$/.test(name)
+  if (!ip && !/^(?=.{1,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*$/.test(name)) bad(`${JSON.stringify(name)} isn't a hostname`)
+  return url.origin
+}
 
 /** Serve `root` (the window's build) and the protocol on 127.0.0.1:port, each connection a peer handed to `serve`. */
-export async function serveWeb({ root, port, devices, tailscale, serve, artifact }: {
+export async function serveWeb({ root, port, devices, tailscale, origin, serve, artifact }: {
   root: string; port: number; devices: WebDevices
+  /** The origin the `web.host` setting says it's reached at, if it says one (see webOrigin). */
+  origin?: () => string | undefined
   /** Serve a connection: `via` names who it is in the client list, `hangUp` closes it. */
   serve(peer: RpcPeer, transport: { via: Via; hangUp: () => void }): () => void
   /** Tailscale serve in front, while it is. */
@@ -86,19 +115,21 @@ export async function serveWeb({ root, port, devices, tailscale, serve, artifact
   const callerOf = (request: IncomingMessage): Caller | undefined => {
     const host = header(request, 'host') ?? ''
     const ts = tailscale?.()
+    const chosen = origin?.()
     const loopback = LOOPBACK.has(request.socket.remoteAddress ?? '')
     let path = new URL(request.url ?? '/', 'http://x').pathname
     // Serve's prefix proves the request came through it; only on loopback, and only while Tailscale serves.
     const via = ts && loopback && (path === `/${ts.prefix}` || path.startsWith(`/${ts.prefix}/`)) ? ts : undefined
     if (via) path = path.slice(via.prefix.length + 1) || '/'
     const name = hostname(host).toLowerCase()
-    if (!LOOPBACK_NAMES.has(name) && name !== ts?.name.toLowerCase()) return undefined
+    const isChosen = Boolean(chosen && sameHost(chosen, host))
+    if (!isChosen && !LOOPBACK_NAMES.has(name) && name !== ts?.name.toLowerCase()) return undefined
     if (via) {
       const address = header(request, 'x-forwarded-for')?.split(',')[0]?.trim() || 'tailnet'
       const login = header(request, 'tailscale-user-login')
-      return { path, address, origin: `https://${via.name}`, serve: via, ...(login ? { login } : {}) }
+      return { path, address, origin: isChosen ? chosen! : `https://${via.name}`, serve: via, ...(login ? { login } : {}) }
     }
-    return { path, address: request.socket.remoteAddress ?? 'unknown', origin: `http://${host}` }
+    return { path, address: request.socket.remoteAddress ?? 'unknown', origin: isChosen ? chosen! : `http://${host}` }
   }
   /** Who a caller is: a paired device's id, or `tailscale:<node>` for the owner through serve; 'limited' after too many misses. */
   const identify = async (caller: Caller, cookie: string | undefined): Promise<string | 'limited' | undefined> => {
@@ -126,7 +157,7 @@ export async function serveWeb({ root, port, devices, tailscale, serve, artifact
     return given.length === expected.length && timingSafeEqual(given, expected) ? who.toString() : undefined
   }
   const cookie = (caller: Caller, value: string, age = COOKIE_AGE) =>
-    `${DEVICE_COOKIE}=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${age}${caller.serve ? '; Secure' : ''}`
+    `${DEVICE_COOKIE}=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${age}${caller.origin.startsWith('https:') ? '; Secure' : ''}`
   /** Refused: a cookie that isn't a device's any more is cleared, so it stops counting against the address. */
   const refuse = (response: ServerResponse, caller: Caller, who: string | undefined, hadCookie: boolean) => {
     if (who === 'limited') return void response.writeHead(429, { 'content-type': 'text/plain' }).end('Too many tries. Wait a few minutes.')
