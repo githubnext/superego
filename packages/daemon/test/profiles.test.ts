@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, renameSync, symlinkSync, writeFileSync } from 'node:fs'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DATA_VIEWS, defineApp, MESSAGE_ENTRY, PROTOCOL_VERSION, type Hello, type DataViewInfo, type ProfileInfo, type RpcPeer, type ThreadInfo } from '@superego/protocol'
 import { connectSocket, defineDaemonExtension, listen, openDaemon } from '../src/index.ts'
@@ -889,6 +889,34 @@ console.log(JSON.stringify([before, (await load()).daemon[0].extension.setup()])
   const { execFileSync } = await import('node:child_process')
   const out = execFileSync(process.execPath, [join(dir, 'probe.ts')], { encoding: 'utf8', env: { ...process.env, NODE_OPTIONS: '' } })
   expect(JSON.parse(out.trim().split('\n').at(-1)!)).toEqual(['before', 'after'])
+})
+
+it("loads a symlinked profile from where its link points now, under Node's own loader (it never forgets a link's old target)", async () => {
+  const files = (v: string) => ({
+    'profile.ts': profileTs(['./extension.ts']),
+    'extension.ts': `import { defineDaemonExtension } from 'superego'\nexport default defineDaemonExtension({ name: 'x', setup() { return '${v}' } })\n`,
+  })
+  write(join(dir, 'old'), files('old'))
+  write(join(dir, 'new'), files('new'))
+  const link = join(home, 'profiles', 'p')
+  mkdirSync(dirname(link), { recursive: true })
+  symlinkSync(join(dir, 'old'), link)
+  const profiles = new URL('../src/profiles.ts', import.meta.url).href
+  write(dir, { 'probe.ts': `import { rmSync, symlinkSync } from 'node:fs'
+import { loadProfile, provideSdk, SDK_EXPORTS, Allowances } from '${profiles}'
+provideSdk(Object.fromEntries(SDK_EXPORTS.map((key) => [key, (x) => x])))
+const ref = { scope: 'user', name: 'p', dir: ${JSON.stringify(link)} }
+const load = () => loadProfile(ref, [{ dir: ${JSON.stringify(join(home, 'profiles'))} }], new Allowances(${JSON.stringify(home)}))
+const before = (await load()).daemon[0].extension.setup()
+// Moved: the link now points at the new folder, and the old one is gone.
+rmSync(${JSON.stringify(link)})
+symlinkSync(${JSON.stringify(join(dir, 'new'))}, ${JSON.stringify(link)})
+rmSync(${JSON.stringify(join(dir, 'old'))}, { recursive: true })
+console.log(JSON.stringify([before, (await load()).daemon[0].extension.setup()]))
+` })
+  const { execFileSync } = await import('node:child_process')
+  const out = execFileSync(process.execPath, [join(dir, 'probe.ts')], { encoding: 'utf8', env: { ...process.env, NODE_OPTIONS: '' } })
+  expect(JSON.parse(out.trim().split('\n').at(-1)!)).toEqual(['old', 'new'])
 })
 
 it('versions an extension by every local file it imports, and vouches for those from outside the folder too', async () => {

@@ -7,6 +7,8 @@
   `profiles/<name>` are yours, after `~/.superego/profiles`. `profile update` pulls them, `profile remove` drops one,
   `profile sources` lists them. A profile shadowed by one of the same name is shown as a problem, and Settings →
   Profiles says which source each comes from.
+- A profile linked into `~/.superego/profiles` and then linked somewhere else loads from its new place. Before, it kept
+  failing with "no such file" for the old one until the daemon restarted.
 
 ## 0.1.5
 

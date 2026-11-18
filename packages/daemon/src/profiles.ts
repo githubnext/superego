@@ -27,6 +27,7 @@ import { existsSync, readdirSync, realpathSync, statSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { dirname, join, relative, resolve } from 'node:path'
 import * as nodeModule from 'node:module'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import type { Extension } from '@earendil-works/pi-durable'
 import type { DaemonExtension } from './extension.ts'
 import { RpcError, type Json } from '@superego/protocol'
@@ -355,10 +356,29 @@ export function provideSdk(sdk: ProfileSdk) {
     resolve(specifier, context, next) {
       if (specifier === 'superego') return { url: `data:text/javascript,${encodeURIComponent(source)}`, shortCircuit: true }
       // A profile's module imports its own files at their versions now, not the copies Node loaded before.
-      const resolved = next(specifier, context)
+      // Imports only (profiles are ES modules): a require takes paths, not URLs.
+      const resolved = next(context.conditions?.includes('import') ? realSpecifier(specifier, context.parentURL) : specifier, context)
       return { ...resolved, url: versionedImport(resolved.url, context.parentURL) }
     },
   })
+}
+
+/**
+ * A file `specifier` names, by its real path as it is now: Node's resolver follows symlinks through a cache it keeps for
+ * the life of the process, so a profile linked into ~/.superego/profiles and then linked elsewhere (its repo moved)
+ * would load from the old target, gone, until the daemon restarts. A real path is one that cache has nothing to say
+ * about. Anything else (a package, a path that isn't a file as written) is left for Node to resolve.
+ */
+function realSpecifier(specifier: string, parent: string | undefined): string {
+  if (!/^(\.{0,2}\/|file:)/.test(specifier)) return specifier
+  let url: URL
+  try { url = new URL(specifier, parent ?? pathToFileURL(process.cwd() + '/')) } catch { return specifier }
+  if (url.protocol !== 'file:') return specifier
+  let path: string
+  // Not a file as written (Node then says so, or finds one a runtime would guess, or a folder's index): left to Node.
+  try { path = realpathSync(fileURLToPath(new URL(url.pathname, url))) } catch { return specifier }
+  if (!statSync(path).isFile()) return specifier
+  return pathToFileURL(path).href + url.search + url.hash
 }
 
 /**
