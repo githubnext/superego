@@ -268,6 +268,7 @@ Writing your first extension (a tool, a pane, where things show up): [packages/c
 superego profile new            # .superego/profiles/default/profile.ts in this project (allowed, since you made it)
 superego profile new support    # another, for `superego -P support`
 superego profile new --user     # ~/.superego/profiles/default: yours, everywhere a project has none
+superego profile install git:github.com/mikker/superego-profiles   # yours from a repo (or a folder): its profiles/<name>
 superego profile allow support  # after pulling someone else's changes to it
 superego profile types          # types for an editor, for profiles made before (or a fresh clone)
 ```

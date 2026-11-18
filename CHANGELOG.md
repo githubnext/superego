@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Profile sources: install your own profiles from a git repo or a folder, as Pi installs packages.
+  `superego profile install git:github.com/<owner>/<repo>` clones it (a folder, `~/…`, is read in place), and its
+  `profiles/<name>` are yours, after `~/.superego/profiles`. `profile update` pulls them, `profile remove` drops one,
+  `profile sources` lists them. A profile shadowed by one of the same name is shown as a problem, and Settings →
+  Profiles says which source each comes from.
+
 ## 0.1.5
 
 **Upgrading:** extensions and profiles need `api: '^4'` (the extension API is now 4.0); one still on `'^3'` is refused

@@ -899,9 +899,9 @@ it('versions an extension by every local file it imports, and vouches for those 
   })
   write(dir, { 'shared/tag.ts': `export const tag = 'one'\n` })
   const allowances = new Allowances(home)
-  const before = await loadProfile(userRef('default') as ProfileRef, join(home, 'profiles'), allowances)
+  const before = await loadProfile(userRef('default') as ProfileRef, [{ dir: join(home, 'profiles') }], allowances)
   write(dir, { 'shared/tag.ts': `export const tag = 'two'\n` })
-  const after = await loadProfile(userRef('default') as ProfileRef, join(home, 'profiles'), allowances)
+  const after = await loadProfile(userRef('default') as ProfileRef, [{ dir: join(home, 'profiles') }], allowances)
   // The helper is outside the folder: still part of what it runs, so of its hash and its extension's version.
   expect(after.hash).not.toBe(before.hash)
   expect(after.daemon[0]!.key).not.toBe(before.daemon[0]!.key)
@@ -971,14 +971,14 @@ it("vouches, in allowing a project's profile, for every file its code can run: h
   const allowances = new Allowances(home)
   for (const [file, content] of [['.helper.ts', `export const a = 'A'\n`], ['.lib/b.ts', `export const b = 'B'\n`], ['../../../tools/c.ts', `export const c = 'C'\n`], ['.listed.ts', `export default { name: 'listed' }\n`], ['.theme.ts', `export const theme = 'light'\n`]] as const) {
     await allowances.allow(ref)
-    await loadProfile(ref, join(home, 'profiles'), allowances)
+    await loadProfile(ref, [{ dir: join(home, 'profiles') }], allowances)
     write(profile, { [file]: content })
-    await expect(loadProfile(ref, join(home, 'profiles'), allowances), file).rejects.toMatchObject({ kind: 'profile_not_allowed' })
+    await expect(loadProfile(ref, [{ dir: join(home, 'profiles') }], allowances), file).rejects.toMatchObject({ kind: 'profile_not_allowed' })
   }
   // What its code doesn't import, and isn't in its folder, isn't part of it.
   await allowances.allow(ref)
   write(project, { 'tools/other.ts': `export const other = 1\n` })
-  await expect(loadProfile(ref, join(home, 'profiles'), allowances)).resolves.toMatchObject({ name: 'support' })
+  await expect(loadProfile(ref, [{ dir: join(home, 'profiles') }], allowances)).resolves.toMatchObject({ name: 'support' })
 })
 
 it('hashes a profile the same while it is unchanged, with a UI or without, and differently once edited', async () => {
@@ -1002,7 +1002,7 @@ it('refuses a module that imports a path worked out as it runs: what it loads ca
     'profile.ts': profileTs(['./vault.ts']),
     'vault.ts': `import { defineDaemonExtension } from 'superego'\nconst name = './helper.ts'\nexport default defineDaemonExtension({ name: 'vault', async setup() { await import(name) } })\n`,
   })
-  await expect(loadProfile(userRef('default') as ProfileRef, join(home, 'profiles'), new Allowances(home)))
+  await expect(loadProfile(userRef('default') as ProfileRef, [{ dir: join(home, 'profiles') }], new Allowances(home)))
     .rejects.toMatchObject({ kind: 'invalid', message: expect.stringMatching(/vault\.ts:3 .*import\(name\)/) })
 })
 

@@ -128,18 +128,35 @@ export type ModelCatalog = {
  */
 export type Pane = { id: string; kind: string; title?: string; params?: Json }
 
-/** A profile: the user's (`~/.superego/profiles/<name>`) or a project's (`.superego/profiles/<name>`), and its folder. */
-export type ProfileRef = { name: string; scope: 'user' | 'project'; dir: string }
 /**
- * A profile a thread in some folder could start with (see the daemon's profiles.ts). Once loaded, what it brings: its
- * extensions (by name, with those of the profile it extends), and what extensions' keys in it bring, by what they are
- * (`{ 'MCP servers': ['linear'] }`: see `profileKey`).
+ * A profile: the user's (`~/.superego/profiles/<name>`, or a profile source's `profiles/<name>`) or a project's
+ * (`.superego/profiles/<name>`), and its folder. `source`: the profile source a user's profile comes from, as it was
+ * installed (`git:github.com/mikker/superego-profiles`, `~/dev/superego-profiles`); unset, `~/.superego/profiles`.
  */
+export type ProfileRef = { name: string; scope: 'user' | 'project'; dir: string; source?: string }
 /**
  * A profile as `profile.list` tells it: once loaded, what it brings (its extensions, and what extensions' keys in it
  * bring, by their titles) and its problems: what's wrong with it that doesn't stop it loading (a key nothing reads).
  */
 export type ProfileInfo = ProfileRef & { description?: string; allowed: boolean; extensions?: string[]; brings?: Record<string, string[]>; problems?: string[] }
+
+/**
+ * A profile source as `profile.sources` tells it: where the user's profiles beyond `~/.superego/profiles` come from, a
+ * git repo (`git:<host>/<owner>/<repo>[@ref]`, cloned to `~/.superego/sources/<host>/<owner>/<repo>`) or a folder, read
+ * in place. Its profiles are its `profiles/<name>/profile.ts`; one whose name an earlier source (or
+ * `~/.superego/profiles`) has already is `shadowedBy` that one's folder, and not used. `state`: `ready`; `missing` (a
+ * folder that isn't there); `not-cloned` (`profile update` clones it); `no-profiles` (no `profiles/` in it).
+ */
+export type ProfileSourceInfo = {
+  source: string
+  kind: 'git' | 'local'
+  dir: string
+  state: 'ready' | 'missing' | 'not-cloned' | 'no-profiles'
+  /** A git source's pinned ref, and the commit it's at. */
+  ref?: string
+  commit?: string
+  profiles: { name: string; dir: string; shadowedBy?: string }[]
+}
 
 /** A file sent with a message: images go to the model as images; any file is saved on the thread's machine. */
 export type Attachment = { name: string; mimeType: string; /** Base64. */ data: string }

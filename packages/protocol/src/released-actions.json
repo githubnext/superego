@@ -216,6 +216,9 @@
     "properties": {
       "cwd": {
         "type": "string"
+      },
+      "user": {
+        "type": "boolean"
       }
     },
     "additionalProperties": false
@@ -227,6 +230,44 @@
         "type": "string"
       },
       "name": {
+        "type": "string"
+      }
+    },
+    "additionalProperties": false
+  },
+  "profile.sources": {
+    "type": "object",
+    "properties": {},
+    "additionalProperties": false
+  },
+  "profile.install": {
+    "type": "object",
+    "properties": {
+      "source": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "source"
+    ],
+    "additionalProperties": false
+  },
+  "profile.remove": {
+    "type": "object",
+    "properties": {
+      "source": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "source"
+    ],
+    "additionalProperties": false
+  },
+  "profile.update": {
+    "type": "object",
+    "properties": {
+      "source": {
         "type": "string"
       }
     },

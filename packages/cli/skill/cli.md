@@ -69,7 +69,8 @@ Useful ones:
 | `thread.rename` `thread title`, `thread.archive` `thread`, `thread.unarchive` `thread` | `thread.archive` answers `{ notes }`, what extensions did (its worktree removed, say). Ego is never archived |
 | `pane.open` `thread kind title? params?` | open a pane beside a thread (`editor`, `thread`; `diff` from git, `preview` and `artifact` from web-panes; a profile's own) |
 | `pane.close` `thread pane`, `pane.focus` `thread pane?` | |
-| `profile.list` `cwd?`, `profile.allow` `cwd? name?` | |
+| `profile.list` `cwd? user?`, `profile.allow` `cwd? name?` | `user`: yours only, wherever they come from |
+| `profile.sources`, `profile.install` `source`, `profile.remove` `source`, `profile.update` `source?` | profile sources (`install` is the user's consent) |
 | `ego.ask` `prompt?` | ask Ego, Superego's own agent (one hidden thread per machine): it answers, changes settings and machines, and starts threads for any other work |
 | `ego.clear` | clear Ego's conversation: the same thread, empty again |
 
@@ -116,6 +117,10 @@ superego profile types [name]       # types for an editor: tsconfig.json, node_m
 superego profile allow [name]       # let this project's profile run (again, after it changed)
 superego profile allow-ui <name> -m <machine>   # let that machine's profile UI run in this computer's window, as it is now
 superego profile revoke-ui <name> -m <machine>
+superego profile install <source>   # yours from a git repo (git:<host>/<owner>/<repo>[@ref]) or a folder: trusted code
+superego profile remove <source>    # drop it (a git one's clone too)
+superego profile update [source]    # git pull --ff-only the git sources
+superego profile sources            # each source, its state and profiles
 ```
 
 `name` defaults to `default`. See `superego --skill profiles`.

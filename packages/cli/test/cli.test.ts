@@ -141,6 +141,33 @@ export default defineExtension({ name: 'orders', tools: [defineTool({ name: 'fin
     expect(await superegoJson(['profile'], undefined, project)).toMatchObject([{ name: 'support', allowed: true }])
   })
 
+  it('installs a folder of profiles as a source: yours, found by name and by folder, until removed', async () => {
+    const sources = realpathSync(home)
+    const folder = join(sources, 'my-profiles')
+    mkdirSync(join(folder, 'profiles', 'writer'), { recursive: true })
+    writeFileSync(join(folder, 'profiles', 'writer', 'profile.ts'), `import { defineProfile } from 'superego'\nexport default defineProfile({ prompt: 'Write.' })\n`)
+    // An agent can't trust code for the user.
+    await expect(superego(['profile', 'install', folder], undefined, undefined, { SUPEREGO_THREAD: 'agent-thread' })).rejects.toThrow(/the user's consent/)
+    // A folder as a path from here: the daemon is told where it is.
+    expect(await superego(['profile', 'install', 'my-profiles'], undefined, sources)).toBe(`Installed ${folder} (${folder}): writer\n`)
+    onTestFinished(async () => { await superego(['profile', 'remove', folder]).catch(() => {}) })
+    expect(await superego(['profile', 'install', folder])).toMatch(/^Had /)
+    expect(await superegoJson(['profile', 'sources'])).toMatchObject([{ source: folder, kind: 'local', state: 'ready', profiles: [{ name: 'writer' }] }])
+    expect(await superego(['profile'], undefined, sources)).toMatch(new RegExp(`writer\\s+yours, from ${folder}`))
+    expect(await superegoJson(['profile', 'update'])).toEqual([{ source: folder, result: 'local' }])
+
+    // Yours, by name or by folder, like those in ~/.superego/profiles.
+    const made = await superegoJson(['extension', 'new', 'notes', '--user', '-P', 'writer'])
+    expect(made.dir).toBe(join(folder, 'profiles', 'writer'))
+    expect(await superego(['extension', 'reload'], undefined, join(folder, 'profiles', 'writer'))).toMatch(/Profile writer \(yours, from .*: the one you're in/)
+    expect(await superegoJson(['profile', 'types', 'writer', '--user'])).toMatchObject([{ name: 'writer', dir: join(folder, 'profiles', 'writer') }])
+
+    expect(await superego(['profile', 'remove', 'my-profiles'], undefined, sources)).toBe(`Removed ${folder}\n`)
+    expect(await superegoJson(['profile', 'sources'])).toEqual([])
+    expect(existsSync(join(folder, 'profiles', 'writer', 'profile.ts'))).toBe(true)
+    await expect(superego(['profile', 'remove', folder])).rejects.toThrow(/No profile source/)
+  }, starting(1))
+
   it("never gives the user's consent for an agent: run from a thread's shell, it's refused", async () => {
     mkdirSync(join(home, 'agent-made'), { recursive: true })
     const project = realpathSync(join(home, 'agent-made'))

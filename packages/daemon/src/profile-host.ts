@@ -5,13 +5,13 @@
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import type { Extension } from '@earendil-works/pi-durable'
-import { Lifetime, obj, opt, RpcError, str } from '@superego/protocol'
+import { bool, Lifetime, obj, opt, RpcError, str } from '@superego/protocol'
 import { describeProfile } from './extension-settings.ts'
 import type { ExtensionHost } from './extension-host.ts'
 import { defineAction } from './extension.ts'
 import type { Host, ThreadMeta } from './host.ts'
 import {
-  broughtBy, findProfile, hashProfile, isProfileDir, listProfiles, loadProfile, profileModule, type LoadedProfile, type ProfileDaemonExtension,
+  allUserProfiles, broughtBy, findProfile, hashProfile, isProfileDir, listProfiles, loadProfile, profileModule, shadowing, type LoadedProfile, type ProfileDaemonExtension,
   type ProfileRef,
 } from './profiles.ts'
 import type { Threads } from './threads.ts'
@@ -23,8 +23,11 @@ import type { Threads } from './threads.ts'
  */
 type Shared = { key: string; file: string; profiles: Set<string>; parts: Extension[]; teardown: () => Promise<void> }
 
+/** Just a profile's ref, of anything carrying one (a loaded profile, a method's params). */
+const refOf = ({ scope, name, dir, source }: ProfileRef): ProfileRef => ({ scope, name, dir, ...(source ? { source } : {}) })
+
 export function createProfileHost(host: Host, extensions: ExtensionHost, later: { threads(): Threads }) {
-  const { registry, mounted, changed, userProfiles, allowances, profileKeys, settings, router, folderOf } = host
+  const { registry, mounted, changed, profileSources, allowances, profileKeys, settings, router, folderOf } = host
   /** The profiles loaded, by folder. */
   const profiles = new Map<string, LoadedProfile>()
   /** Profiles that failed to load, and why: until they load. */
@@ -116,7 +119,7 @@ export function createProfileHost(host: Host, extensions: ExtensionHost, later: 
       // Its modules may hang as they load (a top-level await): given up on in time, so the profiles behind it load.
       let timer: ReturnType<typeof setTimeout> | undefined
       loaded = await Promise.race([
-        loadProfile(ref, userProfiles, allowances, profileKeys),
+        loadProfile(ref, profileSources.roots(), allowances, profileKeys),
         new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new RpcError('invalid', `Profile ${ref.name} didn't load in ${host.inTime}: one of its modules hangs as it loads`)), host.setupTimeout) }),
       ]).finally(() => clearTimeout(timer))
     } catch (error) {
@@ -166,16 +169,20 @@ export function createProfileHost(host: Host, extensions: ExtensionHost, later: 
 
   router.register(defineAction({
     id: 'profile.list', title: 'List profiles', expose: ['ui', 'cli', 'outside'],
-    description: 'The profiles a thread in `cwd` could start with (thread.start\'s `profile`), and whether each may run.',
-    params: obj({ cwd: opt(str()) }),
-    async run({ cwd }) {
+    description: 'The profiles a thread in `cwd` could start with (thread.start\'s `profile`), and whether each may run. `user`: the user\'s own only, whatever the folder: those a project\'s replaces too, and those shadowed by another of theirs (their `problems` say so), the one used first.',
+    params: obj({ cwd: opt(str()), user: opt(bool()) }),
+    async run({ cwd, user }) {
       const dir = folderOf(cwd)
-      return Promise.all(listProfiles(dir, userProfiles).map(async (ref) => {
+      const roots = profileSources.roots()
+      const shadows = shadowing(roots)
+      return Promise.all((user ? allUserProfiles(roots) : listProfiles(dir, roots)).map(async (ref) => {
         const loaded = profiles.get(ref.dir)
         const description = loaded?.spec.description
         // One whose imports can't be told can't be allowed as it is: loading it says why.
         const allowed = await Promise.resolve().then(async () => allowances.allowed(ref, await hashProfile(ref.dir))).catch(() => false)
-        return { ...ref, ...(description ? { description } : {}), allowed, ...(loaded ? broughtBy(loaded, profileKeys) : {}) }
+        const brought = loaded ? broughtBy(loaded, profileKeys) : {}
+        const problems = [...shadows.get(ref.dir) ?? [], ...brought.problems ?? []]
+        return { ...ref, ...(description ? { description } : {}), allowed, ...brought, ...(problems.length ? { problems } : {}) }
       }))
     },
   }))
@@ -184,7 +191,7 @@ export function createProfileHost(host: Host, extensions: ExtensionHost, later: 
     params: obj({ cwd: opt(str()), name: opt(str()) }),
     async run({ cwd, name }) {
       const dir = folderOf(cwd)
-      const ref = findProfile(dir, userProfiles, name?.trim() || undefined)
+      const ref = findProfile(dir, profileSources.roots(), name?.trim() || undefined)
       if (!ref) throw new RpcError('not_found', `No profile in ${dir}`)
       return { ...ref, hash: await allowances.allow(ref) }
     },
@@ -196,10 +203,52 @@ export function createProfileHost(host: Host, extensions: ExtensionHost, later: 
     // extensions torn down and set up again. Fails with why it doesn't load.
     async run({ cwd, name }) {
       const dir = folderOf(cwd)
-      const ref = findProfile(dir, userProfiles, name?.trim() || undefined)
+      const ref = findProfile(dir, profileSources.roots(), name?.trim() || undefined)
       if (!ref) throw new RpcError('not_found', `No profile ${name ?? ''} in ${dir}`.replace('  ', ' '))
       await profileOf(ref)
       return ref
+    },
+  }))
+  /** Sources changed: what profiles there are may have, and the window's list of them. */
+  const sourcesChanged = () => { settings.invalidate(); changed() }
+  router.register(defineAction({
+    id: 'profile.sources', title: 'List profile sources', expose: ['ui', 'cli'],
+    description: 'Where your own profiles come from beyond ~/.superego/profiles: each source (a git repo or a folder), its state, and its profiles.',
+    params: obj({}),
+    async run() {
+      const problem = profileSources.problem()
+      if (problem) throw new RpcError('invalid', `Profile sources: ${problem}`, { hint: 'Fix the file (or remove it), then try again.' })
+      return profileSources.describe()
+    },
+  }))
+  router.register(defineAction({
+    id: 'profile.install', title: 'Install a profile source', expose: ['ui', 'cli'], consent: true,
+    description: 'Add a source of your own profiles, and clone it if it\'s a git repo: `git:<host>/<owner>/<repo>[@ref]`, or a folder (`~/…` or absolute). Its profiles run as yours: installing it is trusting its code. Again, nothing changes.',
+    params: obj({ source: str() }),
+    async run({ source }) {
+      const installed = await profileSources.install(source)
+      if (installed.changed) sourcesChanged()
+      return installed
+    },
+  }))
+  router.register(defineAction({
+    id: 'profile.remove', title: 'Remove a profile source', expose: ['ui', 'cli'],
+    description: 'Drop a profile source; a git one\'s clone is deleted.',
+    params: obj({ source: str() }),
+    async run({ source }) {
+      const removed = await profileSources.remove(source)
+      sourcesChanged()
+      return removed
+    },
+  }))
+  router.register(defineAction({
+    id: 'profile.update', title: 'Update profile sources', expose: ['ui', 'cli'],
+    description: 'Pull the git profile sources (`git pull --ff-only`), or the one named; clone one that isn\'t yet. Pinned ones (`@ref`) and folders stay as they are. Their profiles load again as their next turn would.',
+    params: obj({ source: opt(str()) }),
+    async run({ source }) {
+      const results = await profileSources.update(source?.trim() || undefined)
+      if (results.some((r) => r.result === 'updated' || r.result === 'cloned')) sourcesChanged()
+      return results
     },
   }))
   // The profiles threads here can start with: the user's, and those of the projects that have threads.
@@ -208,10 +257,12 @@ export function createProfileHost(host: Host, extensions: ExtensionHost, later: 
     description: 'Your own, and those of the projects you have threads in.',
     data: async () => {
       const found = new Map<string, ProfileRef>()
+      const roots = profileSources.roots()
       for (const folder of new Set([host.defaultCwd, ...(await later.threads().list()).map((t) => t.project.root)])) {
-        for (const ref of listProfiles(folder, userProfiles)) found.set(ref.dir, ref)
+        for (const ref of listProfiles(folder, roots)) found.set(ref.dir, ref)
       }
-      return Promise.all([...found.values()].map((ref) => describeProfile(ref, userProfiles, allowances, profileKeys)))
+      const shadows = shadowing(roots)
+      return Promise.all([...found.values()].map((ref) => describeProfile(ref, roots, allowances, profileKeys, shadows.get(ref.dir))))
     },
   })
 
@@ -234,14 +285,14 @@ export function createProfileHost(host: Host, extensions: ExtensionHost, later: 
     async ui(ref: ProfileRef) {
       // One that was loaded and is gone now is let go of (profileOf), and the window's UI of it with it.
       const known = profiles.get(ref.dir)
-      if (!isProfileDir(ref, userProfiles) && !known) throw new RpcError('not_found', `No profile at ${ref.dir}`)
-      const loaded = await profileOf(known ? { scope: known.scope, name: known.name, dir: known.dir } : { scope: ref.scope, name: ref.name, dir: ref.dir })
+      if (!isProfileDir(ref, profileSources.roots()) && !known) throw new RpcError('not_found', `No profile at ${ref.dir}`)
+      const loaded = await profileOf(known ? refOf(known) : refOf(ref))
       return { hash: loaded.hash, entries: loaded.spec.ui ?? [] }
     },
     /** One module of a profile's UI (see profileModule). */
     async module(ref: ProfileRef, path: string) {
-      if (!isProfileDir(ref, userProfiles)) throw new RpcError('not_found', `No profile at ${ref.dir}`)
-      await profileOf({ scope: ref.scope, name: ref.name, dir: ref.dir })
+      if (!isProfileDir(ref, profileSources.roots())) throw new RpcError('not_found', `No profile at ${ref.dir}`)
+      await profileOf(refOf(ref))
       return profileModule(ref.dir, path)
     },
   }

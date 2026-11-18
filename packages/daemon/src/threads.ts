@@ -70,7 +70,7 @@ export function answeredBy(entries: readonly Pick<EntryRecord, 'kind' | 'data' |
 export type ThreadStart = Omit<NewThread, 'attachments'> & { attachments?: Attachment[]; hidden?: string; by?: string; exposure?: Exposure; from?: string }
 
 export function createThreads(host: Host, { harness, extensions, profiles }: { harness: Harness; extensions: ExtensionHost; profiles: ProfileHost }) {
-  const { options, agent, mounted, changed, defaultCwd, userProfiles, folderOf } = host
+  const { options, agent, mounted, changed, defaultCwd, profileSources, folderOf } = host
   /** The threads being archived now that their run ended (see archiveWhenDone). */
   const archiving = new Set<string>()
   /** The transcript watches open on each thread, to end when it's cleared (clients then watch again). */
@@ -306,7 +306,7 @@ export function createThreads(host: Host, { harness, extensions, profiles }: { h
     const m = await get(id)
     const was = m.meta.profile
     if (!was || profileThere(was)) return was
-    const found = relocated(was, [m.meta.cwd, rootOf(m)], userProfiles)
+    const found = relocated(was, [m.meta.cwd, rootOf(m)], profileSources.roots())
     if (!found) return was
     await updateMeta(id, (meta) => { meta.profile = found })
     letGoOf(was)
@@ -566,7 +566,7 @@ export function createThreads(host: Host, { harness, extensions, profiles }: { h
     if (parent) await get(parent)
     // The project's profile (or the user's) of that name, else the default one there is; checked (and allowed) now.
     // None for an extension's own thread: it runs as that extension makes it, whatever profiles say.
-    const ref = hidden ? undefined : findProfile(dir, userProfiles, profileName?.trim() || undefined)
+    const ref = hidden ? undefined : findProfile(dir, profileSources.roots(), profileName?.trim() || undefined)
     const loaded = ref ? await profiles.profileOf(ref) : undefined
     // Its project is the checkout (or folder) it starts in; where in it it works is the folder given, unless a hook moves it.
     const checkout = await checkoutOf(dir)

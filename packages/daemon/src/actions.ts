@@ -19,7 +19,7 @@ export const OUTSIDE_THREADS = 'outside.startThreads'
 export function registerCoreActions(host: Host, { harness, machine, threads, profiles, files, relay }: {
   harness: Harness; machine: MachineInfo; threads: Threads; profiles: ProfileHost; files: ReturnType<typeof threadFiles>; relay: Relay
 }) {
-  const { options, settings, router, agent, mounted, userProfiles } = host
+  const { options, settings, router, agent, mounted, profileSources } = host
   /** What a thread action takes: the thread it's for, which the window passes as the one it shows. */
   const thread = { thread: true as const }
   // Outside agents (`superego mcp`) start threads only once this machine lets them: the tool isn't listed until then,
@@ -177,7 +177,7 @@ export function registerCoreActions(host: Host, { harness, machine, threads, pro
       const m = await threads.get(id)
       if (m.meta.owner) throw new RpcError('invalid', `This thread is the ${m.meta.owner} extension's: it runs as that extension makes it`)
       if (m.live?.run) throw new RpcError('busy', 'This thread is working', { hint: 'Change its profile once it finishes.' })
-      const ref = findProfile(m.meta.cwd, userProfiles, name?.trim() || undefined)
+      const ref = findProfile(m.meta.cwd, profileSources.roots(), name?.trim() || undefined)
       // Checked (and allowed) now, as a new thread's is: a thread isn't left with one it can't run.
       if (ref) await profiles.profileOf(ref)
       const was = m.meta.profile

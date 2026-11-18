@@ -29,6 +29,7 @@ import { serveClient } from './handlers.ts'
 import { context, type DaemonContext, type Host } from './host.ts'
 import { createProfileHost } from './profile-host.ts'
 import { Allowances, provideSdk } from './profiles.ts'
+import { ProfileSources } from './profile-sources.ts'
 import { createRelay, type MachineReach } from './relay.ts'
 import * as sdk from './sdk.ts'
 import { keepsRunning } from './service.ts'
@@ -132,7 +133,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     folderOf: (cwd) => cwd?.trim() ? resolvePath(cwd.trim().replace(/^~(?=\/|$)/, homedir())) : defaultCwd,
     // The folder agents share: standing instructions in AGENTS.md (see agents-md.ts), and the skills extension's skills.
     agentsDir: options.agentsDir ?? join(homedir(), '.agents'),
-    userProfiles: join(options.dataDir, 'profiles'),
+    profileSources: new ProfileSources(options.dataDir),
     allowances: new Allowances(options.dataDir),
     profileKeys: new Map(),
     setupTimeout,

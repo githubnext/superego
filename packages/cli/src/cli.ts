@@ -7,7 +7,7 @@ import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from
 import { createInterface } from 'node:readline'
 import { createConnection } from 'node:net'
 import { hostname } from 'node:os'
-import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { parseArgs } from 'node:util'
 import { renderUnicodeCompact } from 'uqr'
@@ -28,7 +28,7 @@ import {
 import { appEnv, daemonStarting, defaultDataDir, installService, isListening, readBuild, socketPath, spawnDaemon, startService, uninstallService } from '@superego/daemon/client'
 import {
   AUTH_REJECTED, compareVersions, consentRefused, driftPhrase, PROTOCOL_VERSION, RpcError, threadEnv, unreadThreads, versionOf, statusShape, statusWord, STATUS_WORDS, type ActionInfo, type AppConfig, type AuthEvent, type Hello, type Json, type MethodName, type Params, type ProviderAuthInfo, type Result,
-  type ProfileInfo, type ProfileRef, type ProviderRejection, type ThreadInfo, type SettingsSnapshot,
+  type ProfileInfo, type ProfileRef, type ProfileSourceInfo, type ProviderRejection, type ThreadInfo, type SettingsSnapshot,
 } from '@superego/protocol'
 
 export type CliOptions = {
@@ -561,10 +561,10 @@ export default defineProfile({
  */
 async function profileTypesCommand(name: string | undefined, values: { machine?: string; user?: boolean }, run: (id: string, params: Record<string, unknown>) => Promise<unknown>) {
   if (resolveMachine(values.machine).config) throw new RpcError('usage', `${app.id} profile types sets up profiles here; on another machine, run it there`)
-  const list = (await run('profile.list', { cwd: process.cwd() }) as ProfileInfo[])
+  const list = (await run('profile.list', { cwd: process.cwd(), ...(values.user ? { user: true } : {}) }) as ProfileInfo[])
     .filter((p) => (values.user ? p.scope === 'user' : p.scope === 'project') && (!name || p.name === name))
   if (!list.length) {
-    const where = values.user ? join(dataDir, 'profiles') : 'this project'
+    const where = values.user ? `yours (${join(dataDir, 'profiles')}, or a profile source's)` : 'this project'
     throw new RpcError('not_found', name ? `No profile ${name} in ${where}` : `No profiles in ${where}. Make one: ${app.id} profile new${values.user ? ' --user' : ''}`)
   }
   const typesDir = await authorTypes(dataDir, options.types)
@@ -591,7 +591,41 @@ async function profileCommand(sub: string | undefined, rest: string[], values: {
     const list = await run('profile.list', cwd ? { cwd } : {}) as ProfileInfo[]
     return print(list, () => {
       if (!list.length) return console.log(`No profiles here. Make one: ${app.id} profile new`)
-      table(list.map((p) => [p.name, p.scope === 'project' ? 'project' : 'yours', p.allowed ? '' : 'not allowed', p.dir]))
+      table(list.map((p) => [p.name, whoseProfile(p), p.allowed ? '' : 'not allowed', p.dir]))
+      for (const p of list) for (const problem of p.problems ?? []) console.log(`${p.name}: ${problem}`)
+    })
+  }
+  if (sub === 'sources') {
+    const sources = await run('profile.sources', {}) as ProfileSourceInfo[]
+    return print(sources, () => {
+      if (!sources.length) return console.log(`No profile sources. Add one: ${app.id} profile install git:<host>/<owner>/<repo>, or a folder`)
+      for (const s of sources) {
+        const state = s.state === 'ready' ? '' : s.state === 'not-cloned' ? `not cloned (${app.id} profile update)` : s.state === 'missing' ? 'missing' : 'no profiles/ folder'
+        console.log([s.source, state, s.commit ?? '', s.dir].filter(Boolean).join('  '))
+        for (const p of s.profiles) console.log(`  ${p.name}${p.shadowedBy ? `  shadowed by ${p.shadowedBy}` : ''}`)
+      }
+    })
+  }
+  if (sub === 'install' || sub === 'remove') {
+    if (!rest[0]) throw new RpcError('usage', `${app.id} profile ${sub} <git:host/owner/repo[@ref] | folder>`)
+    const source = machine.config ? rest[0] : sourceHere(rest[0])
+    if (sub === 'remove') {
+      const removed = await run('profile.remove', { source }) as { source: string; dir: string; deleted: boolean }
+      return print(removed, () => console.log(`Removed ${removed.source}${removed.deleted ? `, and its clone (${removed.dir})` : ''}`))
+    }
+    const installed = await run('profile.install', { source }) as { source: ProfileSourceInfo; changed: boolean }
+    return print(installed, () => {
+      const { source: s } = installed
+      console.log(`${installed.changed ? 'Installed' : 'Had'} ${s.source} (${s.dir})${s.profiles.length ? `: ${s.profiles.map((p) => p.name).join(', ')}` : ', with no profiles yet'}`)
+      for (const p of s.profiles) if (p.shadowedBy) console.log(`  ${p.name} is shadowed by ${p.shadowedBy}, and isn't used`)
+    })
+  }
+  if (sub === 'update') {
+    const results = await run('profile.update', rest[0] ? { source: machine.config ? rest[0] : sourceHere(rest[0]) } : {}) as { source: string; result: string; from?: string; to?: string; error?: string }[]
+    if (results.some((r) => r.result === 'failed')) process.exitCode = 1
+    return print(results, () => {
+      if (!results.length) return console.log('No profile sources to update')
+      table(results.map((r) => [r.source, r.result === 'updated' ? `updated ${r.from}..${r.to}` : r.result === 'local' ? 'a folder: read in place' : r.result === 'pinned' ? 'pinned' : r.result === 'failed' ? `failed: ${r.error}` : r.result]))
     })
   }
   if (sub === 'new') {
@@ -621,6 +655,12 @@ async function profileCommand(sub: string | undefined, rest: string[], values: {
   throw new RpcError('usage', `Unknown: ${app.id} profile ${sub}`)
 }
 
+/** A source as given here: a folder as a path from here made absolute (the daemon has no "here"); git ones and `~/…` as they are. */
+const sourceHere = (source: string) => /^(git:|https?:\/\/|~(\/|$))/.test(source) || isAbsolute(source) ? source : resolve(source)
+
+/** Whose a profile is, in a word: the project's, yours, or yours from a profile source. */
+const whoseProfile = (p: ProfileRef) => p.scope === 'project' ? 'project' : p.source ? `yours, from ${p.source}` : 'yours'
+
 /** What an agent that made or changed a project's profile tells the user: it runs once they allow it. */
 const waitsForUser = (name: string) =>
   `${name} is a project's profile, so it runs only once the user allows it, as it is then: in the window (Settings → Profiles, or Allow where a thread asks), or with ${app.id} profile allow ${name} in their own terminal. Allowing is theirs to do, not an agent's.`
@@ -629,7 +669,7 @@ const waitsForUser = (name: string) =>
 type Chosen = ProfileRef & { by: 'name' | 'folder' | 'default' }
 
 const realPath = (path: string) => { try { return realpathSync(path) } catch { return resolve(path) } }
-const scopeOf = (p: ProfileRef) => p.scope === 'project' ? "this project's" : 'yours'
+const scopeOf = (p: ProfileRef) => p.scope === 'project' ? "this project's" : whoseProfile(p)
 
 /** Where `extension …` says which profile it acts on, and how to pick another. */
 const sayProfile = (p: Chosen) => `Profile ${p.name} (${scopeOf(p)}, ${p.dir})${
@@ -641,35 +681,42 @@ const sayProfile = (p: Chosen) => `Profile ${p.name} (${scopeOf(p)}, ${p.dir})${
  * an extension in, which may not be there yet (the project's default, unless named otherwise or you're in another).
  */
 async function profileHere(values: { profile?: string; user?: boolean }, command: string, make = false): Promise<Chosen> {
-  const userRoot = join(dataDir, 'profiles')
   const here = realPath(process.cwd())
   const inside = (dir: string) => { const at = relative(realPath(dir), here); return !at.startsWith('..') && !isAbsolute(at) }
-  // Yours you're in: ~/.superego/profiles/<name>/…, a project's of that name or not.
-  const [yoursHere] = inside(userRoot) ? relative(realPath(userRoot), here).split(sep) : []
-  const yours = (name: string, by: Chosen['by']): Chosen => ({ scope: 'user', name, dir: join(userRoot, name), by })
-  const exists = (p: ProfileRef) => existsSync(join(p.dir, 'profile.ts'))
-  if (values.user || (yoursHere && !values.profile && exists(yours(yoursHere, 'folder')))) {
-    const chosen = values.profile ? yours(values.profile, 'name') : yoursHere && exists(yours(yoursHere, 'folder')) ? yours(yoursHere, 'folder') : yours('default', 'default')
-    if (make || exists(chosen)) return chosen
+  const profiles = (params: Record<string, unknown>) => on(resolveMachine(undefined), (call) => call('action.run', { id: 'profile.list', params: { cwd: process.cwd(), ...params }, exposure: 'cli' })) as Promise<ProfileInfo[]>
+  // Yours, wherever they are (~/.superego/profiles, or a profile source's), those shadowed by another of their name too.
+  const mine = await profiles({ user: true })
+  const chosen = (p: ProfileRef, by: Chosen['by']): Chosen => ({ scope: p.scope, name: p.name, dir: p.dir, ...(p.source ? { source: p.source } : {}), by })
+  // Yours of that name (the one used), else where a new one of yours goes.
+  const yours = (name: string, by: Chosen['by']): Chosen => {
+    const found = mine.find((p) => p.name === name)
+    return found ? chosen(found, by) : { scope: 'user', name, dir: join(dataDir, 'profiles', name), by }
   }
-  const list = await on(resolveMachine(undefined), (call) => call('action.run', { id: 'profile.list', params: { cwd: process.cwd() }, exposure: 'cli' })) as ProfileInfo[]
+  // Yours you're in, a project's of that name or not.
+  const yoursHere = mine.filter((p) => inside(p.dir)).sort((a, b) => b.dir.length - a.dir.length)[0]
+  const exists = (p: ProfileRef) => existsSync(join(p.dir, 'profile.ts'))
+  if (values.user || (yoursHere && !values.profile)) {
+    const picked = values.profile ? yours(values.profile, 'name') : yoursHere ? chosen(yoursHere, 'folder') : yours('default', 'default')
+    if (make || exists(picked)) return picked
+  }
+  const list = await profiles({})
   if (!values.user) {
     if (values.profile) {
       const found = list.find((p) => p.name === values.profile && p.scope === 'project') ?? (make ? undefined : list.find((p) => p.name === values.profile))
-      if (found) return { scope: found.scope, name: found.name, dir: found.dir, by: 'name' }
+      if (found) return chosen(found, 'name')
       if (make) return { scope: 'project', name: values.profile, dir: join(process.cwd(), '.superego', 'profiles', values.profile), by: 'name' }
     } else {
       // The innermost one you're in.
       const enclosing = list.filter((p) => inside(p.dir)).sort((a, b) => b.dir.length - a.dir.length)[0]
-      if (enclosing) return { scope: enclosing.scope, name: enclosing.name, dir: enclosing.dir, by: 'folder' }
+      if (enclosing) return chosen(enclosing, 'folder')
       const fallback = list.find((p) => p.name === 'default' && (!make || p.scope === 'project'))
-      if (fallback) return { scope: fallback.scope, name: fallback.name, dir: fallback.dir, by: 'default' }
+      if (fallback) return chosen(fallback, 'default')
       if (make) return { scope: 'project', name: 'default', dir: join(process.cwd(), '.superego', 'profiles', 'default'), by: 'default' }
     }
   }
   // Which, then? The ones there are, and how to pick one.
   const wanted = values.profile ?? 'default'
-  const missing = values.user ? `You have no profile ${wanted} (${join(userRoot, wanted)})`
+  const missing = values.user ? `You have no profile ${wanted} (in ${join(dataDir, 'profiles')}, or a profile source)`
     : values.profile ? `No profile ${wanted} here or of yours` : `${here} isn't in a profile's folder, and has no default profile`
   if (!list.length) throw new RpcError('not_found', `There are no profiles here or of yours.`, { hint: `Make one: ${app.id} extension new <name> --user` })
   const width = Math.max(...list.map((p) => p.name.length))

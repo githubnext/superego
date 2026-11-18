@@ -5,6 +5,7 @@ A profile is what an agent is: a folder with a `profile.ts`, and whatever files 
 | Where | Whose | Runs |
 |---|---|---|
 | `~/.superego/profiles/<name>/` | yours, for every folder on this machine | always |
+| `<source>/profiles/<name>/` | yours, from a profile source you installed (see below) | always |
 | `<project>/.superego/profiles/<name>/` | the project's, for threads in it and below | once allowed |
 
 A thread takes its profile when it starts and keeps it. Without `-P`, it gets the profile called `default`: the
@@ -111,6 +112,32 @@ import {
   obj, str, num, int, bool, arr, opt, lit, union, nullable, unknown,   // JSON Schema for parameters
 } from 'superego'
 ```
+
+## Profile sources
+
+Your profiles can live in a repo or folder of their own, installed as a source the way Pi installs packages. A source
+is a git repo, `git:<host>/<owner>/<repo>[@ref]` (an `https://` URL works too), cloned to
+`~/.superego/sources/<host>/<owner>/<repo>`, or a folder, `~/…` or absolute (a path from here, from the command line),
+read in place. Its profiles are its `profiles/<name>/profile.ts`.
+
+```sh
+superego profile install git:github.com/mikker/superego-profiles   # clone it; again, nothing changes
+superego profile install ~/dev/superego-profiles                    # a checkout of it, read in place
+superego profile install git:github.com/acme/profiles@v1.2          # pinned: a tag, branch or commit
+superego profile sources                                            # each source, its state and its profiles
+superego profile update [source]                                    # git pull --ff-only (pinned ones stay)
+superego profile remove <source>                                    # drop it; a git one's clone is deleted
+```
+
+Their profiles are yours: they run without being allowed, like those in `~/.superego/profiles`, so **installing a
+source is trusting its code**, and an agent can't install one for the user. `extends: 'user:<name>'`, `-P <name>
+--user` and `profile types --user` find them by name like any of yours.
+
+Yours are looked for in `~/.superego/profiles` first, then each source in the order installed: of two of one name,
+the first is used, and the other is told of as shadowed (`superego profile`, `profile sources`, Settings → Profiles).
+The list is `~/.superego/profile-sources.json` (`{ "sources": [...] }`); edited by hand, it's read again, and
+`profile update` clones a git source it lists that isn't cloned yet. A source's edits (or a pull) apply as any of your
+profiles' do: from each thread's next turn.
 
 ## Allowing
 

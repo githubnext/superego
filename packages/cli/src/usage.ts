@@ -53,6 +53,13 @@ function groups(id: string, name: string, added: CliCommand[]): Entry[][] {
       { use: 'profile allow [name]', does: "Let this project's profile run (again, after it changed)" },
       { use: 'profile allow-ui <name|dir> -m <machine>', does: "Let that machine's profile UI run in this computer's window, as it is now" },
       { use: 'profile revoke-ui <name|dir> -m <machine>', does: 'Stop it running here' },
+      {
+        use: 'profile install <source>', does: `Add a source of your own profiles: a git repo (cloned to ~/.${id}/sources) or a folder (read in place).\nIts profiles/<name>/profile.ts are yours, after ~/.${id}/profiles: they run unasked, so install only code you trust`,
+        examples: [`${id} profile install git:github.com/mikker/superego-profiles`, `${id} profile install ~/dev/superego-profiles`, `${id} profile install git:github.com/acme/profiles@v1.2`],
+      },
+      { use: 'profile remove <source>', does: "Drop a profile source (a git one's clone too)" },
+      { use: 'profile update [source]', does: 'Pull the git profile sources (git pull --ff-only), or the one named; pinned ones (@ref) stay' },
+      { use: 'profile sources', does: 'List the profile sources, their state and their profiles' },
     ],
     [
       {

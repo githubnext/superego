@@ -15,6 +15,10 @@
 // Besides its own keys, a profile carries extensions' (`mcpServers`, the mcp-servers extension's), each checked and
 // merged over `extends` by the extension that registered it (`superego.profileKey`); the core only carries them.
 //
+// The user's own profiles are `~/.superego/profiles/<name>`, then those of each profile source in the order installed
+// (profile-sources.ts: a git repo or a folder, its `profiles/<name>`): of two of one name, the first is used, and the
+// other told of as shadowed. Each is a user root (`UserRoot`), and wherever a user's profile is looked for, it's across them.
+//
 // A project's profile replaces the user's of the same name, unless it `extends: 'user:<name>'`. A project's profile is
 // code from that repo, so it runs only once allowed (`superego profile allow`), and again after any of its files change.
 import { createHash } from 'node:crypto'
@@ -102,8 +106,17 @@ export type ProfileKeys = Map<string, ProfileKey & { owner: string }>
 /** Identity for type inference: `export default defineProfile({ … })`. */
 export const defineProfile = (spec: ProfileSpec) => spec
 
-/** A profile: the user's (`~/.superego/profiles/<name>`) or a project's (`.superego/profiles/<name>`), and its folder. */
-export type ProfileRef = { scope: 'user' | 'project'; name: string; dir: string }
+/**
+ * A profile: the user's (`~/.superego/profiles/<name>`, or a profile source's `profiles/<name>`) or a project's
+ * (`.superego/profiles/<name>`), its folder, and for one of a source's, the source.
+ */
+export type ProfileRef = { scope: 'user' | 'project'; name: string; dir: string; source?: string }
+
+/**
+ * A folder of the user's own profiles: `~/.superego/profiles` (no `source`), or a profile source's `profiles` folder.
+ * Looked in in order: the first holding a name has the profile of that name.
+ */
+export type UserRoot = { dir: string; source?: string }
 
 /**
  * A daemon half a profile names, and which: `key` is its file at the version loaded (the module's URL, versioned
@@ -154,12 +167,12 @@ const same = (a: string, b: string) => real(a) === real(b)
 /**
  * The folder holding a project's profiles: the nearest `.superego/profiles` at or above `cwd`, that isn't the user's
  * own. Walking up from any folder under `~` finds `~/.superego/profiles`: the user's, never a project's, even for a
- * daemon keeping its data elsewhere (`SUPEREGO_HOME`), as is `userRoot` wherever it is.
+ * daemon keeping its data elsewhere (`SUPEREGO_HOME`), as is each of the user's roots wherever it is.
  */
-export function projectProfiles(cwd: string, userRoot: string): string | undefined {
+export function projectProfiles(cwd: string, roots: UserRoot[]): string | undefined {
   for (let dir = resolve(cwd); ; dir = dirname(dir)) {
     const candidate = join(dir, '.superego', 'profiles')
-    const users = same(candidate, userRoot) || same(dir, homedir())
+    const users = roots.some((root) => same(candidate, root.dir)) || same(dir, homedir())
     if (!users && existsSync(candidate) && statSync(candidate).isDirectory()) return candidate
     if (dirname(dir) === dir) return undefined
   }
@@ -168,19 +181,49 @@ export function projectProfiles(cwd: string, userRoot: string): string | undefin
 const names = (root: string | undefined) => !root || !existsSync(root) ? [] :
   readdirSync(root).filter((name) => existsSync(join(root, name, 'profile.ts'))).sort()
 
+/** Every profile in each of the user's roots, in order: those shadowed by an earlier one of their name too. */
+export function allUserProfiles(roots: UserRoot[]): ProfileRef[] {
+  return roots.flatMap((root) => names(root.dir).map((name): ProfileRef => ({ scope: 'user', name, dir: join(root.dir, name), ...(root.source ? { source: root.source } : {}) })))
+}
+
+/** The user's own profiles, by name: of two of one name, the first root's. */
+export function userProfiles(roots: UserRoot[]): ProfileRef[] {
+  const seen = new Set<string>()
+  return allUserProfiles(roots).filter((p) => !seen.has(p.name) && seen.add(p.name))
+}
+
+/** The user's profile `name`, in the first root that has one. */
+export const userProfile = (roots: UserRoot[], name: string) => userProfiles(roots).find((p) => p.name === name)
+
+/**
+ * What's wrong with how the user's profiles are found, by the folder of the one it's about: one shadowing another of
+ * its name from a later root (a profile source installed after), and that one, which isn't used.
+ */
+export function shadowing(roots: UserRoot[]): Map<string, string[]> {
+  const first = new Map<string, ProfileRef>()
+  const problems = new Map<string, string[]>()
+  const add = (dir: string, problem: string) => problems.set(dir, [...problems.get(dir) ?? [], problem])
+  for (const ref of allUserProfiles(roots)) {
+    const winner = first.get(ref.name)
+    if (!winner) { first.set(ref.name, ref); continue }
+    add(winner.dir, `Shadows the ${ref.name} profile of ${ref.source ?? '~/.superego/profiles'} (${ref.dir}), which isn't used`)
+    add(ref.dir, `Shadowed by ${winner.dir}, of ${winner.source ?? '~/.superego/profiles'}: not used`)
+  }
+  return problems
+}
+
 /** Every profile a thread in `cwd` could start with: the project's, then the user's it doesn't replace. */
-export function listProfiles(cwd: string, userRoot: string): ProfileRef[] {
-  const project = projectProfiles(cwd, userRoot)
+export function listProfiles(cwd: string, roots: UserRoot[]): ProfileRef[] {
+  const project = projectProfiles(cwd, roots)
   const own = names(project).map((name): ProfileRef => ({ scope: 'project', name, dir: join(project!, name) }))
-  const user = names(userRoot).filter((name) => !own.some((p) => p.name === name))
-    .map((name): ProfileRef => ({ scope: 'user', name, dir: join(userRoot, name) }))
+  const user = userProfiles(roots).filter((p) => !own.some((o) => o.name === p.name))
   return [...own, ...user]
 }
 
 /** The profile a thread in `cwd` starts with: `name` if given, else the default; the project's before the user's. */
-export function findProfile(cwd: string, userRoot: string, name?: string): ProfileRef | undefined {
+export function findProfile(cwd: string, roots: UserRoot[], name?: string): ProfileRef | undefined {
   const wanted = name ?? DEFAULT_PROFILE
-  const found = listProfiles(cwd, userRoot).find((p) => p.name === wanted)
+  const found = listProfiles(cwd, roots).find((p) => p.name === wanted)
   if (!found && name) throw new RpcError('not_found', `No profile ${name} for ${cwd}`, { hint: `Make one: superego profile new ${name}` })
   return found
 }
@@ -192,9 +235,9 @@ export const profileThere = (ref: ProfileRef) => existsSync(join(ref.dir, 'profi
  * Where a thread's profile is now that its folder is gone (moved to the user's profiles, say): the profile of that name
  * a thread in the first of `cwds` that has one would start with now (the project's before the user's). None: undefined.
  */
-export function relocated(ref: ProfileRef, cwds: string[], userRoot: string): ProfileRef | undefined {
+export function relocated(ref: ProfileRef, cwds: string[], roots: UserRoot[]): ProfileRef | undefined {
   for (const cwd of new Set(cwds)) {
-    const found = listProfiles(cwd, userRoot).find((p) => p.name === ref.name && !same(p.dir, ref.dir))
+    const found = listProfiles(cwd, roots).find((p) => p.name === ref.name && !same(p.dir, ref.dir))
     if (found) return found
   }
   return undefined
@@ -340,7 +383,7 @@ async function outsideFiles(ref: ProfileRef) {
 }
 
 /** Load a profile (and what it extends) fresh from disk; refuses a project's profile that isn't allowed as it is now. */
-export async function loadProfile(ref: ProfileRef, userRoot: string, allowances: Allowances, keys: ProfileKeys = new Map()): Promise<LoadedProfile> {
+export async function loadProfile(ref: ProfileRef, roots: UserRoot[], allowances: Allowances, keys: ProfileKeys = new Map()): Promise<LoadedProfile> {
   const hash = await hashProfile(ref.dir)
   if (!(await allowances.allowed(ref, hash))) {
     throw new RpcError('profile_not_allowed', `The profile ${ref.name} in ${dirname(dirname(dirname(ref.dir)))} runs that project's code: allow it first (again, if it changed since)`, {
@@ -361,8 +404,9 @@ export async function loadProfile(ref: ProfileRef, userRoot: string, allowances:
   if (spec.extends) {
     const [scope, name] = spec.extends.split(':')
     if (scope !== 'user' || !name) throw new RpcError('invalid', `extends: '${spec.extends}' — use 'user:<name>'`)
-    if (!existsSync(join(userRoot, name, 'profile.ts'))) throw new RpcError('not_found', `No user profile ${name} to extend`)
-    base = await loadProfile({ scope: 'user', name, dir: join(userRoot, name) }, userRoot, allowances, keys)
+    const found = userProfile(roots, name)
+    if (!found) throw new RpcError('not_found', `No user profile ${name} to extend`)
+    base = await loadProfile(found, roots, allowances, keys)
   }
   const extensions: Extension[] = [...(base?.extensions ?? [])]
   const daemon: ProfileDaemonExtension[] = [...(base?.daemon ?? [])]
@@ -382,7 +426,7 @@ export async function loadProfile(ref: ProfileRef, userRoot: string, allowances:
     const module = await load(key) as { default?: Extension | DaemonExtension }
     const extension = module.default
     if (!extension?.name) throw new RpcError('invalid', `${path} in profile ${ref.name} must export default an extension with a name`)
-    const prefix = ownerOf(file, ref, userRoot)
+    const prefix = ownerOf(file, ref, roots)
     // Named once, though listed again (by this profile and the one it extends, say).
     if (typeof (extension as DaemonExtension).setup === 'function') {
       if (!daemon.some((d) => d.key === key)) daemon.push({ extension: extension as DaemonExtension, key, file, prefix })
@@ -414,17 +458,19 @@ export async function loadProfile(ref: ProfileRef, userRoot: string, allowances:
  * (this one, or a user profile it shares with), else the file itself. The same file is named the same however the
  * profiles that list it load, and after a restart.
  */
-function ownerOf(file: string, ref: ProfileRef, userRoot: string) {
+function ownerOf(file: string, ref: ProfileRef, roots: UserRoot[]) {
   if (within(ref.dir, file)) return `${ref.scope}:${ref.name}`
-  const name = within(userRoot, file) ? relative(resolve(userRoot), file).split(/[\\/]/)[0] : undefined
-  if (name && existsSync(join(userRoot, name, 'profile.ts'))) return `user:${name}`
+  for (const root of roots) {
+    const name = within(root.dir, file) ? relative(resolve(root.dir), file).split(/[\\/]/)[0] : undefined
+    if (name && existsSync(join(root.dir, name, 'profile.ts'))) return `user:${name}`
+  }
   return `file:${createHash('sha256').update(file).digest('hex').slice(0, 12)}`
 }
 
-/** Whether `dir` is a profile folder at all: under the user's profiles, or a project's `.superego/profiles`. */
-export function isProfileDir(ref: ProfileRef, userRoot: string): boolean {
+/** Whether `dir` is a profile folder at all: in one of the user's roots, or a project's `.superego/profiles`. */
+export function isProfileDir(ref: ProfileRef, roots: UserRoot[]): boolean {
   const parent = dirname(ref.dir)
-  const ok = ref.scope === 'user' ? resolve(parent) === resolve(userRoot) : parent.endsWith(join('.superego', 'profiles'))
+  const ok = ref.scope === 'user' ? roots.some((root) => resolve(parent) === resolve(root.dir)) : parent.endsWith(join('.superego', 'profiles'))
   return ok && ref.name === ref.dir.split(/[\\/]/).at(-1) && existsSync(join(ref.dir, 'profile.ts'))
 }
 

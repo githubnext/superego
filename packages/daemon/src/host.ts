@@ -10,6 +10,7 @@ import type { AgentSettings } from './agent-settings.ts'
 import type { AuthFlows } from './auth-flows.ts'
 import type { DaemonOptions } from './daemon.ts'
 import type { Allowances, ProfileKeys, ProfileRef } from './profiles.ts'
+import type { ProfileSources } from './profile-sources.ts'
 import type { Values } from './values.ts'
 
 /** The context the daemon's own work runs in: none of it is cancelled from outside. */
@@ -106,8 +107,8 @@ export type Host = {
   folderOf(cwd: string | undefined): string
   /** The folder agents share: skills, `AGENTS.md`. */
   agentsDir: string
-  /** The user's own profiles, and which projects' may run. */
-  userProfiles: string
+  /** Where the user's own profiles are (`~/.superego/profiles`, then the profile sources'), and which projects' may run. */
+  profileSources: ProfileSources
   allowances: Allowances
   /** The keys extensions own in profiles (`superego.profileKey`). */
   profileKeys: ProfileKeys

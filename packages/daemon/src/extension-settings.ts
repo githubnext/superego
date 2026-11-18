@@ -3,7 +3,7 @@
 // part of what the app is. Profiles: each one threads here can start as, what it is and what it changes.
 import type { ExtensionAbout, Json } from '@superego/protocol'
 import type { SettingsRegistry } from '@superego/settings'
-import { hashProfile, loadProfile, type Allowances, type ProfileKeys, type ProfileRef } from './profiles.ts'
+import { hashProfile, loadProfile, type Allowances, type ProfileKeys, type ProfileRef, type UserRoot } from './profiles.ts'
 
 /** One switch per optional extension, `extensions.<name>`, on unless turned off. It applies from a thread's next message. */
 export function registerExtensionSettings(settings: SettingsRegistry, extensions: ExtensionAbout[]) {
@@ -16,15 +16,21 @@ export function registerExtensionSettings(settings: SettingsRegistry, extensions
   })
 }
 
-/** A profile as Settings lists it. Only one that may run is loaded (its code runs), to tell what it changes. */
-export async function describeProfile(ref: ProfileRef, userRoot: string, allowances: Allowances, keys: ProfileKeys): Promise<Json> {
+/**
+ * A profile as Settings lists it. Only one that may run is loaded (its code runs), to tell what it changes. `problems`:
+ * what's wrong with how it's found (it shadows another of its name), and once loaded, with it.
+ */
+export async function describeProfile(ref: ProfileRef, roots: UserRoot[], allowances: Allowances, keys: ProfileKeys, found: string[] = []): Promise<Json> {
+  const about = { ...ref, ...(found.length ? { problems: found } : {}) }
   let allowed: boolean
-  try { allowed = await allowances.allowed(ref, await hashProfile(ref.dir)) } catch (error) { return { ...ref, allowed: false, error: (error as Error).message } }
-  if (!allowed) return { ...ref, allowed }
+  try { allowed = await allowances.allowed(ref, await hashProfile(ref.dir)) } catch (error) { return { ...about, allowed: false, error: (error as Error).message } }
+  if (!allowed) return { ...about, allowed }
   try {
-    const { spec } = await loadProfile(ref, userRoot, allowances, keys)
+    const { spec, problems } = await loadProfile(ref, roots, allowances, keys)
+    const all = [...found, ...problems]
     return {
       ...ref, allowed,
+      ...(all.length ? { problems: all } : {}),
       ...(spec.description ? { description: spec.description } : {}),
       ...(spec.model ? { model: spec.model } : {}),
       ...(spec.extends ? { extends: spec.extends } : {}),
@@ -33,6 +39,6 @@ export async function describeProfile(ref: ProfileRef, userRoot: string, allowan
       without: spec.without ?? [],
     }
   } catch (error) {
-    return { ...ref, allowed, error: (error as Error).message }
+    return { ...about, allowed, error: (error as Error).message }
   }
 }
