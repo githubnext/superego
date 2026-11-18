@@ -78,8 +78,15 @@ export type ThreadInfo = {
   model?: string
   /** Whose `model` is: pi-ai's provider id (`anthropic`, `openai`). */
   provider?: string
+  /** How hard `model` thinks (`low`, `high`): absent, it doesn't. */
+  thinking?: string
   /** The model (`provider/model`) and thinking it chose itself, rather than following its profile or the machine's settings. */
   chosen?: { model?: string; thinking?: string }
+  /**
+   * Whose choice its model is: its own (`chosen`), an extension's that runs it (Ego's), its profile's, or this machine's
+   * settings. Absent while its profile hasn't loaded.
+   */
+  modelFrom?: 'thread' | 'extension' | 'profile' | 'machine'
   /** What it has spent so far, in dollars, as the providers price it. */
   cost?: number
   /** The panes open beside it, and the one in front (none: the thread itself). */

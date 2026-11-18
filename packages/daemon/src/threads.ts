@@ -130,9 +130,10 @@ export function createThreads(host: Host, { harness, extensions, profiles }: { h
         entry.activeAt = (last?.model?.at(-1) as { timestamp?: number } | undefined)?.timestamp ?? Date.now()
       } else if (entry.live?.run && !wasRunning) entry.activeAt = Date.now()
       entry.lastEntryId = last?.id
-      const ran = view.docs['pi.agent'] as { model?: { modelId?: string; provider?: string } } | undefined
+      const ran = view.docs['pi.agent'] as { model?: { modelId?: string; provider?: string }; thinkingLevel?: string } | undefined
       entry.model = ran?.model?.modelId
       entry.provider = ran?.model?.provider
+      entry.thinking = ran?.thinkingLevel
       if (entry.live?.run && !wasRunning) entry.ranWith = entry.provider === undefined ? undefined : agent.credentialOf(entry.provider)
       entry.cost = costOf(view.docs['pi.usage'] as Parameters<typeof costOf>[0])
       heedFailure(key, entry)
@@ -163,9 +164,10 @@ export function createThreads(host: Host, { harness, extensions, profiles }: { h
   const info = (id: string, m: Mounted, without = extensions.withoutFor(id, m.meta)): ThreadInfo => ({
     id, title: m.meta.title || 'New thread', cwd: m.meta.cwd, createdAt: m.meta.createdAt,
     activeAt: Math.max(m.activeAt ?? 0, m.meta.createdAt),
-    ...(m.model ? { model: m.model, ...(m.provider ? { provider: m.provider } : {}) } : {}), ...(m.cost ? { cost: m.cost } : {}),
+    ...(m.model ? { model: m.model, ...(m.provider ? { provider: m.provider } : {}), ...(m.thinking ? { thinking: m.thinking } : {}) } : {}), ...(m.cost ? { cost: m.cost } : {}),
     ...(m.meta.model || m.meta.thinking ? { chosen: { ...(m.meta.model ? { model: m.meta.model } : {}), ...(m.meta.thinking ? { thinking: m.meta.thinking } : {}) } } : {}),
     ...(m.meta.profile ? { profile: m.meta.profile } : {}),
+    ...extensions.modelFromOf(id, m.meta),
     ...(m.meta.panes?.length ? { panes: m.meta.panes, ...(m.meta.pane ? { pane: m.meta.pane } : {}) } : {}),
     project: { root: rootOf(m), name: basename(rootOf(m)) },
     ...extensions.factsOf(id, m.meta, without),

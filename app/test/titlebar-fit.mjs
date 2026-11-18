@@ -1,5 +1,5 @@
 // The title bar short of room (run by `test/look.sh <dir> titlebar-fit`): three threads, from few things in the bar to
-// many (a long title, a long profile name, its MCP chip, an extension's chip and pill, a parent, panes stacked), each at
+// many (a long title, a long profile name by it, its MCP chip, an extension's chip and pill, a parent, panes stacked), each at
 // 700 to 1800 wide, light and dark. At each, checks that nothing in the bar overlaps anything else, spills out of it or
 // wraps, and that the title and the focused tab stay; then the ··· menu, a row of it opening the chip's popover from
 // there, and a contact sheet of every screenshot. Into $SUPEREGO_SHOWCASE_OUT.
@@ -68,6 +68,13 @@ const INSPECT = `(() => {
   if (title && title.getBoundingClientRect().width < 40) problems.push('the title squeezed to ' + Math.round(title.getBoundingClientRect().width) + 'px')
   const focused = bar.querySelector('.strip__tab.is-focused')
   if (focused && !shown(focused)) problems.push('the focused tab hidden')
+  // The MCP chip a count, the model a mark, the profile a badge by the title.
+  const chip = bar.querySelector('.mcp-chip')
+  if (chip && !/^\\d+$/.test(chip.textContent.trim())) problems.push('the MCP chip says ' + chip.textContent.trim())
+  const model = bar.querySelector('.threads-model')
+  if (model && (model.textContent.trim() || !model.querySelector('svg'))) problems.push('the model not a mark: ' + model.textContent.trim())
+  const profile = bar.querySelector('.thread__profile')
+  if (profile && !profile.closest('.titlebar__crumb')) problems.push('the profile away from the title')
   const gone = [...bar.querySelectorAll('[data-out]')].map(name)
   return { problems, shown: items.map(name), gone }
 })()`

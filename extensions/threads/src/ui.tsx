@@ -11,7 +11,8 @@
 //   a card of its thread (card.tsx)
 // - details (`threads.details`): what the thread runs with, spent and touched, then what other extensions say of it (the
 //   `details.section` slot: its MCP servers, say); beside it or not, ⌘I
-// - the model (`threads.model`), in the title bar: a button that shows or hides the details
+// - the model (`threads.model`), in the title bar: its provider's mark, a button that shows or hides the details, and
+//   pointed at, a card of the model (whose it is, its thinking, whose choice, what the thread has spent)
 // It also draws the thread tools' rows and `thread:` links (rows.tsx); the tools themselves are thread-tools'.
 import { Fragment, useEffect, useMemo, useState, type CSSProperties, type DragEvent, type KeyboardEvent } from 'react'
 import {
@@ -19,7 +20,7 @@ import {
   type MachineEntry, type Pin, type Project, type ShownRow, type ShownSection, type Sort, type SpaceRailProps, type WindowContext,
 } from '@superego/app/ui'
 import { rollup, statusLabel, statusShape, unread, type ThreadInfo } from '@superego/protocol'
-import { CaretRightIcon, ChatsIcon, ContextMenu, DotsThreeIcon, Glyph, HOVER_DELAY, HoverCard, IconButton, List, ListItem, Menu, PlusIcon, PushPinIcon, SparkleIcon, StatusGlyph, StatusWord, Tooltip, TooltipProvider } from '@superego/ui'
+import { CaretRightIcon, ChatsIcon, ContextMenu, DotsThreeIcon, Glyph, HOVER_DELAY, HoverCard, IconButton, List, ListItem, Menu, PlusIcon, ProviderMark, providerOf, PushPinIcon, SparkleIcon, StatusGlyph, StatusWord, Tooltip, TooltipProvider } from '@superego/ui'
 import './styles.css'
 import { ago } from './ago.ts'
 import { ThreadCard } from './card.tsx'
@@ -451,25 +452,57 @@ function ThreadsRail({ open, sidebarHidden, show }: SpaceRailProps) {
   )
 }
 
-/**
- * In the title bar: the model the thread runs with, as a button that shows or hides its details (what it runs with,
- * spent and touched), lit while they're shown.
- */
-/** The model's row in the title bar's ··· menu, when there's no room for its button. */
-function ModelItem({ thread }: { thread: ThreadInfo }) {
-  return <>Model: {thread.model?.split('/').at(-1) ?? 'none'}</>
+/** Whose choice the model is, by `modelFrom`. */
+const MODEL_FROM: Record<NonNullable<ThreadInfo['modelFrom']>, (thread: ThreadInfo) => string> = {
+  thread: () => 'This thread',
+  extension: () => 'The extension running it',
+  profile: (thread) => thread.profile ? `Profile ${thread.profile.name}` : 'Its profile',
+  machine: () => "This machine's settings",
 }
 
-function ModelButton({ thread }: { thread: ThreadInfo }) {
+/**
+ * What the model's card says: the model, then whose it is, how hard it thinks, whose choice it is, and what the thread
+ * has spent.
+ */
+export function modelCard(thread: ThreadInfo): { title: string; rows: [string, string][] } {
+  if (!thread.model) return { title: 'No model yet', rows: thread.cost ? [['Cost', `$${thread.cost.toFixed(2)}`]] : [] }
+  return {
+    title: thread.model,
+    rows: [
+      ...thread.provider ? [['Provider', providerOf(thread.provider)] as [string, string]] : [],
+      ['Thinking', thread.thinking ?? 'off'],
+      ...thread.modelFrom ? [['Chosen by', MODEL_FROM[thread.modelFrom](thread)] as [string, string]] : [],
+      ['Cost', `$${(thread.cost ?? 0).toFixed(2)}`],
+    ],
+  }
+}
+
+/** The model's row in the title bar's ··· menu, when there's no room for its button. */
+function ModelItem({ thread }: { thread: ThreadInfo }) {
+  return <>Model: {thread.model ?? 'none'}</>
+}
+
+/**
+ * In the title bar: the model the thread runs with, as its provider's mark, a button that shows or hides the thread's
+ * details (lit while they're shown); pointed at, a card of the model.
+ */
+export function ModelButton({ thread }: { thread: ThreadInfo }) {
   const [on, setOn] = usePlacement(DETAILS, 'beside')
   const keys = useShortcut(DETAILS)
-  const model = thread.model?.split('/').at(-1) ?? 'No model'
+  const card = modelCard(thread)
   return (
-    <button type="button" className={`threads-model ${on ? 'is-on' : ''}`} aria-pressed={Boolean(on)}
-      title={`${thread.model ?? 'No model'}: ${on ? 'hide' : 'show'} thread details${keys ? ` (${keys})` : ''}`}
-      onClick={() => setOn()}>
-      {model}
-    </button>
+    <HoverCard side="bottom" className="threads-model-card" card={
+      <>
+        <div className="threads-model-card__name">{card.title}</div>
+        {card.rows.length > 0 && <dl>{card.rows.map(([label, value]) => <Fragment key={label}><dt>{label}</dt><dd>{value}</dd></Fragment>)}</dl>}
+        {keys && <div className="threads-model-card__keys">Thread details <kbd>{keys}</kbd></div>}
+      </>
+    }>
+      <button type="button" className={`threads-model ${on ? 'is-on' : ''}`} aria-pressed={Boolean(on)}
+        aria-label={`${card.title}: ${on ? 'hide' : 'show'} thread details`} onClick={() => setOn()}>
+        {thread.provider ? <ProviderMark provider={thread.provider} size={15} aria-hidden /> : <SparkleIcon size={15} aria-hidden />}
+      </button>
+    </HoverCard>
   )
 }
 

@@ -453,8 +453,9 @@ committed.
 
 **On the thread:**
 
-- A **chip in the header** shows the thread's servers (`3 servers`). It opens a list of each server with its state, and
-  says why any were left out: no such server here, disabled, waiting for Allow, needs sign-in.
+- A **chip in the header** shows the plug and how many servers the thread has (`3`; with none but some left out, their
+  count in the warning colour, its tooltip saying why). It opens a list of each server with its state, and says why any
+  were left out: no such server here, disabled, waiting for Allow, needs sign-in.
 - The same list is in thread details (⌘I).
 - A server that needs sign-in, in a thread that has it, puts a notice over the composer with *Sign in*, as
   `AuthNotice` does for providers.

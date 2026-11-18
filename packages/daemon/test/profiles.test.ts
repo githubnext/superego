@@ -70,6 +70,20 @@ it("takes the user's default profile: its prompt and model", async () => {
   await close()
 })
 
+it("says whose choice a thread's model is: its own, its profile's, or this machine's", async () => {
+  write(join(home, 'profiles', 'picky'), { 'profile.ts': `import { defineProfile } from 'superego'\nexport default defineProfile({ model: 'faux/faux-1' })\n` })
+  write(join(home, 'profiles', 'plain'), { 'profile.ts': `import { defineProfile } from 'superego'\nexport default defineProfile({})\n` })
+  const { peer, close } = await open()
+  const list = () => peer.call<ThreadInfo[]>('thread.list', {})
+  const picky = await peer.call<ThreadInfo>('thread.start', { cwd: project, profile: 'picky', prompt: 'hello' })
+  const plain = await peer.call<ThreadInfo>('thread.start', { cwd: project, profile: 'plain', prompt: 'hello' })
+  const own = await peer.call<ThreadInfo>('thread.start', { cwd: project, profile: 'picky', model: 'faux/faux-1', prompt: 'hello' })
+  for (const thread of [picky, plain, own]) await done(peer, thread.id)
+  const from = Object.fromEntries((await list()).map((t) => [t.id, t.modelFrom]))
+  expect(from).toMatchObject({ [picky.id]: 'profile', [plain.id]: 'machine', [own.id]: 'thread' })
+  await close()
+})
+
 it("runs a project's profile and its extensions only once allowed, and again after it changes", async () => {
   const profile = join(project, '.superego', 'profiles', 'support')
   write(profile, {

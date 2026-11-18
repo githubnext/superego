@@ -26,6 +26,7 @@ import { refreshFontsSoon } from './fonts.ts'
 import { AuthNotice } from './AuthNotice.tsx'
 import { ThreadView } from './ThreadView.tsx'
 import { ThreadTitle, ThreadTools } from './thread-header.tsx'
+import { ProfileBadge } from './profile-card.tsx'
 import { Overflow, OverflowMenu, OverflowProvider } from './overflow.tsx'
 import { ArchiveButton, PinButton, UnarchiveButton } from './thread-actions.tsx'
 import { StripSlot, SwipeEdgeRef } from './panes.tsx'
@@ -338,6 +339,7 @@ function ThreadSheet({ machine, thread, open, onOpenChange, handle, container }:
               <div className="thread-sheet__head">
                 <span className="thread-sheet__project">{machine.id !== 'local' && `${machine.label} · `}{thread.project.name}</span>
                 <span className="thread-sheet__title"><StatusGlyph status={thread.status} quiet={thread.quiet} />{thread.title}</span>
+                {thread.profile && <ProfileBadge machine={machine} thread={{ ...thread, profile: thread.profile }} />}
               </div>
               <div className="thread-sheet__tools">
                 <ThreadTools machine={machine} thread={thread} panes={false} />

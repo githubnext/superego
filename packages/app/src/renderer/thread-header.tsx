@@ -1,6 +1,6 @@
-// The thread in the window's title bar: where it is and what it's called (renamed in place), its pin and archive buttons
-// (thread-actions.tsx), and what's said about it at the right (where it runs, its profile, extensions' chips, the pane
-// menu).
+// The thread in the window's title bar: where it is and what it's called (renamed in place), its profile's badge, its pin
+// and archive buttons (thread-actions.tsx), and what's said about it at the right (where it runs, extensions' chips, the
+// pane menu).
 import { useLayoutEffect, useRef, type ComponentType } from 'react'
 import type { ThreadInfo } from '@superego/protocol'
 import { ArchiveIcon, ArrowElbowDownRightIcon, IconButton, IdentificationBadgeIcon, Menu, PencilSimpleIcon, PanePlusIcon, PushPinIcon, StatusGlyph, StatusWord } from '@superego/ui'
@@ -10,7 +10,7 @@ import { paneMenu, PlacedViews, Slot, useLayout, ViewScopeProvider } from './pla
 import { ViewContextPopup, withContextMenu } from './view-menu.tsx'
 import { ThreadRef } from './thread-ref.tsx'
 import { ArchiveButton, PinButton, UnarchiveButton } from './thread-actions.tsx'
-import { ProfileChip } from './profile-card.tsx'
+import { ProfileBadge } from './profile-card.tsx'
 import { startRename, stopRename, useRenaming } from './rename.ts'
 import { isPinned } from './pins.ts'
 import { useProjects } from './state.tsx'
@@ -21,7 +21,8 @@ import type { Registry } from './registry.tsx'
 
 /**
  * Where you are, in the window's title bar: the thread's project (and machine, where it isn't this one), then its mark,
- * title and what it's doing in a word (Working, Question, Failed: not Done, which you're looking at), with buttons to rename it (or the name being edited), to pin it and to archive it (not an extension's own hidden
+ * title and what it's doing in a word (Working, Question, Failed: not Done, which you're looking at), its profile's
+ * badge, and buttons to rename it (or the name being edited), to pin it and to archive it (not an extension's own hidden
  * thread, which that extension looks after), or, archived, to bring it back.
  */
 export function ThreadTitle({ machine, thread }: { machine: MachineEntry; thread: ThreadInfo }) {
@@ -43,6 +44,11 @@ export function ThreadTitle({ machine, thread }: { machine: MachineEntry; thread
           <>
             <span className="thread__title" title={thread.title} onDoubleClick={() => startRename(machine.id, thread.id)}>{thread.title.replace(/\.$/, '')}</span>
             {thread.status.state !== 'done' && <StatusWord status={thread.status} quiet={thread.quiet} className="titlebar__word" />}
+            {thread.profile && (
+              <OverflowBox id="profile" priority={PRIORITY.profile} row={<OverflowRow icon={IdentificationBadgeIcon}>Profile: {thread.profile.name}</OverflowRow>}>
+                <ProfileBadge machine={machine} thread={{ ...thread, profile: thread.profile }} />
+              </OverflowBox>
+            )}
             <span className="titlebar__actions">
               <OverflowBox id="rename" priority={PRIORITY.rename} row={<OverflowRow icon={PencilSimpleIcon}>Rename</OverflowRow>}>
                 <IconButton label="Rename" className="titlebar__action" onClick={() => startRename(machine.id, thread.id)}>
@@ -92,7 +98,7 @@ function TitleField({ machine, thread }: { machine: MachineEntry; thread: Thread
 
 /**
  * What the title bar says about the thread, at its right: where it runs (the thread that started it, extensions' chips
- * like its worktree's branch, its profile), what extensions add to the header, and panes to open. `panes: false` leaves
+ * like its worktree's branch), what extensions add to the header, and panes to open. `panes: false` leaves
  * the pane menu to the caller (a phone's thread sheet lists the panes itself).
  */
 export function ThreadTools({ machine, thread, panes = true }: { machine: MachineEntry; thread: ThreadInfo; panes?: boolean }) {
@@ -109,11 +115,6 @@ export function ThreadTools({ machine, thread, panes = true }: { machine: Machin
         <Slot name="header.chips" props={{ machine, thread }} frame={(key, drawn) => (
           <OverflowBox key={key} id={`chip:${key}`} priority={PRIORITY.chips} row={<OverflowRow><ShownText id={`chip:${key}`} /></OverflowRow>}>{drawn}</OverflowBox>
         )} />
-        {thread.profile && (
-          <OverflowBox id="profile" priority={PRIORITY.profile} row={<OverflowRow icon={IdentificationBadgeIcon}>Profile: {thread.profile.name}</OverflowRow>}>
-            <ProfileChip machine={machine} thread={{ ...thread, profile: thread.profile }} />
-          </OverflowBox>
-        )}
       </span>
       <PlacedViews place="header" machine={machine} thread={thread} frame={(view, drawn) => (
         <OverflowBox id={`view:${view.id}`} priority={PRIORITY.header} row={<ViewRow view={view} machine={machine} thread={thread} />}>

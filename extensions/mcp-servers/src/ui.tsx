@@ -3,8 +3,9 @@
 //   tool with the first short argument; open, the arguments (folded), then the result, its images inline (read from
 //   the machine as they're shown, a thumbnail; whole in the lightbox)
 // - tool_search's row: what it looked for, and the tools it loaded
-// - a chip in the header (`mcp-servers.chip`): how many servers the thread has, opening to each with its state, and
-//   why any were left out; the same list in thread details (⌘I)
+// - a chip in the header (`mcp-servers.chip`): the plug and how many servers the thread has (in the warning's colour
+//   when one wants a look: none but some left out, say), opening to each with its state, and why any were left out;
+//   the same list in thread details (⌘I)
 // - a notice over the composer when one of its servers needs the user to sign in or set a key
 // It draws only what the daemon half says (the thread's facts, the live value `mcp-servers.servers`), so a
 // machine without the extension shows none of it.
@@ -136,8 +137,9 @@ export function ServerList({ servers }: { servers: ThreadServers }) {
 const troubled = (servers: ThreadServers) => Boolean(servers.left?.length) || servers.servers.some((s) => s.state === 'failed' || s.state === 'needs-sign-in')
 
 /**
- * What the chip says: how many servers the thread has ("3 servers"); with none, how many it would have had, left out
- * (a profile naming servers this machine hasn't, or has off), rather than "0 servers".
+ * How many servers the thread has, in words ("3 servers"); with none, how many it would have had, left out (a profile
+ * naming servers this machine hasn't, or has off), rather than "0 servers". The chip's row in the ··· menu, and what
+ * it's called.
  */
 export function chipLabel(servers: ThreadServers) {
   const count = servers.servers.length
@@ -146,21 +148,31 @@ export function chipLabel(servers: ThreadServers) {
   return count === 1 ? '1 server' : `${count} servers`
 }
 
+/** What the chip shows beside the plug: the count alone (of those left out, with none). */
+export function chipCount(servers: ThreadServers) {
+  return String(servers.servers.length || servers.left?.length || 0)
+}
+
+/** The chip's tooltip: what it counts, and why any were left out. */
+export function chipTooltip(servers: ThreadServers) {
+  const left = servers.left ?? []
+  return [`MCP servers: ${chipLabel(servers)}`, ...left.map((l) => `${l.name} left out: ${LEFT_OUT[l.why]}`)].join('\n')
+}
+
 /** The chip's row in the title bar's ··· menu, when there's no room for it. */
-function MenuItem({ thread }: ViewProps<'thread'>) {
+export function MenuItem({ thread }: ViewProps<'thread'>) {
   const servers = serversOf(thread)
   return <>MCP: {servers ? chipLabel(servers) : 'none'}</>
 }
 
-/** In the header: "3 servers" beside the plug, opening to its servers. */
+/** In the header: the plug and how many servers ("3"), opening to its servers. */
 export function Chip({ thread }: ViewProps<'thread'>) {
   const servers = serversOf(thread)
   if (!servers) return null
-  const label = chipLabel(servers)
   return (
-    <Popover tooltip="MCP servers" trigger={
-      <button type="button" className={`mcp-chip ${troubled(servers) ? 'is-troubled' : ''}`} aria-label={`MCP servers: ${label}`}>
-        <PlugIcon size={12} aria-hidden /> {label}
+    <Popover tooltip={<span className="mcp-chip__tooltip">{chipTooltip(servers)}</span>} trigger={
+      <button type="button" className={`mcp-chip ${troubled(servers) ? 'is-troubled' : ''}`} aria-label={`MCP servers: ${chipLabel(servers)}`}>
+        <PlugIcon size={12} aria-hidden /> {chipCount(servers)}
       </button>
     }>
       <div className="mcp-chip__popup">

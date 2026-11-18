@@ -174,6 +174,16 @@ export function createExtensionHost(host: Host, later: { profiles(): ProfileHost
     }
     return { choice, without }
   }
+  /**
+   * Whose choice a thread's model is, as agentOf picks it: its own, an extension's (Ego's), its profile's, else this
+   * machine's settings. None while its profile isn't loaded.
+   */
+  function modelFromOf(id: string, meta: ThreadMeta): Pick<ThreadInfo, 'modelFrom'> {
+    if (meta.model) return { modelFrom: 'thread' }
+    const profile = later.profiles().loaded(meta)
+    if (meta.profile && !profile) return {}
+    return { modelFrom: choiceAndWithout(id, meta, profile).choice?.model ? 'extension' : profile?.spec.model ? 'profile' : 'machine' }
+  }
   /** What a thread goes without, with the profile it has loaded now (none: the built-ins' answer for no thread). */
   const withoutFor = (id?: string, meta?: ThreadMeta) => choiceAndWithout(id, meta, meta && later.profiles().loaded(meta)).without
 
@@ -785,7 +795,7 @@ export function createExtensionHost(host: Host, later: { profiles(): ProfileHost
 
   return {
     setUp, setUpBuiltin, registerSwitches, declare, inspect, known, offer, offered: (name: string) => offered().some((e) => e.name === name),
-    publishViews, agentOf, partsFor, switchedOff, withoutFor, panesOf, factsOf, quietOf, blockedOf, appliesTo,
+    publishViews, agentOf, modelFromOf, partsFor, switchedOff, withoutFor, panesOf, factsOf, quietOf, blockedOf, appliesTo,
     /** The daemon closing: switches turned meanwhile change nothing. */
     close: () => unlisten(),
     /** Every teardown so far finished (or given up on): those of extensions torn down earlier too, a profile's reloaded. */

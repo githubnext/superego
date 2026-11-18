@@ -1,5 +1,6 @@
 // Screenshots of the title bar (run by `test/look.sh <dir> titlebar`): a thread with a profile of the user's, its title bar
-// in light and dark, then the profile's card, opened by pointing at it, and the sidebar's heading pointed at. Into $SUPEREGO_SHOWCASE_OUT.
+// in light and dark, then the profile's card and the model's, each opened by pointing at its badge or mark, and the
+// sidebar's heading pointed at. Into $SUPEREGO_SHOWCASE_OUT.
 import { openApp } from './harness.mjs'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -35,19 +36,32 @@ await openApp({ name: 'titlebar', timeout: 180_000 }, async (t) => {
     await shot(`titlebar-${theme}`, bar)
     await shot(`window-${theme}`)
   }
-  // Pointed at, the profile says what it is.
-  const chip = await run(`(() => { const r = document.querySelector('.thread__profile').getBoundingClientRect(); return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) } })()`)
-  for (const theme of ['light', 'dark']) {
-    await t.theme(theme)
-    win().webContents.sendInputEvent({ type: 'mouseMove', x: chip.x - 40, y: chip.y + 200 })
-    await until(`!document.querySelector('.profile-card')`, 'the card gone')
-    win().webContents.sendInputEvent({ type: 'mouseMove', x: chip.x, y: chip.y })
-    await until(`Boolean(document.querySelector('.profile-card .profile-card__about'))`, 'the profile card')
-    const card = await run(`(() => { const c = document.querySelector('.profile-card'); if (!c) return undefined; const r = c.getBoundingClientRect(); return { x: Math.max(0, Math.floor(r.left) - 24), y: 0, width: Math.ceil(r.width) + 48, height: Math.ceil(r.bottom) + 24 } })()`)
-    console.log('profile card:', card ? JSON.stringify(card) : 'none')
-    await shot(`profile-card-${theme}`, card ?? bar)
-    await shot(`window-profile-card-${theme}`)
+  // Pointed at, the profile's badge and the model's mark say what they are.
+  const center = (selector) => run(`(() => { const r = document.querySelector('${selector}').getBoundingClientRect(); return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) } })()`)
+  for (const [name, trigger, card, ready] of [
+    ['profile-card', '.thread__profile', '.profile-card', '.profile-card .profile-card__about'],
+    ['model-card', '.threads-model', '.threads-model-card', '.threads-model-card dl'],
+  ]) {
+    const at = await center(trigger)
+    for (const theme of ['light', 'dark']) {
+      await t.theme(theme)
+      win().webContents.sendInputEvent({ type: 'mouseMove', x: at.x - 40, y: at.y + 200 })
+      await until(`!document.querySelector('${card}')`, `the ${name} gone`)
+      win().webContents.sendInputEvent({ type: 'mouseMove', x: at.x, y: at.y })
+      await until(`Boolean(document.querySelector('${ready}'))`, `the ${name}`)
+      await until(`!document.querySelector('[data-starting-style]')`, `the ${name} open`)
+      const rect = await run(`(() => { const c = document.querySelector('${card}'); if (!c) return undefined; const r = c.getBoundingClientRect(); return { x: Math.max(0, Math.floor(r.left) - 24), y: 0, width: Math.ceil(r.width) + 48, height: Math.ceil(r.bottom) + 24 } })()`)
+      console.log(`${name}:`, rect ? JSON.stringify(rect) : 'none', await run(`document.querySelector('${card}')?.textContent`))
+      await shot(`${name}-${theme}`, rect ?? bar)
+      await shot(`window-${name}-${theme}`)
+    }
   }
+  // Clicked, the model's mark shows the thread's details, and again hides them.
+  await t.mouse('.threads-model')
+  await until(`Boolean(document.querySelector('.threads-details')) && document.querySelector('.threads-model').classList.contains('is-on')`, 'the details, from the model')
+  await shot('titlebar-details-on', bar)
+  await t.mouse('.threads-model')
+  await until(`!document.querySelector('.threads-details')`, 'the details hidden again')
   // Pointed at, the sidebar's heading shows the key that goes anywhere.
   const head = await run(`(() => { const r = document.querySelector('.threads__head').getBoundingClientRect(); return { x: Math.round(r.left + 20), y: Math.round(r.top + r.height / 2), rect: { x: Math.floor(r.left) - 8, y: Math.floor(r.top) - 8, width: Math.ceil(r.width) + 16, height: Math.ceil(r.height) + 16 } } })()`)
   for (const theme of ['light', 'dark']) {

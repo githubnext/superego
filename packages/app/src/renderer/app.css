@@ -127,11 +127,11 @@
 .thread-badge.is-spelled { gap: 4px; min-width: 0; }
 .thread-badge.is-spelled > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .thread__parent { display: flex; align-items: baseline; gap: 4px; }
-/* The profile: its name, pointed at a card of what it is. */
-.thread__profile { display: inline-flex; align-items: center; gap: 4px; font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: default; }
+/* The profile's badge, by the title: its name, quiet and cut short when long; pointed at, a card of what it is. */
+.thread__profile { display: inline-flex; align-items: center; gap: 3px; max-width: 160px; height: 20px; padding: 0 6px; border: 0; border-radius: 5px; background: var(--superego-hover); font: inherit; font-size: var(--superego-text-xs); font-weight: 400; color: var(--superego-muted); cursor: default; }
 .thread__profile > svg { flex: none; }
-.thread__profile > span { overflow: hidden; text-overflow: ellipsis; }
-.thread__profile:hover, .thread__profile[data-popup-open] { color: var(--superego-muted); }
+.thread__profile > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.thread__profile:hover, .thread__profile[data-popup-open] { background: var(--superego-selected); color: var(--superego-text); }
 .profile-card { min-width: 0; width: max-content; max-width: 320px; padding: 10px 12px; }
 .profile-card__name { font-weight: 500; }
 .profile-card__about { margin: 2px 0 0; color: var(--superego-muted); }
@@ -566,6 +566,7 @@ button.app__mobiletitle > svg { flex: none; color: var(--superego-faint); }
 .thread-sheet__project { font-size: var(--superego-text-sm); color: var(--superego-muted); }
 .thread-sheet__title { display: flex; align-items: center; gap: 8px; font-weight: 600; overflow-wrap: anywhere; }
 .thread-sheet__title > .superego-status { flex: none; }
+.thread-sheet__head .thread__profile { align-self: flex-start; }
 .thread-sheet__tools { display: flex; align-items: center; gap: var(--superego-space-2); }
 .thread-sheet__tools .thread__tools { flex: 1; display: flex; flex-wrap: wrap; row-gap: var(--superego-space-2); }
 .thread-sheet__tools .thread__chips { flex: 1 0 100%; display: flex; flex-wrap: wrap; gap: 4px var(--superego-space-3); }

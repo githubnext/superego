@@ -19,8 +19,8 @@ const FIT = 4
 
 /**
  * Who goes first (the lowest): the strip's map, where the thread came from, extensions' chips, the header's views (the
- * last first), the strip's switch, the profile, archive, pin, rename; then the strip's other tabs shrink to icons, then
- * go; the pane opener last.
+ * last first), the strip's switch, the profile's badge, archive, pin, rename; then the strip's other tabs shrink to
+ * icons, then go; the pane opener last.
  */
 export const PRIORITY = { map: 10, parent: 20, chips: 25, header: 30, layout: 40, profile: 50, archive: 60, pin: 64, rename: 68, tabsCompact: 80, tabs: 90, panes: 95 }
 

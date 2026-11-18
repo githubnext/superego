@@ -139,7 +139,7 @@ Focus is always visible: the region holding it (the sidebar, the thread, a pane)
 | `extensions/suggestions` | after each answer, a side call to the thread's model for what you might send next; offered over the composer, numbered; ←/→ pick, ⏎ sends, ⇥ takes it to change, ⌃1–9 send that one (daemon + UI) |
 | `extensions/tasks` | `task_start`/`task_finish` tools and a prompt asking the agent to report its work as tasks; the transcript folds work under each task's title, status and outcome (daemon + UI) |
 | `extensions/terminal` | a shell beside a thread (`` ⌃` ``, the pane menu, the agent's `pane_open`), run by the machine so it outlives the window; its bytes on a channel, drawn by ghostty-web; OSC 7501 status on the pane's tab, and a terminal blocked on something blocks its thread (daemon + UI) |
-| `extensions/mcp-servers` | MCP servers for the agents in threads: other people's tools (Linear, GitHub, a browser) as `mcp__<server>__<tool>`, a command a machine runs or a URL it reaches, signed in to once per machine; Settings → MCP servers (Add server with a list of well-known ones, Sign in, Set key, Allow, Show log), the calls as rows, `3 servers` in a thread's header and its servers in thread details, a notice when one needs signing in (daemon + UI) |
+| `extensions/mcp-servers` | MCP servers for the agents in threads: other people's tools (Linear, GitHub, a browser) as `mcp__<server>__<tool>`, a command a machine runs or a URL it reaches, signed in to once per machine; Settings → MCP servers (Add server with a list of well-known ones, Sign in, Set key, Allow, Show log), the calls as rows, a count (`3`) in a thread's header and its servers in thread details, a notice when one needs signing in (daemon + UI) |
 
 An extension has a daemon half (`defineDaemonExtension`: agent tools and hooks, settings, actions, read methods, live
 values, pane kinds described to the agent, thread status) and a UI half (`defineUiExtension`: slots, pane kinds, tool
@@ -221,7 +221,7 @@ reaches (Streamable HTTP), with how it signs in: OAuth in the browser, an API ke
 Secrets stay on that machine, in `mcp-auth.json` (mode 0600), never in `mcp-servers.json`. Add server offers well-known
 ones to start from, and checks a server as it's saved ("Connected · 23 tools"). A thread uses the servers its profile
 names (`mcpServers: ['linear']`, below), or, without a profile, those switched to *Use in threads without a profile*. Its
-calls show as rows (*Called Linear · create_issue*), its header says how many servers it has (`3 servers`, opening to each
+calls show as rows (*Called Linear · create_issue*), its header says how many servers it has (a plug and `3`, opening to each
 with its state and why any were left out), and a server needing sign-in puts a notice over its composer. Ego sets
 servers up too ("connect Linear"), but never takes a key in chat, and a command it adds waits for **Allow** in
 Settings, which shows the whole command line. Outside agents can't set servers up, through Ego or otherwise; a thread

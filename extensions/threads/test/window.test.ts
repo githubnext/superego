@@ -59,7 +59,7 @@ it('shows the details beside the thread from ⌘I and from the model button, the
   await ui.until(() => Boolean($('.threads-details')?.textContent?.includes('Machine')), 'the details')
   await ui.key('mod+i')
   await ui.until(() => !$('.threads-details') && !$('.app__beside'), 'the details closed, their column gone')
-  await ui.until(() => Boolean($('.app__titlebar .threads-model')?.textContent), 'the model in the title bar')
+  await ui.until(() => Boolean($('.app__titlebar .threads-model svg')), 'the model in the title bar')
   $('.threads-model')!.click()
   await ui.until(() => Boolean($('.threads-details')) && Boolean($('.threads-model')?.classList.contains('is-on')), 'the details from the model button')
   $('.threads-model')!.click()

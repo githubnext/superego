@@ -67,8 +67,8 @@ export const stateOf = (meta: ThreadMeta, name: string): Json | undefined =>
 /** One mounted thread: its conversation and a small watch that keeps its status current. */
 export type Mounted = {
   conversation: Conversation; meta: ThreadMeta; live?: LiveState; lastEntryId?: number
-  /** What the thread runs with (and whose model it is) and has spent, and when anything last happened in it. */
-  model?: string; provider?: string; cost?: number; activeAt?: number
+  /** What the thread runs with (whose model it is, how hard it thinks) and has spent, and when anything last happened in it. */
+  model?: string; provider?: string; thinking?: string; cost?: number; activeAt?: number
   /** The task of the last failed run it heard of (null: none), so each failure is looked at once. */
   failure?: number | null
   /** The credentials (a hash) its provider had as its run started: a rejection is for those, not any stored since. */

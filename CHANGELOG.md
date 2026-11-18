@@ -12,7 +12,12 @@
 - The title bar fits any window: short of room, its chips and buttons (the model, MCP servers, the profile, pin,
   archive, an extension's) move into a ··· menu at its end, the panes' tabs shrink to icons and then follow, and they
   come back as the window widens. Nothing in it overlaps or wraps any more.
-- The MCP chip says how many servers were left out when a thread has none ("2 left out"), not "0 servers".
+- The thread's profile is a small badge right after its title; pointed at, it still shows the profile's card.
+- The model in the title bar is its provider's mark (Anthropic, OpenAI and others). Pointed at, a card says the model,
+  its provider, how hard it thinks, whose choice it is (the thread's, its profile's or this machine's) and what the
+  thread has cost; a click still shows or hides thread details.
+- The MCP chip is the plug and a count ("3"). A thread with none but some left out shows their count in the warning
+  colour, and its tooltip says why.
 - Pointing at a thread in the sidebar, or moving to it with the keyboard, shows a small card of it: its full title, its
   state and what it asks or did, project and machine, model, profile, branch, the thread that started it or how many
   it started, cost and when it was last active. The rail's dots show the same card.

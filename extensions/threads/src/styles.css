@@ -94,9 +94,16 @@
 .threads-archived__where { font-style: normal; margin-left: 6px; color: var(--superego-faint); font-size: var(--superego-text-sm); }
 
 /* The thread's model in the title bar: a quiet button that shows its details., truncated last. */
-.threads-model { max-width: 220px; height: 24px; padding: 0 6px; border: 0; border-radius: var(--superego-radius); background: none; font: inherit; font-size: var(--superego-text-sm); color: var(--superego-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: default; }
+.threads-model { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; padding: 0; border: 0; border-radius: var(--superego-radius); background: none; color: var(--superego-muted); cursor: default; }
 .threads-model:hover { background: var(--superego-hover); color: var(--superego-text); }
 .threads-model.is-on { background: var(--superego-selected); color: var(--superego-text); }
+/* Pointed at: the model, and a few facts about it (as the profile's card has them). */
+.threads-model-card__name { font-weight: 500; overflow-wrap: anywhere; }
+.threads-model-card dl { display: grid; grid-template-columns: auto 1fr; gap: 3px 12px; margin: 8px 0 0; font-size: var(--superego-text-sm); }
+.threads-model-card dt { color: var(--superego-faint); }
+.threads-model-card dd { margin: 0; }
+.threads-model-card__keys { margin-top: 8px; font-size: var(--superego-text-sm); color: var(--superego-faint); }
+.threads-model-card__keys kbd { margin-left: 4px; font: var(--superego-text-xs) var(--superego-mono); color: var(--superego-muted); }
 /* A thread a tool row names (the one started, read or messaged): it gives way when the row is tight, centred in it. */
 a.threads-row-ref { flex: 0 1 auto; align-items: center; }
 

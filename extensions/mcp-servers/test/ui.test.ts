@@ -7,11 +7,11 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { ToolRowCall } from '@superego/app/ui'
 import { createRouter, defineAction, type ThreadInfo } from '@superego/protocol'
 import { mountUi, type TestWindow } from '@superego/sdk/testing'
-import mcpServers, { Chip, NoticeFor } from '../src/ui.tsx'
+import mcpServers, { Chip, chipTooltip, MenuItem, NoticeFor } from '../src/ui.tsx'
 import { ServerRow } from '../src/settings.tsx'
 import { CATALOG, fromCatalog } from '../src/catalog.ts'
 import { ago, authMenu, checkText, commandLine, configOf, emptyForm, formOf, nameFrom, secretLabel, secretPlaceholder, signInDetails, signInText, splitCommandLine, stateText } from '../src/describe.ts'
-import { ADD_PARAMS, splitToolName, type ServerInfo, type ThreadServers } from '../src/shared.ts'
+import { ADD_PARAMS, LEFT_OUT, splitToolName, type ServerInfo, type ThreadServers } from '../src/shared.ts'
 
 const machine = { id: 'local', label: 'This Mac', state: 'connected' } as never
 const servers: ThreadServers = {
@@ -215,14 +215,22 @@ describe('what it draws', () => {
   })
 
   it("shows a thread's servers in its header and details, and why any were left out", async () => {
+    // The chip: the count alone, with the words for those who can't see it; its row in the ··· menu says them.
     const chip = html(createElement(Chip, { place: 'header', machine, thread: where.thread }))
-    expect(chip).toContain('2 servers')
+    expect(chip).toMatch(/<\/svg> 2<\/button>/)
+    expect(chip).not.toContain('2 servers<')
+    expect(chip).toContain('aria-label="MCP servers: 2 servers"')
     expect(chip).toContain('is-troubled')
+    expect(html(createElement(MenuItem, { place: 'header', machine, thread: where.thread }))).toBe('MCP: 2 servers')
     expect(html(createElement(Chip, { place: 'header', machine, thread: thread() }))).toBe('')
-    // With none, it says how many were left out, not "0 servers".
-    const none = html(createElement(Chip, { place: 'header', machine, thread: thread({ servers: [], left: [{ name: 'github', why: 'missing' }, { name: 'linear', why: 'off' }] }) }))
-    expect(none).toContain('2 left out')
-    expect(none).not.toContain('0 servers')
+    // With none, it counts those left out, in the warning's colour; the menu says so, not "0 servers".
+    const leftOut = thread({ servers: [], left: [{ name: 'github', why: 'missing' }, { name: 'linear', why: 'off' }] })
+    const none = html(createElement(Chip, { place: 'header', machine, thread: leftOut }))
+    expect(none).toMatch(/<\/svg> 2<\/button>/)
+    expect(none).toContain('is-troubled')
+    expect(none).toContain('aria-label="MCP servers: 2 left out"')
+    expect(html(createElement(MenuItem, { place: 'header', machine, thread: leftOut }))).toBe('MCP: 2 left out')
+    expect(chipTooltip(leftOut.facts!['mcp-servers'] as ThreadServers)).toBe('MCP servers: 2 left out\ngithub left out: no such server here\nlinear left out: ' + LEFT_OUT.off)
     const drawn = await ui.render({ slot: 'details.section', thread: where.thread })
     const details = drawn.container.innerHTML
     await drawn.unmount()

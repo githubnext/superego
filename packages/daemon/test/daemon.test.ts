@@ -181,7 +181,7 @@ describe('new threads', () => {
     await peer.call('settings.set', { key: 'agent.model', value: 'faux/faux-1' })
     await peer.call('thread.send', { thread: created.id, text: 'again' })
     await until(async () => (await threads(peer))[0]!.status.state === 'done')
-    expect((await threads(peer))[0]).toMatchObject({ model: 'faux-1', chosen: { model: 'faux/faux-1' } })
+    expect((await threads(peer))[0]).toMatchObject({ model: 'faux-1', provider: 'faux', chosen: { model: 'faux/faux-1' }, modelFrom: 'thread' })
     await close()
   })
 })
