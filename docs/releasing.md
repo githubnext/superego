@@ -98,6 +98,11 @@ Before releasing, consolidate the changelog: move `## Unreleased`'s notes under 
 tighten them into short sections grouped by what the user sees, leave an empty `## Unreleased` above it, and merge
 that to main. `pnpm release` stops before building if main's `CHANGELOG.md` has no section for the version.
 
+Before releasing, say what changed by where it lives, so it's clear what reaches whom: the core (protocol, daemon,
+app), the bundled extensions (by name), the CLI and skill, the extension API (its version, and what breaks), and
+anything outside the repo that has to follow: the user's own profiles and extensions (`~/.superego/profiles`), and
+machines that must update (`superego machines update`).
+
 Before releasing, run the checks as before any merge: `pnpm test` and `pnpm smoke`. Smoke includes
 [app/test/oauth.sh](../app/test/oauth.sh): the providers' OAuth flows load in the build (pi loads them by a path the
 bundle can't follow). It takes a packaged app too: `app/test/oauth.sh app/dist/mac-arm64/Superego.app`.

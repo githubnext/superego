@@ -2,25 +2,29 @@
 
 ## Unreleased
 
-**Upgrading:** extensions and profiles need `api: '^4'` (the extension API is now 4.0); one still on `'^3'`
-is refused until it's changed. A tool view that shows `result.images` gets image references to show with
-`ImageFrame` (or read with `image.read`), not base64.
+## 0.1.5
 
-- Threads with big images open fast: pasted screenshots and images from tools no longer come with the thread, and
-  each shows as a thumbnail made on its machine as you scroll to it (only the thumbnail crosses to a remote machine).
-  The lightbox loads the full image, showing the thumbnail meanwhile.
-- A very tall image, such as a screenshot of a whole page, shows its top in the thread, fading out, with Open to see
-  it whole.
-- Images keep their place while they load, so the thread doesn't jump as you scroll.
-- An image you sent opens in the lightbox when you click it.
-- A page in Preview can ask for the camera, the microphone, notifications or to reach apps on your Mac (as Okta
-  FastPass does to sign in), as in a browser: Preview asks you under its toolbar, and remembers your answer for the
-  site. Settings → Site permissions lists what each site may use, to remove it. Artifacts are still refused everything.
-- Preview and Artifact have a proper browser toolbar under their tab: back, forward and reload as icon buttons, the
-  address in a quiet pill (click to select it, the scheme and `localhost` faded), and a button to open the page in your
-  browser.
-- A pane's tab is set apart from what's under it by a faint tint instead of a line, with a soft shadow when you scroll
-  its content up beneath it. An editor's file bar and Preview's toolbar share the tint, so a pane's head reads as one.
+**Upgrading:** extensions and profiles need `api: '^4'` (the extension API is now 4.0); one still on `'^3'` is refused
+until it's changed. A tool view that shows `result.images` gets image references to show with `ImageFrame` (or read
+with `image.read`), not base64.
+
+### Images
+
+- Threads with big images open fast: images show as thumbnails made on their machine as you scroll to them, and only
+  the thumbnail crosses to a remote machine. The lightbox loads the full image.
+- A very tall image, like a full-page screenshot, shows its top with Open to see it whole.
+- Images keep their place while they load, and an image you sent opens in the lightbox.
+
+### Preview
+
+- Pages can ask for the camera, the microphone, notifications, or to reach apps on your Mac (as Okta FastPass does):
+  Preview asks you under its toolbar and remembers your answer per site. Settings → Site permissions lists them.
+- A proper browser toolbar: back, forward and reload as icon buttons, the address in a quiet pill, and a button to open
+  the page in your browser.
+
+### Panes
+
+- A pane's tab is set apart by a faint tint instead of a line, with a soft shadow when content scrolls under it.
 
 ## 0.1.4
 
