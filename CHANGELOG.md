@@ -2,26 +2,32 @@
 
 ## Unreleased
 
-**Upgrading:** the `preview` and `artifact` panes are now one, `browser`. Change a script or extension that opens
-`preview` (`{ url }`) or `artifact` (`{ path }`) to open `browser` with the same params, and a profile going without
-`web-panes` to go without `browser`. A pane of the old kinds still open says so: close it and open the page again.
-Sites start signed out, and ask again for what you'd allowed them.
+## 0.1.6
 
-- Preview and Artifact are one Browser pane, with an address bar: click it to type an address, a host like
-  `localhost:5173`, an HTML file's path in the working folder, or a search. ⌘T, or Browser in the pane menu, opens a
-  blank one. Settings → Browser picks the search engine (DuckDuckGo or Google).
-- A window reconnecting to a restarted daemon no longer misses what a profile's extensions bring (their panes and
-  views) when the profile loads just as it connects.
-- Profile sources: install your own profiles from a git repo or a folder, as Pi installs packages.
-  `superego profile install git:github.com/<owner>/<repo>` clones it (a folder, `~/…`, is read in place), and its
-  `profiles/<name>` are yours, after `~/.superego/profiles`. `profile update` pulls them, `profile remove` drops one,
-  `profile sources` lists them. A profile shadowed by one of the same name is shown as a problem, and Settings →
-  Profiles says which source each comes from.
-- Web access: choose the host it's reached at (Settings → Web access → Host, or `web.host`), for the address, pairing
-  links and QR codes; and on a machine running more than one tailscaled, which tailnet serves it (Tailnet,
-  `web.tailscale.socket`). A `tailscale serve` you set up by hand for its port is taken over rather than reported busy.
-- A profile linked into `~/.superego/profiles` and then linked somewhere else loads from its new place. Before, it kept
-  failing with "no such file" for the old one until the daemon restarted.
+**Upgrading:** the `preview` and `artifact` panes are now one, `browser`, with the same params (`{ url }` or
+`{ path }`). Change a script or extension that opens the old kinds, and a profile going without `web-panes` to go
+without `browser`. Sites start signed out, and ask again for what you'd allowed them.
+
+### Browser
+
+- Preview and Artifact are one Browser pane with an address bar: click it to type an address, a host like
+  `localhost:5173`, an HTML file in the working folder, or a search. ⌘T, or Browser in the pane menu, opens a blank one.
+  Settings → Browser picks the search engine.
+
+### Profiles
+
+- Install profiles from a git repo or a folder: `superego profile install git:github.com/<owner>/<repo>`, then
+  `profile update`, `profile remove` and `profile sources`. Settings → Profiles says where each comes from.
+
+### Web access
+
+- Choose the host it's reached at (`web.host`), and on a machine running more than one tailscaled, which tailnet serves
+  it (`web.tailscale.socket`).
+
+### Fixes
+
+- A profile linked somewhere new loads from there, instead of failing until the daemon restarts.
+- A window reconnecting to a restarted daemon no longer misses what a profile's extensions bring.
 
 ## 0.1.5
 
