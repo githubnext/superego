@@ -1,7 +1,11 @@
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { RpcError, RpcPeer } from '@superego/protocol'
 import type { Transport } from '@superego/client'
 import { Link } from '@superego/client'
+import { openVia } from '../src/transports.ts'
 
 const states = (open: () => Promise<Transport>) => {
   const seen: string[] = []
@@ -72,5 +76,28 @@ describe('a link whose transport opens but never answers', () => {
     expect(opens).toBeGreaterThan(1)
     expect(closes).toBeGreaterThanOrEqual(opens - 1)
     expect(seen[1]).toMatchObject({ state: 'disconnected', errorKind: 'timeout' })
+  })
+})
+
+describe('a link to a command that takes the connection and never answers', () => {
+  it('shows connecting, then the timeout, tries again, and leaves none of its processes behind', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'superego-mute-'))
+    const pids = join(dir, 'pids')
+    const seen: { state: string; errorKind?: string }[] = []
+    // A shell, and a child of its own holding the pipes: closing must take both.
+    const link = new Link({
+      id: 'box', label: 'Box', helloTimeout: 200,
+      open: () => openVia(`echo $$ >> '${pids}'; sleep 300 & echo $! >> '${pids}'; wait`),
+      onEvent: (method, params) => { if (method === '$connection') seen.push(params as { state: string; errorKind?: string }) },
+    })
+    link.start()
+    await new Promise((resolve) => setTimeout(resolve, 1200))
+    link.stop()
+    await new Promise((resolve) => setTimeout(resolve, 200))
+    expect(seen.slice(0, 3)).toMatchObject([{ state: 'connecting' }, { state: 'disconnected', errorKind: 'timeout' }, { state: 'connecting' }])
+    const started = readFileSync(pids, 'utf8').trim().split('\n').map(Number)
+    expect(started.length).toBeGreaterThanOrEqual(4)
+    expect(started.filter((pid) => { try { process.kill(pid, 0); return true } catch { return false } })).toEqual([])
+    rmSync(dir, { recursive: true, force: true })
   })
 })

@@ -21,7 +21,7 @@ import { KIND_SAYS, starterKind } from './starter.ts'
 import { commandHelp, commandNames, help } from './usage.ts'
 import type { CliCommand, CliContext } from './command.ts'
 import {
-  checkIdentity, collectProfileUi, controlPath, filesOf, hashProfileUi, loginArgs, machineHub, MachineStore, masterAlive, openLocal, openMachine, routeOf, runUpdate, UiAllowStore, updateScript,
+  checkIdentity, collectProfileUi, controlPath, filesOf, hashProfileUi, loginArgs, machineHub, MachineStore, masterAlive, openLocal, openMachine, routeOf, runUpdate, UiAllowStore, updateScript, within,
   type MachineConfig, type Transport,
 } from '@superego/client'
 // The daemon itself only for `daemon run`: loading it costs every other command most of its start.
@@ -145,12 +145,29 @@ function userOnly(what: string) {
   if (agentThread()) throw consentRefused(what)
 }
 
-/** Connect to a machine, say hello, and check it is who it should be. */
-async function connect(machine: Machine, as: { client: string; label: string } = { client: `${app.id}-cli`, label: hostname() }, { start = true }: { start?: boolean } = {}): Promise<{ transport: Transport; hello: Hello }> {
+/**
+ * How long a machine has to answer hello once its transport is open (ssh connecting, and `connect --start` starting a
+ * daemon there, included); a check of several machines (the listing, before an update) gives each less.
+ */
+const ANSWER = 30_000
+const PROBE = 15_000
+
+type How = {
+  /** Start this computer's daemon if none is running (the default). */
+  start?: boolean
+  /** How long hello may take. In `on`, the work's too: given, that is bounded as well. */
+  deadline?: number
+}
+
+/**
+ * Connect to a machine, say hello, and check it is who it should be. One that doesn't answer in time (a peer that
+ * accepts and never answers) is closed, its ssh with it, and fails as a `timeout`.
+ */
+async function connect(machine: Machine, as: { client: string; label: string } = { client: `${app.id}-cli`, label: hostname() }, { start = true, deadline = ANSWER }: How = {}): Promise<{ transport: Transport; hello: Hello }> {
   const transport = machine.config ? await openMachine(machine.config, app, dataDir) : await openLocal(socket, start ? startDaemon : undefined)
   try {
     const from = agentThread()
-    const hello = await transport.peer.call<Hello>('hello', { ...as, version: PROTOCOL_VERSION, ...(from ? { from } : {}) })
+    const hello = await within(transport.peer.call<Hello>('hello', { ...as, version: PROTOCOL_VERSION, ...(from ? { from } : {}) }), deadline, () => timedOut(machine, deadline))
     if (machine.config) checkIdentity(hello, { target: routeOf(machine.config, app), ...(machine.config.daemonId ? { expected: machine.config.daemonId } : {}) }, [])
     return { transport, hello }
   } catch (error) {
@@ -159,11 +176,14 @@ async function connect(machine: Machine, as: { client: string; label: string } =
   }
 }
 
-/** Run `work` with typed calls on a machine, closing the connection after. */
-async function on<T>(machine: Machine, work: (call: <M extends MethodName>(method: M, params: Params<M>) => Promise<Result<M>>, hello: Hello) => Promise<T>, how?: { start?: boolean }) {
+const timedOut = (machine: Machine, ms: number) => new RpcError('timeout', `${machine.label} did not answer in ${ms / 1000}s`)
+
+/** Run `work` with typed calls on a machine, closing the connection after (and when a deadline passes). */
+async function on<T>(machine: Machine, work: (call: <M extends MethodName>(method: M, params: Params<M>) => Promise<Result<M>>, hello: Hello) => Promise<T>, how: How = {}) {
   const { transport, hello } = await connect(machine, undefined, how)
   try {
-    return await work((method, params) => transport.peer.call(method, params), hello)
+    const done = work((method, params) => transport.peer.call(method, params), hello)
+    return await (how.deadline ? within(done, how.deadline, () => timedOut(machine, how.deadline!)) : done)
   } finally {
     transport.close()
   }
@@ -259,12 +279,13 @@ async function listMachines() {
   const rows = await Promise.all(all.map(async (machine) => {
     if (machine.config && !machine.config.enabled) return { ...machine, state: 'disabled' }
     try {
-      const { transport, hello } = await withTimeout(connect(machine), 15_000)
+      const { transport, hello } = await connect(machine, undefined, { deadline: PROBE })
       transport.close()
       return { ...machine, state: 'answers', hostname: hello.machine.hostname, features: hello.features, version: versionOf(hello), keepsRunning: hello.machine.keepsRunning }
     } catch (error) {
       const kind = error instanceof RpcError ? error.kind : 'error'
-      return { ...machine, state: kind === 'needs_login' ? 'needs login' : kind.startsWith('host_key') ? 'host key' : 'error', error: error instanceof Error ? error.message : String(error), kind }
+      const state = kind === 'needs_login' ? 'needs login' : kind.startsWith('host_key') ? 'host key' : kind === 'timeout' ? 'not answering' : 'error'
+      return { ...machine, state, error: error instanceof Error ? error.message : String(error), kind }
     }
   }))
   // Each machine's Superego next to this computer's.
@@ -275,7 +296,9 @@ async function listMachines() {
   })
   print(described, () => table(described.map((row) => [
     row.id === 'local' ? 'local' : row.id.slice(0, 8), row.label, row.config ? routeOf(row.config, app) : 'this computer',
-    ((row as { kind?: string }).kind === 'needs_login' ? `needs login: ${app.id} machines login ${row.label}` : 'error' in row ? `${row.state === 'error' ? 'error' : row.state}: ${row.error}`
+    ((row as { kind?: string }).kind === 'needs_login' ? `needs login: ${app.id} machines login ${row.label}`
+      : (row as { kind?: string }).kind === 'timeout' ? 'not answering (timed out connecting)'
+      : 'error' in row ? `${row.state === 'error' ? 'error' : row.state}: ${row.error}`
       : 'hostname' in row ? `${row.state} (${row.hostname})${row.config && stopsEarly(row.keepsRunning) ? ` - stops at logout or reboot: run ${app.id} daemon install there` : ''}` : row.state)
       + ('drift' in row && driftPhrase(row.drift, app.name) ? ` · runs ${driftPhrase(row.drift, app.name)}` : ''),
   ])))
@@ -283,10 +306,6 @@ async function listMachines() {
 
 /** Whether a daemon's `keepsRunning` says it will go away. Unknown (a launchd agent) is not a warning. */
 const stopsEarly = (keeps: Hello['machine']['keepsRunning']) => keeps.service === null || keeps.afterLogout === false
-
-const withTimeout = <T>(promise: Promise<T>, ms: number) => Promise.race([
-  promise, new Promise<never>((_, reject) => setTimeout(() => reject(new Error(`no answer in ${ms / 1000}s`)), ms).unref()),
-])
 
 /** Run ssh in this terminal, so it can ask, and leave a master behind that links and commands ride. */
 async function loginCommand(machine: Machine) {
@@ -300,7 +319,7 @@ async function loginCommand(machine: Machine) {
   }
   // The master is what they ride now: check it gets to a daemon.
   try {
-    const { transport, hello } = await withTimeout(connect(machine), 30_000)
+    const { transport, hello } = await connect(machine)
     transport.close()
     if (!config.daemonId) await machines.update(config.id, { daemonId: hello.machine.id })
     return print({ ok: true, hostname: hello.machine.hostname }, () => console.log(`Logged in to ${machine.label} (${hello.machine.hostname}).`))
@@ -315,7 +334,7 @@ async function machinesCommand(sub: string | undefined, rest: string[], options:
     const added = await machines.add({ target: rest[0], label: options.name, command: options.command, via: options.via })
     // Learn who answers there now, so a different machine later is refused.
     try {
-      const { transport, hello } = await withTimeout(connect({ id: added.id, label: added.label, config: added }), 15_000)
+      const { transport, hello } = await connect({ id: added.id, label: added.label, config: added }, undefined, { deadline: PROBE })
       transport.close()
       await machines.update(added.id, { daemonId: hello.machine.id })
       return print(added, () => console.log(`Added ${added.label} (${hello.machine.hostname}).`))
@@ -344,7 +363,7 @@ async function machinesCommand(sub: string | undefined, rest: string[], options:
  */
 async function updateMachine(machine: Machine & { config: MachineConfig }, now: boolean) {
   // One that doesn't answer may still update (a daemon that won't start, say): then there's no work to interrupt.
-  const before = await withTimeout(on(machine, async (call, hello) => ({ hello, threads: await call('thread.list', {}) })), 15_000).catch(() => undefined)
+  const before = await on(machine, async (call, hello) => ({ hello, threads: await call('thread.list', {}) }), { deadline: PROBE }).catch(() => undefined)
   const working = before?.threads.filter((t) => t.status.state === 'working') ?? []
   if (working.length && !now) {
     throw new RpcError('busy', `${working.length === 1 ? 'An agent is' : `${working.length} agents are`} working on ${machine.label}, and updating restarts its daemon.`, {
@@ -352,7 +371,7 @@ async function updateMachine(machine: Machine & { config: MachineConfig }, now: 
     })
   }
   await runUpdate(machine.config, app, { now, onOutput: (text) => process.stderr.write(text) })
-  const after = await withTimeout(on(machine, async (_call, hello) => hello), 30_000)
+  const after = await on(machine, async (_call, hello) => hello)
   const short = (commit?: string) => commit?.slice(0, 7) ?? 'unknown'
   print({ updated: true, from: before && versionOf(before.hello), to: versionOf(after) }, () =>
     console.log(`Updated ${machine.label}: ${short(before?.hello.machine.commit)} → ${short(after.machine.commit)}, daemon ${after.machine.pid}.`))
@@ -446,7 +465,7 @@ async function providersCommand(sub: string | undefined, rest: string[], machine
       if (event.type === 'done' || event.type === 'failed') done(event)
     }))
     await transport.peer.call('auth.signIn', { provider, type: 'api_key', key })
-    const event = await withTimeout(outcome, 30_000)
+    const event = await within(outcome, 30_000, () => new RpcError('timeout', `${machine.label} did not say how signing in went in 30s`))
     if (event.type === 'failed') throw new RpcError('auth_failed', event.message)
   } finally {
     transport.close()

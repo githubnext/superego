@@ -16,3 +16,10 @@ export const routeOf = (config: MachineConfig, app: AppConfig) => config.via ?? 
 
 export type MachineId = string
 export type { ConnectionState, MachineEntry } from '@superego/protocol'
+
+/** `promise`, or `error()` after `ms`. What it was waiting on is the caller's to stop: close the transport, say. */
+export function within<T>(promise: Promise<T>, ms: number, error: () => Error): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const late = new Promise<never>((_, reject) => { timer = setTimeout(() => reject(error()), ms) })
+  return Promise.race([promise, late]).finally(() => clearTimeout(timer))
+}

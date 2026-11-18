@@ -275,6 +275,25 @@ export default defineExtension({ name: 'orders', tools: [defineTool({ name: 'fin
     await superego(['machines', 'rm', 'Third'])
   }, starting(2))
 
+  it('lists the machines that answer when one never does, leaving nothing of it running', async () => {
+    // A machine whose command takes the connection and never answers: a shell, and a child of its own holding the pipes.
+    const mute = join(home, 'mute.sh')
+    const pids = join(home, 'mute.pids')
+    writeFileSync(mute, `echo $$ > '${pids}'\nsleep 300 &\necho $! >> '${pids}'\nwait\n`)
+    const file = join(home, 'machines.json')
+    const before = existsSync(file) ? await readFile(file, 'utf8') : '[]'
+    writeFileSync(file, JSON.stringify([...JSON.parse(before), { id: 'b1e55ed0-0000-4000-8000-000000000000', label: 'Mute', target: '', enabled: true, via: `sh '${mute}'` }]))
+    onTestFinished(() => superego(['machines', 'rm', 'Mute']).then(() => {}, () => {}))
+    const started = Date.now()
+    const listed = await superegoJson(['machines'])
+    expect(Date.now() - started).toBeLessThan(25_000)
+    expect(listed.find((m: any) => m.id === 'local')).toMatchObject({ state: 'answers' })
+    expect(listed.find((m: any) => m.label === 'Mute')).toMatchObject({ state: 'not answering', kind: 'timeout' })
+    const gone = (pid: number) => { try { process.kill(pid, 0); return false } catch { return true } }
+    const [shell, child] = (await readFile(pids, 'utf8')).trim().split('\n').map(Number)
+    expect(gone(shell!) && gone(child!)).toBe(true)
+  }, starting(1))
+
   it('restarts the daemon onto the installed code, keeping threads and its environment', async () => {
     // Started with a key in its environment (as by `box run superego daemon restart`); restarted from a client without one.
     await superego(['daemon', 'stop'])

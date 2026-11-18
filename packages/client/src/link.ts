@@ -3,7 +3,7 @@
 // the daemon, so a dead link is noticed in seconds on any transport, not when ssh gives up.
 // No Node imports: the app's main process uses it, and a daemon or a browser can.
 import { Channels, offers, PROTOCOL_VERSION, RpcError, versionOf, type Channel, type Hello, type Notifications, type RpcPeer } from '@superego/protocol'
-import type { ConnectionState, MachineEntry, MachineId } from './shared.ts'
+import { within, type ConnectionState, type MachineEntry, type MachineId } from './shared.ts'
 import { carriesFiles, uploadAttachments } from './uploads.ts'
 
 export type Transport = { peer: RpcPeer; closed: Promise<void>; close(): void }
@@ -166,11 +166,4 @@ export class Link {
       this.#delay = Math.min(this.#delay * 2, 30_000)
     }
   }
-}
-
-/** `promise`, or `error()` after `ms`. */
-function within<T>(promise: Promise<T>, ms: number, error: () => Error): Promise<T> {
-  let timer: ReturnType<typeof setTimeout> | undefined
-  const late = new Promise<never>((_, reject) => { timer = setTimeout(() => reject(error()), ms) })
-  return Promise.race([promise, late]).finally(() => clearTimeout(timer))
 }

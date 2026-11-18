@@ -6,6 +6,9 @@
   status bar.
 - The image viewer behaves like the other dialogs: the window behind it can't be scrolled or reached with a screen
   reader while it's open.
+- `superego machines` no longer hangs on a machine that takes the connection but never answers: after 15 seconds it
+  shows as "not answering (timed out connecting)" and the command finishes. `-m` on such a machine gives up after 30
+  seconds, and closing a connection (in the app too) ends everything its command started.
 - The title bar fits any window: short of room, its chips and buttons (the model, MCP servers, the profile, pin,
   archive, an extension's) move into a ··· menu at its end, the panes' tabs shrink to icons and then follow, and they
   come back as the window widens. Nothing in it overlaps or wraps any more.
