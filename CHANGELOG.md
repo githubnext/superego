@@ -6,6 +6,9 @@
   archive, an extension's) move into a ··· menu at its end, the panes' tabs shrink to icons and then follow, and they
   come back as the window widens. Nothing in it overlaps or wraps any more.
 - The MCP chip says how many servers were left out when a thread has none ("2 left out"), not "0 servers".
+- Pointing at a thread in the sidebar, or moving to it with the keyboard, shows a small card of it: its full title, its
+  state and what it asks or did, project and machine, model, profile, branch, the thread that started it or how many
+  it started, cost and when it was last active. The rail's dots show the same card.
 - Extensions: a `header` view can say what its row in the title bar's ··· menu shows (`menuItem`).
 - A profile's styles no longer leak into the rest of the window: with `superego.style(css)` they reach only what that
   profile draws, on its machine. The same profile from two machines at different versions, or two profiles with the

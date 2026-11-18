@@ -122,6 +122,8 @@
 .app__titlebar .thread__chips .titlebar__item { font-size: var(--superego-text-sm); color: var(--superego-faint); }
 /* A mark after a thread's title in the sidebar (the thread.badge slot): an icon, quiet, kept while the title truncates. */
 .thread-badge { flex: none; display: inline-flex; align-items: center; color: var(--superego-muted); }
+.thread-badge.is-spelled { gap: 4px; min-width: 0; }
+.thread-badge.is-spelled > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .thread__parent { display: flex; align-items: baseline; gap: 4px; }
 /* The profile: its name, pointed at a card of what it is. */
 .thread__profile { display: inline-flex; align-items: center; gap: 4px; font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: default; }

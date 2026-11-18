@@ -7,7 +7,8 @@
 //   setting); with the sidebar hidden, a rail of status glyphs; the key to go anywhere (⌘L) beside its heading, while
 //   pointed at. A row's title is followed by other extensions' marks (the `thread.badge` slot: a worktree's branch,
 //   say); a right-click on it pins or unpins it, or archives it. Pinned rows are dragged to reorder them, and a
-//   project's row dragged among them is pinned there
+//   project's row dragged among them is pinned there. Pointed at or focused for a moment, a row (or a rail's dot) shows
+//   a card of its thread (card.tsx)
 // - details (`threads.details`): what the thread runs with, spent and touched, then what other extensions say of it (the
 //   `details.section` slot: its MCP servers, say); beside it or not, ⌘I
 // - the model (`threads.model`), in the title bar: a button that shows or hides the details
@@ -17,10 +18,11 @@ import {
   call, defineAction, defineUiExtension, fold, isPinned, MachineDrift, shownRows, useFold, RailButton, SHOW_PINNED, showProject, Slot, SORT, unreadList, useAppSetting, useDispatch, useLocalState, useMachines, usePlacement, useSelection, useProjects, useThreadView, useShell, useShortcut, useRailShortcut,
   type MachineEntry, type Pin, type Project, type ShownRow, type ShownSection, type Sort, type SpaceRailProps, type WindowContext,
 } from '@superego/app/ui'
-import { rollup, statusLabel, statusShape, statusWord, unread, type ThreadInfo } from '@superego/protocol'
-import { CaretRightIcon, ChatsIcon, ContextMenu, DotsThreeIcon, Glyph, IconButton, List, ListItem, Menu, PlusIcon, PushPinIcon, SparkleIcon, StatusGlyph, StatusWord, Tooltip, TooltipProvider } from '@superego/ui'
+import { rollup, statusLabel, statusShape, unread, type ThreadInfo } from '@superego/protocol'
+import { CaretRightIcon, ChatsIcon, ContextMenu, DotsThreeIcon, Glyph, HOVER_DELAY, HoverCard, IconButton, List, ListItem, Menu, PlusIcon, PushPinIcon, SparkleIcon, StatusGlyph, StatusWord, Tooltip, TooltipProvider } from '@superego/ui'
 import './styles.css'
 import { ago } from './ago.ts'
+import { ThreadCard } from './card.tsx'
 import { registerLinks, registerRows } from './rows.tsx'
 import { about } from './shared.ts'
 
@@ -38,7 +40,7 @@ const set = (c: Pick<WindowContext, 'dispatch'>, key: string, value: string | bo
 export default defineUiExtension({
   ...about,
   setup(superego) {
-    superego.view('threads.list', { title: 'Threads', icon: ChatsIcon, context: 'window', fits: ['space'], default: 'space', component: Threads, railButton: ThreadsRail })
+    superego.view('threads.list', { title: 'Threads', icon: ChatsIcon, context: 'window', fits: ['space'], default: 'space', component: ThreadsSpace, railButton: ThreadsRail })
     superego.view(DETAILS, { title: 'Thread details', context: 'thread', fits: ['beside', 'pane'], component: DetailsPane })
     superego.view('threads.model', { title: 'Model', icon: SparkleIcon, context: 'thread', fits: ['header'], default: 'header', component: ModelButton, menuItem: ModelItem })
     registerRows(superego)
@@ -54,6 +56,9 @@ export default defineUiExtension({
     action('threads.expand', 'Expand all threads', (c) => c.fold(c.sidebar.folded, false))
   },
 })
+
+/** The list. Once a row's card has shown, the next row's shows at once. */
+const ThreadsSpace = () => <TooltipProvider delay={HOVER_DELAY}><Threads /></TooltipProvider>
 
 function Threads() {
   const machines = useMachines().filter((m) => m.state !== 'disabled')
@@ -197,18 +202,20 @@ function ThreadRow({ machine, thread, selected, row, where, className = '', ...d
   return (
     <ContextMenu.Root>
       <ContextMenu.Trigger>
-        <ListItem selected={selected} leading={<span className="threads__lead">{LEADS.has(shape) && <StatusGlyph status={thread.status} quiet={thread.quiet} />}</span>} draggable {...data} data-depth={level}
-          {...(row?.fold ? { 'aria-expanded': !row.folded } : {})} onKeyDown={(event) => rowKeys(event, row, setFold)}
-          className={`${level ? 'threads-child' : ''} ${row?.folded ? 'is-folded' : ''} ${className}`} {...(level ? { style: { '--depth': level } as CSSProperties } : {})}
-          onDragStart={(event) => { event.dataTransfer.setData(DRAGGED, JSON.stringify(at)); event.dataTransfer.effectAllowed = 'move' }}
-          trailing={(row?.folded && rolledUp([thread, ...row.tucked])) || <RowEnd thread={thread} />}
-          onClick={() => select(at)}>
-          <span className={`threads__title ${unread(thread) ? 'is-unread' : ''}`}>{thread.title}</span>
-          {row?.fold && <Caret fold={row.fold} folded={row.folded} tucked={row.tucked} label={thread.title} />}
-          {on && !where && <PushPinIcon className="threads__pin" size={11} weight="fill" aria-label="Pinned" />}
-          <Slot name="thread.badge" props={{ machine, thread }} />
-          {where && <em className="threads-pinned__where">{where}</em>}
-        </ListItem>
+        <HoverCard card={<ThreadCard machine={machine} thread={thread} {...(row?.folded ? { tucked: row.tucked } : {})} />}>
+          <ListItem selected={selected} leading={<span className="threads__lead">{LEADS.has(shape) && <StatusGlyph status={thread.status} quiet={thread.quiet} />}</span>} draggable {...data} data-depth={level}
+            {...(row?.fold ? { 'aria-expanded': !row.folded } : {})} onKeyDown={(event) => rowKeys(event, row, setFold)}
+            className={`${level ? 'threads-child' : ''} ${row?.folded ? 'is-folded' : ''} ${className}`} {...(level ? { style: { '--depth': level } as CSSProperties } : {})}
+            onDragStart={(event) => { event.dataTransfer.setData(DRAGGED, JSON.stringify(at)); event.dataTransfer.effectAllowed = 'move' }}
+            trailing={(row?.folded && rolledUp([thread, ...row.tucked])) || <RowEnd thread={thread} />}
+            onClick={() => select(at)}>
+            <span className={`threads__title ${unread(thread) ? 'is-unread' : ''}`}>{thread.title}</span>
+            {row?.fold && <Caret fold={row.fold} folded={row.folded} tucked={row.tucked} label={thread.title} />}
+            {on && !where && <PushPinIcon className="threads__pin" size={11} weight="fill" aria-label="Pinned" />}
+            <Slot name="thread.badge" props={{ machine, thread }} />
+            {where && <em className="threads-pinned__where">{where}</em>}
+          </ListItem>
+        </HoverCard>
       </ContextMenu.Trigger>
       <ContextMenu.Popup className="threads-row-menu">
         <Menu.Item onClick={run(on ? 'thread.unpin' : 'thread.pin')}>{on ? 'Unpin' : 'Pin'}</Menu.Item>
@@ -417,12 +424,12 @@ function ThreadsRail({ open, sidebarHidden, show }: SpaceRailProps) {
             <div key={group.key} className="threads-rail__group">
               {index > 0 && <div className="threads-rail__sep" />}
               {group.threads.map(({ project, thread }) => (
-                <Tooltip key={`${project.machine.id}/${thread.id}`} side="right" content={<>{thread.title}<small className="threads-rail__tipnote">{statusWord(thread.status, thread.quiet) || ago(thread.activeAt)}</small></>}>
+                <HoverCard key={`${project.machine.id}/${thread.id}`} card={<ThreadCard machine={project.machine} thread={thread} />}>
                   <button className={`threads-rail__dot ${selection?.machine === project.machine.id && selection.thread === thread.id ? 'is-on' : ''} ${project.machine.state !== 'connected' ? 'is-stale' : ''}`}
                     aria-label={`${thread.title}, ${statusLabel(thread.status, thread.quiet)}`} onClick={() => select({ machine: project.machine.id, thread: thread.id })}>
                     <StatusGlyph status={thread.status} quiet={thread.quiet} />
                   </button>
-                </Tooltip>
+                </HoverCard>
               ))}
             </div>
           ))}

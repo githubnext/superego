@@ -19,6 +19,7 @@ export { askText, thisComputer } from '../shared/site-permissions.ts'
 export { describeImage, ImageFrame, TALL, useImageSource } from './images.tsx'
 export { Lightbox } from './lightbox.tsx'
 export { MachineDrift } from './machine-drift.tsx'
+export { SpelledBadges } from './marks.tsx'
 export { Output } from './tool-rows.tsx'
 // What's unread: one rule for the bell, notifications and the counts (see @superego/protocol's status.ts); in the
 // window, as `unreadList` (projects.ts).

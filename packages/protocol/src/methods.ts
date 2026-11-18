@@ -74,8 +74,10 @@ export type ThreadInfo = {
   createdAt: number
   /** When anything last happened in it: a message, or work going on. */
   activeAt: number
-  /** The model its next turn runs with. */
+  /** The model its next turn runs with, by its id (`claude-opus-4-5`). */
   model?: string
+  /** Whose `model` is: pi-ai's provider id (`anthropic`, `openai`). */
+  provider?: string
   /** The model (`provider/model`) and thinking it chose itself, rather than following its profile or the machine's settings. */
   chosen?: { model?: string; thinking?: string }
   /** What it has spent so far, in dollars, as the providers price it. */

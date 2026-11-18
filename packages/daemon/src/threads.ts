@@ -163,7 +163,7 @@ export function createThreads(host: Host, { harness, extensions, profiles }: { h
   const info = (id: string, m: Mounted, without = extensions.withoutFor(id, m.meta)): ThreadInfo => ({
     id, title: m.meta.title || 'New thread', cwd: m.meta.cwd, createdAt: m.meta.createdAt,
     activeAt: Math.max(m.activeAt ?? 0, m.meta.createdAt),
-    ...(m.model ? { model: m.model } : {}), ...(m.cost ? { cost: m.cost } : {}),
+    ...(m.model ? { model: m.model, ...(m.provider ? { provider: m.provider } : {}) } : {}), ...(m.cost ? { cost: m.cost } : {}),
     ...(m.meta.model || m.meta.thinking ? { chosen: { ...(m.meta.model ? { model: m.meta.model } : {}), ...(m.meta.thinking ? { thinking: m.meta.thinking } : {}) } } : {}),
     ...(m.meta.profile ? { profile: m.meta.profile } : {}),
     ...(m.meta.panes?.length ? { panes: m.meta.panes, ...(m.meta.pane ? { pane: m.meta.pane } : {}) } : {}),

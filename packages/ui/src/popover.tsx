@@ -1,6 +1,7 @@
 import type { ReactElement, ReactNode } from 'react'
 import { Popover as Base } from '@base-ui/react/popover'
 import { Tooltip } from '@base-ui/react/tooltip'
+import { HOVER_DELAY } from './hover-card.tsx'
 import { usePortalAttributes } from './portal.tsx'
 
 /**
@@ -13,7 +14,7 @@ export function Popover({ trigger, children, open, onOpenChange, side = 'bottom'
   side?: 'top' | 'bottom' | 'left' | 'right'; align?: 'start' | 'center' | 'end'; tooltip?: ReactNode; hover?: boolean; className?: string
 }) {
   const marked = usePortalAttributes()
-  const opener = <Base.Trigger render={trigger} {...(hover ? { openOnHover: true, delay: 400 } : {})} />
+  const opener = <Base.Trigger render={trigger} {...(hover ? { openOnHover: true, delay: HOVER_DELAY } : {})} />
   return (
     <Base.Root {...(open !== undefined ? { open } : {})} onOpenChange={(next) => onOpenChange?.(next)}>
       {tooltip === undefined ? opener : (

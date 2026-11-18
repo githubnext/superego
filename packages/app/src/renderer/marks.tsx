@@ -1,7 +1,7 @@
 // What an extension draws in the window's own places, in the window's look: a chip among a thread's header chips, a mark
 // on its row in the sidebar, a chip under a sent message, a button in the rail. And what extensions say of a thread (its
 // facts), read typed.
-import type { ComponentProps, ReactNode } from 'react'
+import { createContext, useContext, type ComponentProps, type ReactNode } from 'react'
 import { IconButton } from '@superego/ui'
 import type { Json, ThreadInfo } from '@superego/protocol'
 
@@ -12,9 +12,14 @@ export const HeaderChip = ({ children, title }: { children: ReactNode; title?: s
  * In `thread.badge`: a mark on a thread's row in the sidebar, an icon about 12px (`size={12}`). `label` says what it
  * means, to a screen reader and in its tooltip (`title` for a tooltip of its own).
  */
-export const ThreadBadge = ({ children, label, title }: { children: ReactNode; label: string; title?: string }) => (
-  <span className="thread-badge" title={title ?? label} role="img" aria-label={label}>{children}</span>
-)
+export function ThreadBadge({ children, label, title }: { children: ReactNode; label: string; title?: string }) {
+  if (useContext(Spelled)) return <span className="thread-badge is-spelled">{children}<span>{title ?? label}</span></span>
+  return <span className="thread-badge" title={title ?? label} role="img" aria-label={label}>{children}</span>
+}
+
+/** Where a thread's marks are spelled out (a card of what it is): each its icon and what its tooltip says. */
+const Spelled = createContext(false)
+export const SpelledBadges = ({ children }: { children: ReactNode }) => <Spelled.Provider value>{children}</Spelled.Provider>
 
 /** A chip like a file's under a message (a `sentWith` item, say): an icon, a name, and a tooltip. */
 export const Chip = ({ icon, children, title }: { icon: ReactNode; children: ReactNode; title?: string }) => (

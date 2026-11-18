@@ -218,6 +218,12 @@ button, summary { -webkit-user-select: none; user-select: none; }
 .superego-context { display: contents; }
 .superego-tooltip { background: var(--superego-text); color: var(--superego-bg); font-size: var(--superego-text-sm); border-radius: 6px; padding: 5px 8px; white-space: nowrap; transition: opacity .1s; }
 .superego-tooltip[data-starting-style], .superego-tooltip[data-ending-style] { opacity: 0; }
+/* A card of what something is, while it's pointed at: only to look at, so it takes no pointer. */
+.superego-hover-card {
+  width: max-content; max-width: 300px; padding: 8px 10px; border-radius: 10px; background: var(--superego-raised);
+  box-shadow: var(--superego-shadow-float); font-size: var(--superego-text-sm); pointer-events: none; transition: opacity .1s;
+}
+.superego-hover-card[data-starting-style], .superego-hover-card[data-ending-style] { opacity: 0; }
 
 /* Focus: the region holding it wears the ring (the app's), and a text field its own. Nothing else does, but a small
    control reached from the keyboard: one solid outline in the accent colour, inside its edge, so nothing clips it. */
