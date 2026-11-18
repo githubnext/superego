@@ -219,6 +219,10 @@ describe('what it draws', () => {
     expect(chip).toContain('2 servers')
     expect(chip).toContain('is-troubled')
     expect(html(createElement(Chip, { place: 'header', machine, thread: thread() }))).toBe('')
+    // With none, it says how many were left out, not "0 servers".
+    const none = html(createElement(Chip, { place: 'header', machine, thread: thread({ servers: [], left: [{ name: 'github', why: 'missing' }, { name: 'linear', why: 'off' }] }) }))
+    expect(none).toContain('2 left out')
+    expect(none).not.toContain('0 servers')
     const drawn = await ui.render({ slot: 'details.section', thread: where.thread })
     const details = drawn.container.innerHTML
     await drawn.unmount()

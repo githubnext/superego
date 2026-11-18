@@ -34,6 +34,7 @@ import { BRING_FORWARD, focusRegion } from './focus.ts'
 import { DEFAULT_SHARE, END, endShare, frontOf, GAP, roomFor, scrollWidths, stackWidths } from './pane-layout.ts'
 import { maximizedPane, maximizedStore, restoresOn } from './maximized.ts'
 import { useShortcut } from './keys.ts'
+import { OverflowBox, OverflowRow, PRIORITY, useOverflowItem } from './overflow.tsx'
 import { WebViewPane } from './web-view.tsx'
 
 /** The strip's switch between the layouts. */
@@ -302,45 +303,58 @@ function PaneStrip({ tabs, current, stacked, narrow, onShow }: { tabs: StripTab[
   const dispatch = useRegistry().router.dispatch
   const slot = useContext(StripSlot)
   const total = tabs.reduce((sum, tab) => sum + tab.width, 0) || 1
+  const layout = (next: PaneLayout) => void dispatch('pane.layout', { layout: next }, { source: 'strip' }).catch((error) => console.error(error))
+  // In the title bar, short of room, its parts give way (overflow.tsx): the map, then the switch, then the other tabs.
+  const inBar = Boolean(slot)
+  const mapRef = useOverflowItem('strip:map', inBar && { priority: PRIORITY.map })
   const strip = (
     <div className={`strip ${narrow ? 'strip--narrow' : ''}`} role="tablist" aria-label="The thread and its panes">
       {/* Stacked, the thread stands on its own beside the stack's tabs: one tablist still, in the same order. */}
       {(stacked ? [tabs.filter((tab) => !tab.id), tabs.filter((tab) => tab.id)] : [tabs]).map((group, i) => (
         <div key={i} className={`strip__tabs ${stacked && i === 0 ? 'strip__tabs--thread' : ''}`}>
-          {group.map((tab) => {
-          const Icon = tab.kind?.icon
-          // The whole of what the tab may cut short: a file's path, a page's address, or its title.
-          const { path, url } = (tab.pane?.params ?? {}) as { path?: string; url?: string }
-          const full = path ?? url ?? tab.label
-          return (
-            <button key={tab.id ?? 'thread'} type="button" role="tab" aria-selected={tab.id === current}
-              className={`strip__tab ${tab.id === current ? 'is-focused' : tab.away ? 'is-away' : 'is-shown'}`}
-              title={full}
-              onClick={() => onShow(tab.pane)}>
-              {Icon && <Icon size={14} aria-hidden />}
-              <span className={`strip__label ${isFile(tab.kind, tab.pane) ? 'strip__label--file' : ''}`}>{tab.label}</span>
-              {tab.id && tab.note && <span className="strip__note">{tab.note}</span>}
-              {tab.away === 'right' && <ArrowRightIcon className="strip__away" size={11} aria-hidden />}
-            </button>
-          )
-        })}
+          {group.map((tab) => <StripTabButton key={tab.id ?? 'thread'} tab={tab} focused={tab.id === current} inBar={inBar} onShow={onShow} />)}
         </div>
       ))}
       {!narrow && (
         <>
           {/* The row in small: each column a bar as wide as it is, the ones in view darker. */}
           {!stacked && (
-            <span className="strip__map" aria-hidden>
+            <span className="strip__map" aria-hidden ref={mapRef}>
               {tabs.map((tab, i) => <i key={i} className={tab.shown >= 0.5 ? 'is-in' : ''} style={{ width: Math.max(4, Math.round((tab.width / total) * 52)) }} />)}
             </span>
           )}
-          <SegmentedControl label="Pane layout" className="strip__layout" options={LAYOUTS} value={stacked ? 'stack' : 'scroll'}
-            onChange={(next) => void dispatch('pane.layout', { layout: next }, { source: 'strip' })} />
+          <OverflowBox id="strip:layout" priority={PRIORITY.layout} className="strip__layout-item"
+            row={<OverflowRow icon={stacked ? ColumnsPlusRightIcon : CardsIcon}>{stacked ? 'Scroll panes' : 'Stack panes'}</OverflowRow>}
+            select={() => layout(stacked ? 'scroll' : 'stack')}>
+            <SegmentedControl label="Pane layout" className="strip__layout" options={LAYOUTS} value={stacked ? 'stack' : 'scroll'} onChange={layout} />
+          </OverflowBox>
         </>
       )}
     </div>
   )
   return slot ? createPortal(strip, slot) : strip
+}
+
+/** A column's tab: in the title bar, short of room, one not focused shrinks to its glyph, then goes to the ···. */
+function StripTabButton({ tab, focused, inBar, onShow }: { tab: StripTab; focused: boolean; inBar: boolean; onShow(pane: Pane | undefined): void }) {
+  const Icon = tab.kind?.icon
+  // The whole of what the tab may cut short: a file's path, a page's address, or its title.
+  const { path, url } = (tab.pane?.params ?? {}) as { path?: string; url?: string }
+  const full = path ?? url ?? tab.label
+  const ref = useOverflowItem(`tab:${tab.id ?? 'thread'}`, inBar && !focused && {
+    priority: PRIORITY.tabs, compactAt: PRIORITY.tabsCompact, row: <OverflowRow icon={Icon}>{tab.label}</OverflowRow>,
+  })
+  return (
+    <button ref={ref} type="button" role="tab" aria-selected={focused}
+      className={`strip__tab ${focused ? 'is-focused' : tab.away ? 'is-away' : 'is-shown'}`}
+      title={full}
+      onClick={() => onShow(tab.pane)}>
+      {Icon && <Icon size={14} aria-hidden />}
+      <span className={`strip__label overflow-part ${isFile(tab.kind, tab.pane) ? 'strip__label--file' : ''}`}>{tab.label}</span>
+      {tab.id && tab.note && <span className="strip__note overflow-part">{tab.note}</span>}
+      {tab.away === 'right' && <ArrowRightIcon className="strip__away" size={11} aria-hidden />}
+    </button>
+  )
 }
 
 /** What a pane says on its tab in the strip (Changes: +3 −1), by pane. */

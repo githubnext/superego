@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- The title bar fits any window: short of room, its chips and buttons (the model, MCP servers, the profile, pin,
+  archive, an extension's) move into a ··· menu at its end, the panes' tabs shrink to icons and then follow, and they
+  come back as the window widens. Nothing in it overlaps or wraps any more.
+- The MCP chip says how many servers were left out when a thread has none ("2 left out"), not "0 servers".
+- Extensions: a `header` view can say what its row in the title bar's ··· menu shows (`menuItem`).
+
 ## 0.1.7
 
 ### Fixes

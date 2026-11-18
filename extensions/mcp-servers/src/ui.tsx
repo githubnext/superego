@@ -38,7 +38,7 @@ export default defineUiExtension({
       body: (c) => { const loaded = loadedBy(c); return loaded?.length ? <SearchBody call={c} loaded={loaded} /> : undefined },
       phrase: (k) => k === 1 ? 'looked for tools' : `looked for tools ${k}×`,
     })
-    superego.view('mcp-servers.chip', { title: 'MCP servers', icon: PlugIcon, context: 'thread', fits: ['header'], default: 'header', component: Chip })
+    superego.view('mcp-servers.chip', { title: 'MCP servers', icon: PlugIcon, context: 'thread', fits: ['header'], default: 'header', component: Chip, menuItem: MenuItem })
     superego.slot('details.section', Details)
     superego.slot('composer.above', SignInNotice, { order: 50 })
   },
@@ -135,15 +135,31 @@ export function ServerList({ servers }: { servers: ThreadServers }) {
 /** Whether any of a thread's servers wants a look: one failed or needing sign-in, or one left out. */
 const troubled = (servers: ThreadServers) => Boolean(servers.left?.length) || servers.servers.some((s) => s.state === 'failed' || s.state === 'needs-sign-in')
 
+/**
+ * What the chip says: how many servers the thread has ("3 servers"); with none, how many it would have had, left out
+ * (a profile naming servers this machine hasn't, or has off), rather than "0 servers".
+ */
+export function chipLabel(servers: ThreadServers) {
+  const count = servers.servers.length
+  const left = servers.left?.length ?? 0
+  if (!count && left) return `${left} left out`
+  return count === 1 ? '1 server' : `${count} servers`
+}
+
+/** The chip's row in the title bar's ··· menu, when there's no room for it. */
+function MenuItem({ thread }: ViewProps<'thread'>) {
+  const servers = serversOf(thread)
+  return <>MCP: {servers ? chipLabel(servers) : 'none'}</>
+}
+
 /** In the header: "3 servers" beside the plug, opening to its servers. */
 export function Chip({ thread }: ViewProps<'thread'>) {
   const servers = serversOf(thread)
   if (!servers) return null
-  const count = servers.servers.length
-  const label = count === 1 ? '1 server' : `${count} servers`
+  const label = chipLabel(servers)
   return (
     <Popover tooltip="MCP servers" trigger={
-      <button type="button" className={`mcp-chip ${troubled(servers) ? 'is-troubled' : ''}`} aria-label={`MCP servers: ${count}`}>
+      <button type="button" className={`mcp-chip ${troubled(servers) ? 'is-troubled' : ''}`} aria-label={`MCP servers: ${label}`}>
         <PlugIcon size={12} aria-hidden /> {label}
       </button>
     }>

@@ -18,7 +18,7 @@ import {
   type MachineEntry, type Pin, type Project, type ShownRow, type ShownSection, type Sort, type SpaceRailProps, type WindowContext,
 } from '@superego/app/ui'
 import { rollup, statusLabel, statusShape, statusWord, unread, type ThreadInfo } from '@superego/protocol'
-import { CaretRightIcon, ChatsIcon, ContextMenu, DotsThreeIcon, Glyph, IconButton, List, ListItem, Menu, PlusIcon, PushPinIcon, StatusGlyph, StatusWord, Tooltip, TooltipProvider } from '@superego/ui'
+import { CaretRightIcon, ChatsIcon, ContextMenu, DotsThreeIcon, Glyph, IconButton, List, ListItem, Menu, PlusIcon, PushPinIcon, SparkleIcon, StatusGlyph, StatusWord, Tooltip, TooltipProvider } from '@superego/ui'
 import './styles.css'
 import { ago } from './ago.ts'
 import { registerLinks, registerRows } from './rows.tsx'
@@ -40,7 +40,7 @@ export default defineUiExtension({
   setup(superego) {
     superego.view('threads.list', { title: 'Threads', icon: ChatsIcon, context: 'window', fits: ['space'], default: 'space', component: Threads, railButton: ThreadsRail })
     superego.view(DETAILS, { title: 'Thread details', context: 'thread', fits: ['beside', 'pane'], component: DetailsPane })
-    superego.view('threads.model', { title: 'Model', context: 'thread', fits: ['header'], default: 'header', component: ModelButton })
+    superego.view('threads.model', { title: 'Model', icon: SparkleIcon, context: 'thread', fits: ['header'], default: 'header', component: ModelButton, menuItem: ModelItem })
     registerRows(superego)
     registerLinks(superego)
     const action = (id: string, title: string, run: (c: WindowContext) => void, keys?: string) =>
@@ -437,6 +437,11 @@ function ThreadsRail({ open, sidebarHidden, show }: SpaceRailProps) {
  * In the title bar: the model the thread runs with, as a button that shows or hides its details (what it runs with,
  * spent and touched), lit while they're shown.
  */
+/** The model's row in the title bar's ··· menu, when there's no room for its button. */
+function ModelItem({ thread }: { thread: ThreadInfo }) {
+  return <>Model: {thread.model?.split('/').at(-1) ?? 'none'}</>
+}
+
 function ModelButton({ thread }: { thread: ThreadInfo }) {
   const [on, setOn] = usePlacement(DETAILS, 'beside')
   const keys = useShortcut(DETAILS)

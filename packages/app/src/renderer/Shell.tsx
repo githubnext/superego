@@ -25,6 +25,7 @@ import { refreshFontsSoon } from './fonts.ts'
 import { AuthNotice } from './AuthNotice.tsx'
 import { ThreadView } from './ThreadView.tsx'
 import { ThreadTitle, ThreadTools } from './thread-header.tsx'
+import { Overflow, OverflowMenu, OverflowProvider } from './overflow.tsx'
 import { ArchiveButton, PinButton, UnarchiveButton } from './thread-actions.tsx'
 import { StripSlot } from './panes.tsx'
 import { useSidebarEdge } from './sidebar-edge.tsx'
@@ -94,6 +95,8 @@ export function Shell() {
   const threadPlaced = useLayout(where).placed
   // Where the thread's columns show their tabs: in the title bar, wide.
   const [strip, setStrip] = useState<HTMLElement | null>(null)
+  // What the title bar gives way with, short of room (overflow.tsx).
+  const [overflow] = useState(() => new Overflow())
   useEffect(() => { setDrawer(false); setSheet(false); setPanePicker(false) }, [selection?.machine, selection?.thread, narrow])
   // The installed fonts take seconds to list: read them in the background, for Settings' font pickers.
   useEffect(refreshFontsSoon, [])
@@ -133,11 +136,12 @@ export function Shell() {
   // says about itself); down the left a rail (what extensions put there, Settings) and the sidebar beside it; the rest holds the
   // thread and its panes. Narrow: one column under a bar of its own, the sidebar a drawer.
   return (
+    <OverflowProvider value={narrow ? null : overflow}>
     <div className={`app ${sideOpen ? 'has-sidebar' : ''} ${narrow ? 'is-narrow' : ''} ${drawer ? 'has-drawer' : ''} ${window.superego.web ? 'is-web' : ''} ${sidebarEdge.hiding ? 'is-hiding' : ''}`}
       style={narrow ? undefined : sidebarEdge.style}>
       {narrow && spaces.length > 0 && drawer && <div className="app__scrim" onClick={() => setDrawer(false)} />}
       {!narrow && (
-        <header className="app__drag app__titlebar">
+        <header className="app__drag app__titlebar" ref={overflow.setBar}>
           <BackForward />
           <PlacedViews place="titlebar" frame={withContextMenu('titlebar')} />
           {tab === 'settings'
@@ -147,6 +151,7 @@ export function Shell() {
             <span className="app__strip" ref={setStrip} />
             {tab !== 'settings' && selection && thread && machine && <ThreadTools machine={machine} thread={thread} />}
           </span>
+          <OverflowMenu />
         </header>
       )}
       <div className="app__body">
@@ -224,6 +229,7 @@ export function Shell() {
       {log && <ActionLog router={registry.router.router} onClose={() => setLog(false)} />}
       {newThread.start && <NewThreadDialog start={newThread.start} onClose={newThread.close} />}
     </div>
+    </OverflowProvider>
   )
 }
 

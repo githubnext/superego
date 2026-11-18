@@ -13,14 +13,17 @@ import type { BehaviourSlot, SlotProps, View, ViewProps } from './extension-api.
 import { paneKind } from './lookups.ts'
 import { scopeOf, seenIn, useRegistry, type Owned, type Registry, type Where } from './registry.tsx'
 
-/** Draw every component in `slot`, with `props`. */
-export function Slot<S extends BehaviourSlot>({ name, props }: { name: S; props: SlotProps[S] }) {
+/** Draw every component in `slot`, with `props`; each in its `frame`, if given, by a key of its own. */
+export function Slot<S extends BehaviourSlot>({ name, props, frame }: { name: S; props: SlotProps[S]; frame?: (key: string, drawn: ReactNode) => ReactNode }) {
   const registry = useRegistry()
   useSyncExternalStore(registry.subscribe, () => registry.version)
   const { machine, thread } = props as { machine?: MachineEntry; thread?: ThreadInfo }
   const entries = seenIn(registry.slots[name] as Owned<{ component: ComponentType<SlotProps[S]> }>[], machine && thread ? { machine: machine.id, thread } : undefined)
-  return <>{entries.map(({ component: Component, owner }, index) =>
-    <Contained key={`${owner.profile ?? ''}/${owner.extension}-${index}`} name={owner.extension} inline={name === 'header.chips' || name === 'thread.badge' || name === 'editor.bar'}><Component {...props} /></Contained>)}</>
+  return <>{entries.map(({ component: Component, owner }, index) => {
+    const key = `${owner.profile ?? ''}/${owner.extension}-${index}`
+    const drawn = <Contained key={key} name={owner.extension} inline={name === 'header.chips' || name === 'thread.badge' || name === 'editor.bar'}><Component {...props} /></Contained>
+    return frame ? <Fragment key={key}>{frame(key, drawn)}</Fragment> : drawn
+  })}</>
 }
 
 /** The user's layout (`app.layout`), as stored; anything not shaped as one is none. */
@@ -73,7 +76,7 @@ export const ViewScopeProvider = ViewScope.Provider
 
 /** Draw the views in a place: a thread's (`machine`, `thread`), or the window's; each in its `frame`, if given (its menu). */
 export function PlacedViews({ place, machine, thread, frame }: {
-  place: Place; machine?: MachineEntry; thread?: ThreadInfo; frame?: (view: View & { id: string }, drawn: ReactNode) => ReactNode
+  place: Place; machine?: MachineEntry; thread?: ThreadInfo; frame?: (view: Registry['views'][number], drawn: ReactNode) => ReactNode
 }) {
   const registry = useRegistry()
   const where = machine && thread ? { machine: machine.id, thread } : undefined

@@ -35,7 +35,7 @@ export default defineUiExtension({
       component: (props) => <EgoButton {...props} chosen={chosen.use()} beckon={welcoming.use()} />,
     })
     superego.view('ego.machine', { title: 'Machine', context: 'thread', fits: ['header'], default: 'header', component: MachineSwitch })
-    superego.view('ego.clear', { title: 'Clear', context: 'thread', fits: ['header'], default: 'header', component: ClearButton })
+    superego.view('ego.clear', { title: 'Clear', icon: BroomIcon, context: 'thread', fits: ['header'], default: 'header', component: ClearButton })
     superego.slot('onboarding', () => <Welcome welcoming={welcoming} />)
     superego.composer.sentWith({
       read: (blocks) => { const at = outsideBlocks(blocks); return at.length ? { items: [true], blocks: at } : undefined },

@@ -58,7 +58,8 @@
 .mcp-call__loaded code { font: var(--superego-text-sm) var(--superego-mono); }
 
 /* The header's chip, and the list it opens to (the same in thread details). */
-.mcp-chip { display: inline-flex; align-items: center; gap: 4px; font: inherit; border: 0; cursor: default; }
+.mcp-chip { display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 6px; border: 0; border-radius: var(--superego-radius); background: none; font: inherit; font-size: var(--superego-text-sm); color: var(--superego-muted); white-space: nowrap; cursor: default; }
+.mcp-chip:hover, .mcp-chip[data-popup-open] { background: var(--superego-hover); color: var(--superego-text); }
 .mcp-chip.is-troubled { color: var(--superego-status-blocked); }
 .mcp-chip__popup { min-width: 240px; max-width: 360px; padding: 4px 2px; }
 .mcp-chip__title { font-size: var(--superego-text-xs); font-weight: 500; color: var(--superego-muted); margin: 0 0 6px; }

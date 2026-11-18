@@ -66,22 +66,22 @@
 .app__titlebar { position: relative; height: var(--superego-titlebar); display: flex; align-items: center; gap: var(--superego-space-3); min-width: 0; padding: 0 12px 0 84px; border-bottom: 1px solid var(--superego-line); container-type: inline-size; overflow: hidden; }
 .app.has-sidebar:has(.app__sidebar:not(:empty)) .app__titlebar { padding-left: calc(var(--superego-rail) + var(--superego-sidebar) + 1px + var(--superego-space-3)); }
 .app.has-sidebar:has(.app__sidebar:not(:empty)) .app__titlebar::before { content: ''; position: absolute; top: 0; bottom: 0; left: 0; width: calc(var(--superego-rail) + var(--superego-sidebar)); background: var(--superego-chrome); border-right: 1px solid var(--superego-line); pointer-events: none; }
-/* Short of room, the bar gives way in turn. Its end takes up to 55% of it: in there, where the thread came from and
-   its branch give way first (gone when tight), then the tabs and the model; buttons keep their size. The title takes
-   the rest, the project kept short beside it. Nothing makes the window wider: the bar is as wide as the window,
-   whatever it holds. Nor does anything in it come and go with the pointer: what fits shows. */
+/* Short of room, the bar gives way in one order (overflow.tsx): its items keep their size and go, in turn, to the ···
+   at its end; the title takes what's left, truncating. Nothing in it shrinks, wraps or overlaps another, nor makes the
+   window wider; nor does anything come and go with the pointer: what fits shows. */
 .titlebar__crumb { display: flex; align-items: center; gap: 2px; min-width: 0; flex: 0 1 auto; font-weight: 500; }
 .titlebar__seg { display: flex; align-items: center; gap: 6px; height: 26px; padding: 0 8px; border-radius: 6px; white-space: nowrap; min-width: 0; }
-.titlebar__project { color: var(--superego-muted); flex: none; max-width: 30%; overflow: hidden; text-overflow: ellipsis; display: block; line-height: 26px; }
+.titlebar__seg > * { flex: none; }
+.titlebar__project { color: var(--superego-muted); flex: none; max-width: 180px; overflow: hidden; text-overflow: ellipsis; display: block; line-height: 26px; }
 .titlebar__dot { margin: 0 5px; color: var(--superego-faint); }
 .titlebar__sep { color: var(--superego-faint); font-size: var(--superego-text-sm); }
 .titlebar__title { color: var(--superego-text); }
-.titlebar__title .thread__title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.titlebar__title > .thread__title { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .titlebar__title > .superego-status { font-size: 14px; }
 .titlebar__word { font-size: var(--superego-text-sm); }
-/* Rename and archive: quiet buttons beside the title. */
-.titlebar__title .titlebar__action { flex: none; width: 22px; height: 22px; min-height: 22px; margin-left: -2px; border-radius: 5px; box-shadow: none; background: none; color: var(--superego-faint); }
-.titlebar__title .titlebar__action + .titlebar__action { margin-left: -4px; }
+/* Rename, pin and archive: quiet buttons beside the title. */
+.titlebar__actions { display: flex; align-items: center; margin-left: -2px; }
+.titlebar__title .titlebar__action { flex: none; width: 22px; height: 22px; min-height: 22px; border-radius: 5px; box-shadow: none; background: none; color: var(--superego-faint); }
 .titlebar__title .titlebar__action:hover { background: var(--superego-hover); color: var(--superego-text); }
 .titlebar__title .thread__pin.is-on { color: var(--superego-muted); }
 .titlebar__field { font: inherit; font-weight: 500; color: inherit; min-width: 0; width: min(480px, 50vw); padding: 2px 6px; margin-left: -7px; border: 1px solid var(--superego-field-edge); border-radius: 5px; background: var(--superego-field-bg); outline: none; }
@@ -94,16 +94,33 @@
 .app.has-sidebar:has(.app__sidebar:not(:empty)) .app__history { position: absolute; top: 0; bottom: 0; margin: 0; right: calc(100% - var(--superego-rail) - var(--superego-sidebar) + 10px); }
 .app__history .superego-icon-button { width: 26px; height: 26px; min-height: 26px; border-radius: 6px; box-shadow: none; background: none; color: var(--superego-muted); }
 .app__history .superego-icon-button:hover:not(:disabled) { background: var(--superego-hover); color: var(--superego-text); }
-.app__titlebar-end { margin-left: auto; display: flex; align-items: center; gap: var(--superego-space-2); min-width: 0; flex: none; max-width: 55cqi; }
-.thread__chips { display: flex; align-items: center; min-width: 0; max-width: 26cqi; overflow: hidden; font-size: var(--superego-text-sm); color: var(--superego-faint); white-space: nowrap; }
-/* Tight, the title keeps the room: where it came from and its branch go. */
-@container (max-width: 720px) { .thread__chips { display: none; } }
+.app__titlebar-end { margin-left: auto; display: flex; align-items: center; gap: var(--superego-space-2); flex: none; white-space: nowrap; }
 @container (max-width: 520px) { .titlebar__archived { display: none; } }
-.header__chip { flex: 0 1 auto; min-width: 4em; overflow: hidden; text-overflow: ellipsis; }
+/* An item of the bar: its own width, never squeezed. Gone, it's still drawn, at the bar's end under the ···, unseen: it
+   measures as it would show, and a click on it from the menu opens what it opens there. */
+.titlebar__item { display: inline-flex; align-items: center; flex: none; white-space: nowrap; }
+/* One that draws nothing (a view with nothing to say for this thread) takes no room, nor a gap. */
+.titlebar__item:empty, .titlebar__item:has(> .superego-context:empty):not(:has(> :not(.superego-context))) { display: none; }
+.app__titlebar [data-out] { position: absolute; top: 50%; right: 12px; translate: 0 -50%; visibility: hidden; pointer-events: none; }
+/* A tab shrunk: its glyph alone (its parts out of the flow, still measured). */
+.app__titlebar [data-compact]:not([data-out]) .overflow-part { position: absolute; visibility: hidden; }
+/* A track with all its tabs gone shows nothing (still laid out, so they measure where they are). */
+.app__strip .strip__tabs:not(:has(> :not([data-out]))) { padding: 0; margin: 0; background: none; }
+.titlebar__more { flex: none; display: flex; }
+.titlebar__more[hidden] { display: none; }
+.titlebar__more-button { width: 28px; height: 28px; min-height: 28px; border-radius: 6px; box-shadow: none; background: none; color: var(--superego-muted); }
+.titlebar__more-button:hover, .titlebar__more-button[data-popup-open] { background: var(--superego-hover); color: var(--superego-text); }
+.overflow-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.overflow-row > svg { flex: none; color: var(--superego-muted); }
+.overflow-row__blank { flex: none; width: 14px; }
+.overflow-row__label { min-width: 0; max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.header__chip { white-space: nowrap; }
+.app__titlebar :is(.thread__tools, .thread__chips) { display: contents; }
+.thread__chips { font-size: var(--superego-text-sm); color: var(--superego-faint); }
+.app__titlebar .thread__chips .titlebar__item { font-size: var(--superego-text-sm); color: var(--superego-faint); }
 /* A mark after a thread's title in the sidebar (the thread.badge slot): an icon, quiet, kept while the title truncates. */
 .thread-badge { flex: none; display: inline-flex; align-items: center; color: var(--superego-muted); }
-.thread__parent { display: flex; align-items: baseline; gap: 4px; min-width: 6em; }
-.header__chip + .header__chip::before { content: '·'; margin: 0 6px; }
+.thread__parent { display: flex; align-items: baseline; gap: 4px; }
 /* The profile: its name, pointed at a card of what it is. */
 .thread__profile { display: inline-flex; align-items: center; gap: 4px; font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: default; }
 .thread__profile > svg { flex: none; }
@@ -520,7 +537,7 @@ button.app__mobiletitle > svg { flex: none; color: var(--superego-faint); }
 .thread-sheet__title > .superego-status { flex: none; }
 .thread-sheet__tools { display: flex; align-items: center; gap: var(--superego-space-2); }
 .thread-sheet__tools .thread__tools { flex: 1; display: flex; flex-wrap: wrap; row-gap: var(--superego-space-2); }
-.thread-sheet__tools .thread__chips { flex: 1 0 100%; max-width: none; white-space: normal; }
+.thread-sheet__tools .thread__chips { flex: 1 0 100%; display: flex; flex-wrap: wrap; gap: 4px var(--superego-space-3); }
 .thread-sheet__tools .thread__chips:empty { display: none; }
 .thread-sheet h5 { margin: 0 0 6px; font-size: var(--superego-text-xs); font-weight: 500; color: var(--superego-muted); }
 .thread-sheet__panes { display: flex; flex-direction: column; align-items: stretch; }
@@ -559,7 +576,6 @@ button.app__mobiletitle > svg { flex: none; color: var(--superego-faint); }
 
 .thread__tools { display: inline-flex; align-items: center; gap: var(--superego-space-2); flex: 0 1 auto; min-width: 0; }
 .thread__tools > * { flex: none; }
-.thread__tools > .thread__chips { flex: 0 1000 auto; }
 .thread-sheet .thread__archive, .thread-sheet .thread__pin, .app__titlebar .thread__panes { width: 28px; height: 28px; min-height: 28px; border-radius: 6px; box-shadow: none; background: none; color: var(--superego-muted); }
 .thread-sheet .thread__archive:hover, .thread-sheet .thread__pin:hover, .app__titlebar .thread__panes:hover { background: var(--superego-hover); color: var(--superego-text); }
 
@@ -826,13 +842,13 @@ a.pane-header__url:hover { color: var(--superego-accent); }
 .strip__map i { display: block; height: 8px; border-radius: 2px; background: light-dark(rgb(0 0 0 / .1), rgb(255 255 255 / .12)); }
 .strip__map i.is-in { background: light-dark(rgb(0 0 0 / .32), rgb(255 255 255 / .36)); }
 /* Wide, the strip sits in the title bar: the tabs on a quiet track, the focused one raised. */
-/* Short of room, the tabs shrink to their icons, then the track. */
-.app__strip { display: flex; min-width: 0; }
+/* Short of room, the tabs not focused shrink to their icons, then go to the bar's ··· (overflow.tsx). */
+.app__strip { display: flex; flex: none; }
 .app__strip:empty { display: none; }
-.app__strip .strip { flex: 0 1 auto; min-width: 0; height: auto; padding: 0; border-bottom: 0; gap: 4px; }
-.app__strip .strip__tabs { flex: 0 1 auto; min-width: 44px; padding: 2px; border-radius: 8px; background: var(--superego-fill); }
-.app__strip .strip__tabs--thread { flex: none; min-width: 0; margin-right: 4px; }
-.app__strip .strip__tab { padding: 0 9px; color: var(--superego-muted); overflow: hidden; }
+.app__strip .strip { flex: none; height: auto; padding: 0; border-bottom: 0; gap: 4px; }
+.app__strip .strip__tabs { flex: none; overflow: visible; padding: 2px; border-radius: 8px; background: var(--superego-fill); }
+.app__strip .strip__tabs--thread { margin-right: 4px; }
+.app__strip .strip__tab { flex: none; padding: 0 9px; color: var(--superego-muted); }
 .app__strip .strip__tab.is-focused { background: var(--superego-raised); color: var(--superego-text); box-shadow: 0 0 0 .5px light-dark(rgb(0 0 0 / .12), rgb(255 255 255 / .08)), 0 1px 2px light-dark(rgb(0 0 0 / .08), rgb(0 0 0 / .3)); }
 .app__strip .strip__tab.is-away { color: var(--superego-faint); }
 .app__strip .strip__tab:not(.is-focused):hover { background: var(--superego-hover); color: var(--superego-text); }

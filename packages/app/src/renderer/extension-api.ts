@@ -93,6 +93,12 @@ export type View<C extends ViewContext = ViewContext> = {
   /** Order among the views in a place (100 when unset; then as registered); the user's layout comes first. */
   order?: number
   component: ComponentType<ViewProps<C>>
+  /**
+   * In the `header`: what its row in the title bar's ··· menu says, after its icon, when the bar has no room for it: its
+   * name and state, "Model: claude-opus-5-5". Choosing the row clicks the view as drawn (its menu or popover opens from
+   * the ···). Unset: its title, and the text it shows.
+   */
+  menuItem?: ComponentType<ViewProps<C>>
   /** As a `space`: what it draws in the rail instead of a button with its icon (the sidebar hidden, a list as dots, say). */
   railButton?: ComponentType<SpaceRailProps>
   /**
