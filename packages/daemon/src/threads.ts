@@ -16,6 +16,7 @@ import { titleOf } from './names.ts'
 import type { ProfileHost } from './profile-host.ts'
 import { findProfile, profileThere, relocated, type ProfileRef } from './profiles.ts'
 import { lastRun, recapOf } from './recap.ts'
+import { opsWithoutPixels, withoutPixels } from './window-images.ts'
 
 type Usage = { cost?: { total?: number } }
 /** Everything a thread spent: every model's answers and every tool's own usage. */
@@ -714,7 +715,16 @@ export function createThreads(host: Host, { harness, extensions, profiles }: { h
     // A cleared thread's history starts where it was cleared.
     const start = m.meta.cleared ?? 0
     const entries = [...page.items].reverse().filter((e) => Number(e.id) >= start)
-    return { entries, more: page.next !== undefined && entries.length === page.items.length }
+    return { entries: withoutPixels(entries), more: page.next !== undefined && entries.length === page.items.length }
+  }
+
+  /** An image block of an entry of a thread's transcript (its `model`'s `message`th message, its `block`th block). */
+  async function imageBlock(id: string, entryId: number, message: number, block: number) {
+    const m = await get(id)
+    const { items: [entry] } = await m.conversation.entries({ minEntryId: entryId as EntryId, maxEntryId: entryId as EntryId }, 1, undefined, context)
+    const content = (entry?.model?.[message] as { content?: unknown } | undefined)?.content
+    const found = Array.isArray(content) ? content[block] as { type?: unknown; data?: unknown; mimeType?: unknown } | undefined : undefined
+    return found?.type === 'image' && typeof found.data === 'string' && typeof found.mimeType === 'string' ? { data: found.data, mimeType: found.mimeType } : undefined
   }
 
   /**
@@ -728,14 +738,15 @@ export function createThreads(host: Host, { harness, extensions, profiles }: { h
     const stop = () => watch.stop()
     const watches = transcriptWatches.get(id) ?? new Set()
     transcriptWatches.set(id, watches.add(stop))
-    watch.start(async (call) => { if (call.kind === 'value') ops(call.ops as unknown[]) })
+    // Its images without their pixels: a window reads those as it shows them (window-images.ts).
+    watch.start(async (call) => { if (call.kind === 'value') ops(opsWithoutPixels(call.ops as unknown[])) })
     void watch.closed.then((end) => {
       watches.delete(stop)
       ended(end.kind)
     })
     // Nothing before where it was cleared: no earlier entries to page back to.
     const { before, ...rest } = watch.value
-    return { value: from !== undefined && Number(before ?? from) < from ? rest : watch.value, stop }
+    return { value: withoutPixels(from !== undefined && Number(before ?? from) < from ? rest : watch.value), stop }
   }
 
   /** The threads as an extension reaches them (`superego.threads`), as `owner`. */
@@ -767,7 +778,7 @@ export function createThreads(host: Host, { harness, extensions, profiles }: { h
 
   return {
     list, get, updateMeta, editState, heedStatus, rebound, letGoOf, note, tellPaneClosed, submit, startThread, archive, unarchive, openPane, history, lastAnswer: answerOf, read,
-    watchTranscript, apiFor, retrySignIn, rejectedNow, learnConversations, threadOf,
+    watchTranscript, imageBlock, apiFor, retrySignIn, rejectedNow, learnConversations, threadOf,
   }
 }
 

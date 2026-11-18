@@ -159,15 +159,15 @@ An extension says its version and the extension API it needs in `about` (bundled
 
 <!-- check: daemon -->
 ```ts
-export const about = { name: 'orders', version: '1.2.0', api: '^3', title: 'Orders' } satisfies ExtensionAbout
+export const about = { name: 'orders', version: '1.2.0', api: '^4', title: 'Orders' } satisfies ExtensionAbout
 ```
 
 - `version`: a **major** when something relying on its methods, actions, values or data views could no longer follow
   (a method's result changes shape, an action goes); a **minor** when something's added; a patch otherwise. Bundled
   extensions started at `1.0.0`. Unset: it counts as `0.0.0`.
-- `api`: the range of extension APIs it works with: `^2` for any 2.x, `^2.1` once it uses something 2.1 added. A host
-  outside the range refuses it before `setup` runs, with why: *Extension orders needs extension API ^3, and this
-  Superego has 2.0.0: update Superego*. A bundled one fails the build's tests; a profile's fails its profile's load
+- `api`: the range of extension APIs it works with: `^4` for any 4.x, `^4.1` once it uses something 4.1 added. A host
+  outside the range refuses it before `setup` runs, with why: *Extension orders needs extension API ^4.1, and this
+  Superego has 4.0.0: update Superego*. A bundled one fails the build's tests; a profile's fails its profile's load
   (the thread says so); a profile UI's is left out, the rest of the profile set up. Unset: any.
 
 The host's `EXTENSION_API` goes up a minor when the API grows, and a major when something an extension could rely on

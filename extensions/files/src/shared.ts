@@ -9,6 +9,6 @@ export const FOLDER = 'folder'
 export type FileList = { files: string[]; truncated: boolean }
 
 export const about = {
-  name: 'files', version: '1.0.0', api: '^3', title: 'Files', description: 'A file tree beside the editor, quick open (⌘P), and folders opened in a pane.',
+  name: 'files', version: '1.0.0', api: '^4', title: 'Files', description: 'A file tree beside the editor, quick open (⌘P), and folders opened in a pane.',
   panes: { [FOLDER]: '{ path }: a folder in the working folder ("" for the folder itself), as a tree to open its files from' },
 } satisfies ExtensionAbout

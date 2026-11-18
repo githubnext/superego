@@ -25,7 +25,7 @@ export const KIND_SAYS: Record<StarterKind, string> = {
   'tool-ui': 'an agent tool and a pane of what it did',
 }
 
-/** The extension API a new extension asks for: this one's minor (`^3.0`). */
+/** The extension API a new extension asks for: this one's minor (`^4.0`). */
 const apiRange = () => `^${EXTENSION_API.split('.').slice(0, 2).join('.')}`
 
 const title = (name: string) => name.split('-').map((w, i) => i ? w : w[0]!.toUpperCase() + w.slice(1)).join(' ')

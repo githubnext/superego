@@ -178,14 +178,15 @@ describe('what it draws', () => {
 
   it("draws an MCP call: the plug, the verb, the server and tool, what it's about; open, its arguments, result and images", async () => {
     const done = await row(call('mcp__linear__create_issue', { title: 'Fix login', body: 'long\ntext' }, {
-      result: { text: 'Created ENG-1', isError: false, details: { server: 'linear', tool: 'create_issue', title: 'Create issue', serverTitle: 'Linear' }, images: [{ data: 'AAAA', mimeType: 'image/png' }] },
+      result: { text: 'Created ENG-1', isError: false, details: { server: 'linear', tool: 'create_issue', title: 'Create issue', serverTitle: 'Linear' }, images: [{ name: 'Image', entry: { id: 4, message: 0, block: 1 }, mimeType: 'image/png', width: 640, height: 480 }] },
     }))
     expect(done).toContain('>Called<')
     expect(done).toContain('Linear · Create issue')
     expect(done).toContain('Fix login')
     expect(done).toMatch(/<summary>.*Arguments<\/summary>/)
     expect(done).toContain('Created ENG-1')
-    expect(done).toContain('src="data:image/png;base64,AAAA"')
+    // Its image in its place, at its size, read from the machine as it's shown.
+    expect(done).toMatch(/<button[^>]*class="image-frame [^"]*mcp-call__image[^"]*has-size[^"]*"[^>]*style="--image-width: 640px; --image-ratio: 640 \/ 480;"/)
     // Before its result, by its name, the server's title from the thread.
     const running = await row(call('mcp__linear__list_issues', {}, { state: 'working' }))
     expect(running).toContain('>Calling<')

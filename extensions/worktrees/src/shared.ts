@@ -11,4 +11,4 @@ export type Worktree = { path: string; branch: string; root: string; removed?: b
  * Required: archiving removes a folder and unarchiving puts it back, so it's never switched off between the two. Its
  * threads are asked for by name, `options: { worktrees: true }`, as they start or in their profile's `options`.
  */
-export const about = { name: 'worktrees', version: '1.0.0', api: '^3', title: 'Worktrees', description: 'Give a thread a git worktree of its own.', required: true } satisfies ExtensionAbout
+export const about = { name: 'worktrees', version: '1.0.0', api: '^4', title: 'Worktrees', description: 'Give a thread a git worktree of its own.', required: true } satisfies ExtensionAbout

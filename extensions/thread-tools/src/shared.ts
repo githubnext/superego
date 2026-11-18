@@ -3,5 +3,5 @@
 import type { ExtensionAbout } from '@superego/protocol'
 
 export const about = {
-  name: 'thread-tools', version: '1.1.0', api: '^3', title: 'Thread tools', description: 'Start threads of their own, read, message and archive others, on this machine and those it reaches.',
+  name: 'thread-tools', version: '1.1.0', api: '^4', title: 'Thread tools', description: 'Start threads of their own, read, message and archive others, on this machine and those it reaches.',
 } satisfies ExtensionAbout

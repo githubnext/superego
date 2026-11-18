@@ -21,14 +21,18 @@ export function readAttachment(file: File): Promise<Attachment> {
   })
 }
 
-type Block = { type: string; text?: string; data?: string; mimeType?: string }
-export type Sent = { name: string; type: string; path: string; image?: string }
+type Block = { type: string; text?: string; data?: string; mimeType?: string; width?: number; height?: number }
+/**
+ * A file sent with a message; an image's `image` is the image block the model was given, by its index in the
+ * message's content, its size when known, and its pixels only when its daemon sent them (one from before `image.read`).
+ */
+export type Sent = { name: string; type: string; path: string; image?: { block: number; mimeType: string; width?: number; height?: number; data?: string } }
 
 const TAG = /^<attachment name="([^"]*)" type="([^"]*)" path="([^"]*)"/
 const unquote = (value: string) => value.replace(/&#(\d+);/g, (_m, code: string) => String.fromCharCode(Number(code)))
 
-/** A sent message's own text, and the files that went with it (an image's as a data URL). */
-export function splitMessage(blocks: Block[]): { text: string; files: Sent[] } {
+/** A sent message's own text, and the files that went with it; `at`: the blocks' indexes in the message, when they're some of them. */
+export function splitMessage(blocks: Block[], at?: readonly number[]): { text: string; files: Sent[] } {
   const text: string[] = []
   const files: Sent[] = []
   blocks.forEach((block, index) => {
@@ -38,7 +42,9 @@ export function splitMessage(blocks: Block[]): { text: string; files: Sent[] } {
     const next = blocks[index + 1]
     files.push({
       name: unquote(tag[1]!), type: unquote(tag[2]!), path: unquote(tag[3]!),
-      ...(next?.type === 'image' && next.data ? { image: `data:${next.mimeType};base64,${next.data}` } : {}),
+      ...(next?.type === 'image' ? { image: {
+        block: at?.[index + 1] ?? index + 1, mimeType: next.mimeType ?? '', ...(next.width && next.height ? { width: next.width, height: next.height } : {}), ...(next.data ? { data: next.data } : {}),
+      } } : {}),
     })
   })
   return { text: text.join(''), files }

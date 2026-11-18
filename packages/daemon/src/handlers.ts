@@ -15,6 +15,7 @@ import type { DaemonContext, Host } from './host.ts'
 import type { ProfileHost } from './profile-host.ts'
 import type { Relay } from './relay.ts'
 import type { Threads } from './threads.ts'
+import type { WindowImages } from './window-images.ts'
 
 const thread = str()
 const EXPOSURE = union([lit('ui'), lit('cli'), lit('outside')])
@@ -31,6 +32,7 @@ const PARAMS: Record<string, JsonSchema> = {
   'thread.list': params({ archived: opt(bool()), hidden: opt(bool()) }),
   'file.read': params({ thread, path: str(), base64: opt(bool()) }),
   'file.stat': params({ thread, paths: arr(str()) }),
+  'image.read': params({ thread, image: union([obj({ path: str() }), obj({ entry: num(), message: num(), block: num() })]), thumbnail: opt(bool()) }),
   'file.find': params({ thread, name: str() }),
   'file.watch': params({ thread, path: str() }),
   'profile.ui': params(PROFILE_REF),
@@ -61,12 +63,13 @@ export type Served = {
   profiles: ProfileHost
   threads: Threads
   files: ReturnType<typeof threadFiles>
+  images: WindowImages
   outsideMayStart(): boolean
 }
 
 /** Serve one connection: its methods registered on `peer`, until the returned cleanup, as it disconnects. */
 export function serveClient(peer: RpcPeer, { via, hangUp }: { via?: Via; hangUp?: () => void }, served: Served): () => void {
-  const { host, machine, clients, relay, extensions, profiles, threads, files } = served
+  const { host, machine, clients, relay, extensions, profiles, threads, files, images } = served
   const { options, settings, router, values } = host
   const subs = new Map<string, () => unknown>()
   const connection = serveConnection(peer, { ...(hangUp ? { hangUp } : {}) })
@@ -111,6 +114,7 @@ export function serveClient(peer: RpcPeer, { via, hangUp }: { via?: Via; hangUp?
     'agent.models': async () => host.agent.catalog(),
     'file.read': ({ thread: id, path, base64 }: Methods['file.read']['params']) => files.read(id, path, base64),
     // Which version of each file there is, without its bytes: what the window checks its images against.
+    'image.read': ({ thread: id, image, thumbnail }: Methods['image.read']['params']) => images.read(id, image, Boolean(thumbnail)),
     'file.stat': async ({ thread: id, paths }: Methods['file.stat']['params']) => ({ files: await files.stat(id, paths) }),
     'file.find': ({ thread: id, name }: Methods['file.find']['params']) => files.find(id, name),
     // A profile's UI is its code too: served only for a real profile folder, and only once it is allowed.

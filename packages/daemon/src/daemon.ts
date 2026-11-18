@@ -24,6 +24,7 @@ import { whereYouRun } from './where.ts'
 import { createExtensionHost } from './extension-host.ts'
 import type { DaemonExtension } from './extension.ts'
 import { threadFiles } from './files.ts'
+import { createWindowImages } from './window-images.ts'
 import { serveClient } from './handlers.ts'
 import { context, type DaemonContext, type Host } from './host.ts'
 import { createProfileHost } from './profile-host.ts'
@@ -155,6 +156,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   }, context)
   const threads = createThreads(host, { harness, extensions, profiles })
   const files = threadFiles({ dataDir: options.dataDir, cwdOf: async (id) => (await threads.get(id)).meta.cwd })
+  const images = createWindowImages({ dataDir: options.dataDir, processor: agent.images.processor, file: files.resolve, block: threads.imageBlock })
 
   const machine: MachineInfo = {
     id: await machineId(options.dataDir), hostname: hostname(), platform: platform(), pid: process.pid, dataDir: options.dataDir,
@@ -236,7 +238,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     machine,
     settings,
     serve: (peer, transport = {}) => serveClient(peer, transport, {
-      host, machine, keepsRunning: kept, clients, relay, extensions, profiles, threads, files, outsideMayStart,
+      host, machine, keepsRunning: kept, clients, relay, extensions, profiles, threads, files, images, outsideMayStart,
     }),
     async close() {
       host.state.closing = true

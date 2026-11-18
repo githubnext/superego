@@ -78,7 +78,7 @@ import { join } from 'node:path'
 import { defineDaemonExtension, defineExtension, defineTool, obj, str } from 'superego'
 
 export default defineDaemonExtension({
-  name: 'notes', version: '1.0.0', api: '^3',
+  name: 'notes', version: '1.0.0', api: '^4',
   panes: { notes: "the thread's NOTES.md; no params" },
   setup(superego) {
     const fileOf = async (id: string) => join((await superego.threads.get(id)).cwd, 'NOTES.md')
@@ -112,7 +112,7 @@ function Notes({ machine, thread }: PaneProps) {
   return <pre className="pane-scroll">{data?.text || 'No notes yet.'}</pre>
 }
 
-export default defineUiExtension({ name: 'notes', version: '1.0.0', api: '^3', setup: (superego) => superego.pane('notes', { title: 'Notes', component: Notes, menu: true }) })
+export default defineUiExtension({ name: 'notes', version: '1.0.0', api: '^4', setup: (superego) => superego.pane('notes', { title: 'Notes', component: Notes, menu: true }) })
 ```
 
 Send a thread a message: the daemon loads the profile and the agent has `add_note`. The window loads its UI as soon as it

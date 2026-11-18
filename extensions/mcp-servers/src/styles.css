@@ -51,7 +51,7 @@
 .mcp-call__caret { transition: transform .12s; }
 .mcp-call__args[open] > summary .mcp-call__caret { transform: rotate(90deg); }
 .mcp-call__args > summary:hover { color: var(--superego-text); }
-.mcp-call__image { display: block; max-width: min(100%, 480px); max-height: 360px; margin: 4px 0 var(--superego-space-2); border-radius: 8px; box-shadow: var(--superego-control-edge); }
+.mcp-call__image { --image-max-width: min(100%, 480px); --image-max-height: 360px; display: block; width: fit-content; margin: 4px 0 var(--superego-space-2); }
 .mcp-call__files { font-size: var(--superego-text-sm); color: var(--superego-muted); margin: 0 0 var(--superego-space-2); }
 .mcp-call__files code { margin-left: 6px; font: var(--superego-text-sm) var(--superego-mono); overflow-wrap: anywhere; }
 .mcp-call__loaded { margin: 2px 0 var(--superego-space-2) 21px; padding: 0; list-style: none; font-size: var(--superego-text-sm); }

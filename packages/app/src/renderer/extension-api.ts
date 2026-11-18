@@ -14,6 +14,7 @@ import type { Dispatch, WindowAction } from './actions.tsx'
 import type { Store } from './local-state.ts'
 import type { Place, Placement } from '../shared/layout.ts'
 import type { CompletionProvider, CompletionWord, SentWith } from './composer.ts'
+import type { ImageItem } from './images.tsx'
 
 /**
  * Where an extension can put UI by itself: places whose occupant behaviour decides, so the layout doesn't move them (a
@@ -145,13 +146,14 @@ export type NewThreadField = {
  * A tool call in the transcript. `result` is there once it finished: its text (the output's, then what went wrong, as
  * the user reads it: without the harness's `<harness>[error] …</harness>` the model is shown it in), the harness's
  * other notes on it apart (`notes`: "Showing lines 1-2000 of 5000…", info or a warning), and the images the model was
- * shown, as base64. `live` while it runs.
+ * shown: not their pixels, but where they are in the transcript (`entry`), their type and size, for the window to read
+ * as they're shown (`image.read` on the machine, as a thumbnail or whole). `live` while it runs.
  */
 export type ToolCallProps = {
   machine: MachineEntry
   thread: ThreadInfo
   call: { id: string; name: string; arguments: Record<string, unknown> }
-  result?: { text: string; isError: boolean; details?: unknown; notes?: ToolNote[]; images?: { data: string; mimeType: string }[] }
+  result?: { text: string; isError: boolean; details?: unknown; notes?: ToolNote[]; images?: ImageItem[] }
   live?: { status: 'pending' | 'running' | 'done'; output?: string; details?: unknown }
 }
 

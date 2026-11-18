@@ -6,7 +6,7 @@ import { dirname } from 'node:path'
 let temps = 0
 
 /** Write `text` to `path` atomically (its folder made first), readable by its owner only unless `mode` says otherwise. */
-export async function writeAtomic(path: string, text: string, mode = 0o600): Promise<void> {
+export async function writeAtomic(path: string, text: string | Uint8Array, mode = 0o600): Promise<void> {
   await mkdir(dirname(path), { recursive: true })
   const temp = `${path}.${process.pid}.${++temps}.tmp`
   try {

@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+**Upgrading:** extensions and profiles need `api: '^4'` (the extension API is now 4.0); one still on `'^3'`
+is refused until it's changed. A tool view that shows `result.images` gets image references to show with
+`ImageFrame` (or read with `image.read`), not base64.
+
+- Threads with big images open fast: pasted screenshots and images from tools no longer come with the thread, and
+  each shows as a thumbnail made on its machine as you scroll to it (only the thumbnail crosses to a remote machine).
+  The lightbox loads the full image, showing the thumbnail meanwhile.
+- A very tall image, such as a screenshot of a whole page, shows its top in the thread, fading out, with Open to see
+  it whole.
+- Images keep their place while they load, so the thread doesn't jump as you scroll.
+- An image you sent opens in the lightbox when you click it.
 - Preview and Artifact have a proper browser toolbar under their tab: back, forward and reload as icon buttons, the
   address in a quiet pill (click to select it, the scheme and `localhost` faded), and a button to open the page in your
   browser.

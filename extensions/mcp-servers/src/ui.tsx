@@ -1,6 +1,7 @@
 // mcp-servers, UI half: Settings → MCP servers (settings.tsx), and in threads:
 // - MCP calls as rows (`mcp__*`): the plug, Called / Calling / Failed (or "Interrupted: may have run"), the server and
-//   tool with the first short argument; open, the arguments (folded), then the result, its images inline
+//   tool with the first short argument; open, the arguments (folded), then the result, its images inline (read from
+//   the machine as they're shown, a thumbnail; whole in the lightbox)
 // - tool_search's row: what it looked for, and the tools it loaded
 // - a chip in the header (`mcp-servers.chip`): how many servers the thread has, opening to each with its state, and
 //   why any were left out; the same list in thread details (⌘I)
@@ -9,7 +10,7 @@
 // machine without the extension shows none of it.
 import { useState } from 'react'
 import {
-  defineUiExtension, factsOf, Output, useLocalState, useValue,
+  defineUiExtension, factsOf, ImageFrame, Lightbox, Output, useLocalState, useValue,
   type MachineEntry, type SlotProps, type ToolRowCall, type ViewProps,
 } from '@superego/app/ui'
 import type { ThreadInfo } from '@superego/protocol'
@@ -69,7 +70,8 @@ function CallSubject({ call }: { call: ToolRowCall }) {
 }
 
 /** Open: its arguments (folded), then its result, with its images, and the files it saved. */
-function CallBody({ call: { call, result, live, state } }: { call: ToolRowCall }) {
+function CallBody({ call: { machine, thread, call, result, live, state } }: { call: ToolRowCall }) {
+  const [open, setOpen] = useState<number>()
   const args = Object.keys(call.arguments).length ? JSON.stringify(call.arguments, null, 2) : undefined
   const text = result ? result.text : live?.output
   const files = (result?.details as CallDetails | undefined)?.files
@@ -82,7 +84,10 @@ function CallBody({ call: { call, result, live, state } }: { call: ToolRowCall }
         </details>
       )}
       {text ? <Output text={text} className={state === 'error' ? 'is-error' : ''} /> : null}
-      {result?.images?.map((image, index) => <img key={index} className="mcp-call__image" alt="" src={`data:${image.mimeType};base64,${image.data}`} />)}
+      {result?.images?.map((image, index) => (
+        <ImageFrame key={index} machine={machine} thread={thread.id} image={image} className="image-frame--inline mcp-call__image" cropTall onOpen={() => setOpen(index)} />
+      ))}
+      {open !== undefined && result?.images && <Lightbox machine={machine} thread={thread.id} images={result.images} start={open} onClose={() => setOpen(undefined)} />}
       {files?.length ? <div className="mcp-call__files">Saved: {files.map((file) => <code key={file}>{file}</code>)}</div> : null}
     </div>
   )

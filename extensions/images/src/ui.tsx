@@ -1,9 +1,10 @@
 // images, UI half: a show_images call drawn as the images themselves, where the call is in the thread and outside the
 // fold of its run of work. One image fits the column; a few sit in a grid; more go one at a time in a carousel (‹ ›,
-// ←/→ when focused, a swipe on touch). Any opens in the lightbox. Each is read only as it nears the screen, holding its
-// place (its size is known) until then, and says so when its file is gone.
+// ←/→ when focused, a swipe on touch). Any opens in the lightbox. Each is read only as it nears the screen (a thumbnail;
+// whole in the lightbox), holding its place (its size is known) until then, and says so when its file is gone. One alone
+// and much taller than wide (a whole page's screenshot) shows its top at the column's width, fading out.
 import { useRef, useState, type CSSProperties, type KeyboardEvent } from 'react'
-import { defineUiExtension, describeImage, ImageFrame, Lightbox, type MachineEntry, type ToolCallProps } from '@superego/app/ui'
+import { defineUiExtension, describeImage, ImageFrame, Lightbox, TALL, type MachineEntry, type ToolCallProps } from '@superego/app/ui'
 import { CaretLeftIcon, CaretRightIcon, ImageBrokenIcon } from '@superego/ui'
 import { about, TOOL, type ShowDetails, type Shown } from './shared.ts'
 import './styles.css'
@@ -48,12 +49,13 @@ type Props = { machine: MachineEntry; thread: string; images: Shown[]; onOpen(in
 /** One image, as big as the column allows up to its own size and a height, keeping its shape. */
 function Single({ image, index, ...props }: Props & { image: Shown; index: number }) {
   const ratio = image.width && image.height ? image.width / image.height : undefined
-  const style: CSSProperties | undefined = ratio
-    ? { aspectRatio: `${image.width} / ${image.height}`, width: `min(100%, ${image.width}px, calc(var(--images-max-height) * ${ratio.toFixed(4)}))` }
-    : undefined
+  const tall = ratio !== undefined && 1 / ratio > TALL
+  const style: CSSProperties | undefined = !ratio ? undefined
+    : tall ? { aspectRatio: `${image.width} / ${image.height}`, width: `min(100%, ${image.width}px)`, maxHeight: 'var(--images-max-height)' }
+    : { aspectRatio: `${image.width} / ${image.height}`, width: `min(100%, ${image.width}px, calc(var(--images-max-height) * ${ratio.toFixed(4)}))` }
   return (
     <div className="images__item">
-      <Picture {...props} image={image} index={index} fit="contain" className="images__frame--single" style={style} />
+      <Picture {...props} image={image} index={index} fit="contain" className="images__frame--single" style={style} cropTall />
       {image.caption && <div className="images__caption">{image.caption}</div>}
     </div>
   )
@@ -130,7 +132,7 @@ function Carousel(props: Props) {
 }
 
 /** An image as a button that opens the lightbox (the app's own frame: read as it nears the screen, broken when it can't be). */
-function Picture({ machine, thread, image, index, onOpen, fit, className, style, wanted = true, tabIndex }: Props & {
+function Picture({ machine, thread, image, index, onOpen, fit, className, style, wanted = true, tabIndex, cropTall = false }: Props & {
   image: Shown
   index: number
   fit: 'contain' | 'cover'
@@ -138,10 +140,11 @@ function Picture({ machine, thread, image, index, onOpen, fit, className, style,
   style?: CSSProperties
   wanted?: boolean
   tabIndex?: number
+  cropTall?: boolean
 }) {
   return (
     <ImageFrame machine={machine} thread={thread} image={image} onOpen={() => onOpen(index)} className={`images__frame ${className}`}
-      imgClassName={`images__img images__img--${fit}`} style={style} wanted={wanted} tabIndex={tabIndex} near={nearFrom} />
+      imgClassName={`images__img images__img--${fit}`} style={style} wanted={wanted} tabIndex={tabIndex} near={nearFrom} cropTall={cropTall} />
   )
 }
 

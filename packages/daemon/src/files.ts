@@ -87,6 +87,8 @@ export function threadFiles({ dataDir, cwdOf }: { dataDir: string; cwdOf(thread:
     return kept ? resolvePath(path) : editable(cwd, path)
   }
   return {
+    /** Where a file of a thread's that clients may read is, refusing one outside what they may. */
+    resolve: async (thread: string, path: string) => readable(await cwdOf(thread), thread, path),
     async read(thread: string, path: string, base64 = false) {
       const file = readable(await cwdOf(thread), thread, path)
       const info = await stat(file).catch(() => undefined)

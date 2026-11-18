@@ -71,8 +71,8 @@ export function complete(text: string, caret: number, start: number, insert: str
   return { text: text.slice(0, start) + insert + after, caret: start + insert.length }
 }
 
-/** A block of a sent message, as the agent was given it: text, or an image. */
-export type SentBlock = { type: string; text?: string; data?: string; mimeType?: string }
+/** A block of a sent message, as the agent was given it: text, or an image (its pixels left out: `ImageStub`). */
+export type SentBlock = { type: string; text?: string; data?: string; mimeType?: string; width?: number; height?: number }
 
 /** What a composer claim put in a message, read back from it once sent and drawn under it. */
 export type SentWith<T = any> = {
@@ -92,8 +92,8 @@ export function sentWords(found: readonly { reader: SentWith; items: unknown[] }
   }, text)
 }
 
-/** A sent message as `readers` find it: what each found in it, and the blocks none of them claimed. */
-export function readSent<R extends SentWith>(readers: readonly R[], blocks: readonly SentBlock[]): { found: { reader: R; items: unknown[] }[]; rest: SentBlock[] } {
+/** A sent message as `readers` find it: what each found in it, and the blocks none of them claimed (`at`: their indexes in it). */
+export function readSent<R extends SentWith>(readers: readonly R[], blocks: readonly SentBlock[]): { found: { reader: R; items: unknown[] }[]; rest: SentBlock[]; at: number[] } {
   const claimed = new Set<number>()
   const found: { reader: R; items: unknown[] }[] = []
   for (const reader of readers) {
@@ -103,5 +103,6 @@ export function readSent<R extends SentWith>(readers: readonly R[], blocks: read
     for (const index of read.blocks) claimed.add(index)
     if (read.items.length) found.push({ reader, items: read.items })
   }
-  return { found, rest: blocks.filter((_, index) => !claimed.has(index)) }
+  const at = blocks.flatMap((_, index) => claimed.has(index) ? [] : [index])
+  return { found, rest: at.map((index) => blocks[index]!), at }
 }

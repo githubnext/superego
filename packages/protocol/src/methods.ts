@@ -41,15 +41,28 @@ export const linkTo = (thread: Pick<ThreadInfo, 'id' | 'title'>) => `[${thread.t
  * What a daemon of this build offers beyond what its generation began with, announced in `hello`. Clients check a
  * feature before using it, so an older daemon of the generation keeps working with a newer app (and the other way
  * round) for whatever both know. `thread-read`: the `thread.read` method. `forward`: `forward` channels, a TCP
- * connection to a port on its loopback (forward.ts).
+ * connection to a port on its loopback (forward.ts). `image-read`: the `image.read` method, and transcripts whose images
+ * come without their pixels (`ImageStub`).
  */
-export const FEATURES = ['thread-read', 'forward'] as const
+export const FEATURES = ['thread-read', 'forward', 'image-read'] as const
 export type Feature = (typeof FEATURES)[number]
 
 export type ThreadId = string
 
 /** A file's version, as the daemon sees it: when it last changed, and its size in bytes. */
 export type FileVersion = { mtimeMs: number; size: number }
+
+/**
+ * An image as a transcript gives it to clients (`thread.watch`, `thread.history`): its kind and size, without its
+ * pixels, which are read with `image.read` by where it is (`ImageRef`'s entry). Its size in pixels when its header says.
+ */
+export type ImageStub = { type: 'image'; mimeType: string; bytes: number; width?: number; height?: number }
+
+/**
+ * An image of a thread's, for `image.read`: a file it may read (`file.read`'s), or an image block of an entry of its
+ * transcript, by the entry's id, the index of the message in its `model`, and the block's in that message's content.
+ */
+export type ImageRef = { path: string } | { entry: number; message: number; block: number }
 
 /** A thread, as its machine tells clients about it (`thread.list`, `useThreads`). */
 export type ThreadInfo = {
@@ -255,6 +268,12 @@ export type Methods = {
   'agent.models': { params: {}; result: ModelCatalog }
   /** A file in a thread's folder (not outside it), as text, with its version as `file.stat` says it. */
   'file.read': { params: { thread: ThreadId; path: string; base64?: boolean }; result: { path: string; content: string } & FileVersion }
+  /**
+   * An image of a thread's, as base64: whole, or as a `thumbnail` (at most 1600×4800, as small as a window shows it
+   * in a transcript; the image itself when it's that small already), made on this machine and kept. A file's `version`
+   * is the one read, as `file.stat` says it. With the `image-read` feature.
+   */
+  'image.read': { params: { thread: ThreadId; image: ImageRef; thumbnail?: boolean }; result: { data: string; mimeType: string; width?: number; height?: number; version?: FileVersion } }
   /** Which version of each file there is, without reading them (null: none, or not the thread's). */
   'file.stat': { params: { thread: ThreadId; paths: string[] }; result: { files: (FileVersion | null)[] } }
   /** A file in a thread's folder, then `file.changed` whenever it changes on disk (by anyone), until unwatched. */
@@ -285,7 +304,7 @@ export type Methods = {
   'thread.steer': { params: { thread: ThreadId; submission: string }; result: { status: 'steers' | 'placed' | 'settled' } }
   /** The user looked at the thread: its done/error status clears. */
   'thread.seen': { params: { thread: ThreadId }; result: null }
-  /** Entries older than `before` (an entry id), oldest first: scrolling back past a watch's window. */
+  /** Entries older than `before` (an entry id), oldest first: scrolling back past a watch's window. Images as `ImageStub`s. */
   'thread.history': { params: { thread: ThreadId; before: number; limit?: number }; result: { entries: unknown[]; more: boolean } }
   /** Its last answer, as text (the newest assistant message that says something), if it has one. */
   'thread.lastAnswer': { params: { thread: ThreadId }; result: { text: string | null } }
@@ -295,7 +314,7 @@ export type Methods = {
    * that closes stops the wait. With the `thread-read` feature.
    */
   'thread.read': { params: { thread: ThreadId; wait?: boolean }; result: { thread: ThreadInfo; answer: string | null } }
-  /** Snapshot of the conversation view, then `watch.ops` notifications with Chord delta ops against it. */
+  /** Snapshot of the conversation view, then `watch.ops` notifications with Chord delta ops against it. Images as `ImageStub`s. */
   'thread.watch': { params: { thread: ThreadId }; result: { sub: string; value: ConversationView } }
   /**
    * Snapshot of the thread list, then `threads.changed` notifications with the whole list. `hidden`: the threads no list

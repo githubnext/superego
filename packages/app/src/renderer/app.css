@@ -767,8 +767,8 @@ a.pane-header__url:hover { color: var(--superego-accent); }
 .msg--user:has(.msg__files) { display: flex; flex-direction: column; align-items: flex-end; }
 .attachment { display: inline-flex; align-items: center; gap: 6px; max-width: 240px; padding: 3px 6px 3px 3px; border-radius: 7px; background: color-mix(in srgb, var(--superego-text) 6%, transparent); font-size: var(--superego-text-sm); }
 .attachment img { width: 28px; height: 28px; object-fit: cover; border-radius: 5px; }
-.msg__files .attachment img { width: auto; height: auto; max-width: 220px; max-height: 160px; }
-.attachment--image { padding: 3px; max-width: none; }
+/* An image sent with a message: up to 220×160, keeping its shape (a very tall one shows its top, fading out). */
+.image-frame--attachment { --image-max-width: 220px; --image-max-height: 160px; flex: none; margin: 0; }
 .attachment__icon { width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; color: var(--superego-muted); }
 .attachment__name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .attachment__remove { border: 0; background: none; color: var(--superego-faint); font: inherit; padding: 0 2px; cursor: default; }

@@ -15,6 +15,8 @@ import { DiffStat } from './diff.tsx'
 import { splitMessage } from './attachments.ts'
 import { readSent, sentWords, type SentBlock } from './composer.ts'
 import { Contained } from './contained.tsx'
+import { ImageFrame, type ImageItem } from './images.tsx'
+import { Lightbox } from './lightbox.tsx'
 
 /** A message in the conversation, as the model sees it. */
 export type Message = { role: string; content: string | Block[]; toolCallId?: string; isError?: boolean; details?: unknown; timestamp?: number }
@@ -47,7 +49,7 @@ export function toolResults(entries: readonly EntryRecord[]): Map<string, ToolRe
       ...diagnostics.flatMap((d) => d.severity === 'error' ? [d.message] : []),
     ].join('\n')
     const notes = diagnostics.flatMap((d) => d.severity === 'error' ? [] : [{ severity: d.severity, message: d.message }])
-    results.set(message.toolCallId, { text, isError: Boolean(message.isError), details: message.details, ...notes.length ? { notes } : {}, ...imagesOf(content) })
+    results.set(message.toolCallId, { text, isError: Boolean(message.isError), details: message.details, ...notes.length ? { notes } : {}, ...imagesOf(content, Number(entry.id)) })
   }
   return results
 }
@@ -62,13 +64,23 @@ const diagnosticsOf = (data: unknown): { severity: 'info' | 'warn' | 'error'; me
   }) : []
 }
 
-/** A tool result's images, as the model was shown them: `{ images }`, or nothing when it has none. */
-const imagesOf = (content: Block[]) => {
-  const images = content.flatMap((b) => {
-    const { data, mimeType } = b as { data?: unknown; mimeType?: unknown }
-    return b.type === 'image' && typeof data === 'string' && typeof mimeType === 'string' ? [{ data, mimeType }] : []
-  })
+/** A tool result's images (those of its entry's first message), as the model was shown them: `{ images }`, or nothing when it has none. */
+const imagesOf = (content: Block[], entry: number) => {
+  const images = content.flatMap((b, block) => b.type === 'image' ? [imageIn(b as ImageBlock, entry, block, 'Image')] : [])
   return images.length ? { images } : {}
+}
+
+/**
+ * An image block of an entry's first message, to show: read from its machine by where it is, or from its pixels when
+ * its daemon sent them (one from before `image.read`).
+ */
+type ImageBlock = { mimeType?: string; width?: number; height?: number; data?: string }
+function imageIn(block: ImageBlock, entry: number, index: number, name: string): ImageItem {
+  const size = block.width && block.height ? { width: block.width, height: block.height } : {}
+  const mimeType = block.mimeType ?? 'image/png'
+  return block.data
+    ? { name, url: `data:${mimeType};base64,${block.data}`, mimeType, ...size }
+    : { name, entry: { id: entry, message: 0, block: index }, mimeType, ...size }
 }
 
 /** A thread's transcript: `view` as watched (scrolled back), and the run going on (`live`). */
@@ -132,11 +144,11 @@ function WaitingForSignIn() {
  * A message you sent: your words, whole, and what went with them below: what extensions put in it (a skill it named,
  * drawn by the extension that sent it along), then its files.
  */
-function Sent({ blocks, className, children }: { blocks: SentBlock[]; className: string; children?: ReactNode }) {
+function Sent({ entry, blocks, className, children }: { entry: number; blocks: SentBlock[]; className: string; children?: ReactNode }) {
   const here = useContext(Here)
   const registry = useRegistry()
-  const { found, rest } = readSent(sentWithIn(registry, { machine: here.machine.id, thread: here.thread }), blocks)
-  const { text, files } = splitMessage(rest)
+  const { found, rest, at } = readSent(sentWithIn(registry, { machine: here.machine.id, thread: here.thread }), blocks)
+  const { text, files } = splitMessage(rest, at)
   const drawn = found.filter(({ reader }) => reader.component)
   if (!text && !drawn.length && !files.length && !children) return null
   return (
@@ -145,7 +157,7 @@ function Sent({ blocks, className, children }: { blocks: SentBlock[]; className:
       {(drawn.length > 0 || files.length > 0) && (
         <div className="msg__files">
           {drawn.map(({ reader: { component: Component, owner }, items }) => <Contained key={`${owner.profile ?? ''}/${owner.extension}`} name={owner.extension} inline>{Component && <Component {...here} items={items} />}</Contained>)}
-          <Files files={files} />
+          <Files files={files} entry={entry} />
         </div>
       )}
       {children}
@@ -153,19 +165,28 @@ function Sent({ blocks, className, children }: { blocks: SentBlock[]; className:
   )
 }
 
-/** The files that went with a message. */
-function Files({ files }: { files: ReturnType<typeof splitMessage>['files'] }) {
+/** The files that went with a message (its `entry`). */
+function Files({ files, entry }: { files: ReturnType<typeof splitMessage>['files']; entry: number }) {
+  const { machine, thread } = useContext(Here)
+  const [open, setOpen] = useState<number>()
+  const images = useMemo(() => files.flatMap((file) => file.image ? [imageIn(file.image, entry, file.image.block, file.name)] : []), [files, entry])
+  let shown = 0
   return (
     <>
-      {/* An image shows as itself, its name on hover; other files as a chip with their name. */}
-      {files.map((file, index) => file.image
-        ? <span key={`${file.path}-${index}`} className="attachment attachment--image" title={file.name}><img src={file.image} alt={file.name} /></span>
-        : (
+      {/* An image shows as itself, its name on hover, and opens in the lightbox; other files as a chip with their name. */}
+      {files.map((file, index) => {
+        if (file.image) {
+          const at = shown++
+          return <ImageFrame key={`${file.path}-${index}`} machine={machine} thread={thread.id} image={images[at]!} className="image-frame--inline image-frame--attachment" cropTall onOpen={() => setOpen(at)} />
+        }
+        return (
           <span key={`${file.path}-${index}`} className="attachment" title={file.path}>
             <span className="attachment__icon"><FileIcon size={14} aria-hidden /></span>
             <span className="attachment__name">{file.name}</span>
           </span>
-        ))}
+        )
+      })}
+      {open !== undefined && <Lightbox machine={machine} thread={thread.id} images={images} start={open} onClose={() => setOpen(undefined)} />}
     </>
   )
 }
@@ -279,7 +300,7 @@ function Entry({ entry }: { entry: EntryRecord }) {
   if (custom) { const Custom = custom; return <Contained name={entryOwner(registry, entry.kind, where) ?? entry.kind}><Custom {...here} entry={{ id: entry.id, kind: entry.kind, data: entry.data }} /></Contained> }
   const message = entry.model?.[0] as Message | undefined
   if (message?.role === 'user') {
-    return <Sent className="msg msg--user" blocks={blocks(message)} />
+    return <Sent className="msg msg--user" entry={Number(entry.id)} blocks={blocks(message)} />
   }
   // Superego's own lines (a self-archive that couldn't be done); else the kind, for an entry nothing draws.
   const said = entry.kind === NOTE_ENTRY ? (entry.data as { text?: unknown } | undefined)?.text : undefined

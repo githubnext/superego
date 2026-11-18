@@ -402,8 +402,13 @@ describe('record and replay', () => {
     const user = value.entries.find((e) => e.kind === MESSAGE_ENTRY)!.model![0] as { content: { type: string; text?: string; mimeType?: string }[] }
     expect(user.content.map((b) => b.type)).toEqual(['text', 'text', 'image', 'text', 'text'])
     expect(user.content[0]!.text).toBe('look')
-    expect(user.content[2]!.mimeType).toBe('image/png')
+    // The image comes without its pixels, read by where it is.
+    expect(user.content[2]).toEqual({ type: 'image', mimeType: 'image/png', bytes: 8 })
+    const entry = value.entries.find((e) => e.kind === MESSAGE_ENTRY)!.id
+    expect(await peer.call('image.read', { thread: thread.id, image: { entry, message: 0, block: 2 } })).toEqual({ data: png, mimeType: 'image/png' })
     const saved = join(dir, 'attachments', thread.id)
+    expect(await peer.call('image.read', { thread: thread.id, image: { path: join(saved, 'shot.png') }, thumbnail: true })).toMatchObject({ data: png, version: { size: 8 } })
+    await expect(peer.call('image.read', { thread: thread.id, image: { path: '/etc/hosts' } })).rejects.toMatchObject({ kind: 'invalid' })
     expect(user.content[3]!.text).toBe(`<attachment name="notes.md" type="text/markdown" path="${join(saved, 'notes.md')}">\n# Hi\n\n</attachment>`)
     expect(user.content[4]!.text).toContain(`path="${join(saved, 'notes-2.md')}"`)
     expect(await readFile(join(saved, 'shot.png'), 'base64')).toBe(png)

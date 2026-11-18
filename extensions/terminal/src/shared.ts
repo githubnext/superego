@@ -19,7 +19,7 @@ export type TerminalStatus = Status & { app?: string }
 export type TerminalStatuses = Record<string, TerminalStatus>
 
 export const about = {
-  name: 'terminal', version: '1.0.0', api: '^3', title: 'Terminal',
+  name: 'terminal', version: '1.0.0', api: '^4', title: 'Terminal',
   description: 'A shell beside a thread (⌃`), run by the machine so it outlives the window.',
   panes: { [TERMINAL]: '{}: a shell in the working folder, for the user (another one beside it: { n: 2 })' },
 } satisfies ExtensionAbout

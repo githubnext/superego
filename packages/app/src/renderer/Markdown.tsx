@@ -195,7 +195,7 @@ function InlineImage({ src, srcSet, alt, title, width, height }: ImageProps) {
   return (
     <span ref={ref} className="md__image">
       <ImageFrame machine={images.machine} thread={images.thread} image={image} className="image-frame--inline"
-        srcSet={sizes} width={width} height={height} brokenLabel={alt || image.name}
+        srcSet={sizes} width={width} height={height} brokenLabel={alt || image.name} cropTall
         onOpen={() => { if (ref.current) gallery?.open(ref.current) }} />
     </span>
   )
@@ -211,10 +211,10 @@ function useSrcset(images: ImagesIn, candidates: { url: string; descriptor: stri
     if (!key) return
     let alive = true
     const files = candidates.map((c) => images.resolve(c.url))
-    void Promise.all(candidates.map((c, i) => imageSourceOf(images.machine.id, images.thread, files[i]!)
+    void Promise.all(candidates.map((c, i) => imageSourceOf(images.machine, images.thread, files[i]!)
       .then((url) => `${url}${c.descriptor ? ` ${c.descriptor}` : ''}`, () => undefined)))
       .then((urls) => { if (alive) setSet({ key, value: urls.filter(Boolean).join(', ') }) })
-    const offs = files.flatMap((file) => file.path && !file.url ? [onImageChange(images.machine.id, images.thread, file.path, () => setChanged((n) => n + 1))] : [])
+    const offs = files.map((file) => onImageChange(images.machine, images.thread, file, 'thumbnail', () => setChanged((n) => n + 1)))
     return () => { alive = false; for (const off of offs) off() }
   }, [images.machine.id, images.thread, key, changed])
   return set?.key === key && set.value ? set.value : undefined

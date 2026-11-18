@@ -63,7 +63,7 @@ describe('a new extension', () => {
     expect(spec).toContain(`extensions: ['./words/daemon.ts', './failed/daemon.ts', './notes/daemon.ts']`)
     expect(spec).toContain(`ui: ['./peek/ui.tsx', './failed/ui.tsx', './notes/ui.tsx']`)
     expect(spec).toContain(`panes: { 'peek': `)
-    expect(await readFile(join(profile, 'notes', 'shared.ts'), 'utf8')).toMatch(/version: '0\.1\.0', api: '\^3\.\d+'/)
+    expect(await readFile(join(profile, 'notes', 'shared.ts'), 'utf8')).toMatch(/version: '0\.1\.0', api: '\^4\.\d+'/)
     expect(() => newExtension(profile, 'words', 'ui', types)).toThrow(/there already/)
     expect(await testExtension(profile, undefined, types)).toBe(0)
   }, 240_000)

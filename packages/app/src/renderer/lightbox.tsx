@@ -1,11 +1,12 @@
 // The lightbox: an image of a thread's (one an agent showed, or one in a message or a rendered file) over the whole window, to look at closely. Click or tap to zoom in where you click (again to
 // fit), scroll or pinch to zoom, drag to pan; ←/→, the side buttons or a swipe go through the set; Esc, the close
 // button or a click beside the image close it. The focus stays inside while it is open and goes back where it was.
+// It reads each image whole, showing its thumbnail (what the thread showed) meanwhile.
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react'
 import { createPortal } from 'react-dom'
 import { CaretLeftIcon, CaretRightIcon, ImageBrokenIcon, MagnifyingGlassMinusIcon, MagnifyingGlassPlusIcon, XIcon } from '@superego/ui'
 import type { MachineEntry } from '../shared/bridge.ts'
-import { describeImage, imageSourceOf, useImageSource, type ImageItem } from './images.tsx'
+import { describeImage, imageReadAlready, imageSourceOf, useImageSource, type ImageItem } from './images.tsx'
 import { CLICK_SCALE, clampPan, FIT, toggleAt, zoomAt, type Bounds, type Point, type View } from './zoom.ts'
 
 /** How far a finger or the mouse may move and still be a click; how far a swipe must go to turn the page. */
@@ -40,10 +41,12 @@ export function Lightbox({ machine, thread, images, start, onClose }: {
   const pointers = useRef(new Map<number, Point>())
   const gesture = useRef<Gesture | undefined>(undefined)
   const image = images[index]!
-  const { src, broken, problem } = useImageSource(machine, thread, image, true)
-  // Which image was drawn (any version of it: a newer one swaps in without the spinner between).
-  const [ready, setReady] = useState<string>()
-  const which = image.url ?? image.path
+  const whole = useImageSource(machine, thread, image, true, 'whole')
+  const { broken, problem } = whole
+  const src = whole.src ?? imageReadAlready(machine, thread, image, 'thumbnail')
+  // Which image was drawn, and whether whole (any version of it: a newer one swaps in without the spinner between).
+  const [drawn, setDrawn] = useState<{ which: string | undefined; whole: boolean }>()
+  const which = image.url ?? image.path ?? (image.entry && `${image.entry.id}:${image.entry.message}:${image.entry.block}`)
   const many = images.length > 1
 
   const go = useCallback((by: number) => {
@@ -55,8 +58,9 @@ export function Lightbox({ machine, thread, images, start, onClose }: {
   // Its neighbours, read ahead so going through the set doesn't wait.
   useEffect(() => {
     if (!many) return
-    for (const by of [1, -1]) void imageSourceOf(machine.id, thread, images[(index + by + images.length) % images.length]!).catch(() => {})
-  }, [machine.id, thread, images, index, many])
+    // Not there, it's said when it's shown.
+    for (const by of [1, -1]) void imageSourceOf(machine, thread, images[(index + by + images.length) % images.length]!, 'whole').catch(() => {})
+  }, [machine, thread, images, index, many])
 
   // The focus inside while it's open, and back where it was after.
   useLayoutEffect(() => {
@@ -187,12 +191,12 @@ export function Lightbox({ machine, thread, images, start, onClose }: {
             src={src}
             alt={image.alt ?? image.caption ?? ''}
             draggable={false}
-            className={`lightbox__image ${ready === which ? 'is-ready' : ''}`}
-            onLoad={() => setReady(which)}
+            className={`lightbox__image ${drawn?.which === which ? 'is-ready' : ''}`}
+            onLoad={() => setDrawn({ which, whole: src === whole.src })}
             style={{ transform: `translate(${view.x + drag}px, ${view.y}px) scale(${view.scale})` }}
           />
         )}
-        {!broken && ready !== which && <div className="lightbox__loading" aria-hidden />}
+        {!broken && !(drawn?.which === which && drawn?.whole) && <div className="lightbox__loading" aria-hidden />}
       </div>
       <div className="lightbox__bar">
         {many && <span className="lightbox__count" aria-hidden>{index + 1} / {images.length}</span>}
