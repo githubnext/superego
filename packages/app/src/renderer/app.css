@@ -831,6 +831,7 @@ a.pane-header__url:hover { color: var(--superego-accent); }
 .app__strip:empty { display: none; }
 .app__strip .strip { flex: 0 1 auto; min-width: 0; height: auto; padding: 0; border-bottom: 0; gap: 4px; }
 .app__strip .strip__tabs { flex: 0 1 auto; min-width: 44px; padding: 2px; border-radius: 8px; background: var(--superego-fill); }
+.app__strip .strip__tabs--thread { flex: none; min-width: 0; margin-right: 4px; }
 .app__strip .strip__tab { padding: 0 9px; color: var(--superego-muted); overflow: hidden; }
 .app__strip .strip__tab.is-focused { background: var(--superego-raised); color: var(--superego-text); box-shadow: 0 0 0 .5px light-dark(rgb(0 0 0 / .12), rgb(255 255 255 / .08)), 0 1px 2px light-dark(rgb(0 0 0 / .08), rgb(0 0 0 / .3)); }
 .app__strip .strip__tab.is-away { color: var(--superego-faint); }

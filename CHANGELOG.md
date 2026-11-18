@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- With panes stacked, the thread's tab stands apart from the stack's tabs in the title bar.
+
 ## 0.1.6
 
 **Upgrading:** the `preview` and `artifact` panes are now one, `browser`, with the same params (`{ url }` or

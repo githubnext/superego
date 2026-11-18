@@ -304,8 +304,10 @@ function PaneStrip({ tabs, current, stacked, narrow, onShow }: { tabs: StripTab[
   const total = tabs.reduce((sum, tab) => sum + tab.width, 0) || 1
   const strip = (
     <div className={`strip ${narrow ? 'strip--narrow' : ''}`} role="tablist" aria-label="The thread and its panes">
-      <div className="strip__tabs">
-        {tabs.map((tab) => {
+      {/* Stacked, the thread stands on its own beside the stack's tabs: one tablist still, in the same order. */}
+      {(stacked ? [tabs.filter((tab) => !tab.id), tabs.filter((tab) => tab.id)] : [tabs]).map((group, i) => (
+        <div key={i} className={`strip__tabs ${stacked && i === 0 ? 'strip__tabs--thread' : ''}`}>
+          {group.map((tab) => {
           const Icon = tab.kind?.icon
           // The whole of what the tab may cut short: a file's path, a page's address, or its title.
           const { path, url } = (tab.pane?.params ?? {}) as { path?: string; url?: string }
@@ -322,7 +324,8 @@ function PaneStrip({ tabs, current, stacked, narrow, onShow }: { tabs: StripTab[
             </button>
           )
         })}
-      </div>
+        </div>
+      ))}
       {!narrow && (
         <>
           {/* The row in small: each column a bar as wide as it is, the ones in view darker. */}
