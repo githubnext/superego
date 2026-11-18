@@ -5,6 +5,8 @@
 - Preview and Artifact have a proper browser toolbar under their tab: back, forward and reload as icon buttons, the
   address in a quiet pill (click to select it, the scheme and `localhost` faded), and a button to open the page in your
   browser.
+- A pane's tab is set apart from what's under it by a faint tint instead of a line, with a soft shadow when you scroll
+  its content up beneath it. An editor's file bar and Preview's toolbar share the tint, so a pane's head reads as one.
 
 ## 0.1.4
 

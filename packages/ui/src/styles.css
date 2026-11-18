@@ -17,6 +17,7 @@
   --superego-fill: light-dark(rgb(0 0 0 / .05), rgb(255 255 255 / .06));   /* quiet fills: file heads, small buttons */
   --superego-card-edge: 0 0 0 .5px var(--superego-border), 0 1px 3px light-dark(rgb(0 0 0 / .06), rgb(0 0 0 / .3));
   --superego-surface: light-dark(#f3f3f6, #262629);     /* wells: code, tool output */
+  --superego-pane-tab: light-dark(#f9f9fb, #232325);   /* a pane's tab and its bars, a step off the sheet */
   --superego-bubble: light-dark(color-mix(in oklab, var(--superego-accent) 9%, #fff), color-mix(in oklab, var(--superego-accent) 14%, #2a2a2e));      /* your messages */
   --superego-code-chip: light-dark(rgb(0 0 0 / .055), rgb(255 255 255 / .08));
   --superego-raised: light-dark(#ffffff, #2c2c2e);      /* what floats: menus, popovers, the composer */

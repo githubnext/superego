@@ -369,6 +369,31 @@ export const PaneButton = (props: Omit<ButtonHTMLAttributes<HTMLButtonElement>, 
 /** What a pane says in place of what it shows: Loading…, nothing here, or what went wrong. Centred in the pane. */
 export const PaneMessage = ({ children }: { children: ReactNode }) => <div className="pane-empty">{children}</div>
 
+/**
+ * Marks a pane's head `data-scrolled` while what's right under it is scrolled up beneath it, for its shadow: the tab,
+ * or a bar of the pane's own under it (an editor's path and modes). Whatever scrolls in a pane is the pane kind's own
+ * (an editor, a list, a terminal), so it listens for scroll events on the way down (they don't bubble) and minds only a
+ * scroller whose top meets the bottom of one of those: one further down (a code block, a file's sideways scroll) has
+ * something between. Reads layout only when a scroll has already laid out, and only touches an attribute React doesn't
+ * own (the tab's class changes with the focus).
+ */
+function useScrolledUnder(column: RefObject<HTMLElement | null>) {
+  useEffect(() => {
+    const el = column.current
+    if (!el) return
+    const onScroll = (event: Event) => {
+      const target = event.target
+      if (!(target instanceof Element)) return
+      const top = target.getBoundingClientRect().top
+      const head = [...el.querySelectorAll(':scope > .panes__tab, :scope > .panes__body .pane-bar')]
+        .find((bar) => Math.abs(bar.getBoundingClientRect().bottom - top) <= 1)
+      head?.toggleAttribute('data-scrolled', target.scrollTop > 0)
+    }
+    el.addEventListener('scroll', onScroll, { capture: true, passive: true })
+    return () => el.removeEventListener('scroll', onScroll, { capture: true })
+  }, [column])
+}
+
 function PaneColumn({ pane, title, focused, width, behind, maximized, onFocus, onClick, onClose, onMaximize, view, children }: {
   pane: Pane; title: string; focused: boolean; width: number; behind: boolean
   /** Whether it's the one maximized, while one is (undefined: none is). */
@@ -380,6 +405,8 @@ function PaneColumn({ pane, title, focused, width, behind, maximized, onFocus, o
   view?: { view: string; machine: string; thread: ThreadInfo }; children: ReactNode
 }) {
   const [slot, setSlot] = useState<HTMLElement | null>(null)
+  const column = useRef<HTMLDivElement>(null)
+  useScrolledUnder(column)
   const keys = useShortcut('pane.maximize')
   const closeKeys = useShortcut('pane.closeFocused')
   const label = maximized ? 'Restore' : 'Maximize'
@@ -387,7 +414,7 @@ function PaneColumn({ pane, title, focused, width, behind, maximized, onFocus, o
   // of reach.
   const covered = maximized === false
   return (
-    <div data-column={pane.id} tabIndex={-1} className={`panes__column ${behind ? 'is-behind' : ''} ${maximized ? 'is-maximized' : covered ? 'is-covered' : ''}`}
+    <div ref={column} data-column={pane.id} tabIndex={-1} className={`panes__column ${behind ? 'is-behind' : ''} ${maximized ? 'is-maximized' : covered ? 'is-covered' : ''}`}
       inert={behind || covered} style={maximized ? undefined : { width }} onPointerDownCapture={onFocus} onFocusCapture={onFocus} onClick={onClick}>
       <div className={`panes__tab ${focused ? 'is-active' : ''}`}>
         <button className="panes__label" title={title} onDoubleClick={onMaximize}>{title}</button>

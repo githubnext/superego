@@ -584,11 +584,21 @@ button.app__mobiletitle > svg { flex: none; color: var(--superego-faint); }
 .panes__gap:hover::after, .panes__gap:active::after { opacity: 1; height: 40px; background: var(--superego-muted); }
 /* While a column is dragged: the cursor stays, and nothing under it is selected. */
 .is-resizing-columns, .is-resizing-columns * { cursor: col-resize !important; user-select: none !important; }
-.panes__column { flex: none; display: flex; flex-direction: column; min-height: 0; position: relative; overflow: hidden; background: var(--superego-bg); }
+.panes__column { flex: none; display: flex; flex-direction: column; min-height: 0; position: relative; isolation: isolate; overflow: hidden; background: var(--superego-bg); }
 .panes__column--thread > .thread { flex: 1; min-width: 0; }
 .panes__column--thread .thread__column { max-width: calc(100% - 2 * var(--superego-space-7)); }
 .panes__column--thread .dock { max-width: calc(100% - 2 * var(--superego-space-4)); }
-.panes__tab { display: flex; align-items: center; gap: 8px; flex: none; height: 36px; padding: 0 8px 0 14px; font-size: var(--superego-text-sm); color: var(--superego-muted); white-space: nowrap; }
+/* A pane's tab: set apart from what's under it by a tint a step off the sheet, not a line (the title bar above has
+   that); a soft shadow only while what's under it is scrolled up beneath it (useScrolledUnder in panes.tsx). Over the
+   body, so the shadow falls on it. */
+.panes__tab {
+  display: flex; align-items: center; gap: 8px; flex: none; height: 36px; padding: 0 8px 0 14px; position: relative; z-index: 1;
+  background: var(--superego-pane-tab); font-size: var(--superego-text-sm); color: var(--superego-muted); white-space: nowrap;
+  transition: box-shadow .15s;
+}
+/* A bar of the pane's own under it (an editor's path and modes) is part of the same head: the same tint, no line. */
+.panes__body .pane-bar { background: var(--superego-pane-tab); border-bottom: 0; position: relative; z-index: 1; transition: box-shadow .15s; }
+:is(.panes__tab, .panes__body .pane-bar)[data-scrolled] { box-shadow: 0 1px 4px light-dark(rgb(0 0 0 / .08), rgb(0 0 0 / .45)); }
 
 .panes__label { flex: none; max-width: 50%; text-align: left; font: inherit; font-weight: 500; color: var(--superego-text); background: none; border: 0; padding: 0; cursor: default; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .panes__tools { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; }

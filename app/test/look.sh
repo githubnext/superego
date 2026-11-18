@@ -1,11 +1,12 @@
 #!/bin/sh
 # The window's layout in the states the design covers, screenshotted:
-# `test/look.sh <dir> [look|focus|panes|composer|images|mcp|web|terminal|toolbar|titlebar|pins|folds|states]` (look, unless given), each a script of
+# `test/look.sh <dir> [look|focus|panes|panehead|composer|images|mcp|web|terminal|toolbar|titlebar|pins|folds|states]` (look, unless given), each a script of
 # that name here:
 # - `look`: the sidebar shown, dragged and hidden, the thread alone and with panes, details, a phone; the first-launch
 #   page, ⌘N's dialog, Settings and its Keyboard;
 # - `focus`: each region holding the focus;
 # - `panes`: a thread's panes scrolled and stacked;
+# - `panehead`: panes' heads (a tab, an editor's bar, Preview's toolbar) at rest and with what's under them scrolled;
 # - `composer`: the composer and what's around it;
 # - `images`: an agent's images in a thread, the lightbox, a message's own images, on a phone too;
 # - `mcp`: Settings → MCP servers, a thread's MCP calls, its chip and details;
@@ -23,7 +24,7 @@ cd "$(dirname "$0")/.."
 # seconds), and builds the app first if its sources changed.
 [ "$SUPEREGO_CHECK_COMMAND" = test/look.sh ] || exec node ../scripts/check.ts --timeout SUPEREGO_SHOWCASE_TIMEOUT=480 test/look.sh "$@"
 node scripts/build.ts
-OUT="$(cd "$(dirname "${1:?usage: look.sh <dir> [look|focus|panes|composer|images|mcp|web|terminal|toolbar|titlebar|pins|folds|states]}")" && pwd)/$(basename "$1")"
+OUT="$(cd "$(dirname "${1:?usage: look.sh <dir> [look|focus|panes|panehead|composer|images|mcp|web|terminal|toolbar|titlebar|pins|folds|states]}")" && pwd)/$(basename "$1")"
 mkdir -p "$OUT"
 unset ANTHROPIC_API_KEY ANTHROPIC_OAUTH_TOKEN OPENAI_API_KEY
 export SUPEREGO_HOME="$(mktemp -d)" SUPEREGO_HEADLESS=1 SUPEREGO_SHOWCASE_OUT="$OUT" SUPEREGO_REPLAY_SPEED=0 TZ=Europe/Copenhagen

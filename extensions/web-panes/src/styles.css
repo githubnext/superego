@@ -1,11 +1,12 @@
 /* A page in a pane: the page (the app's WebView) fills the column under its header, and what it did (a file saved,
    something refused) shows above it until dismissed. */
 .web-panes-frame { flex: 1; display: flex; flex-direction: column; min-height: 0; }
-/* Its toolbar, a browser's at its quietest: a hint of the surface colour, fading down to a line. One fixed height, so
-   the page under it never moves as what's in it changes. */
+/* Its toolbar, a browser's at its quietest: of a piece with the pane's tab above it (its tint), with a line where the
+   page starts, the page being anyone's colours and its scrolling out of the pane's sight. One fixed height, so the
+   page under it never moves as what's in it changes. */
 .web-panes-toolbar {
   flex: none; display: flex; align-items: center; gap: 2px; height: 36px; box-sizing: border-box; padding: 0 var(--superego-space-2);
-  background: linear-gradient(color-mix(in srgb, var(--superego-surface) 35%, var(--superego-bg)), color-mix(in srgb, var(--superego-surface) 80%, var(--superego-bg)));
+  background: var(--superego-pane-tab);
   border-bottom: 1px solid var(--superego-line); font-size: var(--superego-text-sm); color: var(--superego-text);
 }
 .web-panes-toolbar .superego-icon-button { flex: none; color: var(--superego-muted); }
