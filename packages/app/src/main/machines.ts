@@ -210,7 +210,7 @@ export function createMachines({ app: appConfig, dataDir, headless, broadcast, o
       async run({ id }) { await store.remove(id); await uiAllowed.revoke(id); return null },
     }))
     const uiSource = obj({
-      machine: str(), profile: obj({ scope: union([lit('user'), lit('project')]), name: str(), dir: str() }), hash: str(),
+      machine: str(), profile: obj({ scope: union([lit('user'), lit('project')]), name: str(), dir: str(), source: opt(str()) }), hash: str(),
       files: arr(obj({ path: str(), size: int() })),
     })
     router.register(defineAction({

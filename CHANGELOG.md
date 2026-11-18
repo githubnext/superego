@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Allowing a remote machine's profile UI works again for profiles that come from a profile source: it failed with
+  "profile.allowUi: /profile/source: unknown field".
 - With panes stacked, the thread's tab stands apart from the stack's tabs in the title bar.
 - Stopping a thread no longer loses the messages you'd queued: they come back into its composer, with their files, to
   send again. Messages another thread queued are withdrawn, and the thread says so (its parent hears it in the report).

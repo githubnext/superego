@@ -19,7 +19,7 @@ import type { WindowImages } from './window-images.ts'
 
 const thread = str()
 const EXPOSURE = union([lit('ui'), lit('cli'), lit('outside')])
-const PROFILE_REF = { scope: union([lit('user'), lit('project')]), name: str(), dir: str() }
+const PROFILE_REF = { scope: union([lit('user'), lit('project')]), name: str(), dir: str(), source: opt(str()) }
 /** A method's params, open to more: a newer client may send what an older daemon of its generation doesn't know yet. */
 const params = (properties: Parameters<typeof obj>[0]) => obj(properties, { open: true })
 /**

@@ -215,6 +215,8 @@ it("serves a profile's UI modules, types stripped, only from inside it and only 
   await expect(peer.call('profile.ui', ref)).rejects.toMatchObject({ kind: 'profile_not_allowed' })
   await peer.call('profile.allow', { cwd: project })
   expect(await peer.call('profile.ui', ref)).toMatchObject({ entries: ['./ui/badge.ts'] })
+  // A ref as profile.list gives it, a source's name included, is taken as it is.
+  expect(await peer.call('profile.ui', { ...ref, source: 'git:example.com/me/profiles' })).toMatchObject({ entries: ['./ui/badge.ts'] })
   const badge = await peer.call<{ path: string; code: string }>('profile.module', { ...ref, path: 'ui/badge' })
   expect(badge.path).toBe('ui/badge.ts')
   expect(badge.code).not.toContain(': number')
