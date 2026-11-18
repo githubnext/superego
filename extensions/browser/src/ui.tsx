@@ -6,11 +6,10 @@
 // at as the thread moves on). A web page at `localhost` on another machine than this computer loads from that machine's,
 // forwarded here by the app (the bridge's `forward`).
 //
-// Its address bar: a quiet pill until it's clicked (or ⌘L pressed with the pane focused, in its page too), then a
-// field with the address selected. Return goes where it says (address.ts: a web address, a bare host, an HTML file's
+// Its address bar: a quiet pill until it's clicked, then a field with the address selected. Return goes where it says (address.ts: a web address, a bare host, an HTML file's
 // path, else a search), by pointing the pane there (`pane.update`), so the pane is where it was sent, for the agent and
 // the next launch alike; Esc leaves it as it was.
-import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { askText, call, defineAction, defineUiExtension, hasWebViews, PaneMessage, useApp, useAppSetting, useDispatch, thisComputer, WebView, type PaneProps, type PermissionAsk, type WebViewEvent, type WebViewHandle } from '@superego/app/ui'
 import type { Pane } from '@superego/protocol'
 import { ArrowClockwiseIcon, ArrowLeftIcon, ArrowRightIcon, ArrowSquareOutIcon, Button, GlobeIcon, IconButton, XIcon } from '@superego/ui'
@@ -86,7 +85,6 @@ function BrowserPane({ machine, thread, pane }: PaneProps) {
 
   const onEvent = (event: WebViewEvent) => {
     if (event.type === 'state') setState(event.state)
-    if (event.type === 'address') setEditing(true)
     if (event.type === 'download' && event.state !== 'progressing') {
       setNotice(event.state === 'completed' ? { text: `Saved ${event.name} to Downloads`, path: event.path } : { text: `${event.name} wasn't saved (${event.state})` })
     }
@@ -117,15 +115,8 @@ function BrowserPane({ machine, thread, pane }: PaneProps) {
   }
   const native = hasWebViews()
   const isWeb = Boolean(current && /^https?:/i.test(current))
-  // ⌘L (Ctrl elsewhere) in the pane: its address bar, before the window's navigator.
-  const onKeyDown = (event: KeyboardEvent) => {
-    if (!isAddressKey(event)) return
-    event.preventDefault()
-    event.stopPropagation()
-    setEditing(true)
-  }
   return (
-    <div ref={frame} className="browser-frame" onKeyDown={onKeyDown}>
+    <div ref={frame} className="browser-frame">
       <div className="browser-toolbar">
         {native && <IconButton label="Back" variant="ghost" disabled={!state?.canGoBack} onClick={() => view.current?.go(-1)}><ArrowLeftIcon size={14} aria-hidden /></IconButton>}
         {native && <IconButton label="Forward" variant="ghost" disabled={!state?.canGoForward} onClick={() => view.current?.go(1)}><ArrowRightIcon size={14} aria-hidden /></IconButton>}
@@ -165,12 +156,6 @@ function BrowserPane({ machine, thread, pane }: PaneProps) {
         : !blank && <PaneMessage>{target?.message ?? 'Loading…'}</PaneMessage>}
     </div>
   )
-}
-
-/** ⌘L on a Mac, Ctrl+L elsewhere. */
-function isAddressKey(event: KeyboardEvent) {
-  if (event.key.toLowerCase() !== 'l' || event.altKey || event.shiftKey) return false
-  return /mac/i.test(navigator.platform) ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey
 }
 
 /**

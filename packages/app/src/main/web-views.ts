@@ -45,13 +45,10 @@ export function savePath(dir: string, name: string, exists: (path: string) => bo
   }
 }
 
-/**
- * A browser's own keys in a page: ⌘L goes to its address bar, ⌘R reloads it, ⌘[ and ⌘] go back and forward (Ctrl
- * elsewhere). ⌘L is the page's before the window's (the navigator's, outside a page).
- */
-export function browserKey(input: Pick<Input, 'type' | 'key' | 'meta' | 'control' | 'alt' | 'shift'>, mac: boolean): 'address' | 'reload' | 'back' | 'forward' | undefined {
+/** A browser's own keys in a page: ⌘R reloads it, ⌘[ and ⌘] go back and forward (Ctrl elsewhere). */
+export function browserKey(input: Pick<Input, 'type' | 'key' | 'meta' | 'control' | 'alt' | 'shift'>, mac: boolean): 'reload' | 'back' | 'forward' | undefined {
   if (input.type !== 'keyDown' || input.alt || input.shift || !(mac ? input.meta && !input.control : input.control && !input.meta)) return undefined
-  return ({ l: 'address', r: 'reload', '[': 'back', ']': 'forward' } as const)[input.key.toLowerCase() as 'l' | 'r' | '[' | ']']
+  return ({ r: 'reload', '[': 'back', ']': 'forward' } as const)[input.key.toLowerCase() as 'r' | '[' | ']']
 }
 
 /** A view as web pages' permissions know it: told what its page asks the user now. */
@@ -209,15 +206,10 @@ export function serveWebViews({ windowOf, linkOf, sites }: WebViewsOptions) {
       if (opensOutside(to)) void shell.openExternal(to)
     })
     contents.on('will-redirect', (event, to) => { if (!mayNavigate(partition, to)) event.preventDefault() })
-    // ⌘L to the pane's address bar; then the window's shortcuts (⌘W closes the pane, from inside it too), then a
-    // browser's own.
+    // The window's shortcuts first (⌘W closes the pane, from inside it too), then a browser's own.
     contents.on('before-input-event', (event, input) => {
-      const key = browserKey(input, process.platform === 'darwin')
-      if (key === 'address') {
-        event.preventDefault()
-        return tell(entry, { type: 'address' })
-      }
       if (window.takeKey(input)) return event.preventDefault()
+      const key = browserKey(input, process.platform === 'darwin')
       if (!key) return
       event.preventDefault()
       if (key === 'reload') reload(entry)

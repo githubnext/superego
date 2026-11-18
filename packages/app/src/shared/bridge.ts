@@ -105,15 +105,13 @@ export type SiteAnswer = 'granted' | 'denied'
 export type SitePermissions = Record<string, Partial<Record<SitePermission, SiteAnswer>>>
 
 /**
- * What a web view tells its pane: where it is now; that it took the keyboard (Return, a click into it); that ⌘L was
- * pressed in it (its pane's address bar takes the keyboard); a file it saved (to the Downloads folder, as a browser does);
- * something it asked for that was refused (geolocation, or anything an artifact asks for), or that the system keeps from
- * the app.
+ * What a web view tells its pane: where it is now; that it took the keyboard (Return, a click into it); a file it saved (to the
+ * Downloads folder, as a browser does); something it asked for that was refused (geolocation, or anything an artifact
+ * asks for), or that the system keeps from the app.
  */
 export type WebViewEvent =
   | { type: 'state'; state: WebViewState }
   | { type: 'focus' }
-  | { type: 'address' }
   | { type: 'download'; name: string; path: string; state: 'progressing' | 'completed' | 'cancelled' | 'interrupted' }
   | { type: 'denied'; permission: string }
   /** The user allowed the site the camera or microphone, but the system doesn't let the app use it. */

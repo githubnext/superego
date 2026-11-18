@@ -1,8 +1,8 @@
 // Browser as a browser tab: a page of its own over its pane. A sign-in that sets a SameSite=Lax cookie on one port and
 // redirects to another holds, and still does after a reload; the header follows the page's address and goes back; ⌘L in
-// the page goes to its address bar, where a bare host typed goes there, an HTML file's path shows the file (with its own
-// cookies), and the web page again is still signed in; a page that refuses frames loads; a link to a new window goes to the browser. The view follows its pane: hidden (a still in its
-// place) under a dialog, hidden at the back of a stack. It's kept for its pane: drawn again, it's as it was.
+// the page is the navigator; the address bar, clicked, takes a bare host typed there, an HTML file's path shows the file
+// (with its own cookies), and the web page again is still signed in; a page that refuses frames loads; a link to a new
+// window goes to the browser. The view follows its pane: hidden (a still in its place) under a dialog, hidden at the back of a stack. It's kept for its pane: drawn again, it's as it was.
 import { writeFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { join } from 'node:path'
@@ -66,11 +66,15 @@ export default async function browser(t) {
   await t.click('.panes__column:has(.web-view) button[aria-label="Back"]')
   await t.until(`document.querySelector('.panes__column:has(.web-view) .browser-address__text')?.textContent === ${JSON.stringify(`${appUrl}/`)}`, 'back again')
 
-  // ⌘L in the page: its pane's address bar, not the navigator, the address selected to type over.
+  // ⌘L from inside the page is the window's navigator, as anywhere.
   for (const type of ['keyDown', 'keyUp']) page().sendInputEvent({ type, keyCode: 'l', modifiers: ['meta'] })
+  await t.until(`Boolean(document.querySelector('.navigator'))`, 'cmd+L in the page opens the navigator')
+  t.key('Escape', [])
+  await t.until(`!document.querySelector('.navigator')`, 'the navigator closed')
+  // The address bar, clicked: a field, the address selected to type over.
   const field = 'input.browser-address'
-  await t.until(`document.activeElement?.matches(${JSON.stringify(field)}) && document.activeElement.selectionEnd === document.activeElement.value.length && document.activeElement.selectionStart === 0`, 'cmd+L in the page focuses the address bar, its address selected')
-  await t.check(`!document.querySelector('.navigator')`, 'cmd+L in the page opened the navigator')
+  await t.click('.panes__column:has(.web-view) button.browser-address')
+  await t.until(`document.activeElement?.matches(${JSON.stringify(field)}) && document.activeElement.selectionEnd === document.activeElement.value.length && document.activeElement.selectionStart === 0`, 'the address bar a field, its address selected')
   // A bare host goes there, over http as it's this computer's, and the pane points there.
   const paneParams = async () => (await t.call('thread.list')).find((x) => x.id === thread).panes.find((p) => p.kind === 'browser').params
   await t.type(field, `127.0.0.1:${app.address().port}/next`, { enter: true })

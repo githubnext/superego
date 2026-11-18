@@ -30,12 +30,9 @@ describe('a web view', () => {
     expect(savePath('/dl', '', () => false)).toBe('/dl/download')
   })
 
-  it("takes a browser's keys: the address bar, reload, back and forward", () => {
+  it("takes a browser's keys: reload, back and forward", () => {
     const key = (key: string, mods: Partial<Record<'meta' | 'control' | 'alt' | 'shift', boolean>> = {}) =>
       ({ type: 'keyDown', key, meta: false, control: false, alt: false, shift: false, ...mods })
-    expect(browserKey(key('l', { meta: true }), true)).toBe('address')
-    expect(browserKey(key('L', { control: true }), false)).toBe('address')
-    expect(browserKey(key('l', { meta: true, shift: true }), true)).toBeUndefined()
     expect(browserKey(key('r', { meta: true }), true)).toBe('reload')
     expect(browserKey(key('[', { meta: true }), true)).toBe('back')
     expect(browserKey(key(']', { meta: true }), true)).toBe('forward')

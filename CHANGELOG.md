@@ -7,9 +7,9 @@
 `web-panes` to go without `browser`. A pane of the old kinds still open says so: close it and open the page again.
 Sites start signed out, and ask again for what you'd allowed them.
 
-- Preview and Artifact are one Browser pane, with an address bar: click it (or press ⌘L in the pane) to type an
-  address, a host like `localhost:5173`, an HTML file's path in the working folder, or a search. ⌘T, or Browser in the
-  pane menu, opens a blank one. Settings → Browser picks the search engine (DuckDuckGo or Google).
+- Preview and Artifact are one Browser pane, with an address bar: click it to type an address, a host like
+  `localhost:5173`, an HTML file's path in the working folder, or a search. ⌘T, or Browser in the pane menu, opens a
+  blank one. Settings → Browser picks the search engine (DuckDuckGo or Google).
 - A window reconnecting to a restarted daemon no longer misses what a profile's extensions bring (their panes and
   views) when the profile loads just as it connects.
 - Profile sources: install your own profiles from a git repo or a folder, as Pi installs packages.

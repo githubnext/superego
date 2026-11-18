@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
-// A Browser pane's address bar: a pill until it's clicked (or ⌘L, in the pane or its page), then a field with the
-// address selected; Return points the pane where it says (a web page, an HTML file, a search), Esc leaves it as it was.
+// A Browser pane's address bar: a pill until it's clicked, then a field with the address selected (no shortcut: ⌘L
+// stays the window's navigator); Return points the pane where it says (a web page, an HTML file, a search), Esc leaves it as it was.
 // Opened blank (⌘T, the pane menu), the field waits to be typed in. A web page has the web's cookies and may ask for
 // permissions; an HTML file's page has its own, and is refused them all.
 import { afterEach, expect, it, vi } from 'vitest'
@@ -98,25 +98,20 @@ it('searches with the engine set', async () => {
   expect(updates.at(-1)).toMatchObject({ params: { url: 'https://www.google.com/search?q=superego' } })
 })
 
-it('goes to its address bar on ⌘L, in the pane or from its page, before the window\'s navigator', async () => {
+it("leaves ⌘L to the window's navigator, in the pane too", async () => {
   const { m } = machine()
   ui = await mountUi({ extensions: [browser], machines: [m] })
   const views = desktop()
   const pane = await ui.render({ thread: 't1', pane: { id: 'p1', kind: BROWSER, params: { url: 'https://example.com/' } } })
   await vi.waitFor(() => expect(views).toHaveLength(1))
-  // The window's shortcuts are heard on the window, last (the app's key routing): ⌘L never gets there.
-  const navigator = vi.fn()
-  window.addEventListener('keydown', navigator)
+  // The window's shortcuts are heard on the window, last (the app's key routing): ⌘L gets there.
+  const heard = vi.fn()
+  window.addEventListener('keydown', heard)
   ;(pane.find('.web-view') as HTMLElement).focus()
   await ui.key('mod+l')
-  expect(document.activeElement).toBe(field())
-  expect(navigator).not.toHaveBeenCalled()
-  await ui.key('escape')
+  window.removeEventListener('keydown', heard)
+  expect(heard).toHaveBeenCalledOnce()
   expect(field()).toBeNull()
-  // From inside the page, the main process tells the pane.
-  views[0]!.listener!({ type: 'address' })
-  await vi.waitFor(() => expect(document.activeElement).toBe(field()))
-  window.removeEventListener('keydown', navigator)
 })
 
 it('opens blank, its address bar waiting, from ⌘T or the pane menu', async () => {

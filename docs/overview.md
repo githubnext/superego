@@ -52,7 +52,7 @@ project    a git repository (its worktrees too) or a folder, on a machine
   Built in: the file editor (Markdown rendered, in live preview as Obsidian shows it, or as source) and another thread.
   Bundled extensions add Changes (git's diff, `git`) and Browser (`browser`: a web page, as a browser tab shows it,
   another machine's `localhost` forwarded here; or an HTML file the agent wrote, sandboxed; an address bar to go
-  anywhere, `⌘L` in the pane; `⌘T` opens a blank one); a pane of an extension a thread goes without isn't shown.
+  anywhere, clicked to type in; `⌘T` opens a blank one); a pane of an extension a thread goes without isn't shown.
 - **Files** named in a thread (`[[Note]]`, a relative link, `` `src/app.ts` ``) open beside it; the `files` extension
   adds a tree beside the editor and quick open.
 - **Messages** take files: attach, drop or paste them into the composer. Images go to the model as images; every file
@@ -256,9 +256,9 @@ Settings) hides it as it was, and coming back shows it again, where the user had
 recently shown, and the pane's closing or its thread's archiving closes its page. An HTML file's page reloads when the
 file changes. The address bar (`extensions/browser/src/address.ts`) takes a URL, a bare host (`https://`, or `http://`
 for this computer and its network), an HTML file's path in the working folder, or else searches (Settings → Browser's
-search engine); Return points the pane there (`pane.update`). `⌘L` in the pane, its page too, goes to it rather than
-to the navigator (the main process tells the pane, `browserKey`). In a browser (Web access) the page is framed, with
-the same address bar, and the pane says many sites refuse that.
+search engine); Return points the pane there (`pane.update`). It has no shortcut of its own: `⌘L` is the navigator's,
+in a Browser pane too. In a browser (Web access) the page is framed, with the same address bar, and the pane says many
+sites refuse that.
 
 The daemon takes model keys from the providers' own variables (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, …) when none is
 stored in Settings. A restart keeps the environment it was started with and adds that of the shell asking for it. Where
