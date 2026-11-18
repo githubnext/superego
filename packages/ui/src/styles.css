@@ -87,6 +87,11 @@ body { font: var(--superego-text-ui)/var(--superego-leading-ui) var(--superego-f
 body { -webkit-user-select: none; user-select: none; }
 input, textarea, [contenteditable]:not([contenteditable="false"]) { -webkit-user-select: text; user-select: text; }
 button, summary { -webkit-user-select: none; user-select: none; }
+/* Under a finger, no field is smaller than 16px: iOS zooms the page into one that is, as it takes the focus. Whatever
+   size a field is given elsewhere, hence the !important. (An editor's lines are sized where it's styled.) */
+@media (pointer: coarse) {
+  :is(input, textarea, select) { font-size: max(16px, calc(16px * var(--superego-text-scale))) !important; }
+}
 
 .superego-button {
   font: inherit; font-weight: 500; color: var(--superego-text); background: var(--superego-control); border: 0; box-shadow: var(--superego-control-edge);

@@ -201,7 +201,9 @@
 .row::-webkit-details-marker { display: none; }
 .row:hover { background: var(--superego-hover); }
 .row__chevron { position: absolute; left: 8px; width: 12px; height: 12px; color: var(--superego-faint); opacity: 0; transition: transform .12s, opacity .12s; }
-.row:hover > .row__chevron, .row:focus-visible > .row__chevron, details[open] > .row > .row__chevron { opacity: 1; }
+.row:focus-visible > .row__chevron, details[open] > .row > .row__chevron { opacity: 1; }
+/* Only where there's a pointer to hover with: under a finger, what a tap reveals takes iOS a second tap to get past. */
+@media (hover: hover) { .row:hover > .row__chevron { opacity: 1; } }
 details[open] > .row > .row__chevron { transform: rotate(90deg); }
 .row__icon, .row > .superego-status { flex: none; width: 13px; text-align: center; color: var(--superego-faint); }
 .row__label { flex: none; color: var(--superego-muted); }
@@ -520,7 +522,11 @@ code { font-family: var(--superego-mono); font-size: .92em; }
 .web-device__actions { display: flex; gap: 6px; flex: none; }
 
 /* Phones and narrow windows: one column, the sidebar a drawer, nothing hovering where a thumb goes. */
-.app__mobilebar { display: flex; align-items: center; gap: var(--superego-space-2); padding: calc(env(safe-area-inset-top) + 8px) var(--superego-space-3) 8px; border-bottom: 1px solid var(--superego-line); background: var(--superego-sidebar-bg); flex: none; }
+/* The bar is fixed at the top, the column under it: Safari (iOS 26) takes a fixed bar at the top edge for the page's own
+   and carries its colour up under the status bar, where it would otherwise blur what's there. */
+.app { --mobilebar: calc(env(safe-area-inset-top) + 49px); }
+.app__mobilebar { position: fixed; z-index: 10; top: 0; left: 0; right: 0; height: var(--mobilebar); display: flex; align-items: center; gap: var(--superego-space-2); padding: env(safe-area-inset-top) max(var(--superego-space-3), env(safe-area-inset-right)) 0 max(var(--superego-space-3), env(safe-area-inset-left)); border-bottom: 1px solid var(--superego-line); background: var(--superego-sidebar-bg); }
+.app.is-narrow .app__main { padding-top: var(--mobilebar); }
 .app__mobiletitle { flex: 1; min-width: 0; text-align: center; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* The thread's title opens its sheet: the status, the title, a caret that says there's more. */
 button.app__mobiletitle { display: flex; align-items: center; justify-content: center; gap: 6px; height: 32px; padding: 0 6px; border: 0; border-radius: 8px; background: none; color: var(--superego-text); font: inherit; font-weight: 600; cursor: default; }
@@ -549,7 +555,9 @@ button.app__mobiletitle > svg { flex: none; color: var(--superego-faint); }
 .thread-sheet__pane.superego-button { justify-content: flex-start; height: 40px; min-height: 40px; padding: 0 8px; }
 .thread-sheet__beside { margin: 0 calc(-1 * var(--superego-space-4)); border-top: 1px solid var(--superego-line); }
 .thread-sheet__beside:not(:has(> .placed-view > :not(.view-menu__button, .profile-scope:empty))) { display: none; }
-.app__mobilebar .superego-button { min-width: 36px; min-height: 32px; }
+/* Its buttons are icons on the bar, as a phone's are: no box, a tint while pressed. */
+.app__mobilebar .superego-button { min-width: 36px; min-height: 32px; padding: 0 8px; border-radius: 8px; background: none; box-shadow: none; color: var(--superego-text); }
+.app__mobilebar .superego-button:active:not(:disabled) { background: var(--superego-hover); }
 .app__scrim { position: fixed; inset: 0; z-index: 20; background: rgb(0 0 0 / .3); }
 .app.is-narrow { background: var(--superego-bg); }
 .app.is-narrow .app__main { border-radius: 0; box-shadow: none; }
@@ -562,13 +570,13 @@ button.app__mobiletitle > svg { flex: none; color: var(--superego-faint); }
 .app.is-narrow .dock__action { height: 32px; min-height: 32px; padding: 0 8px; }
 .app.is-narrow .queued-row { height: 32px; }
 .app.is-narrow .queued-row__action { width: 28px; height: 28px; min-height: 28px; }
-/* 16px keeps iOS from zooming into the field. */
-.app.is-narrow .composer, .app.is-narrow .superego-field, .app.is-narrow .new-thread__prompt { font-size: calc(16px * var(--superego-text-scale)); }
 .app.is-narrow .msg--user { max-width: 88%; }
 .app.is-narrow .md pre, .app.is-narrow .step__output, .app.is-narrow .step__diff { margin-left: 0; margin-right: 0; }
 @media (max-width: 760px) {
   .superego-dialog { width: 100vw !important; max-width: 100vw; height: 100dvh !important; max-height: 100dvh; border-radius: 0; }
-  .superego-dialog__frame { max-height: 100dvh; }
+  /* Filling a phone's screen: clear of the status bar, the notch at its side and the home indicator. */
+  .superego-dialog__frame { max-height: 100dvh; padding-bottom: env(safe-area-inset-bottom); }
+  .superego-dialog__header { padding-top: calc(env(safe-area-inset-top) + 10px); padding-right: max(10px, env(safe-area-inset-right)); padding-left: max(16px, env(safe-area-inset-left)); }
   /* Filling the desktop app's window, a dialog's header is its title bar: past the traffic lights, and it drags. */
   :root:has(.app:not(.is-web)) .superego-dialog__header { min-height: var(--superego-titlebar); padding-left: 84px; -webkit-app-region: drag; }
   :root:has(.app:not(.is-web)) .superego-dialog__header :is(button, a, input, select, [role="button"]) { -webkit-app-region: no-drag; }
@@ -708,6 +716,8 @@ a.pane-header__url:hover { color: var(--superego-accent); }
 .pane-bar__note.is-error { color: var(--superego-danger, #d70015); }
 
 .cm-editor.is-live { font-size: calc(15px * var(--superego-text-scale)); }
+/* Under a finger, an editor's lines are 16px at least, as fields are (ui's styles.css): iOS zooms into smaller. */
+@media (pointer: coarse) { .file-editor__host .cm-editor, .cm-editor.is-live { font-size: max(16px, calc(16px * var(--superego-text-scale))); } }
 .cm-editor.is-live .cm-scroller { font-family: var(--superego-font); line-height: 1.65; }
 .cm-editor.is-live .cm-content { max-width: 720px; margin: 0 auto; padding: 20px var(--superego-space-5) 32px; box-sizing: border-box; width: 100%; caret-color: var(--superego-accent); }
 .cm-editor.is-live .cm-line { padding: 0; }
@@ -828,6 +838,8 @@ a.pane-header__url:hover { color: var(--superego-accent); }
    small control reached from the keyboard (see @superego/ui's styles). */
 .app__sidebar, .panes > .panes__column { border: 2px solid transparent; }
 :is(.app__sidebar, .panes > .panes__column):focus-within { border-color: var(--superego-ring); }
+/* Narrow, one region shows at a time: no ring to say which. */
+.app.is-narrow :is(.app__sidebar, .panes > .panes__column) { border: 0; }
 
 /* Over the row: a tab for the thread and each pane (the focused one tinted, those out of view faint, with which way
    they are), the row in small, and + for another pane. */

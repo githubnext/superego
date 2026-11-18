@@ -3,7 +3,7 @@
 // its own actions. `<Blocks>` checks them as they land, keeps the inputs' values (across new blocks too, by id), and
 // hands what the user does to its host; given an `answer`, it shows that, locked. An html block is a page of its own
 // in a sandboxed frame (see frame.html).
-import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type PointerEvent, type ReactNode } from 'react'
 import {
   blockErrors, initialValues, keptValues, needsSubmit, optionValue, picksAnswer, showValue,
   type Block, type BlocksUse, type Button as BlockButton, type ChoiceOption, type Json, type ListItem, type Reply, type ThreadInfo, type Value,
@@ -214,23 +214,26 @@ function Choice({ block }: { block: Extract<Block, { type: 'choice' }> }) {
   // Buttons for a few short options; a list where they say more.
   const style = block.style ?? (block.options.length <= 4 && block.options.every((o) => !o.description && !o.preview && o.label.length <= 24) ? 'buttons' : 'list')
   const preview = (looking ?? block.options.find(chosen))?.preview
+  // An option's preview shows while a mouse points at it; not on a tap, where iOS would take a preview appearing for
+  // something to see before the tap goes through, and want a second one.
+  const look = (option?: ChoiceOption) => (event: PointerEvent) => { if (event.pointerType === 'mouse') setLooking(option) }
   return (
     <div className="blocks-choice" role="group" aria-label={block.label ?? block.id}>
       {block.label && <div className="blocks-field__label">{block.label}</div>}
       {style === 'buttons' ? (
-        <div className="blocks-choice__buttons" onMouseLeave={() => setLooking(undefined)}>
+        <div className="blocks-choice__buttons" onPointerLeave={look()}>
           {block.options.map((option, i) => (
             <Button key={i} variant={chosen(option) ? 'primary' : 'default'} aria-pressed={chosen(option)} disabled={form.locked && !chosen(option) || form.busy}
-              title={option.description} onMouseEnter={() => setLooking(option)} onClick={() => pick(option)}>
+              title={option.description} onPointerEnter={look(option)} onClick={() => pick(option)}>
               {option.label}
             </Button>
           ))}
         </div>
       ) : (
-        <div className="blocks-choice__list" onMouseLeave={() => setLooking(undefined)}>
+        <div className="blocks-choice__list" onPointerLeave={look()}>
           {block.options.map((option, i) => (
             <button key={i} type="button" className={`blocks-option ${chosen(option) ? 'is-chosen' : ''}`} aria-pressed={chosen(option)}
-              disabled={form.locked || form.busy} onMouseEnter={() => setLooking(option)} onFocus={() => setLooking(option)} onClick={() => pick(option)}>
+              disabled={form.locked || form.busy} onPointerEnter={look(option)} onFocus={() => setLooking(option)} onClick={() => pick(option)}>
               <span className={`blocks-option__mark ${block.multiple ? 'is-check' : ''}`}>{chosen(option) && <CheckIcon weight="bold" />}</span>
               <span className="blocks-option__body">
                 <span className="blocks-option__label">{option.label}</span>

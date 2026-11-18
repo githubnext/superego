@@ -70,7 +70,9 @@
 .blocks-option__label { font-weight: 500; }
 .blocks-option__description { font-size: var(--superego-text-sm); color: var(--superego-muted); }
 .blocks-option__go { flex: none; align-self: center; color: var(--superego-faint); opacity: 0; }
-.blocks-option:hover .blocks-option__go, .blocks-option:focus-visible .blocks-option__go { opacity: 1; }
+.blocks-option:focus-visible .blocks-option__go { opacity: 1; }
+/* Only where there's a pointer: under a finger, what a tap reveals takes iOS a second tap to get past. */
+@media (hover: hover) { .blocks-option:hover .blocks-option__go { opacity: 1; } }
 .blocks-preview { padding: var(--superego-space-3); border-radius: var(--superego-radius); background: var(--superego-surface); }
 
 .blocks-open__link { all: unset; display: inline-flex; align-items: center; gap: 4px; color: var(--superego-accent); cursor: pointer; font-weight: 500; }

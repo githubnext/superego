@@ -15,6 +15,14 @@
   same class names, no longer restyle each other's threads. A profile that appends a `<style>` to `document.head`
   still works, but styles the whole window: move it to `superego.style` (`api: '^4.2'`).
 
+### Fixes
+
+- On a phone, the page no longer zooms in when you tap into a field, so the New thread dialog fits the screen.
+- On a phone, buttons and rows take one tap, not two: controls that showed on hover (the sidebar's +, ··· and fold
+  carets) are always shown there.
+- On a phone, the bar at the top is drawn cleanly under the status bar, its ☰ and + plain icons, and full-screen
+  dialogs keep clear of the status bar and the home indicator.
+
 ## 0.1.7
 
 ### Fixes
