@@ -5,9 +5,9 @@
 // whenever its file has changed (looked at as the thread moves on). A preview of `localhost` on another machine than this
 // computer loads from that machine's, forwarded here by the app (the bridge's `forward`).
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { call, defineUiExtension, hasWebViews, PaneMessage, WebView, type PaneProps, type WebViewEvent, type WebViewHandle } from '@superego/app/ui'
+import { askText, call, defineUiExtension, hasWebViews, useApp, PaneMessage, thisComputer, WebView, type PaneProps, type PermissionAsk, type WebViewEvent, type WebViewHandle } from '@superego/app/ui'
 import type { Pane } from '@superego/protocol'
-import { ArrowClockwiseIcon, ArrowLeftIcon, ArrowRightIcon, ArrowSquareOutIcon, FileTextIcon, GlobeIcon, IconButton, XIcon } from '@superego/ui'
+import { ArrowClockwiseIcon, ArrowLeftIcon, ArrowRightIcon, ArrowSquareOutIcon, Button, FileTextIcon, GlobeIcon, IconButton, XIcon } from '@superego/ui'
 import './styles.css'
 import { about, ARTIFACT, PREVIEW } from './shared.ts'
 
@@ -54,15 +54,17 @@ type Notice = { text: string; path?: string }
 /** The page at `at`, where `url` (on `machine`) loads from here. */
 function Page({ url, at, machine }: { url: string; at: string; machine: string }) {
   const view = useRef<WebViewHandle>(null)
-  const [state, setState] = useState<{ url: string; canGoBack: boolean; canGoForward: boolean }>()
+  const [state, setState] = useState<{ url: string; canGoBack: boolean; canGoForward: boolean; ask?: PermissionAsk }>()
   const [notice, setNotice] = useState<Notice>()
   const [waiting, setWaiting] = useState(false)
+  const app = useApp()
   const onEvent = (event: WebViewEvent) => {
     if (event.type === 'state') setState(event.state)
     if (event.type === 'download' && event.state !== 'progressing') {
       setNotice(event.state === 'completed' ? { text: `Saved ${event.name} to Downloads`, path: event.path } : { text: `${event.name} wasn't saved (${event.state})` })
     }
     if (event.type === 'denied') setNotice({ text: `The page asked for ${PERMISSIONS[event.permission] ?? event.permission}: refused here` })
+    if (event.type === 'blocked') setNotice({ text: `macOS doesn't let ${app.name} use the ${event.permission}: allow it in System Settings → Privacy & Security` })
   }
   // Forwarded from another machine: its address there is shown, with where it's come from, and where it is here when
   // that's at another port (the machine's is taken here), as the page's own links to that port lead elsewhere.
@@ -85,6 +87,7 @@ function Page({ url, at, machine }: { url: string; at: string; machine: string }
         {waiting && <ReturnHint />}
         <a className="superego-button superego-button--ghost superego-icon-button" href={current} target="_blank" rel="noreferrer" aria-label="Open in browser" title="Open in browser"><ArrowSquareOutIcon size={14} aria-hidden /></a>
       </div>
+      {state?.ask && <Ask ask={state.ask} answer={(allow) => view.current?.answer(allow)} />}
       {notice && (
         <div className="web-panes-notice" role="status">
           <span>{notice.text}</span>
@@ -125,6 +128,18 @@ function urlParts(address: string): [string, string] {
 const pathParts = (path: string): [string, string] => {
   const at = path.lastIndexOf('/') + 1
   return [path.slice(0, at), path.slice(at)]
+}
+
+/** What the page asks for, until the user answers: only they can, here. */
+function Ask({ ask, answer }: { ask: PermissionAsk; answer(allow: boolean): void }) {
+  const text = askText(ask, thisComputer(navigator.platform))
+  return (
+    <div className="web-panes-ask" role="group" aria-label={text}>
+      <span title={ask.origin}>{text}</span>
+      <Button variant="ghost" onClick={() => answer(false)}>Don't allow</Button>
+      <Button onClick={() => answer(true)}>Allow</Button>
+    </div>
+  )
 }
 
 /** The pane has the keyboard, its page doesn't: Return passes it in. */

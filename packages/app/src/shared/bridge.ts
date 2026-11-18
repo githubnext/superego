@@ -89,17 +89,33 @@ export type WebViewState = {
   canGoForward: boolean
   /** Why the page last asked for didn't load (it isn't there, a certificate refused), or that it crashed. */
   error?: { code: number; description: string; url: string }
+  /** What the page asks the user for now (Preview's), until they answer (`BridgeWebView.answer`). */
+  ask?: PermissionAsk
 }
 
 /**
+ * What a page in Preview may ask the user for: to reach apps on this computer (its loopback addresses) or devices on
+ * its network, the camera, the microphone, to show notifications. Anything else is refused.
+ */
+export type SitePermission = 'loopback-network' | 'local-network' | 'camera' | 'microphone' | 'notifications'
+/** A site asking for one or more permissions at once (the camera and the microphone, say). */
+export type PermissionAsk = { origin: string; kinds: SitePermission[] }
+export type SiteAnswer = 'granted' | 'denied'
+/** What the user said, by site (origin) and permission. */
+export type SitePermissions = Record<string, Partial<Record<SitePermission, SiteAnswer>>>
+
+/**
  * What a web view tells its pane: where it is now; that it took the keyboard (Return, a click into it); a file it saved (to the
- * Downloads folder, as a browser does); something it asked for that was refused (the camera, notifications).
+ * Downloads folder, as a browser does); something it asked for that was refused (geolocation, or anything an artifact
+ * asks for), or that the system keeps from the app.
  */
 export type WebViewEvent =
   | { type: 'state'; state: WebViewState }
   | { type: 'focus' }
   | { type: 'download'; name: string; path: string; state: 'progressing' | 'completed' | 'cancelled' | 'interrupted' }
   | { type: 'denied'; permission: string }
+  /** The user allowed the site the camera or microphone, but the system doesn't let the app use it. */
+  | { type: 'blocked'; permission: 'camera' | 'microphone' }
 
 /**
  * A web page over a pane, held by the main process (main/web-views.ts). It draws above the window's page, wherever it's
@@ -117,6 +133,8 @@ export type BridgeWebView = {
   snapshot(): Promise<Uint8Array | null>
   /** Show a file it saved in the Finder (or the system's file manager). */
   reveal(path: string): void
+  /** The user's answer to what the page asks now (its state's `ask`). */
+  answer(allow: boolean): void
   onEvent(listener: (event: WebViewEvent) => void): void
   close(): void
 }

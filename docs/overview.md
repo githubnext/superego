@@ -243,8 +243,10 @@ On the desktop, Preview and Artifact show their page as a browser tab does: a pa
 WebContentsView, `main/web-views.ts`), not a frame in the window, so its cookies are first-party (a sign-in on one port
 that redirects to another holds), and a page that refuses frames loads. Preview's pages share one session kept between
 launches (`persist:preview`); an artifact's is in memory. A page there has no app powers (sandboxed, isolated, no
-preload); what it asks for (the camera, notifications) is refused and its pane says so; a new window opens in the
-browser; a file it saves goes to Downloads. The view draws above the window's page, so the pane places it
+preload). A Preview page asks for the local network, the camera, the microphone and notifications as in a browser:
+its pane asks the user, whose answer is kept per site (`main/site-permissions.ts`; Settings → Site permissions forgets
+it), and only the user gives it, never an agent; anything else it asks for, and everything an artifact asks for, is
+refused and its pane says so. A new window opens in the browser; a file it saves goes to Downloads. The view draws above the window's page, so the pane places it
 (`renderer/web-view.tsx`, the app's `WebView`): it follows the pane's box, is hidden when the pane is (behind a stack,
 under a maximized pane), and while any of the window's overlays is over it (a menu, a popover, a dialog: `OVERLAYS`, or
 an extension's `data-superego-overlay`), or the pane is partly out of view, a still of the page stands in its place. A

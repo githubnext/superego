@@ -1,5 +1,5 @@
-/* A page in a pane: the page (the app's WebView) fills the column under its header, and what it did (a file saved,
-   something refused) shows above it until dismissed. */
+/* A page in a pane: the page (the app's WebView) fills the column under its header; what it asks for, and what it did
+   (a file saved, something refused), show above it until answered or dismissed. */
 .web-panes-frame { flex: 1; display: flex; flex-direction: column; min-height: 0; }
 /* Its toolbar, a browser's at its quietest: of a piece with the pane's tab above it (its tint), with a line where the
    page starts, the page being anyone's colours and its scrolling out of the pane's sight. One fixed height, so the
@@ -26,4 +26,8 @@ a.superego-icon-button { text-decoration: none; }
 .web-panes-notice > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .web-panes-notice button { flex: none; display: grid; place-items: center; height: 20px; padding: 0 6px; border: 0; border-radius: 5px; background: none; color: var(--superego-text); font: inherit; cursor: default; }
 .web-panes-notice button:hover { background: var(--superego-fill); }
+/* What the page asks for: a line under the toolbar, its question as text and its two answers, until one's chosen. */
+.web-panes-ask { flex: none; display: flex; align-items: center; gap: var(--superego-space-1); min-height: 32px; padding: 0 var(--superego-space-2) 0 var(--superego-space-3); border-bottom: 1px solid var(--superego-line); font-size: var(--superego-text-sm); }
+.web-panes-ask > span { flex: 1; min-width: 0; padding: 6px 0; overflow-wrap: anywhere; }
+.web-panes-ask .superego-button { flex: none; }
 .web-panes-hint { flex: none; padding: 0 var(--superego-space-1); font-size: var(--superego-text-xs); color: var(--superego-muted); opacity: 0.7; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; max-width: 40%; }

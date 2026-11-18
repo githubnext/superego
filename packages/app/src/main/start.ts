@@ -16,7 +16,8 @@ import { commandLine } from './command-line.ts'
 import { createDesktop } from './desktop.ts'
 import { serveIpc } from './ipc.ts'
 import { createForwards } from './forwards.ts'
-import { serveWebViews } from './web-views.ts'
+import { serveWebViews, type AskingView } from './web-views.ts'
+import { createSitePermissions, fileStore } from './site-permissions.ts'
 import { LayoutFile } from './layout-file.ts'
 import { createMachines } from './machines.ts'
 import { createNotifier } from './notify.ts'
@@ -59,6 +60,13 @@ export function startApp(appConfig: AppConfig) {
   settings.register({
     id: 'command-line', title: 'Command line', order: 80, ui: 'command-line', settings: [],
     data: () => cli.info(),
+  })
+  // What sites in Preview may use, as the user said (site-permissions.ts), and Settings' list of them to forget.
+  const siteStore = fileStore(join(dataDir, 'preview-sites.json'))
+  const sites = createSitePermissions<AskingView>({ store: siteStore, asking: (view, ask) => view.asking(ask), changed: () => settings.invalidate() })
+  settings.register({
+    id: 'sites', title: 'Site permissions', order: 75, ui: 'sites', settings: [],
+    data: () => ({ sites: sites.list(), ...(siteStore.problem ? { problem: siteStore.problem } : {}) }),
   })
   // Types for profile authors, from this build (out/types) to <dataDir>/types, where profiles link to them: an upgrade
   // brings its own without anyone asking. Not for tests.
@@ -104,7 +112,7 @@ export function startApp(appConfig: AppConfig) {
 
   const router = createRouter<AppActionContext>()
   machines.registerActions(router)
-  registerAppActions(router, { app: appConfig, settings, cli, service, layoutFile, quit: () => app.quit(), restart: () => restartApp(devRestart) })
+  registerAppActions(router, { app: appConfig, settings, cli, service, layoutFile, sites, quit: () => app.quit(), restart: () => restartApp(devRestart) })
   const windows = createWindows({
     app: appConfig, dataDir, headless,
     methods: (window) => appMethods(window, { settings, router, service, notifier, machines, windows, desktop, build }),
@@ -137,7 +145,7 @@ export function startApp(appConfig: AppConfig) {
   registerArtifactScheme()
   app.whenReady().then(() => {
     if (!primary) return
-    serveWebViews({ windowOf: windows.of, linkOf: machines.linkOf })
+    serveWebViews({ windowOf: windows.of, linkOf: machines.linkOf, sites })
     desktop.start()
     setUpSession()
     machines.start()

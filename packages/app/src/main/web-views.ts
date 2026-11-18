@@ -6,16 +6,19 @@
 // over it.
 //
 // What a page in one may do: what a browser tab may, short of the app's powers (no Node, no preload, sandboxed,
-// isolated). It asks for nothing it's given: the camera, notifications and the rest are refused, and its pane says so.
+// isolated). A page in Preview asks the user, in its pane, for the local network, the camera, the microphone and to
+// show notifications, as a browser does, and has them once they allow it (site-permissions.ts); anything else is
+// refused, and its pane says so. An artifact is the agent's file, not a website: it's refused everything.
 // A link that opens a window opens in the user's browser; a file it saves goes to the Downloads folder. Preview's pages
 // share cookies and storage, kept between launches (`persist:preview`); an artifact's are its own, gone as the app quits.
 import { existsSync } from 'node:fs'
 import { join, parse } from 'node:path'
-import { app, ipcMain, session, shell, WebContentsView, type Input, type IpcMainEvent, type IpcMainInvokeEvent, type Session, type WebContents } from 'electron'
-import { CHANNEL, type WebViewEvent, type WebViewPartition, type WebViewRect, type WebViewState } from '../shared/bridge.ts'
+import { app, ipcMain, session, shell, systemPreferences, WebContentsView, type Input, type IpcMainEvent, type IpcMainInvokeEvent, type Session, type WebContents } from 'electron'
+import { CHANNEL, type PermissionAsk, type SitePermission, type WebViewEvent, type WebViewPartition, type WebViewRect, type WebViewState } from '../shared/bridge.ts'
 import type { AppWindow } from './app-windows.ts'
 import { attachContextMenu } from './context-menu.ts'
 import { SCHEME as ARTIFACT_SCHEME, serveArtifacts } from './artifacts.ts'
+import { asked, checkAsks, originOf, type SitePermissionsHandle } from './site-permissions.ts'
 import type { Link } from '@superego/client'
 
 /** The sessions' partitions: Preview's kept on disk, an artifact's in memory. */
@@ -48,16 +51,23 @@ export function browserKey(input: Pick<Input, 'type' | 'key' | 'meta' | 'control
   return ({ r: 'reload', '[': 'back', ']': 'forward' } as const)[input.key.toLowerCase() as 'r' | '[' | ']']
 }
 
-type Held = { window: AppWindow; id: string; partition: WebViewPartition; view: WebContentsView; error?: WebViewState['error']; stillFailed?: boolean }
+/** A view as Preview's permissions know it: told what its page asks the user now. */
+export type AskingView = { asking(ask: PermissionAsk | undefined): void }
+
+type Held = AskingView & {
+  window: AppWindow; id: string; partition: WebViewPartition; view: WebContentsView; error?: WebViewState['error']; ask?: PermissionAsk; stillFailed?: boolean
+}
 
 export type WebViewsOptions = {
   /** The open window whose page this is. */
   windowOf(contents: WebContents): AppWindow | undefined
   linkOf(machine: string): Link | undefined
+  /** What Preview's pages may use, as the user said. */
+  sites: SitePermissionsHandle<AskingView>
 }
 
 /** Answer the windows' web views (shared/bridge.ts's `webView`; the preload is the other half). Once the app is ready. */
-export function serveWebViews({ windowOf, linkOf }: WebViewsOptions) {
+export function serveWebViews({ windowOf, linkOf, sites }: WebViewsOptions) {
   /** Every view open, by its page's id. */
   const held = new Map<number, Held>()
   /** The files the views saved: the only ones a window may show in the Finder this way. */
@@ -72,6 +82,7 @@ export function serveWebViews({ windowOf, linkOf }: WebViewsOptions) {
       url: contents.getURL(), title: contents.getTitle(), loading: contents.isLoading(),
       canGoBack: contents.navigationHistory.canGoBack(), canGoForward: contents.navigationHistory.canGoForward(),
       ...(view.error ? { error: view.error } : {}),
+      ...(view.ask ? { ask: view.ask } : {}),
     }
   }
 
@@ -81,15 +92,64 @@ export function serveWebViews({ windowOf, linkOf }: WebViewsOptions) {
     if (partition === 'artifact') serveArtifacts(ses, linkOf)
   }
 
+  /**
+   * Whether the system lets the app use what the user allowed a site: the camera and microphone need macOS's say too,
+   * asked for the first time one is used. Refused, the pane says so.
+   */
+  async function systemAllows(view: Held, kinds: SitePermission[]): Promise<boolean> {
+    if (process.platform !== 'darwin') return true
+    for (const kind of kinds) {
+      if (kind !== 'camera' && kind !== 'microphone') continue
+      let allowed = false
+      try {
+        const status = systemPreferences.getMediaAccessStatus(kind)
+        allowed = status === 'granted' || (status === 'not-determined' && await systemPreferences.askForMediaAccess(kind))
+      } catch (error) { console.error(`Asking macOS for the ${kind}:`, error) }
+      if (!allowed) {
+        tell(view, { type: 'blocked', permission: kind })
+        return false
+      }
+    }
+    return true
+  }
+
   function setUpSession(ses: Session, partition: WebViewPartition) {
-    ses.setPermissionRequestHandler((contents, permission, callback) => {
-      const granted = GRANTED.has(permission)
-      callback(granted)
-      const view = held.get(contents.id)
-      if (!granted && view) tell(view, { type: 'denied', permission })
-    })
-    ses.setPermissionCheckHandler((_contents, permission) => GRANTED.has(permission))
     ses.setDevicePermissionHandler(() => false)
+    if (partition === 'preview') {
+      // What the user is asked for (site-permissions.ts), asked in the page's pane; anything else is refused, and said.
+      ses.setPermissionRequestHandler((contents, permission, callback, details) => {
+        if (GRANTED.has(permission)) return callback(true)
+        const view = held.get(contents.id)
+        const origin = originOf(('securityOrigin' in details && details.securityOrigin) || details.requestingUrl)
+        const kinds = asked(permission, 'mediaTypes' in details ? details.mediaTypes : undefined)
+        if (!view || !origin || !kinds?.length) {
+          callback(false)
+          if (view) tell(view, { type: 'denied', permission })
+          return
+        }
+        sites.request(view, origin, kinds, (granted) => {
+          if (!granted) return callback(false)
+          void systemAllows(view, kinds).then(callback)
+        })
+      })
+      ses.setPermissionCheckHandler((contents, permission, requestingOrigin, details) => {
+        if (GRANTED.has(permission)) return true
+        const origin = originOf(requestingOrigin || details.requestingUrl)
+        const kinds = asked(permission, details.mediaType ? [details.mediaType] : undefined)
+        if (!origin || !kinds?.length) return false
+        const view = contents ? held.get(contents.id) : undefined
+        // The local network, checked by a page in a view: asked for, and the page loaded again once it's allowed.
+        return sites.check(origin, kinds, view && checkAsks(permission) ? { view, allowed: () => reload(view) } : undefined)
+      })
+    } else {
+      ses.setPermissionRequestHandler((contents, permission, callback) => {
+        const granted = GRANTED.has(permission)
+        callback(granted)
+        const view = held.get(contents.id)
+        if (!granted && view) tell(view, { type: 'denied', permission })
+      })
+      ses.setPermissionCheckHandler((_contents, permission) => GRANTED.has(permission))
+    }
     ses.on('will-download', (_event, item, contents) => {
       const view = contents && held.get(contents.id)
       const path = savePath(app.getPath('downloads'), item.getFilename())
@@ -111,7 +171,13 @@ export function serveWebViews({ windowOf, linkOf }: WebViewsOptions) {
       webPreferences: { partition: PARTITIONS[partition], sandbox: true, contextIsolation: true, nodeIntegration: false, webSecurity: true },
     })
     const contents = view.webContents
-    const entry: Held = { window, id, partition, view }
+    const entry: Held = {
+      window, id, partition, view,
+      asking(ask) {
+        entry.ask = ask
+        changed()
+      },
+    }
     view.setVisible(false)
     view.setBackgroundColor('#ffffff')
     window.browser.contentView.addChildView(view)
@@ -120,6 +186,7 @@ export function serveWebViews({ windowOf, linkOf }: WebViewsOptions) {
       close() {
         window.views.delete(id)
         held.delete(contents.id)
+        sites.drop(entry, true)
         if (!window.browser.isDestroyed()) window.browser.contentView.removeChildView(view)
         if (!contents.isDestroyed()) contents.close()
       },
@@ -148,10 +215,12 @@ export function serveWebViews({ windowOf, linkOf }: WebViewsOptions) {
       if (key === 'reload') reload(entry)
       else go(entry, key === 'back' ? -1 : 1)
     })
-    const changed = () => tell(entry, { type: 'state', state: stateOf(entry) })
+    function changed() { tell(entry, { type: 'state', state: stateOf(entry) }) }
     contents.on('did-start-navigation', (details) => {
       if (!details.isMainFrame || details.isSameDocument) return
       entry.error = undefined
+      // What the page leaving asked for goes with it, unanswered.
+      sites.drop(entry, false)
       changed()
     })
     for (const name of ['did-start-loading', 'did-stop-loading', 'did-navigate', 'did-navigate-in-page', 'page-title-updated'] as const) contents.on(name as 'did-start-loading', changed)
@@ -222,6 +291,8 @@ export function serveWebViews({ windowOf, linkOf }: WebViewsOptions) {
           else if (contents.isFocused()) window.contents.focus()
           break
         case 'reveal': if (saved.has(args[0] as string)) shell.showItemInFolder(args[0] as string); break
+        // The user's click in the pane's ask: only a window's page gets here, never an agent.
+        case 'answer': sites.answer(view, args[0] === true); break
         case 'close': window.views.get(id)?.close(); break
         default: console.error(`Web view: no ${op}`)
       }

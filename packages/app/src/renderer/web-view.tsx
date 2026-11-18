@@ -23,8 +23,8 @@ import { holdWebView, type HeldWebView, type PaneRef, type WebViewAsk } from './
  */
 export const OVERLAYS = '.superego-layer, .superego-dialog__backdrop, .superego-dialog, .lightbox, .app__scrim, .thread-sheet, .pair-gate, [data-superego-overlay]'
 
-/** What a pane does to its page: go back and forward, reload it, show a file it saved. */
-export type WebViewHandle = { go(by: -1 | 1): void; reload(): void; reveal(path: string): void }
+/** What a pane does to its page: go back and forward, reload it, show a file it saved, answer what it asks (its state's `ask`). */
+export type WebViewHandle = { go(by: -1 | 1): void; reload(): void; reveal(path: string): void; answer(allow: boolean): void }
 
 /** A page to show: its address, and whose cookies it keeps (`partition`). */
 export type WebViewProps = {
@@ -94,7 +94,7 @@ function FramedWebView({ src, title, sandbox, revision, onWaiting, ref }: WebVie
   // The box itself has the focus (the page has it once the frame does).
   const [held, setHeld] = useState(false)
   useWaiting(held, onWaiting)
-  useImperativeHandle(ref, () => ({ go: () => {}, reload: () => setKey((k) => k + 1), reveal: () => {} }), [])
+  useImperativeHandle(ref, () => ({ go: () => {}, reload: () => setKey((k) => k + 1), reveal: () => {}, answer: () => {} }), [])
   return (
     <div className="web-view web-view--framed" tabIndex={-1} data-focus onKeyDown={onReturn(() => frame.current?.focus())}
       onFocus={(event) => setHeld(event.target === event.currentTarget)} onBlur={(event) => { if (event.target === event.currentTarget) setHeld(false) }}>
@@ -168,7 +168,9 @@ function NativeWebView({ src, partition, revision, onEvent, onWaiting, ref }: We
     // The pane by its key: a new object for the same pane is the same pane.
   }, [paneKey, partition])
   useEffect(() => { held.current?.ask(asked.current) }, [src, revision])
-  useImperativeHandle(ref, () => ({ go: (by) => view()?.go(by), reload: () => view()?.reload(), reveal: (path) => view()?.reveal(path) }), [])
+  useImperativeHandle(ref, () => ({
+    go: (by) => view()?.go(by), reload: () => view()?.reload(), reveal: (path) => view()?.reveal(path), answer: (allow) => view()?.answer(allow),
+  }), [])
 
   // Return gives the page the keyboard; the focus moving on to something else in the window takes it back. The window
   // losing the focus (to the page itself, or another app) isn't that.

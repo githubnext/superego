@@ -15,6 +15,7 @@ import type { LayoutFile } from './layout-file.ts'
 import type { Machines } from './machines.ts'
 import type { Notifier } from './notify.ts'
 import type { Service } from './service.ts'
+import type { SitePermissionsHandle } from './site-permissions.ts'
 
 /** What the app's actions run for: a window (its own, from its endpoint), or none (the CLI's). */
 export type AppActionContext = { window?: AppWindow }
@@ -84,10 +85,12 @@ export function callApp(router: Router<AppActionContext>, window: AppWindow, met
 }
 
 /** The app's own actions, besides the machines' (machines.ts). */
-export function registerAppActions(router: Router<AppActionContext>, { app: appConfig, settings, cli, service, layoutFile, quit, restart }: {
+export function registerAppActions(router: Router<AppActionContext>, { app: appConfig, settings, cli, service, layoutFile, sites, quit, restart }: {
   app: AppConfig
   settings: SettingsRegistry
   cli: ReturnType<typeof commandLine>
+  /** What sites in Preview may use: forgotten from Settings. Granted only in a page's pane, never by an action. */
+  sites: Pick<SitePermissionsHandle<unknown>, 'forget'>
   service: Pick<Service, 'state' | 'act'>
   layoutFile: LayoutFile
   quit(): void
@@ -108,6 +111,11 @@ export function registerAppActions(router: Router<AppActionContext>, { app: appC
     id: 'app.cli.uninstall', title: `Remove the ${appConfig.id} command`, runs: 'app', expose: ['ui'],
     params: obj({}),
     run() { cli.uninstall(); settings.invalidate(); return null },
+  }))
+  router.register(defineAction({
+    id: 'app.sites.forget', title: 'Forget what a site in Preview may use', runs: 'app', expose: ['ui'],
+    params: obj({ origin: str() }),
+    run({ origin }) { sites.forget(origin); return null },
   }))
   router.register(defineAction({
     id: 'service.act', title: 'Restart the daemon', runs: 'app', expose: ['ui'],

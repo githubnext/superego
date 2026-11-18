@@ -83,6 +83,7 @@ function webView(url: string, partition: WebViewPartition): BridgeWebView {
     reload: () => op('reload'),
     focus: (on) => op('focus', on),
     reveal: (path) => op('reveal', path),
+    answer: (allow) => op('answer', allow === true),
     snapshot: () => ipcRenderer.invoke(CHANNEL.viewSnapshot, id) as Promise<Uint8Array | null>,
     onEvent: (next) => { listener = next; for (const event of waiting.splice(0)) next(event) },
     close: () => { views.delete(id); op('close') },

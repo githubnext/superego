@@ -36,14 +36,25 @@ export type PackageOptions = {
 
 const BUILDER = 'electron-builder@26'
 
-/** Electron's V8 writes executable memory, in the app and in the daemon it runs as Node; nothing else is asked for. */
+/**
+ * Electron's V8 writes executable memory, in the app and in the daemon it runs as Node; and a page in Preview may use
+ * the camera and microphone once the user allows it (and macOS does: the hardened runtime refuses them without these).
+ */
 const ENTITLEMENTS = `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
   <key>com.apple.security.cs.allow-jit</key><true/>
   <key>com.apple.security.cs.allow-unsigned-executable-memory</key><true/>
+  <key>com.apple.security.device.camera</key><true/>
+  <key>com.apple.security.device.audio-input</key><true/>
 </dict></plist>
 `
+
+/** What macOS says as it first asks to let the app use the camera or microphone: for a site the user allowed in Preview. */
+const USAGE = {
+  NSCameraUsageDescription: 'So a site you allow in Preview can use the camera.',
+  NSMicrophoneUsageDescription: 'So a site you allow in Preview can use the microphone.',
+}
 
 export async function packageApp(root: string, app: AppConfig, options: PackageOptions = {}): Promise<string[]> {
   const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')) as { version?: string; description?: string }
@@ -95,7 +106,8 @@ export async function packageApp(root: string, app: AppConfig, options: PackageO
       target: ['dir'],
       category: 'public.app-category.developer-tools',
       ...(existsSync(join(root, 'resources/icon.icns')) ? { icon: join(root, 'resources/icon.icns') } : {}),
-      ...(existsSync(icons) ? { extraResources: [{ from: icons, to: '.' }], extendInfo: { CFBundleIconName: app.id } } : {}),
+      extendInfo: { ...USAGE, ...(existsSync(icons) ? { CFBundleIconName: app.id } : {}) },
+      ...(existsSync(icons) ? { extraResources: [{ from: icons, to: '.' }] } : {}),
       ...(options.identity
         ? { identity: builderIdentity(options.identity), hardenedRuntime: true, gatekeeperAssess: false, entitlements, entitlementsInherit: entitlements, notarize: false }
         : { identity: null }),

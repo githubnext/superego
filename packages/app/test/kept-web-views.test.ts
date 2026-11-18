@@ -11,7 +11,7 @@ function fakeView(url: string): Fake {
   let listener: ((event: WebViewEvent) => void) | undefined
   const view: Fake = {
     url, loads: [url], reloads: 0, closed: false,
-    place: () => {}, focus: () => {}, go: () => {}, reveal: () => {}, snapshot: async () => null,
+    place: () => {}, focus: () => {}, go: () => {}, reveal: () => {}, answer: () => {}, snapshot: async () => null,
     load: (to) => { view.loads.push(to) },
     reload: () => { view.reloads++ },
     onEvent: (next) => { listener = next },

@@ -44,7 +44,7 @@ export { parseWikilink, WIKILINK, wikilinkHref, type Wikilink } from './wikilink
 export { Picker, type PickerProps, type PickerRow } from './picker.tsx'
 export { PaneHeader, PaneNote, PaneButton, PaneMessage, useTabNote } from './panes.tsx'
 export { WebView, hasWebViews, OVERLAYS, type WebViewHandle, type WebViewProps } from './web-view.tsx'
-export type { WebViewEvent, WebViewState, WebViewPartition } from '../shared/bridge.ts'
+export type { PermissionAsk, SitePermission, WebViewEvent, WebViewState, WebViewPartition } from '../shared/bridge.ts'
 export { HeaderChip, ThreadBadge, Chip, RailButton, factsOf } from './marks.tsx'
 export { Diff, DiffStat, parseDiff, type DiffFile } from './diff.tsx'
 export { FileEditor, type FileEditorProps } from './file-editor.tsx'

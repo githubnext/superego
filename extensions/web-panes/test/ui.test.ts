@@ -2,7 +2,7 @@
 // own first), and nowhere while the thread goes without web-panes; a page framed in a browser, and in a view of its own
 // on the desktop.
 import { afterEach, expect, it, vi } from 'vitest'
-import { defineUiExtension, fileKind, type WebViewEvent } from '@superego/app/ui'
+import { defineUiExtension, fileKind, type SitePermission, type WebViewEvent } from '@superego/app/ui'
 import { mountUi, testThread, type TestWindow } from '@superego/sdk/testing'
 import webPanes from '../src/ui.tsx'
 import { ARTIFACT, PREVIEW } from '../src/shared.ts'
@@ -78,7 +78,7 @@ it('shows a page in a view of its own on the desktop: placed over the pane, its 
     views.push(view)
     const op = (name: string) => (...args: unknown[]) => { view.ops.push([name, ...args]) }
     return {
-      place: op('place'), load: op('load'), go: op('go'), reload: op('reload'), focus: op('focus'), reveal: op('reveal'),
+      place: op('place'), load: op('load'), go: op('go'), reload: op('reload'), focus: op('focus'), reveal: op('reveal'), answer: op('answer'),
       snapshot: async () => null, onEvent: (listener) => { view.listener = listener }, close: () => { view.closed = true },
     }
   }
@@ -110,8 +110,8 @@ it('shows a page in a view of its own on the desktop: placed over the pane, its 
   await vi.waitFor(() => expect(pane.text()).toContain('Saved report.pdf to Downloads'))
   await pane.click('Show')
   expect(view!.ops).toContainEqual(['reveal', '/Users/me/Downloads/report.pdf'])
-  view!.listener!({ type: 'denied', permission: 'media' })
-  await vi.waitFor(() => expect(pane.text()).toContain('The page asked for the camera or microphone: refused here'))
+  view!.listener!({ type: 'denied', permission: 'geolocation' })
+  await vi.waitFor(() => expect(pane.text()).toContain('The page asked for your location: refused here'))
   // A page that doesn't load says why, in the pane.
   view!.listener!({ type: 'state', state: { ...state, url: 'http://localhost:5173/', error: { code: -102, description: 'ERR_CONNECTION_REFUSED', url: 'http://localhost:5173/' } } })
   await vi.waitFor(() => expect(pane.text()).toContain("didn't load: ERR_CONNECTION_REFUSED"))
@@ -126,4 +126,39 @@ it('shows a page in a view of its own on the desktop: placed over the pane, its 
   await ui.unmount()
   ui = undefined
   expect(view!.closed).toBe(true)
+})
+
+it("asks for what the page asks for, under its toolbar, until the user answers; and says what macOS keeps from it", async () => {
+  ui = await mountUi({ extensions: [webPanes] })
+  globalThis.ResizeObserver ??= class { observe() {} unobserve() {} disconnect() {} } as never
+  const ops: unknown[][] = []
+  let listener: ((event: WebViewEvent) => void) | undefined
+  window.superego.forward = undefined
+  window.superego.webView = () => {
+    const op = (name: string) => (...args: unknown[]) => { ops.push([name, ...args]) }
+    return {
+      place: op('place'), load: op('load'), go: op('go'), reload: op('reload'), focus: op('focus'), reveal: op('reveal'), answer: op('answer'),
+      snapshot: async () => null, onEvent: (next) => { listener = next }, close: () => {},
+    }
+  }
+  const pane = await ui.render({ pane: { kind: PREVIEW, params: { url: 'https://okta.example.com/signin' } } })
+  await vi.waitFor(() => expect(listener).toBeDefined())
+  const state = { url: 'https://okta.example.com/signin', title: 'Sign in', loading: false, canGoBack: false, canGoForward: false }
+  const ask = (kinds: SitePermission[]) => listener!({ type: 'state', state: { ...state, ask: { origin: 'https://okta.example.com', kinds } } })
+  ask(['loopback-network'])
+  const asked = () => pane.find('.web-panes-ask')?.textContent ?? ''
+  await vi.waitFor(() => expect(asked()).toMatch(/^okta\.example\.com wants to reach apps on this (Mac|computer)/))
+  await pane.click('Allow')
+  expect(ops).toContainEqual(['answer', true])
+  // Answered, the page says so: the ask goes.
+  listener!({ type: 'state', state })
+  await vi.waitFor(() => expect(pane.find('.web-panes-ask')).toBeFalsy())
+  ask(['camera', 'microphone'])
+  await vi.waitFor(() => expect(asked()).toContain('okta.example.com wants to use the camera and microphone'))
+  await pane.click("Don't allow")
+  expect(ops).toContainEqual(['answer', false])
+  ask(['notifications'])
+  await vi.waitFor(() => expect(asked()).toContain('wants to show notifications'))
+  listener!({ type: 'blocked', permission: 'camera' })
+  await vi.waitFor(() => expect(pane.text()).toContain("macOS doesn't let Superego test use the camera: allow it in System Settings"))
 })

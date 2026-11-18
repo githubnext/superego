@@ -16,6 +16,7 @@ import { registerLayoutText } from './layout-text.tsx'
 import { Profiles } from './settings/profiles.tsx'
 import { Providers } from './settings/providers.tsx'
 import { CommandLine } from './command-line.tsx'
+import { SitePermissions } from './site-permissions.tsx'
 import { WebAccess } from './web-access.tsx'
 import { ConnectedClients } from './connected.tsx'
 import { Shell, ThreadPicker } from './Shell.tsx'
@@ -82,6 +83,7 @@ export function windowRegistry(app: AppConfig, extensions: UiExtension[]) {
     core.settings('clients', ConnectedClients)
     core.settings('profiles', Profiles)
     core.settings('command-line', CommandLine)
+    core.settings('sites', SitePermissions)
     core.appSettings({
       id: 'navigation', title: 'Navigation', order: 60,
       settings: [

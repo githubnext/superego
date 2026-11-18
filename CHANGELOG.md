@@ -13,6 +13,9 @@ is refused until it's changed. A tool view that shows `result.images` gets image
   it whole.
 - Images keep their place while they load, so the thread doesn't jump as you scroll.
 - An image you sent opens in the lightbox when you click it.
+- A page in Preview can ask for the camera, the microphone, notifications or to reach apps on your Mac (as Okta
+  FastPass does to sign in), as in a browser: Preview asks you under its toolbar, and remembers your answer for the
+  site. Settings → Site permissions lists what each site may use, to remove it. Artifacts are still refused everything.
 - Preview and Artifact have a proper browser toolbar under their tab: back, forward and reload as icon buttons, the
   address in a quiet pill (click to select it, the scheme and `localhost` faded), and a button to open the page in your
   browser.
