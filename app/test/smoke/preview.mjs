@@ -41,7 +41,7 @@ export default async function preview(t) {
   const title = async () => page()?.isLoading() === false && page().getTitle()
   await t.until(async () => await title() === 'signed in as mikker', 'signed in, through the redirect, by the cookie')
   // Its address in the header is the page's, now the app's; and it's shown over its pane.
-  await t.until(`document.querySelector('.panes__column:has(.web-view) .pane-header__url')?.textContent.startsWith(${JSON.stringify(`${appUrl}/`)})`, "the header shows the page's address")
+  await t.until(`document.querySelector('.panes__column:has(.web-view) .web-panes-address__text')?.textContent.startsWith(${JSON.stringify(`${appUrl}/`)})`, "the header shows the page's address")
   // Shown over its pane, once it's whole in view (given the focus, it's scrolled to): not put out of sight, as it is
   // while something's over it or it's cut short.
   const viewShown = () => t.win().contentView.children.some((v) => v.webContents === page() && v.getVisible() && v.getBounds().x >= 0 && v.getBounds().y >= 0)
@@ -54,14 +54,14 @@ export default async function preview(t) {
   if ([bounds.x, bounds.y, bounds.width, bounds.height].some((v, i) => Math.abs(v - box[i] * zoom) > 2)) t.fail(`the view at ${JSON.stringify(bounds)}, its pane at ${box}`)
 
   // Reloaded, it's still signed in: the cookie is the page's own.
-  await t.click('.panes__column:has(.web-view) .pane-header__button', 'Reload')
+  await t.click('.panes__column:has(.web-view) button[aria-label="Reload"]')
   await t.until(async () => page()?.isLoading() === false && await title() === 'signed in as mikker', 'still signed in after a reload')
   // Its own links, then back: the header follows.
   await page().executeJavaScript(`document.getElementById('next').click()`, true)
-  await t.until(`document.querySelector('.panes__column:has(.web-view) .pane-header__url')?.textContent === ${JSON.stringify(`${appUrl}/next`)}`, 'the header follows a link')
+  await t.until(`document.querySelector('.panes__column:has(.web-view) .web-panes-address__text')?.textContent === ${JSON.stringify(`${appUrl}/next`)}`, 'the header follows a link')
   await t.until(`!document.querySelector('.panes__column:has(.web-view) button[aria-label="Back"]').disabled`, 'back offered')
   await t.click('.panes__column:has(.web-view) button[aria-label="Back"]')
-  await t.until(`document.querySelector('.panes__column:has(.web-view) .pane-header__url')?.textContent === ${JSON.stringify(`${appUrl}/`)}`, 'back again')
+  await t.until(`document.querySelector('.panes__column:has(.web-view) .web-panes-address__text')?.textContent === ${JSON.stringify(`${appUrl}/`)}`, 'back again')
 
   // Under a dialog, the page is hidden, a still of it in its place; back once it's gone.
   t.key('n')
@@ -111,7 +111,7 @@ export default async function preview(t) {
   const counterPlaced = () => t.win().contentView.children.some((v) => v.webContents === counter && v.getVisible())
   const counterShown = () => t.win().contentView.children.some((v) => v.webContents === counter && v.getVisible() && v.getBounds().x >= 0 && v.getBounds().y >= 0)
   await counter.executeJavaScript(`document.getElementById('on').click()`, true)
-  const header = (url) => `document.querySelector('.panes__column:has(.web-view) .pane-header__url')?.textContent === ${JSON.stringify(url)}`
+  const header = (url) => `document.querySelector('.panes__column:has(.web-view) .web-panes-address__text')?.textContent === ${JSON.stringify(url)}`
   await t.until(header(`${countingUrl}on`), 'taken along a link')
   await t.call('pane.focus', { thread, pane: await previewPane() })
   await t.until(counterShown, 'shown')

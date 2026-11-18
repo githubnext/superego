@@ -26,6 +26,7 @@ export { ArrowElbowDownRightIcon } from '@phosphor-icons/react/dist/csr/ArrowElb
 export { ArrowElbowRightIcon } from '@phosphor-icons/react/dist/csr/ArrowElbowRight'
 export { ArrowLeftIcon } from '@phosphor-icons/react/dist/csr/ArrowLeft'
 export { ArrowRightIcon } from '@phosphor-icons/react/dist/csr/ArrowRight'
+export { ArrowSquareOutIcon } from '@phosphor-icons/react/dist/csr/ArrowSquareOut'
 export { BellIcon } from '@phosphor-icons/react/dist/csr/Bell'
 export { BroomIcon } from '@phosphor-icons/react/dist/csr/Broom'
 export { PlugsConnectedIcon } from '@phosphor-icons/react/dist/csr/PlugsConnected'

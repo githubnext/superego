@@ -4,10 +4,10 @@
 // work, its history goes back and forward. In a browser they're framed. Both reload from their header; an artifact also
 // whenever its file has changed (looked at as the thread moves on). A preview of `localhost` on another machine than this
 // computer loads from that machine's, forwarded here by the app (the bridge's `forward`).
-import { useEffect, useRef, useState } from 'react'
-import { call, defineUiExtension, hasWebViews, PaneButton, PaneHeader, PaneMessage, PaneNote, WebView, type PaneProps, type WebViewEvent, type WebViewHandle } from '@superego/app/ui'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { call, defineUiExtension, hasWebViews, PaneMessage, WebView, type PaneProps, type WebViewEvent, type WebViewHandle } from '@superego/app/ui'
 import type { Pane } from '@superego/protocol'
-import { ArrowLeftIcon, ArrowRightIcon, FileTextIcon, GlobeIcon, XIcon } from '@superego/ui'
+import { ArrowClockwiseIcon, ArrowLeftIcon, ArrowRightIcon, ArrowSquareOutIcon, FileTextIcon, GlobeIcon, IconButton, XIcon } from '@superego/ui'
 import './styles.css'
 import { about, ARTIFACT, PREVIEW } from './shared.ts'
 
@@ -71,17 +71,20 @@ function Page({ url, at, machine }: { url: string; at: string; machine: string }
   const forwarded = at !== url && current.startsWith(here.origin)
   const address = forwarded ? new URL(url).origin + current.slice(here.origin.length) : current
   const moved = forwarded && here.port !== new URL(url).port
-  const note = forwarded ? `${address} (${machine}${moved ? `, here at ${here.host}` : ''})` : address
+  const where = forwarded ? `${machine}${moved ? `, here at ${here.host}` : ''}` : undefined
   const native = hasWebViews()
   return (
     <div className="web-panes-frame">
-      <PaneHeader>
-        {native && <PaneButton aria-label="Back" title="Back" disabled={!state?.canGoBack} onClick={() => view.current?.go(-1)}><ArrowLeftIcon size={12} aria-hidden /></PaneButton>}
-        {native && <PaneButton aria-label="Forward" title="Forward" disabled={!state?.canGoForward} onClick={() => view.current?.go(1)}><ArrowRightIcon size={12} aria-hidden /></PaneButton>}
-        <PaneNote title={note} href={current}>{note}</PaneNote>
+      <div className="web-panes-toolbar">
+        {native && <IconButton label="Back" variant="ghost" disabled={!state?.canGoBack} onClick={() => view.current?.go(-1)}><ArrowLeftIcon size={14} aria-hidden /></IconButton>}
+        {native && <IconButton label="Forward" variant="ghost" disabled={!state?.canGoForward} onClick={() => view.current?.go(1)}><ArrowRightIcon size={14} aria-hidden /></IconButton>}
+        <IconButton label="Reload" variant="ghost" onClick={() => view.current?.reload()}><ArrowClockwiseIcon size={14} aria-hidden /></IconButton>
+        <Address title={where ? `${address} (${where})` : address} parts={urlParts(address)}>
+          {where && <span className="web-panes-where">{where}</span>}
+        </Address>
         {waiting && <ReturnHint />}
-        <PaneButton onClick={() => view.current?.reload()}>Reload</PaneButton>
-      </PaneHeader>
+        <a className="superego-button superego-button--ghost superego-icon-button" href={current} target="_blank" rel="noreferrer" aria-label="Open in browser" title="Open in browser"><ArrowSquareOutIcon size={14} aria-hidden /></a>
+      </div>
       {notice && (
         <div className="web-panes-notice" role="status">
           <span>{notice.text}</span>
@@ -92,6 +95,36 @@ function Page({ url, at, machine }: { url: string; at: string; machine: string }
       <WebView ref={view} src={at} partition="preview" title={url} sandbox="allow-scripts allow-same-origin allow-forms allow-popups" onEvent={onEvent} onWaiting={setWaiting} />
     </div>
   )
+}
+
+/**
+ * Where the page is, in a quiet pill: what says little (the scheme, `localhost`, a file's folder) faint, the rest as
+ * text. A click selects all of it, to copy; `children` follow it, inside (where a forwarded page is from).
+ */
+function Address({ title, parts: [quiet, rest], children }: { title: string; parts: [string, string]; children?: ReactNode }) {
+  return (
+    <div className="web-panes-address" title={title}>
+      <span className="web-panes-address__text"><span className="web-panes-address__quiet">{quiet}</span>{rest}</span>
+      {children}
+    </div>
+  )
+}
+
+/** The hosts a dev server is at: said quietly, as they say nothing of which page it is. */
+const LOCAL = /^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/
+
+/** A URL as the address shows it: the scheme (and a local host) quiet, the rest (another host, the path) as text. */
+function urlParts(address: string): [string, string] {
+  const match = /^([a-z][\w+.-]*:\/\/)([^/?#]*)(.*)$/i.exec(address)
+  if (!match) return ['', address]
+  const [, scheme, host, path] = match as unknown as [string, string, string, string]
+  return LOCAL.test(host) ? [scheme + host, path] : [scheme, host + path]
+}
+
+/** A file's path as the address shows it: its folder quiet, its name as text. */
+const pathParts = (path: string): [string, string] => {
+  const at = path.lastIndexOf('/') + 1
+  return [path.slice(0, at), path.slice(at)]
 }
 
 /** The pane has the keyboard, its page doesn't: Return passes it in. */
@@ -115,12 +148,12 @@ function ArtifactPane({ machine, thread, pane }: PaneProps) {
   if (!url) return <PaneMessage>Artifacts aren't shown here.</PaneMessage>
   return (
     <div className="web-panes-frame">
-      <PaneHeader>
-        <PaneNote title={path} code>{path}</PaneNote>
+      <div className="web-panes-toolbar">
+        <IconButton label="Reload" variant="ghost" onClick={() => view.current?.reload()}><ArrowClockwiseIcon size={14} aria-hidden /></IconButton>
+        <Address title={path} parts={pathParts(path)} />
         {error && <span className="web-panes-hint" role="alert" title={error}>Won't reload as it changes: {error}</span>}
         {waiting && <ReturnHint />}
-        <PaneButton onClick={() => view.current?.reload()}>Reload</PaneButton>
-      </PaneHeader>
+      </div>
       <WebView ref={view} src={url} partition="artifact" revision={revision} title={path} sandbox="allow-scripts allow-forms allow-popups" onWaiting={setWaiting} />
     </div>
   )

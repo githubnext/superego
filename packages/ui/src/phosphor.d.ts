@@ -27,6 +27,7 @@ declare module '@phosphor-icons/react/dist/lib/IconBase' {
 
 declare module '@phosphor-icons/react/dist/csr/Archive' { export const ArchiveIcon: import('@phosphor-icons/react').Icon }
 declare module '@phosphor-icons/react/dist/csr/ArrowClockwise' { export const ArrowClockwiseIcon: import('@phosphor-icons/react').Icon }
+declare module '@phosphor-icons/react/dist/csr/ArrowSquareOut' { export const ArrowSquareOutIcon: import('@phosphor-icons/react').Icon }
 declare module '@phosphor-icons/react/dist/csr/ArrowCounterClockwise' { export const ArrowCounterClockwiseIcon: import('@phosphor-icons/react').Icon }
 declare module '@phosphor-icons/react/dist/csr/ArrowDown' { export const ArrowDownIcon: import('@phosphor-icons/react').Icon }
 declare module '@phosphor-icons/react/dist/csr/ArrowElbowDownRight' { export const ArrowElbowDownRightIcon: import('@phosphor-icons/react').Icon }

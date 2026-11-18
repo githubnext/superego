@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Preview and Artifact have a proper browser toolbar under their tab: back, forward and reload as icon buttons, the
+  address in a quiet pill (click to select it, the scheme and `localhost` faded), and a button to open the page in your
+  browser.
+
 ## 0.1.4
 
 **Upgrading:** CSS in a profile or extension that draws its own status dots with `--superego-status-dot` needs

@@ -16,8 +16,8 @@ export default async function remote(t, s) {
   const devServer = await new Promise((resolve) => { const server = createServer((_q, r) => { r.setHeader('content-type', 'text/html'); r.end('<title>on second</title>') }).listen(0, '127.0.0.1', () => resolve(server)) })
   const devUrl = `http://127.0.0.1:${devServer.address().port}/`
   await t.call('pane.open', { thread: onSecond, kind: 'preview', params: { url: devUrl } }, s.second)
-  await t.until(`document.querySelector('.panes__column:has(.web-view) .pane-header__url')?.textContent.includes('here at 127.0.0.1:')`, 'the page forwarded at another port')
-  const forwarded = await t.run(`document.querySelector('.panes__column:has(.web-view) .pane-header__url').href`)
+  await t.until(`document.querySelector('.panes__column:has(.web-view) .web-panes-address')?.textContent.includes('here at 127.0.0.1:')`, 'the page forwarded at another port')
+  const forwarded = await t.run(`document.querySelector('.panes__column:has(.web-view) a[aria-label="Open in browser"]').href`)
   await t.until(() => pageAt(forwarded)?.isLoading() === false && pageAt(forwarded).getTitle() === 'on second', "the second machine's page, through the forward")
   const previewPane = (await t.call('thread.list', {}, s.second)).find((x) => x.id === onSecond).panes.find((p) => p.kind === 'preview').id
   await t.call('pane.close', { thread: onSecond, pane: previewPane }, s.second)

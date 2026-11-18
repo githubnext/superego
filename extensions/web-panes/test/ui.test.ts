@@ -47,6 +47,10 @@ it('shows a page through the bridge\'s forward: at the address it gives, said wh
   const same = await ui.render({ pane: { kind: PREVIEW, params: { url: 'https://example.com/' } } })
   await vi.waitFor(() => expect(frame(same)).toBe('https://example.com/'))
   expect(same.text()).not.toContain('here at')
+  // The address says the scheme, and a local host, quietly; another host and the path as text.
+  expect(moved.find('.web-panes-address__quiet')?.textContent).toBe('http://localhost:5173')
+  expect(same.find('.web-panes-address__quiet')?.textContent).toBe('https://')
+  expect(same.find('.web-panes-address__text')?.textContent).toBe('https://example.com/')
   // Focused, the pane keeps the keyboard, and says so; Return passes it into the frame.
   const box = same.find('.web-view') as HTMLElement
   box.focus()
@@ -91,6 +95,8 @@ it('shows a page in a view of its own on the desktop: placed over the pane, its 
   expect(button('Forward').disabled).toBe(true)
   await pane.click('Back')
   expect(view!.ops).toContainEqual(['go', -1])
+  await pane.click('Reload')
+  expect(view!.ops).toContainEqual(['reload'])
   // Focused, the pane keeps the keyboard, and says so; Return gives it to the page.
   const box = pane.find('.web-view') as HTMLElement
   box.focus()
