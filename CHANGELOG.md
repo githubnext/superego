@@ -6,6 +6,7 @@
   status bar.
 - The image viewer behaves like the other dialogs: the window behind it can't be scrolled or reached with a screen
   reader while it's open.
+- A thread opened in a pane beside another has less padding at its sides: its messages line up with the composer.
 - `superego machines` no longer hangs on a machine that takes the connection but never answers: after 15 seconds it
   shows as "not answering (timed out connecting)" and the command finishes. `-m` on such a machine gives up after 30
   seconds, and closing a connection (in the app too) ends everything its command started.

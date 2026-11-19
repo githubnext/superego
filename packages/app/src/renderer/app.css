@@ -657,7 +657,7 @@ button.app__mobiletitle > svg { flex: none; color: var(--superego-faint); }
 .is-resizing-columns, .is-resizing-columns * { cursor: col-resize !important; user-select: none !important; }
 .panes__column { flex: none; display: flex; flex-direction: column; min-height: 0; position: relative; isolation: isolate; overflow: hidden; background: var(--superego-bg); }
 .panes__column--thread > .thread { flex: 1; min-width: 0; }
-.panes__column--thread .thread__column { max-width: calc(100% - 2 * var(--superego-space-7)); }
+.panes__column--thread .thread__column { max-width: calc(100% - 2 * var(--superego-space-4)); }
 .panes__column--thread .dock { max-width: calc(100% - 2 * var(--superego-space-4)); }
 /* A pane's tab: set apart from what's under it by a tint a step off the sheet, not a line (the title bar above has
    that); a soft shadow only while what's under it is scrolled up beneath it (useScrolledUnder in panes.tsx). Over the
