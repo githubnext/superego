@@ -1,7 +1,10 @@
 // The window's widths that change how it's laid out, as media queries, and a hook to follow one.
 import { useSyncExternalStore } from 'react'
 
-/** A window as narrow as a phone's: no rail, the space a drawer, one column at a time (and nothing to maximize). */
+/**
+ * A window as narrow as a phone's: no rail, the space a drawer, one column at a time (and nothing to maximize), and text
+ * a quarter bigger (app.css, which repeats this width).
+ */
 export const NARROW = '(max-width: 599px)'
 
 /** A window wide enough for the rail, too tight for the sidebar beside the thread: hidden unless shown there (sidebar-mode.ts). */

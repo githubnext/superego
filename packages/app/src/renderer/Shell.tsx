@@ -393,7 +393,8 @@ function useAppearance() {
     // leaves the default.
     if (typeof accent === 'string' && CSS.supports('color', accent)) style.setProperty('--superego-accent-base', accent)
     else style.removeProperty('--superego-accent-base')
-    style.setProperty('--superego-text-scale', String(textScale(textSize)))
+    // The setting's part of the scale: @superego/ui's styles multiply it by the device's (bigger on a phone).
+    style.setProperty('--superego-text-size', String(textScale(textSize)))
   }, [interfaceFont, monoFont, accent, textSize])
 }
 

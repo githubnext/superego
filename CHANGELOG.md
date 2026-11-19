@@ -17,6 +17,7 @@
 - On a phone, swipe right from the screen's left edge to pull out the sidebar, and swipe it left to put it away. It
   follows your finger and slides open or shut when you let go, smoothly both ways, and slides in and out when you tap ☰
   or beside it too.
+- On a phone, text is a quarter bigger throughout, on top of the Text size you pick in Settings → Appearance.
 
 ### Fixes
 

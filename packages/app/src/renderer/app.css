@@ -524,6 +524,9 @@ code { font-family: var(--superego-mono); font-size: .92em; }
 .web-device__actions { display: flex; gap: 6px; flex: none; }
 
 /* Phones and narrow windows: one column, the sidebar a drawer, nothing hovering where a thumb goes. */
+/* Text reads a quarter bigger there, on top of the Text size setting. The narrow layout's width (media.ts's NARROW); set
+   on the root, where the type tokens are worked out. */
+@media (max-width: 599px) { :root { --superego-text-device: 1.25; } }
 /* The bar is fixed at the top, the column under it, and runs up under the status bar (index.html's black-translucent):
    Safari (iOS 26) samples a fixed bar at the top edge for the page's colour there and leaves out the blur it otherwise
    draws under the status bar, over whatever's at the page's top. */
@@ -735,7 +738,7 @@ a.pane-header__url:hover { color: var(--superego-accent); }
 
 .cm-editor.is-live { font-size: calc(15px * var(--superego-text-scale)); }
 /* Under a finger, an editor's lines are 16px at least, as fields are (ui's styles.css): iOS zooms into smaller. */
-@media (pointer: coarse) { .file-editor__host .cm-editor, .cm-editor.is-live { font-size: max(16px, calc(16px * var(--superego-text-scale))); } }
+@media (pointer: coarse) { .file-editor__host .cm-editor, .cm-editor.is-live { font-size: var(--superego-text-field); } }
 .cm-editor.is-live .cm-scroller { font-family: var(--superego-font); line-height: 1.65; }
 .cm-editor.is-live .cm-content { max-width: 720px; margin: 0 auto; padding: 20px var(--superego-space-5) 32px; box-sizing: border-box; width: 100%; caret-color: var(--superego-accent); }
 .cm-editor.is-live .cm-line { padding: 0; }

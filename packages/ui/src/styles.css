@@ -53,14 +53,19 @@
   --superego-space: 8px;
 
   /* Type: UI text at 13, reading text at 15.5, one title size; mono for meta. */
-  /* Every size of text times this (Settings → Appearance → Text size). */
-  --superego-text-scale: 1;
+  /* Every size of text times this: the Text size setting's factor (Settings → Appearance; the app sets
+     --superego-text-size) times the device's (--superego-text-device: the app's phone layout reads bigger). */
+  --superego-text-size: 1;
+  --superego-text-device: 1;
+  --superego-text-scale: calc(var(--superego-text-size) * var(--superego-text-device));
   --superego-text-xs: calc(11px * var(--superego-text-scale));
   --superego-text-sm: calc(12px * var(--superego-text-scale));
   --superego-text-ui: calc(13px * var(--superego-text-scale));
   --superego-text-body: calc(13.5px * var(--superego-text-scale));
   --superego-text-mono: calc(12px * var(--superego-text-scale));
   --superego-text-title: calc(26px * var(--superego-text-scale));
+  /* A field's under a finger (see below). */
+  --superego-text-field: max(16px, calc(16px * var(--superego-text-size)), var(--superego-text-body));
   --superego-leading-ui: 1.45;
   --superego-leading-body: 1.55;
   /* Space on a 4px grid. */
@@ -88,9 +93,10 @@ body { -webkit-user-select: none; user-select: none; }
 input, textarea, [contenteditable]:not([contenteditable="false"]) { -webkit-user-select: text; user-select: text; }
 button, summary { -webkit-user-select: none; user-select: none; }
 /* Under a finger, no field is smaller than 16px: iOS zooms the page into one that is, as it takes the focus. Whatever
-   size a field is given elsewhere, hence the !important. (An editor's lines are sized where it's styled.) */
+   size a field is given elsewhere, hence the !important. It grows with the Text size setting, and on a phone, where text
+   reads bigger, it's never smaller than reading text. (An editor's lines are sized where it's styled.) */
 @media (pointer: coarse) {
-  :is(input, textarea, select) { font-size: max(16px, calc(16px * var(--superego-text-scale))) !important; }
+  :is(input, textarea, select) { font-size: var(--superego-text-field) !important; }
 }
 
 .superego-button {
@@ -137,7 +143,8 @@ button, summary { -webkit-user-select: none; user-select: none; }
 .superego-status-word--signin { color: var(--superego-muted); font-weight: 400; }
 
 .superego-list { list-style: none; margin: 0; padding: 0; }
-.superego-list-item { display: flex; align-items: center; gap: var(--superego-space-2); height: 28px; padding: 0 8px; border-radius: var(--superego-radius); }
+/* 28px, or a line of text and a little more once the text is big enough (a large Text size on a phone). */
+.superego-list-item { display: flex; align-items: center; gap: var(--superego-space-2); height: max(28px, calc(var(--superego-text-ui) * var(--superego-leading-ui) + 6px)); padding: 0 8px; border-radius: var(--superego-radius); }
 .superego-list-item:hover { background: var(--superego-hover); }
 .superego-list-item.is-selected { background: var(--superego-selected); }
 .superego-list-item__body { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
