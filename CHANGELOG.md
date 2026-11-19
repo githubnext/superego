@@ -22,6 +22,7 @@
   carets) are always shown there.
 - On a phone, the bar at the top is drawn cleanly under the status bar, its ☰ and + plain icons, and full-screen
   dialogs keep clear of the status bar and the home indicator.
+- On iPhone and iPad, a link to a thread shows its status dot right before its title again, not spread across the line.
 - On a phone or tablet, the focused pane no longer wears a blue ring.
 
 ## 0.1.7

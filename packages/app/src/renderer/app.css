@@ -753,7 +753,6 @@ a.pane-header__url:hover { color: var(--superego-accent); }
 .thread-ref:hover .thread-ref__title { text-decoration: underline; text-underline-offset: 2px; }
 .md a.thread-ref:hover { text-decoration: none; }
 .thread-ref__title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.thread-ref .superego-status { width: auto; flex: none; }
 .thread__parent .thread-ref { color: inherit; }
 .md a.md__file:hover { text-decoration: underline; text-underline-offset: 2px; }
 .md a.md__file--code code { color: inherit; }
