@@ -566,6 +566,16 @@ button.app__mobiletitle > svg { flex: none; color: var(--superego-faint); }
 .app.is-narrow .app__main { border-radius: 0; box-shadow: none; }
 .app.is-narrow .app__sidebar { position: fixed; z-index: 21; top: 0; bottom: 0; left: 0; width: min(85vw, 320px); margin: 0; border-radius: 0; background: var(--superego-sidebar-bg); box-shadow: var(--superego-shadow-float); padding-top: env(safe-area-inset-top); }
 .app.is-narrow .app__sidebar .app__drag { height: 12px; }
+/* The drawer slides out and back, and its scrim fades (drawer-swipe.ts moves both under a finger, without transitions). */
+.app.is-narrow .app__sidebar { transition: transform .25s cubic-bezier(.2, .8, .2, 1), opacity .12s; will-change: transform; }
+.app__scrim--drawer { transition: opacity .25s; }
+.app__scrim--drawer.is-leaving { pointer-events: none; }
+@starting-style {
+  .app.is-narrow .app__sidebar { transform: translate3d(-100%, 0, 0); }
+  .app__scrim--drawer { opacity: 0; }
+}
+.app.is-swiping .app__sidebar, .app.is-swiping .app__scrim--drawer { transition: none; }
+@media (prefers-reduced-motion: reduce) { .app.is-narrow .app__sidebar, .app__scrim--drawer { transition: none; } }
 .app.is-narrow .thread__column { width: auto; max-width: none; padding: var(--superego-space-4) var(--superego-space-4) calc(var(--dock, 100px) + 50px); }
 .app.is-narrow .dock { left: var(--superego-space-2); right: var(--superego-space-2); bottom: calc(env(safe-area-inset-bottom) + var(--superego-space-1)); width: auto; max-width: none; transform: none; }
 /* Under a finger: the status bar's actions and the queued rows' buttons get room to be hit. */

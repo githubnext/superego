@@ -29,6 +29,7 @@ import { Overflow, OverflowMenu, OverflowProvider } from './overflow.tsx'
 import { ArchiveButton, PinButton, UnarchiveButton } from './thread-actions.tsx'
 import { StripSlot } from './panes.tsx'
 import { useSidebarEdge } from './sidebar-edge.tsx'
+import { useDrawerSwipe } from './drawer-swipe.ts'
 import { SettingsView } from './SettingsView.tsx'
 import { Palette } from './Palette.tsx'
 import { Navigator } from './Navigator.tsx'
@@ -76,6 +77,9 @@ export function Shell() {
   const tab: 'settings' | 'thread' | 'space' = narrow ? 'space' : settings.open ? 'settings' : alone ? 'thread' : 'space'
   // Wide, the sidebar's edge resizes it, and hides it dragged narrow.
   const sidebarEdge = useSidebarEdge()
+  // Narrow, the drawer comes out with a swipe from the screen's left edge and goes back with one to the left, or slides
+  // back when tapped beside or a thread's picked in it.
+  const swipe = useDrawerSwipe(narrow && spaces.length > 0, drawer, setDrawer)
   const where = selection && thread && machine ? { machine: machine.id, thread } : undefined
   // A space shown in the sidebar (\`open\`), or the sidebar hidden from its button: from Ego's thread, back to the
   // listed one it left; from Settings, back to the thread.
@@ -129,7 +133,7 @@ export function Shell() {
       <GearSixIcon size={18} aria-hidden />
     </IconButton>
   )
-  const sideOpen = spaces.length > 0 && (narrow ? drawer : !sidebar.hidden && tab === 'space')
+  const sideOpen = spaces.length > 0 && (narrow ? drawer || swipe.moving : !sidebar.hidden && tab === 'space')
   // The notices: wide, in the rail above Settings, each a mark that opens to all it says; on a phone, at the drawer's foot.
   const notices = <><AuthNotice rail={!narrow} /><ServiceNotice rail={!narrow} /><BuildNotice rail={!narrow} /><LayoutNotice rail={!narrow} /><RevokedUiNotice rail={!narrow} /></>
   // Wide: across the top a title bar (the window's buttons, then where you are, the thread's columns and what the thread
@@ -137,9 +141,9 @@ export function Shell() {
   // thread and its panes. Narrow: one column under a bar of its own, the sidebar a drawer.
   return (
     <OverflowProvider value={narrow ? null : overflow}>
-    <div className={`app ${sideOpen ? 'has-sidebar' : ''} ${narrow ? 'is-narrow' : ''} ${drawer ? 'has-drawer' : ''} ${window.superego.web ? 'is-web' : ''} ${sidebarEdge.hiding ? 'is-hiding' : ''}`}
+    <div className={`app ${sideOpen ? 'has-sidebar' : ''} ${narrow ? 'is-narrow' : ''} ${drawer ? 'has-drawer' : ''} ${window.superego.web ? 'is-web' : ''} ${sidebarEdge.hiding ? 'is-hiding' : ''} ${swipe.dragging ? 'is-swiping' : ''}`}
       style={narrow ? undefined : sidebarEdge.style}>
-      {narrow && spaces.length > 0 && drawer && <div className="app__scrim" onClick={() => setDrawer(false)} />}
+      {narrow && spaces.length > 0 && (drawer || swipe.moving) && <div className={`app__scrim app__scrim--drawer ${drawer ? '' : 'is-leaving'}`} ref={swipe.scrim} onClick={swipe.close} />}
       {!narrow && (
         <header className="app__drag app__titlebar" ref={overflow.setBar}>
           <BackForward />
@@ -173,7 +177,7 @@ export function Shell() {
         {tab === 'settings' && <main className="app__main"><SettingsView machines={machines} onClose={settings.close} pane /></main>}
         {tab !== 'settings' && sideOpen && (
           // In the drawer, picking a thread (even the open one) closes it.
-          <aside className="app__sidebar" onClick={narrow ? (event) => { if ((event.target as HTMLElement).closest('.superego-list-item')) setDrawer(false) } : undefined}>
+          <aside className="app__sidebar" ref={narrow ? swipe.drawer : undefined} onClick={narrow ? (event) => { if ((event.target as HTMLElement).closest('.superego-list-item')) swipe.close() } : undefined}>
             {narrow && <div className="app__drag" />}
             {space && <SpaceView key={space.id} view={space} {...(where ? { machine, thread } : {})} />}
             {narrow && <div className="app__footer">{notices}
