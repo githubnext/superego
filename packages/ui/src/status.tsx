@@ -29,11 +29,17 @@ function keepInStep(element: Element | null) {
   })
 }
 
-/** Two thirds of a ring: a spinner while it turns, `still` when what it stands for stopped (stalled); `small` for the quiet. */
-const arc = (small: boolean, still = false) => (
-  <circle ref={still ? undefined : keepInStep} className={still ? undefined : 'superego-glyph__spin'} cx="8" cy="8" r={small ? 4 : 5} fill="none" stroke="currentColor"
+/** Two thirds of a ring: a spinner while it turns (`SPINS`), still when what it stands for stopped (stalled); `small` for the quiet. */
+const arc = (small: boolean) => (
+  <circle cx="8" cy="8" r={small ? 4 : 5} fill="none" stroke="currentColor"
     strokeWidth={small ? 1.7 : 2} strokeLinecap="round" strokeDasharray={small ? '17 8.1' : '21 10.4'} />
 )
+/**
+ * The shapes that turn. The mark's box turns, not the arc in its drawing: the compositor turns a box of the page on its
+ * own, but anything of an SVG only by drawing the page again every frame, which costs the window CPU for as long as
+ * any thread works.
+ */
+const SPINS = new Set<GlyphShape>(['working', 'connecting'])
 const ring = (r: number, width: number, dash?: string) => <circle cx="8" cy="8" r={r} fill="none" stroke="currentColor" strokeWidth={width} strokeDasharray={dash} />
 
 /** Every shape but working, whose spinner is smaller for the quiet. */
@@ -45,7 +51,7 @@ const SHAPES: Record<Exclude<GlyphShape, 'working'>, ReactNode> = {
   signin: ring(4.6, 1.4, '2.2 1.9'),
   error: <path d="M5 5l6 6M11 5l-6 6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />,
   queued: ring(3.4, 1.3),
-  stalled: arc(false, true),
+  stalled: arc(false),
   landed: <path d="M4 8.4l2.6 2.6 5.4-5.6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />,
   offline: ring(3.4, 1.3),
   connecting: arc(true),
@@ -59,7 +65,8 @@ const SHAPES: Record<Exclude<GlyphShape, 'working'>, ReactNode> = {
  */
 export function Glyph({ shape, quiet = false, label, className = '' }: { shape: GlyphShape; quiet?: boolean; label?: string; className?: string }) {
   return (
-    <span className={classes('superego-status', `superego-status--${shape}`, quiet && 'is-quiet', className)}
+    <span ref={SPINS.has(shape) ? keepInStep : undefined}
+      className={classes('superego-status', `superego-status--${shape}`, quiet && 'is-quiet', SPINS.has(shape) && 'superego-glyph__spin', className)}
       {...(label ? { role: 'img', 'aria-label': label, title: label } : { 'aria-hidden': true })}>
       <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden>{shape === 'working' ? arc(quiet) : SHAPES[shape]}</svg>
     </span>

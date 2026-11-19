@@ -130,7 +130,7 @@ button, summary { -webkit-user-select: none; user-select: none; }
 .superego-status--queued, .superego-status--offline { color: var(--superego-faint); }
 /* Working: a spinner, every one in step (status.tsx); still under reduced motion, and where what's shown isn't live
    (`.is-stale`). */
-.superego-glyph__spin { transform-box: fill-box; transform-origin: center; animation: superego-spin 1.6s linear infinite; }
+.superego-glyph__spin { animation: superego-spin 1.6s linear infinite; }
 .is-stale .superego-glyph__spin { animation: none; }
 @keyframes superego-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .superego-glyph__spin { animation: none; } }
