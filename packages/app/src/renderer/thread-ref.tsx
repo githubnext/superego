@@ -2,10 +2,10 @@
 // thread's title, kept current (archived or hidden too: Ego's, as its threads' parent), and opens it: a click shows it, ⌘-click opens it in a pane beside the thread shown;
 // or as `open` says, given one (a link handler's, to open it beside the thread the link is in).
 import { useEffect, useState, type MouseEvent, type ReactNode } from 'react'
-import type { ThreadInfo } from '@superego/protocol'
+import { threadPaneParams, type ThreadInfo } from '@superego/protocol'
 import { StatusGlyph } from '@superego/ui'
 import { useRegistry } from './registry.tsx'
-import { useHidden, useSelection, useThreads } from './state.tsx'
+import { useHidden, useMachines, useSelection, useThreads } from './state.tsx'
 
 /**
  * A machine's archived threads, asked once for each set of threads it has in use (archiving or unarchiving one changes
@@ -35,6 +35,7 @@ function useArchived(machine: string, id: string, inUse: ThreadInfo[] | undefine
 export function ThreadRef({ machine, id, children, className = '', open: follow }: { machine: string; id: string; children?: ReactNode; className?: string; open?: (beside: boolean) => void }) {
   const dispatch = useRegistry().router.dispatch
   const { selection } = useSelection()
+  const machines = useMachines()
   const inUse = useThreads(machine)
   const hidden = useHidden(machine)
   const listed = inUse?.find((t) => t.id === id) ?? hidden?.find((t) => t.id === id)
@@ -45,9 +46,10 @@ export function ThreadRef({ machine, id, children, className = '', open: follow 
     event.preventDefault()
     event.stopPropagation()
     if (follow) return follow(event.metaKey || event.ctrlKey)
-    const beside = (event.metaKey || event.ctrlKey) && selection && selection.machine === machine && selection.thread !== id
+    const beside = (event.metaKey || event.ctrlKey) && selection && !(selection.machine === machine && selection.thread === id)
+      ? threadPaneParams(machines, selection.machine, machine, id) : undefined
     const done = beside
-      ? dispatch('pane.open', { thread: selection.thread, kind: 'thread', params: { thread: id } }, { machine, source: 'thread link' })
+      ? dispatch('pane.open', { thread: selection!.thread, kind: 'thread', params: beside }, { machine: selection!.machine, source: 'thread link' })
       : dispatch('thread.select', { machine, thread: id }, { source: 'thread link' })
     void done.catch((error) => console.error(error))
   }

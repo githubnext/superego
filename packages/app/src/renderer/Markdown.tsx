@@ -18,6 +18,7 @@ import { CheckIcon, CopyIcon } from '@superego/ui'
 import { useOptionalRegistry } from './registry.tsx'
 import { linkHandler, linkSchemes } from './lookups.ts'
 import { Claimed, LinkPlace, WIKILINK, wikilinks } from './links.tsx'
+import { useKnownFiles } from './known-files.ts'
 
 /** Code scrolls sideways, never wraps; it fades at the right edge only while a line runs past it. */
 export function Scroll({ node: _node, ...props }: ComponentProps<'pre'> & { node?: unknown }) {
@@ -260,6 +261,8 @@ const components: Components = {
     return <a {...props} href={href} target="_blank" rel="noreferrer" />
   },
   code: ({ node: _node, className, children, ...props }) => {
+    // Code that names a file is a link once that's known: drawn again then.
+    useKnownFiles()
     const registry = useOptionalRegistry()
     const where = useContext(LinkPlace)
     const text = typeof children === 'string' ? children : undefined

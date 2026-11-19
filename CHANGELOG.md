@@ -35,6 +35,13 @@
   state and what it asks or did, project and machine, model, profile, branch, the thread that started it or how many
   it started, cost and when it was last active. The rail's dots show the same card.
 - Extensions: a `header` view can say what its row in the title bar's ··· menu shows (`menuItem`).
+- A path in a message's code is a link only when that file or folder is there on the thread's machine, untracked and
+  git-ignored files included, and it opens there. Anything else stays plain code. A file that's gone by the time you
+  click is struck through and says why. A remote machine needs updating before its threads' paths become links.
+- A "thread" pane shows threads on remote machines too (the Chief of Staff board's "open beside" on another machine),
+  and ⌘-clicking a link to a thread on another machine opens it beside the one you're in.
+- The thread list no longer goes stale after a change comes in mid-update, or after a failed attempt to follow a
+  machine's threads: a pane you opened, say, now shows.
 - A profile's styles no longer leak into the rest of the window: with `superego.style(css)` they reach only what that
   profile draws, on its machine. The same profile from two machines at different versions, or two profiles with the
   same class names, no longer restyle each other's threads. A profile that appends a `<style>` to `document.head`

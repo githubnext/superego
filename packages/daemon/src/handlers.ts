@@ -34,6 +34,7 @@ const PARAMS: Record<string, JsonSchema> = {
   'file.stat': params({ thread, paths: arr(str()) }),
   'image.read': params({ thread, image: union([obj({ path: str() }), obj({ entry: num(), message: num(), block: num() })]), thumbnail: opt(bool()) }),
   'file.find': params({ thread, name: str() }),
+  'file.locate': params({ thread, names: arr(str()) }),
   'file.watch': params({ thread, path: str() }),
   'profile.ui': params(PROFILE_REF),
   'profile.module': params({ ...PROFILE_REF, path: str() }),
@@ -117,6 +118,7 @@ export function serveClient(peer: RpcPeer, { via, hangUp }: { via?: Via; hangUp?
     'image.read': ({ thread: id, image, thumbnail }: Methods['image.read']['params']) => images.read(id, image, Boolean(thumbnail)),
     'file.stat': async ({ thread: id, paths }: Methods['file.stat']['params']) => ({ files: await files.stat(id, paths) }),
     'file.find': ({ thread: id, name }: Methods['file.find']['params']) => files.find(id, name),
+    'file.locate': async ({ thread: id, names }: Methods['file.locate']['params']) => ({ found: await files.locate(id, names) }),
     // A profile's UI is its code too: served only for a real profile folder, and only once it is allowed.
     'profile.ui': (ref: Methods['profile.ui']['params']) => profiles.ui(ref),
     'profile.module': ({ path, ...ref }: Methods['profile.module']['params']) => profiles.module(ref, path),
@@ -155,10 +157,24 @@ export function serveClient(peer: RpcPeer, { via, hangUp }: { via?: Via; hangUp?
     async 'threads.watch'({ hidden = false }: Methods['threads.watch']['params']) {
       const id = sub()
       let last = ''
+      // One list at a time, again after it when something changed meanwhile: lists made side by side could finish out of
+      // order, and the older one, told last, would stand until the next change.
+      let listing = false
+      let again = false
       const push = async () => {
-        const value = await threads.list({ hidden: Boolean(hidden) })
-        const json = JSON.stringify(value)
-        if (json !== last) { last = json; notify('threads.changed', { sub: id, value }) }
+        if (listing) { again = true; return }
+        listing = true
+        try {
+          do {
+            again = false
+            const value = await threads.list({ hidden: Boolean(hidden) })
+            const json = JSON.stringify(value)
+            if (json !== last && subs.has(id)) { last = json; notify('threads.changed', { sub: id, value }) }
+          } while (again && subs.has(id))
+        } catch (error) {
+          // Told nothing this time: the next change lists again.
+          console.error('Listing threads for a watch', error)
+        } finally { listing = false }
       }
       subs.set(id, host.onChanged(push))
       const value = await threads.list({ hidden: Boolean(hidden) })

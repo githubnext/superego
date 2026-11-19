@@ -521,14 +521,18 @@ function EditorPane({ machine, thread, pane }: PaneProps) {
   return <FileEditor key={path} machine={machine} thread={thread} path={path} {...(line ? { line } : {})} onOpenFile={open} />
 }
 
-/** Another thread, beside this one. */
-function ThreadPane({ pane }: PaneProps) {
-  const { thread: id, machine: machineId } = params<{ thread?: string; machine?: string }>(pane)
+/**
+ * Another thread, beside this one: on this thread's machine, or on the one `machine` names. That's the machine's own
+ * id (as its hello says it), not this window's name for it: the pane is kept with the thread, for every window to show.
+ */
+function ThreadPane({ machine: here, pane }: PaneProps) {
+  const { thread: id, machine: named } = params<{ thread?: string; machine?: string }>(pane)
   const machines = useMachines()
   const threads = useAllThreads()
-  const machine = machines.find((m) => m.id === (machineId ?? 'local'))
-  const thread = machine && threads[machine.id]?.find((s) => s.id === id)
-  if (!machine || !thread) return <div className="pane-empty">No thread {id ?? ''} here.</div>
+  const machine = named === undefined ? here : machines.find((m) => m.machine?.id === named)
+  if (!machine) return <div className="pane-empty">Not connected to the machine thread {id ?? ''} is on.</div>
+  const thread = threads[machine.id]?.find((s) => s.id === id)
+  if (!thread) return <div className="pane-empty">No thread {id ?? ''} on {machine.label}.</div>
   return <div className="thread-pane"><ThreadBody machine={machine} thread={thread} /></div>
 }
 

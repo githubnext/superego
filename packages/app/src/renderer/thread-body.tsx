@@ -93,7 +93,7 @@ export function ThreadBody({ machine, thread }: { machine: MachineEntry; thread:
   }, [])
 
   // Where its Markdown's links are; the transcript's are kept for ⌃O's list.
-  const links = useLinkPlace(machine.id, thread, { source: 'thread' })
+  const links = useLinkPlace(machine, thread, { source: 'thread' })
   const transcriptLinks = useMemo<LinkPlaceValue>(() => ({ ...links, collect: collector(machine.id, thread.id) }), [links])
 
   return (

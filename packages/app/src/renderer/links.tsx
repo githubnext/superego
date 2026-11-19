@@ -9,7 +9,9 @@
 import { createContext, useCallback, useContext, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { ThreadInfo } from '@superego/protocol'
 import { SquareSplitHorizontalIcon } from '@superego/ui'
-import { machine as client } from './client.ts'
+import type { MachineEntry } from '../shared/bridge.ts'
+import { machine as client, has } from './client.ts'
+import { knownFile } from './known-files.ts'
 import type { LinkAttributes, LinkHandler, LinkProps, LinkWhere, UiApi } from './extension-api.ts'
 import { scopeOfEntry, useRegistry, whose } from './registry.tsx'
 import { fileKind, folderKind, urlKind } from './lookups.ts'
@@ -26,38 +28,68 @@ type Kept = TranscriptLink & { element: Element }
 export type LinkPlaceValue = LinkWhere & { collect?: (link: Kept) => () => void }
 export const LinkPlace = createContext<LinkPlaceValue>({})
 
+/** A name split from the line it names: `src/a.ts:12` (`:12:3` too), `src/a.ts#L12`. */
+const withLine = (name: string) => {
+  const at = /^(.+?)((?::\d+)+|#L\d+.*)$/.exec(name)
+  return { name: at?.[1] ?? name, line: at?.[2] ?? '' }
+}
+
 /**
  * Where a thread's Markdown is drawn (its transcript, a file's rendered text), for its links: a file it names opens
  * beside the thread, in the pane kind that takes it, at the line it names (a folder in the kind that shows folders);
- * else why not, for the link to say. A file's links (`near`: the folder it's in) look beside it first. A web page opens
- * beside it in the pane kind that shows web pages; with none here, links open in the browser only. Kept the same while
- * what links care about is, so the text isn't drawn again as the thread moves on.
+ * else why not, for the link to say. A file's links (`near`: the folder it's in) look beside it first. Code that names a
+ * path is a link once the thread's machine has said there's a file or folder there (`file`, known-files.ts). A web page
+ * opens beside it in the pane kind that shows web pages; with none here, links open in the browser only. Kept the same
+ * while what links care about is, so the text isn't drawn again as the thread moves on.
  */
-export function useLinkPlace(machine: string, thread: ThreadInfo, { near, source }: { near?: string; source: string }): LinkPlaceValue {
+export function useLinkPlace(machine: MachineEntry, thread: ThreadInfo, { near, source }: { near?: string; source: string }): LinkPlaceValue {
   const registry = useRegistry()
-  const latest = useRef({ machine, thread, near, source, registry })
-  latest.current = { machine, thread, near, source, registry }
-  const openFile = useCallback(async (name: string): Promise<string | undefined> => {
-    const { machine, thread, near, source, registry } = latest.current
+  const machineId = machine.id
+  // An older daemon can't say: its code stays code.
+  const locates = has(machine, 'file-locate')
+  const latest = useRef({ machineId, thread, near, source, registry })
+  latest.current = { machineId, thread, near, source, registry }
+  const openFile = useCallback(async (name: string, { exact = false }: { exact?: boolean } = {}): Promise<string | undefined> => {
+    const { machineId: machine, thread, near, source, registry } = latest.current
     try {
       const peer = client(machine)
-      const at = /^(.+?)((?::\d+)+|#L\d+.*)$/.exec(name)
-      const beside = near === undefined ? undefined : resolve(near, at?.[1] ?? name)
-      const there = beside ? await peer.call('file.find', { thread: thread.id, name: `${beside}${at?.[2] ?? ''}` }) : undefined
-      const found = there && (there.path === beside || there.path === `${beside}.md`) ? there : await peer.call('file.find', { thread: thread.id, name })
+      const at = withLine(name)
+      const beside = near === undefined ? undefined : resolve(near, at.name)
       const folder = shortPath(thread.cwd)
-      if (found.outside) return `outside ${folder}, where this thread works`
-      if (found.path === null) return `not in ${folder}`
+      let found: { path: string | null; folder?: boolean; line?: number; outside?: boolean }
+      if (exact) {
+        // As the path it is, beside the file first: what was drawn as a link, unless it has gone since.
+        const names = beside ? [`${beside}${at.line}`, name] : [name]
+        const { found: each } = await peer.call('file.locate', { thread: thread.id, names })
+        const hit = each.find((one) => one !== null)
+        if (!hit) return `no longer in ${folder}`
+        found = hit
+      } else {
+        const there = beside ? await peer.call('file.find', { thread: thread.id, name: `${beside}${at.line}` }) : undefined
+        found = there && (there.path === beside || there.path === `${beside}.md`) ? there : await peer.call('file.find', { thread: thread.id, name })
+        if (found.outside) return `outside ${folder}, where this thread works`
+        if (found.path === null) return `not in ${folder}`
+      }
       const where = { machine, thread }
-      const kind = found.folder ? folderKind(registry, where) : fileKind(registry, where, found.path)
+      const kind = found.folder ? folderKind(registry, where) : fileKind(registry, where, found.path!)
       if (!kind) return found.folder ? 'a folder, and nothing here shows folders' : 'a file, and nothing here shows files'
       await registry.router.dispatch('pane.open', { thread: thread.id, kind, params: { path: found.path, ...(found.line ? { line: found.line } : {}) } }, { machine, source })
       return undefined
     } catch (error) { return (error as Error).message }
   }, [])
-  const web = urlKind(registry, { machine, thread })
+  const file = useCallback((name: string) => {
+    const { machineId: machine, thread, near } = latest.current
+    const at = withLine(name)
+    const beside = near === undefined ? undefined : resolve(near, at.name)
+    if (beside !== undefined) {
+      const there = knownFile(machine, thread.id, `${beside}${at.line}`)
+      if (there !== null) return there
+    }
+    return knownFile(machine, thread.id, name)
+  }, [])
+  const web = urlKind(registry, { machine: machineId, thread })
   const openUrl = useCallback((url: string) => {
-    const { machine, thread, source, registry } = latest.current
+    const { machineId: machine, thread, source, registry } = latest.current
     const kind = urlKind(registry, { machine, thread })
     if (!kind) return
     const host = URL.parse(url)?.host
@@ -65,7 +97,7 @@ export function useLinkPlace(machine: string, thread: ThreadInfo, { near, source
       .catch((error) => console.error(error))
   }, [])
   const linkThread = useMemo(() => thread, [thread.id, thread.profile?.dir, String(thread.without)])
-  return useMemo(() => ({ machine, thread: linkThread, openFile, ...(web ? { openUrl } : {}) }), [machine, linkThread, web])
+  return useMemo(() => ({ machine: machineId, thread: linkThread, openFile, ...(locates ? { file } : {}), ...(web ? { openUrl } : {}) }), [machineId, linkThread, locates, web])
 }
 
 /** By thread: one window draws one transcript (Shell's ThreadView), so a thread's links are one view's. */
@@ -105,10 +137,11 @@ export const shortUrl = (url: string) => url.replace(/^https?:\/\/(www\.)?/i, ''
 export function registerLinks(core: UiApi) {
   core.link({
     scheme: 'wikilink',
-    match: (href, kind, where) => Boolean(where.openFile) && (kind === 'code' ? looksLikePath(href)
+    // Code only once it's known to name a file or folder there; a link as it's written.
+    match: (href, kind, where) => Boolean(where.openFile) && (kind === 'code' ? looksLikePath(href) && Boolean(where.file?.(href))
       : href.toLowerCase().startsWith(WIKILINK) || (href !== '' && !/^([a-z][\w+.-]*:|#|\/\/)/i.test(href))),
     render: FileLink,
-    open: (href, { openFile, kind }) => openFile!(fileName(href, kind)),
+    open: (href, { openFile, kind }) => kind === 'code' ? openFile!(href, { exact: true }) : openFile!(fileName(href, kind)),
     target: fileName,
   })
   core.link({

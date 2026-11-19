@@ -3,7 +3,7 @@
 // so a thread whose agent goes without the tools (Ego, with a thread_read and a thread_start of its own) still shows
 // them, and a message naming a thread still links to it.
 import { ThreadRef, useMachines, type MachineEntry, type ToolRowCall, type UiApi } from '@superego/app/ui'
-import { machineNamed } from '@superego/protocol'
+import { machineNamed, threadPaneParams } from '@superego/protocol'
 import { ArchiveIcon, ArrowElbowDownRightIcon, ChatCircleIcon, ChatsCircleIcon } from '@superego/ui'
 
 const THREAD = 'thread:'
@@ -51,12 +51,14 @@ export function registerLinks(superego: UiApi) {
       const to = linkedThread(href, where.machine, useMachines())
       return to ? <ThreadRef machine={to.machine} id={to.id} open={(beside) => void open(beside)}>{children}</ThreadRef> : <span title={`${href}: no such machine here`}>{children}</span>
     },
-    // Shown; or, beside, in a pane beside the thread it's named in (one on its machine: a pane shows its own machine's).
+    // Shown; or, beside, in a pane beside the thread it's named in (on any machine the window reaches, named by its own id).
     open(href, { machine, thread, beside }) {
       const to = linkedThread(href, machine, superego.window.machines)
       if (!to) return `${href.slice(THREAD.length).split('/')[0]} isn't a machine here`
-      return beside && thread && to.machine === machine && thread.id !== to.id
-        ? superego.dispatch('pane.open', { thread: thread.id, kind: 'thread', params: { thread: to.id } }, { machine: machine!, source: 'thread link' }).then(() => {})
+      const pane = beside && thread && machine && !(to.machine === machine && thread.id === to.id)
+        ? threadPaneParams(superego.window.machines, machine, to.machine, to.id) : undefined
+      return pane
+        ? superego.dispatch('pane.open', { thread: thread!.id, kind: 'thread', params: pane }, { machine: machine!, source: 'thread link' }).then(() => {})
         : superego.dispatch('thread.select', { machine: to.machine, thread: to.id }, { source: 'thread link' }).then(() => {})
     },
   })

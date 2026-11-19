@@ -47,9 +47,13 @@ export function useMachineList(): MachineEntry[] {
  * A watch shared by everyone who wants it: one subscription per (machine, method, params), however many components
  * show it, held while any of them is mounted. It takes the snapshot, then folds notifications in; notifications that
  * arrive before the snapshot's response are folded in after it. Stale data stays while the machine is disconnected, and
- * it watches again when the machine is back, when the daemon stopped the watch itself (it cleared the thread), or after
- * a failed call, once something changes (a subscriber, the connection).
+ * it watches again when the machine is back, when the daemon stopped the watch itself (it cleared the thread), and
+ * after a failed call: a while later, and sooner if something changes (a subscriber, the connection).
  */
+/** How long a watch whose call failed waits before trying again: at first, and at most (doubling in between). */
+const RETRY_FIRST = 1_000
+const RETRY_LAST = 30_000
+
 export class SharedWatch<T> {
   /** The value and why the last call failed, replaced (not changed) as either changes. */
   state: WatchState<T> = NO_WATCH
@@ -58,6 +62,9 @@ export class SharedWatch<T> {
   /** Whether each of its users wants it running now (connected, say): it runs while any of them does. */
   readonly #wanted = new Map<object, boolean>()
   #stop: (() => void) | undefined
+  /** Trying again after a failed call, and how long it waits next time. */
+  #retry: ReturnType<typeof setTimeout> | undefined
+  #retryIn = RETRY_FIRST
   #release: ReturnType<typeof setTimeout> | undefined
   #ended = false
   readonly id: string
@@ -114,6 +121,8 @@ export class SharedWatch<T> {
 
   #run() {
     if (this.#stop || !this.#on || !this.listeners.size) return
+    clearTimeout(this.#retry)
+    this.#retry = undefined
     const client = machine(this.machineId)
     let sub: string | undefined
     let stopped = false
@@ -138,18 +147,24 @@ export class SharedWatch<T> {
     ;(client.call as (method: string, params: unknown) => Promise<{ sub: string; value: T }>)(this.method, this.params).then((result) => {
       if (stopped) { void client.call('unwatch', { sub: result.sub }).catch(() => {}); return }
       sub = result.sub
+      this.#retryIn = RETRY_FIRST
       let next = result.value
       for (const { method, params } of early) if (params.sub === sub) next = this.fold(next, method, params)
       this.#set({ value: next })
     }).catch((error: unknown) => {
-      // Not watching: the next change (a subscriber, the connection) tries again. What it had stays, with why.
+      // Not watching: tried again a while later (or at the next change: a subscriber, the connection), however it
+      // failed, rather than showing what it had for good. What it had stays meanwhile, with why.
       stop()
       console.error(`${this.method} failed`, error)
       this.#set({ value: this.value, error: error instanceof Error ? error : new Error(String(error)) })
+      if (this.#ended) return
+      this.#retry = setTimeout(() => { this.#retry = undefined; this.#run() }, this.#retryIn)
+      this.#retryIn = Math.min(this.#retryIn * 2, RETRY_LAST)
     })
   }
 
   #end() {
+    clearTimeout(this.#retry)
     this.#stop?.()
     this.#ended = true
     // Only itself: a watch made since, for the same thing, stays.

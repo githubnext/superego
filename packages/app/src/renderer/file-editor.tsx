@@ -164,7 +164,7 @@ export function FileEditor({ machine, thread, path, line, actions, children, onO
 
   // Where its links are: a file it names is looked for beside it first, as a link in it means, else as a message's
   // would be (by its name, anywhere in the folder).
-  const links = useLinkPlace(machine.id, thread, { near: folderOf(path), source: 'editor' })
+  const links = useLinkPlace(machine, thread, { near: folderOf(path), source: 'editor' })
   // A link in live preview (a click on it, or ⌘-click while it's being edited; ⌘: beside), followed by its handler, as
   // in rendered text; one none claims, in the browser.
   const open = (href: string, beside: boolean) => {

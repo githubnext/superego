@@ -529,6 +529,40 @@ describe('record and replay', () => {
     expect(await where('/etc/passwd')).toEqual({ path: null, outside: true })
     await close()
   })
+
+  it('locates the paths code names exactly as given, ignored files too, and nothing by name alone', async () => {
+    const { mkdir } = await import('node:fs/promises')
+    await mkdir(join(dir, 'scripts'), { recursive: true })
+    await writeFile(join(dir, '.gitignore'), 'scripts/*\n')
+    await writeFile(join(dir, 'scripts/product-shape.md'), 'shape\n')
+    const { peer, close } = await open()
+    const thread = await peer.call<ThreadInfo>('thread.start', { cwd: dir })
+    const { found } = await peer.call<{ found: unknown[] }>('file.locate', {
+      thread: thread.id,
+      names: ['scripts/product-shape.md', 'scripts/product-shape.md:3', join(dir, 'scripts/product-shape.md'), 'scripts/', 'product-shape.md', 'scripts/product-shape', 'scripts/gone.md', '/etc/passwd', '../x.md'],
+    })
+    expect(found).toEqual([
+      { path: 'scripts/product-shape.md' },
+      { path: 'scripts/product-shape.md', line: 3 },
+      { path: 'scripts/product-shape.md' },
+      { path: 'scripts', folder: true },
+      null, null, null, null, null,
+    ])
+    await close()
+  })
+
+  it('tells a threads watch the newest list last, however quickly things change', async () => {
+    const { peer, close } = await open()
+    const created = await peer.call<ThreadInfo>('thread.start', { title: 'a' })
+    const { sub } = await peer.call<{ sub: string }>('threads.watch', {})
+    let last: ThreadInfo[] | undefined
+    peer.on('threads.changed', ({ sub: from, value }: Notifications['threads.changed']) => { if (from === sub) last = value })
+    for (let i = 0; i < 12; i++) await peer.call('thread.rename', { thread: created.id, title: `t${i}` })
+    await until(() => last?.[0]?.title === 't11')
+    await new Promise((resolve) => setTimeout(resolve, 100))
+    expect(last?.[0]?.title).toBe('t11')
+    await close()
+  })
 })
 
 

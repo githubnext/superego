@@ -124,6 +124,23 @@ it('tries again after a failed call, once something changes', async () => {
   expect(w.value).toBe(0)
 })
 
+it('tries again on its own a while after a failed call, waiting longer each time', async () => {
+  fail = 2
+  const w = fresh().watch()
+  w.subscribe(() => {})
+  w.want({}, true)
+  await settle()
+  expect(watches()).toBe(1)
+  await vi.advanceTimersByTimeAsync(1000)
+  expect(watches()).toBe(2)
+  expect(w.value).toBeUndefined()
+  await vi.advanceTimersByTimeAsync(1000)
+  expect(watches()).toBe(2)
+  await vi.advanceTimersByTimeAsync(1000)
+  expect(watches()).toBe(3)
+  expect(w.state).toEqual({ value: 0 })
+})
+
 it("doesn't let a watch that ended before it was subscribed take its successor's place", async () => {
   const { watch } = fresh()
   const stale = watch()

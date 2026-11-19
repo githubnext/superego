@@ -47,11 +47,16 @@ async function findFile(root: string, name: string): Promise<string | undefined>
   await walk(root, '')
   return best
 }
+/** Where a path a message names points: a file or folder in the thread's folder, with the line it names. */
+export type Located = { path: string; folder?: boolean; line?: number }
+
 /**
- * What a path in a message points at, in a thread's folder `root`: a file (by `findFile`), a folder, and a line when it
- * names one (`src/a.ts:12`, `src/a.ts#L12`). Absolute and `~` paths count when they're in the folder; `outside` when not.
+ * What a path in a message points at, in a thread's folder `root`: a file, a folder, and a line when it names one
+ * (`src/a.ts:12`, `src/a.ts#L12`). Absolute and `~` paths count when they're in the folder; `outside` when not. A link
+ * is looked up as Obsidian resolves [[links]] (`findFile`: by name too); `exact`, only the path as it's given, as code
+ * in a message is (`file.locate`).
  */
-async function locate(root: string, name: string): Promise<{ path: string | null; folder?: boolean; line?: number; outside?: boolean }> {
+async function locate(root: string, name: string, exact = false): Promise<{ path: string | null; folder?: boolean; line?: number; outside?: boolean }> {
   let given = name.trim()
   let line: number | undefined
   const at = /^(.+?)(?::(\d+)(?::\d+)?|#L(\d+)(?:-L?\d+)?)$/.exec(given)
@@ -62,9 +67,9 @@ async function locate(root: string, name: string): Promise<{ path: string | null
     if (inside.startsWith('..') || isAbsolute(inside)) return { path: null, outside: true }
     given = inside
   }
-  const folder = await (async () => { try { return (await stat(inFolder(root, given || '.'))).isDirectory() } catch { return false } })()
-  if (folder) return { path: given.replace(/\/+$/, ''), folder: true }
-  const path = await findFile(root, given)
+  const info = await Promise.resolve().then(() => stat(inFolder(root, given || '.'))).catch(() => undefined)
+  if (info?.isDirectory()) return { path: given.replace(/\/+$/, ''), folder: true }
+  const path = exact ? info?.isFile() ? given : undefined : await findFile(root, given)
   return path ? { path, ...(line ? { line } : {}) } : { path: null }
 }
 
@@ -105,6 +110,14 @@ export function threadFiles({ dataDir, cwdOf }: { dataDir: string; cwdOf(thread:
       }))
     },
     find: async (thread: string, name: string) => locate(await cwdOf(thread), name),
+    /** The file or folder each path names, exactly as given (no search by name); null for none, or one past the folder. */
+    async locate(thread: string, names: string[]): Promise<(Located | null)[]> {
+      const cwd = await cwdOf(thread)
+      return Promise.all(names.map(async (name) => {
+        const { path, folder, line } = await locate(cwd, name, true)
+        return path === null ? null : { path, ...(folder ? { folder } : {}), ...(line ? { line } : {}) }
+      }))
+    },
     async write(thread: string, path: string, content: string) {
       const file = editable(await cwdOf(thread), path)
       await writeFile(file, content)

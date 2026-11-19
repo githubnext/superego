@@ -207,8 +207,16 @@ export type ToolRow = {
 export type LinkWhere = {
   machine?: string
   thread?: ThreadInfo
-  /** Open a file or folder by the name the text gives it (from the thread's folder, or beside the file it's in); resolves to why it couldn't. */
-  openFile?(name: string): Promise<string | undefined>
+  /**
+   * Open a file or folder by the name the text gives it (from the thread's folder, or beside the file it's in); resolves
+   * to why it couldn't. A link's name is looked up as Obsidian's are, by name too; `exact`, only as the path it is.
+   */
+  openFile?(name: string, options?: { exact?: boolean }): Promise<string | undefined>
+  /**
+   * What a path names here, exactly as given (beside the file it's in first), as known now: a file or folder, null for
+   * nothing, undefined while that's being found out (the place is drawn again once it is).
+   */
+  file?(name: string): { path: string; folder?: boolean; line?: number } | null | undefined
   /** Open a web page in a pane beside the thread; there only where some pane kind shows web pages. */
   openUrl?(url: string): void
 }

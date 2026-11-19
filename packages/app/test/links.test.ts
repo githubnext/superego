@@ -16,7 +16,7 @@ const thread = (withProfile = false): ThreadInfo => ({
   id: '1', title: 't', cwd: '/', createdAt: 0, activeAt: 0, project: { root: '/', name: '/' }, status: { state: 'idle' },
   ...(withProfile ? { profile } : {}),
 })
-const inThread = (withProfile = false): LinkWhere => ({ machine: 'local', thread: thread(withProfile), openFile: async () => undefined })
+const inThread = (withProfile = false): LinkWhere => ({ machine: 'local', thread: thread(withProfile), openFile: async () => undefined, file: (name) => ({ path: name }) })
 const Note = ({ href, children }: LinkProps) => h('a', { className: 'note', 'data-href': href }, children)
 const notes = defineUiExtension({ name: 'notes', setup(superego) { superego.link({ match: 'wikilink:', render: Note, open: () => {} }) } })
 const tickets = defineUiExtension({ name: 'tickets', setup(superego) { superego.link({ match: (href, kind) => kind === 'code' && /^[A-Z]+-\d+$/.test(href), open: () => 'closed' }) } })

@@ -76,7 +76,13 @@ it('follows a thread: link to another machine, named by its id, name or hostname
   ui.registry.window.machines = machines
   const handler = ui.linkHandler('thread:workbox/42', 'link', where)!
   const dispatch = vi.spyOn(ui.registry.router, 'dispatch').mockResolvedValue(undefined as never)
-  // Shown, beside or not: a pane shows a thread of its own machine.
+  // Shown; beside, in a pane here that names the machine by its own id, as every window knows it.
+  await handler.open('thread:workbox/42', { ...where, beside: false, kind: 'link' })
+  expect(dispatch).toHaveBeenLastCalledWith('thread.select', { machine: 'm-9', thread: '42' }, expect.anything())
+  await handler.open('thread:workbox/42', { ...where, beside: true, kind: 'link' })
+  expect(dispatch).toHaveBeenLastCalledWith('pane.open', { thread: '1', kind: 'thread', params: { thread: '42', machine: 'd' } }, expect.objectContaining({ machine: 'local' }))
+  // One that never answered can't be named so: shown instead.
+  ui.registry.window.machines = [machines[0]!, { id: 'm-9', label: 'workbox', state: 'connected' as const }]
   await handler.open('thread:workbox/42', { ...where, beside: true, kind: 'link' })
   expect(dispatch).toHaveBeenLastCalledWith('thread.select', { machine: 'm-9', thread: '42' }, expect.anything())
   expect(await handler.open('thread:elsewhere/42', { ...where, beside: false, kind: 'link' })).toBe("elsewhere isn't a machine here")

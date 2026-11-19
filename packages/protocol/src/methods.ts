@@ -42,9 +42,9 @@ export const linkTo = (thread: Pick<ThreadInfo, 'id' | 'title'>) => `[${thread.t
  * feature before using it, so an older daemon of the generation keeps working with a newer app (and the other way
  * round) for whatever both know. `thread-read`: the `thread.read` method. `forward`: `forward` channels, a TCP
  * connection to a port on its loopback (forward.ts). `image-read`: the `image.read` method, and transcripts whose images
- * come without their pixels (`ImageStub`).
+ * come without their pixels (`ImageStub`). `file-locate`: the `file.locate` method.
  */
-export const FEATURES = ['thread-read', 'forward', 'image-read'] as const
+export const FEATURES = ['thread-read', 'forward', 'image-read', 'file-locate'] as const
 export type Feature = (typeof FEATURES)[number]
 
 export type ThreadId = string
@@ -275,6 +275,17 @@ export type MachineEntry = {
   remote?: { route: string; enabled: boolean; /** Reached with ssh, so it can log in. */ ssh: boolean }
 }
 
+/**
+ * What a "thread" pane on machine `host` takes to show thread `id` on machine `on` (both as a client calls them): a
+ * thread on another machine by that machine's own id (its hello's), as every client knows it, not this one's name for
+ * it. Undefined when that isn't known: a machine that never answered.
+ */
+export function threadPaneParams(machines: readonly Pick<MachineEntry, 'id' | 'machine'>[], host: string, on: string, id: string): { thread: string; machine?: string } | undefined {
+  if (on === host) return { thread: id }
+  const machine = machines.find((m) => m.id === on)?.machine?.id
+  return machine ? { thread: id, machine } : undefined
+}
+
 /** The machine `name` names among `machines`: by its id, else by its name or hostname, in any case. */
 export function machineNamed<M extends Pick<MachineEntry, 'id' | 'label' | 'machine'>>(machines: readonly M[], name: string): M | undefined {
   const wanted = name.toLowerCase()
@@ -316,6 +327,12 @@ export type Methods = {
    * folder itself), with the `line` it names. `path` is null when there's nothing, `outside` when it's past the folder.
    */
   'file.find': { params: { thread: ThreadId; name: string }; result: { path: string | null; folder?: boolean; line?: number; outside?: boolean } }
+  /**
+   * The file or folder each path names in a thread's folder, exactly as given (no search by name, a `:line` or `#L`
+   * kept apart): what a window draws as a link in a message's code. Null for nothing there, or past the folder. With
+   * the `file-locate` feature.
+   */
+  'file.locate': { params: { thread: ThreadId; names: string[] }; result: { found: ({ path: string; folder?: boolean; line?: number } | null)[] } }
   /** A profile's UI halves: their entry modules, and a hash that changes when any of its files do. */
   'profile.ui': { params: ProfileRef; result: { hash: string; entries: string[] } }
   /** One module of a profile's UI, as JavaScript (types stripped); its own imports are left for the window to load. */
