@@ -212,8 +212,16 @@ export function createRegistry(app: AppConfig, extensions: UiExtension[], core: 
     const owner: Owner = { extension: extension.name, optional: !profile && extension.name !== 'core' && !extension.required, ...(profile ? { profile } : {}) }
     // An app's UI half draws for a machine's threads only where it speaks with that machine's half (a profile's comes
     // from the machine itself; the core is the app).
+    // Asked for every tool call a transcript draws, so worked out once for each list a machine announces.
     if (!profile && extension.name !== 'core') {
-      owner.speaks = (machine) => speaks(extension.version, registry.machineExtensions[machine]?.find((e) => e.name === extension.name))
+      const spoken = new WeakMap<ExtensionManifest[], boolean>()
+      owner.speaks = (machine) => {
+        const there = registry.machineExtensions[machine]
+        if (!there) return true
+        let answer = spoken.get(there)
+        if (answer === undefined) spoken.set(there, answer = speaks(extension.version, there.find((e) => e.name === extension.name)))
+        return answer
+      }
     }
     // A name is the extension's prefix: one of each among the app's, and a profile's can't take one of theirs.
     if (teardowns.has(ownerKey(owner)) || (profile && teardowns.has(`/${extension.name}`))) throw new Error(`An extension named ${extension.name} is already set up`)

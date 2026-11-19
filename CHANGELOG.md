@@ -16,6 +16,12 @@
 - ⌃T (Focus threads list) puts the keyboard in the sidebar's threads, on the selected thread, showing the sidebar if
   it's hidden; ⌃T again goes back to the prompt. A terminal keeps ⌃T for its shell.
 - In a file editor, ⌃D, ⌃O and ⌃T only do what the app binds them to, no longer editing the text as well.
+- The window uses far less CPU while threads work: the working spinners no longer make it redraw the whole page every
+  frame, which cost up to a third of a core at rest, and all of one with a long thread open.
+- Long threads scroll smoothly and stream new answers without slowing the window: a folded run of steps is drawn once
+  you open it, and what's already there isn't drawn again for every word that comes in.
+- An open terminal no longer keeps the window busy while nothing happens in it, and a closed one no longer holds on to
+  its memory.
 - The New thread dialog asks in the order you decide: the machine, then a folder on it, then the profile, model and
   thinking, then what to work on. Picking another machine offers that machine's folders.
 - Its folder field lists every folder that machine's threads have worked in, archived ones' too, most recent first,

@@ -42,7 +42,9 @@ export function ThreadBody({ machine, thread }: { machine: MachineEntry; thread:
     const first = (watched.entries[0]?.id as number | undefined) ?? Infinity
     for (const id of seen.current.keys()) if (id < first) seen.current.delete(id)
   }
-  const entries = useMemo(() => [...seen.current.values()].sort((a, b) => (a.id as number) - (b.id as number)), [watched, older])
+  // Only as entries come and go: what streams in (the live run) changes the watch, not them, and a transcript drawn
+  // from the same entries draws again only what's new.
+  const entries = useMemo(() => [...seen.current.values()].sort((a, b) => (a.id as number) - (b.id as number)), [watched?.entries, watched?.before, older])
   const atStart = watched !== undefined && (watched.before === undefined || (entries[0] !== undefined && !older.more && !older.loading))
   const view = useMemo(() => watched && { ...watched, entries, before: atStart ? undefined : entries[0]?.id }, [watched, entries, atStart])
   const keep = useRef<{ height: number; top: number }>(undefined)

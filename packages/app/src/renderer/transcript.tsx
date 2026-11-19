@@ -1,6 +1,6 @@
 // What a thread's transcript shows: your messages (and extensions' entries), the agent's answers, and its work folded
 // into runs and tasks, each tool call drawn as its tool's row describes it or as an extension draws it.
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { createContext, memo, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { ConversationView, EntryRecord, LiveState } from '@earendil-works/pi-durable'
 import { NOTE_ENTRY, waitingForSignIn, type ThreadInfo } from '@superego/protocol'
 import { Button, CheckIcon, FileIcon, type Icon as PhosphorIcon, MinusIcon, PauseIcon, StatusGlyph, XIcon } from '@superego/ui'
@@ -89,10 +89,19 @@ export function Transcript({ machine, thread, view, live }: { machine: MachineEn
   const registry = useRegistry()
   // Tool results render inside the call that asked for them.
   const results = useMemo(() => toolResults(view.entries), [view.entries])
-  const running = new Map((live?.tools ?? []).map((slot) => [slot.callId, slot]))
+  const running = useMemo(() => new Map((live?.tools ?? []).map((slot) => [slot.callId, slot])), [live?.tools])
   const partial = live?.generation?.message as Message | undefined
   const working = Boolean(live?.run) && here.thread.status.state === 'working'
-  const items = useMemo(() => flatten(view.entries, partial, working), [view.entries, partial, working])
+  // An item like the one drawn before is that one, so what didn't change (all but the run streaming in) isn't drawn again.
+  const drawn = useRef(new Map<string, Item>())
+  const items = useMemo(() => {
+    const next = flatten(view.entries, partial, working).map((item) => {
+      const was = drawn.current.get(item.key)
+      return was && sameItem(was, item) ? was : item
+    })
+    drawn.current = new Map(next.map((item) => [item.key, item]))
+    return next
+  }, [view.entries, partial, working])
   const result = (id: string) => results.get(id)
 
   return (
@@ -115,7 +124,10 @@ export function Transcript({ machine, thread, view, live }: { machine: MachineEn
               ? <Task key={`${item.key}:${i}`} part={part} results={results} running={running} />
               : part.blocks.length ? <Work key={`${item.key}:${i}`} blocks={part.blocks} results={results} running={running} active={active && i === parts.length - 1} /> : null)
           }
-          case 'end': return <TurnEnd key={item.key} blocks={divideWork(registry, { machine: here.machine.id, thread: here.thread }, { blocks: item.blocks, active: false, result }).flatMap((part) => part.blocks)} results={results} />
+          case 'end': {
+            const parts = divideWork(registry, { machine: here.machine.id, thread: here.thread }, { blocks: item.blocks, active: false, result })
+            return <TurnEnd key={item.key} blocks={parts.length === 1 ? parts[0]!.blocks : parts.flatMap((part) => part.blocks)} results={results} />
+          }
           case 'working': return <Working key={item.key} steps={item.blocks.filter((b) => b.type === 'toolCall').length} since={item.since} />
         }
       })}
@@ -246,6 +258,16 @@ function flatten(entries: readonly EntryRecord[], partial: Message | undefined, 
   return items
 }
 
+/** Whether two items draw the same: the same entry, text or blocks (each the same object). */
+function sameItem(a: Item, b: Item): boolean {
+  if (a.type !== b.type) return false
+  if (a.type === 'entry') return a.entry === (b as typeof a).entry
+  if (a.type === 'text') { const t = b as typeof a; return a.text === t.text && a.narration === t.narration && a.streaming === t.streaming }
+  const blocksOf = (b as typeof a).blocks
+  if (a.type === 'working' && a.since !== (b as typeof a).since) return false
+  return a.blocks.length === blocksOf.length && a.blocks.every((block, i) => block === blocksOf[i])
+}
+
 /** "Working · 5 steps · 1m 12s" at the end of the turn going on. */
 function Working({ steps, since }: { steps: number; since: number | undefined }) {
   const [now, setNow] = useState(Date.now)
@@ -265,7 +287,7 @@ function Working({ steps, since }: { steps: number; since: number | undefined })
 }
 
 /** "6 steps · +11 −2 · 1 failed" under a finished turn. */
-function TurnEnd({ blocks, results }: { blocks: Block[]; results: Results }) {
+const TurnEnd = memo(function TurnEnd({ blocks, results }: { blocks: Block[]; results: Results }) {
   const rows = useRows()
   const calls = blocks.filter((b) => b.type === 'toolCall')
   const failed = calls.filter((b) => results.get(b.id!)?.isError).length
@@ -277,7 +299,7 @@ function TurnEnd({ blocks, results }: { blocks: Block[]; results: Results }) {
       {failed > 0 && <span>{failed} failed</span>}
     </div>
   )
-}
+})
 
 /** The rows of this thread's tools: each tool's, and the lines a run of calls added and removed, summed. */
 function useRows() {
@@ -292,7 +314,7 @@ function useRows() {
   return { rowOf, stats }
 }
 
-function Entry({ entry }: { entry: EntryRecord }) {
+const Entry = memo(function Entry({ entry }: { entry: EntryRecord }) {
   const here = useContext(Here)
   const registry = useRegistry()
   const where = { machine: here.machine.id, thread: here.thread }
@@ -305,7 +327,7 @@ function Entry({ entry }: { entry: EntryRecord }) {
   // Superego's own lines (a self-archive that couldn't be done); else the kind, for an entry nothing draws.
   const said = entry.kind === NOTE_ENTRY ? (entry.data as { text?: unknown } | undefined)?.text : undefined
   return <div className="msg msg--note">{typeof said === 'string' ? said : entry.kind}</div>
-}
+})
 
 /** A run's blocks as rows: thinking, what the agent said along the way, tool calls. */
 const steps = (blocks: Block[], results: Results, running: Slots) => blocks.map((block, index) => block.type === 'thinking'
@@ -316,19 +338,18 @@ const steps = (blocks: Block[], results: Results, running: Slots) => blocks.map(
 
 /**
  * A run of work. One step shows as itself; more fold into one line saying what was done ("Read 2 files and ran a
- * command"), open while the run is going and closed once the agent has moved on.
+ * command"), opened by hand. Its steps are drawn only while it's open: a long run holds thousands.
  *
  * Rows share one anatomy: a chevron hung in the gutter, then an icon at the text's edge, then the label. What a row
  * opens to sits under its icon; inside a run, rows sit under the run's label.
  */
-function Work({ blocks: all, results, running, active }: { blocks: Block[]; results: Results; running: Slots; active: boolean }) {
+const Work = memo(function Work({ blocks: all, results, running, active }: { blocks: Block[]; results: Results; running: Slots; active: boolean }) {
   const [open, setOpen] = useState<boolean>()
   const { rowOf, stats: sum } = useRows()
   const { blocks, shown } = useUnfolded(all, results, running)
   if (!blocks.length) return shown
-  const rows = steps(blocks, results, running)
   // One step, or only what the agent said beside what it shows: as itself.
-  if ((blocks.length === 1 && blocks[0]!.type !== 'text') || (shown && blocks.every((b) => b.type === 'text'))) return <><div className="steps">{rows}</div>{shown}</>
+  if ((blocks.length === 1 && blocks[0]!.type !== 'text') || (shown && blocks.every((b) => b.type === 'text'))) return <><div className="steps">{steps(blocks, results, running)}</div>{shown}</>
   const calls = blocks.filter((b) => b.type === 'toolCall')
   const failed = calls.filter((b) => results.get(b.id!)?.isError).length
   const stats = sum(calls, results)
@@ -346,12 +367,12 @@ function Work({ blocks: all, results, running, active }: { blocks: Block[]; resu
           {(stats.added > 0 || stats.removed > 0) && <span className="row__meta"><DiffStat {...stats} /></span>}
           {failed > 0 && <span className="row__failed">{failed} failed</span>}
         </summary>
-        <div className="run__steps">{rows}</div>
+        {folded && <div className="run__steps">{steps(blocks, results, running)}</div>}
       </details>
       {shown}
     </>
   )
-}
+})
 
 /**
  * A run's blocks without the calls an extension shows unfolded (`tool(name, component, { fold: false })`: images the
@@ -368,7 +389,7 @@ function useUnfolded(all: Block[], results: Results, running: Slots) {
 
 /**
  * A titled part of a run (a task the agent reported): how it went, its title, and its outcome under it, all shown
- * folded; its steps under that, opened by hand.
+ * folded; its steps under that, opened by hand (and drawn only then).
  */
 function Task({ part, results, running }: { part: WorkPart; results: Results; running: Slots }) {
   const [open, setOpen] = useState(false)
@@ -377,7 +398,6 @@ function Task({ part, results, running }: { part: WorkPart; results: Results; ru
   const { blocks, shown } = useUnfolded(part.blocks, results, running)
   const calls = blocks.filter((b) => b.type === 'toolCall')
   const stats = sum(calls, results)
-  const rows = steps(blocks, results, running)
   const summary = (
     <>
       {status === 'running' ? <StatusGlyph status={{ state: 'working' }} /> : <TaskIcon status={status} />}
@@ -390,12 +410,12 @@ function Task({ part, results, running }: { part: WorkPart; results: Results; ru
       </span>
     </>
   )
-  if (!rows.length) return <><div className={`steps task task--${status}`}><div className="row task__row">{summary}</div></div>{shown}</>
+  if (!blocks.length) return <><div className={`steps task task--${status}`}><div className="row task__row">{summary}</div></div>{shown}</>
   return (
     <>
       <details className={`steps steps--run task task--${status}`} open={open} onToggle={(e) => setOpen(e.currentTarget.open)}>
         <summary className="row task__row" aria-label={`${part.title} — ${TASK_LABELS[status]}`}><Chevron />{summary}</summary>
-        <div className="run__steps">{rows}</div>
+        {open && <div className="run__steps">{steps(blocks, results, running)}</div>}
       </details>
       {shown}
     </>
