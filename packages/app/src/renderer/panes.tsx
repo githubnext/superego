@@ -10,7 +10,8 @@
 //   window's edge. The strip's tabs bring one to the front; so does its getting the focus (a click, ⌃Tab, ⌘⌥←/→, the
 //   navigator, pane.focus from anywhere) and its opening. The thread's handle drags the line between the two.
 // Either way, a column (the thread's or a pane's) can be maximized for a while: over the rest, which stay as they were under it (see
-// maximized.ts). ⌃Tab moves the focus along. On a phone each column is the screen's width, and a swipe moves between them.
+// maximized.ts). ⌃Tab moves the focus along. A pane's tab dragged along the strip moves it among the others
+// (pane.move, kept with the thread; ⌘⌥⇧←/→ too). On a phone each column is the screen's width, and a swipe moves between them.
 // Built in: editor and thread. Extensions and profiles add kinds with superego.pane(kind, …) (Changes is git's; a web
 // page or an HTML file, browser's). A pane of a kind only an extension the thread goes without draws isn't shown.
 import { createContext, Fragment, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState, type ButtonHTMLAttributes, type ReactNode, type RefObject } from 'react'
@@ -18,7 +19,7 @@ import { createPortal, flushSync } from 'react-dom'
 import type { Pane, ThreadInfo } from '@superego/protocol'
 import { ArrowRightIcon, CardsIcon, ChatTextIcon, ColumnsPlusRightIcon, CornersInIcon, CornersOutIcon, DotsThreeIcon, FileTextIcon, IconButton, Menu, SegmentedControl, usePortalAttributes, XIcon, type SegmentedOption } from '@superego/ui'
 import { PANE_LAYOUT, type PaneLayout } from '../shared/app-settings.ts'
-import { useAppSetting } from './client.ts'
+import { has, useAppSetting } from './client.ts'
 import type { PaneKind, PaneProps, UiApi } from './extension-api.ts'
 import { useRegistry, whose } from './registry.tsx'
 import { fileKind, paneKind, paneTitle, shownPanes } from './lookups.ts'
@@ -31,7 +32,7 @@ import { ThreadBody } from './thread-body.tsx'
 import { PaneMoveTo } from './view-menu.tsx'
 import { FileEditor } from './file-editor.tsx'
 import { BRING_FORWARD, focusRegion } from './focus.ts'
-import { DEFAULT_SHARE, END, endShare, frontOf, GAP, roomFor, scrollWidths, stackWidths } from './pane-layout.ts'
+import { arranged, DEFAULT_SHARE, dropIndex, END, endShare, frontOf, GAP, moved, placeAmong, roomFor, scrollWidths, slideOf, stackWidths } from './pane-layout.ts'
 import { maximizedColumn, maximizedStore, restoresOn, THREAD_COLUMN } from './maximized.ts'
 import { useShortcut } from './keys.ts'
 import { OverflowBox, OverflowRow, PRIORITY, useOverflowItem } from './overflow.tsx'
@@ -55,7 +56,18 @@ export const SwipeEdgeRef = createContext<((row: HTMLElement | null) => void) | 
 export function ThreadPanes({ machine, thread, main }: { machine: PaneProps['machine']; thread: ThreadInfo; main: ReactNode }) {
   const registry = useRegistry()
   const dispatch = registry.router.dispatch
-  const panes = shownPanes(registry, { machine: machine.id, thread })
+  const threadKey = `${machine.id}/${thread.id}`
+  // In the thread's order; while a move from the strip is on its way to the thread, in the order asked for.
+  const served = shownPanes(registry, { machine: machine.id, thread })
+  const [asked, setAsked] = useState<{ thread: string; order: string[] }>()
+  const panes = arranged(served, asked?.thread === threadKey ? asked.order : undefined)
+  const servedOrder = served.map((pane) => pane.id).join()
+  // Once the thread has it (or panes opened or closed meanwhile), the thread's own order again.
+  useEffect(() => {
+    if (asked && (asked.thread !== threadKey || panes === served || servedOrder === asked.order.join())) setAsked(undefined)
+  }, [asked, threadKey, servedOrder])
+  // A move that failed, by pane: said on its tab until the next.
+  const [moveFailed, setMoveFailed] = useState<{ pane: string; message: string }>()
   const where = { machine: machine.id, thread }
   const title = (pane: Pane) => paneTitle(registry, pane, where)
   // A pane of a view's kind can move to the other places the view fits, from its tab's ···.
@@ -82,7 +94,6 @@ export function ThreadPanes({ machine, thread, main }: { machine: PaneProps['mac
 
   // The pane in front of the stack, by thread, kept in this window (in either layout, for when it's stacked).
   const [fronts, setFronts] = useLocalState<Record<string, string>>('pane.front', {})
-  const threadKey = `${machine.id}/${thread.id}`
   const ids = panes.map((pane) => pane.id)
   const front = frontOf(ids, fronts[threadKey], focused)
   const bringForward = (id: string) => setFronts((all) => all[threadKey] === id ? all : { ...all, [threadKey]: id })
@@ -132,10 +143,10 @@ export function ThreadPanes({ machine, thread, main }: { machine: PaneProps['mac
     return () => el?.removeEventListener(BRING_FORWARD, bring)
   }, [panes.length > 0])
   const columnOf = (id: string | undefined) => row.current?.querySelector<HTMLElement>(`[data-column="${id ?? 'thread'}"]`)
-  // Brought into view as it gets the focus: just far enough to show it whole.
+  // Brought into view as it gets the focus, and as it moves: just far enough to show it whole.
   useEffect(() => {
     columnOf(focused)?.scrollIntoView({ inline: 'nearest', block: 'nearest', behavior: 'smooth' })
-  }, [focused, panes.length, rowWidth])
+  }, [focused, ids.join(), rowWidth])
 
   const settled = useRef<ReturnType<typeof setTimeout>>(undefined)
 
@@ -150,6 +161,20 @@ export function ThreadPanes({ machine, thread, main }: { machine: PaneProps['mac
     if (!event.currentTarget.contains(at) || at?.matches('.panes__label')) focusRegion(event.currentTarget, { visible: event.detail === 0 })
   }
   const close = (pane: Pane) => void dispatch('pane.close', { thread: thread.id, pane: pane.id }, { machine: machine.id, source: 'panes' })
+  // A pane moved to `to` among those shown, from the strip: shown there at once, while the thread is told. Its place
+  // among all the thread's panes is before the one shown there now (one of a kind not drawn here keeps its own).
+  const move = (id: string, to: number) => {
+    const order = moved(ids, id, to)
+    if (order.join() === ids.join()) return
+    const at = placeAmong((thread.panes ?? []).map((pane) => pane.id), ids, id, to)
+    setAsked({ thread: threadKey, order })
+    setMoveFailed(undefined)
+    dispatch('pane.move', { thread: thread.id, pane: id, to: at }, { machine: machine.id, source: 'strip' }).catch((error: Error) => {
+      console.error(`Moving pane ${id}`, error)
+      setAsked(undefined)
+      setMoveFailed({ pane: id, message: error.message })
+    })
+  }
 
   // How much of each column is in view, and on which side the rest are: for the strip. Stacked, the thread and the
   // pane in front are; the rest are behind. Maximized, only that column is: the rest are under it.
@@ -158,8 +183,15 @@ export function ThreadPanes({ machine, thread, main }: { machine: PaneProps['mac
     : w ? Math.max(0, Math.min(starts[i]! + w, scrolled + rowWidth) - Math.max(starts[i]!, scrolled)) / w : 0)
   const side = (i: number) => shown[i]! >= 0.5 ? undefined : stacked || maximized ? 'behind' as const : starts[i]! < scrolled ? 'left' as const : 'right' as const
 
+  // The columns stay in the page in the order they opened, and are laid out in the thread's (`order`): a pane moved
+  // keeps what moving it in the page would lose (the focus, a framed page).
+  const placed = useRef<string[]>([])
+  placed.current = [...placed.current.filter((id) => ids.includes(id)), ...ids.filter((id) => !placed.current.includes(id))]
+  // The thread and its handle first; then each pane, its place kept while it's maximized, and its handle.
+  const orderOf = (index: number, part: 0 | 1 | 2 = 0) => index === 0 ? part && 1 : 3 * index - 1 + part
   const gap = (index: number) => !narrow && (
-    <div className="panes__gap" onPointerDown={drag(index)} onDoubleClick={() => reset(index)} role="separator" aria-orientation="vertical"
+    <div className={`panes__gap ${index < panes.length && (index === 0 || !stacked) ? 'is-between' : ''}`} style={{ order: orderOf(index, 2) }}
+      onPointerDown={drag(index)} onDoubleClick={() => reset(index)} role="separator" aria-orientation="vertical"
       aria-label={`${index === 0 ? 'Thread' : title(panes[index - 1]!)} width`} title="Drag to resize, double-click to reset" />
   )
   const onScroll = () => {
@@ -194,6 +226,7 @@ export function ThreadPanes({ machine, thread, main }: { machine: PaneProps['mac
     { id: undefined, label: 'Thread', kind: { icon: ChatTextIcon }, pane: undefined, width: widths[0]!, shown: shown[0]!, away: side(0) },
     ...panes.map((pane, i) => ({
       id: pane.id, label: title(pane), kind: paneKind(registry, pane.kind, where), pane, note: notes[pane.id], width: widths[i + 1]!, shown: shown[i + 1]!, away: side(i + 1),
+      ...(moveFailed?.pane === pane.id ? { failed: moveFailed.message } : {}),
     })),
   ]
   // The tab raised: the focused column's; stacked, the one in front once a pane opening covers the focused one.
@@ -201,7 +234,8 @@ export function ThreadPanes({ machine, thread, main }: { machine: PaneProps['mac
 
   return (
     <div className={`sheet ${panes.length ? 'has-panes' : ''}`}>
-      {panes.length > 0 && <PaneStrip tabs={tabs} current={current} stacked={stacked} narrow={narrow} onShow={show} />}
+      {panes.length > 0 && <PaneStrip tabs={tabs} current={current} stacked={stacked} narrow={narrow} onShow={show}
+        {...(has(machine, 'pane-move') ? { onMove: (id: string, to: number) => { flushSync(() => move(id, to)); show(panes.find((p) => p.id === id)) } } : {})} />}
       {/* Stacked, a grid: the thread, its handle, the panes on top of each other, the room at the end. */}
       <div className={`panes ${narrow ? 'panes--narrow' : ''} ${stacked ? 'panes--stack' : ''} ${maximized ? 'has-maximized' : ''}`} ref={setRow} onScroll={onScroll}
         style={stacked ? { gridTemplateColumns: `${threadWidth}px ${GAP}px ${stackWidth}px ${GAP}px` } : undefined}>
@@ -213,21 +247,25 @@ export function ThreadPanes({ machine, thread, main }: { machine: PaneProps['mac
         {!stacked && threadMaximized && <div className="panes__kept" style={{ width: widths[0] }} aria-hidden />}
         {/* The gap after each column is its handle: drag it to make that one wider or narrower. */}
         {gap(0)}
-        {panes.map((pane, index) => (
+        {placed.current.map((id) => {
+          const index = ids.indexOf(id)
+          const pane = panes[index]!
+          return (
           <Fragment key={pane.id}>
-          <PaneColumn pane={pane} title={title(pane)} focused={pane.id === focused} width={widthOf(pane)}
+          <PaneColumn pane={pane} title={title(pane)} focused={pane.id === focused} width={widthOf(pane)} order={orderOf(index + 1)} last={!stacked && index === panes.length - 1}
             behind={stacked && pane.id !== front && pane.id !== maximized} maximized={maximized === undefined ? undefined : pane.id === maximized}
             onFocus={() => focus(pane.id)} onClick={takeFocus} onClose={() => close(pane)} {...(narrow ? {} : { onMaximize: () => maximize(pane) })}
             view={isView(pane) ? { view: pane.kind, machine: machine.id, thread } : undefined}>
             <TabNote.Provider value={setNoteFor(pane.id)}><PaneBody machine={machine} thread={thread} pane={pane} /></TabNote.Provider>
           </PaneColumn>
           {/* Scrolled, its place in the row is kept while it's over the rest, so they stay where they were. */}
-          {!stacked && pane.id === maximized && <div className="panes__kept" style={{ width: widthOf(pane) }} aria-hidden />}
+          {!stacked && pane.id === maximized && <div className="panes__kept" style={{ width: widthOf(pane), order: orderOf(index + 1, 1) }} aria-hidden />}
           {!stacked && gap(index + 1)}
           </Fragment>
-        ))}
+          )
+        })}
         {stacked && <div className="panes__end" aria-hidden />}
-        {!stacked && !narrow && panes.length > 0 && <div className="panes__tail" style={{ width: END }} aria-hidden />}
+        {!stacked && !narrow && panes.length > 0 && <div className="panes__tail" style={{ width: END, order: orderOf(panes.length + 1) }} aria-hidden />}
       </div>
     </div>
   )
@@ -305,26 +343,33 @@ type StripTab = {
   width: number; shown: number
   /** Where its column is, when it's mostly out of view. */
   away: 'left' | 'right' | 'behind' | undefined
+  /** Why moving it last failed. */
+  failed?: string
 }
 
 /**
  * The strip: a tab for the thread and each pane (`current` raised), bringing its column into view; wide, the row in
- * small (scrolled) and the switch between the layouts. In the title bar, where the window has a place for it.
+ * small (scrolled) and the switch between the layouts. In the title bar, where the window has a place for it. A pane's
+ * tab drags along it to move the pane (`onMove`, its place among the panes; none where the machine can't).
  */
-function PaneStrip({ tabs, current, stacked, narrow, onShow }: { tabs: StripTab[]; current: string | undefined; stacked: boolean; narrow: boolean; onShow(pane: Pane | undefined): void }) {
+function PaneStrip({ tabs, current, stacked, narrow, onShow, onMove }: {
+  tabs: StripTab[]; current: string | undefined; stacked: boolean; narrow: boolean; onShow(pane: Pane | undefined): void; onMove?: (pane: string, to: number) => void
+}) {
   const dispatch = useRegistry().router.dispatch
   const slot = useContext(StripSlot)
   const total = tabs.reduce((sum, tab) => sum + tab.width, 0) || 1
   const layout = (next: PaneLayout) => void dispatch('pane.layout', { layout: next }, { source: 'strip' }).catch((error) => console.error(error))
   // In the title bar, short of room, its parts give way (overflow.tsx): the map, then the switch, then the other tabs.
   const inBar = Boolean(slot)
+  const paneIds = tabs.flatMap((tab) => tab.id ?? [])
   const mapRef = useOverflowItem('strip:map', inBar && { priority: PRIORITY.map })
   const strip = (
     <div className={`strip ${narrow ? 'strip--narrow' : ''}`} role="tablist" aria-label="The thread and its panes">
       {/* Stacked, the thread stands on its own beside the stack's tabs: one tablist still, in the same order. */}
       {(stacked ? [tabs.filter((tab) => !tab.id), tabs.filter((tab) => tab.id)] : [tabs]).map((group, i) => (
         <div key={i} className={`strip__tabs ${stacked && i === 0 ? 'strip__tabs--thread' : ''}`}>
-          {group.map((tab) => <StripTabButton key={tab.id ?? 'thread'} tab={tab} focused={tab.id === current} inBar={inBar} onShow={onShow} />)}
+          {group.map((tab) => <StripTabButton key={tab.id ?? 'thread'} tab={tab} focused={tab.id === current} inBar={inBar} onShow={onShow}
+            {...(onMove && tab.id ? { onDrag: (event: React.PointerEvent<HTMLButtonElement>) => dragTab(event, (to, shown) => onMove(tab.id!, placeAmong(paneIds, shown, tab.id!, to))) } : {})} />)}
         </div>
       ))}
       {!narrow && (
@@ -348,7 +393,9 @@ function PaneStrip({ tabs, current, stacked, narrow, onShow }: { tabs: StripTab[
 }
 
 /** A column's tab: in the title bar, short of room, one not focused shrinks to its glyph, then goes to the ···. */
-function StripTabButton({ tab, focused, inBar, onShow }: { tab: StripTab; focused: boolean; inBar: boolean; onShow(pane: Pane | undefined): void }) {
+function StripTabButton({ tab, focused, inBar, onShow, onDrag }: {
+  tab: StripTab; focused: boolean; inBar: boolean; onShow(pane: Pane | undefined): void; onDrag?: (event: React.PointerEvent<HTMLButtonElement>) => void
+}) {
   const Icon = tab.kind?.icon
   // The whole of what the tab may cut short: a file's path, a page's address, or its title.
   const { path, url } = (tab.pane?.params ?? {}) as { path?: string; url?: string }
@@ -357,16 +404,108 @@ function StripTabButton({ tab, focused, inBar, onShow }: { tab: StripTab; focuse
     priority: PRIORITY.tabs, compactAt: PRIORITY.tabsCompact, row: <OverflowRow icon={Icon}>{tab.label}</OverflowRow>,
   })
   return (
-    <button ref={ref} type="button" role="tab" aria-selected={focused}
-      className={`strip__tab ${focused ? 'is-focused' : tab.away ? 'is-away' : 'is-shown'}`}
-      title={full}
-      onClick={() => onShow(tab.pane)}>
+    <button ref={ref} type="button" role="tab" aria-selected={focused} data-pane={tab.id}
+      className={`strip__tab ${focused ? 'is-focused' : tab.away ? 'is-away' : 'is-shown'} ${tab.failed ? 'is-failed' : ''}`}
+      title={tab.failed ? `Couldn't move ${tab.label}: ${tab.failed}` : full}
+      onPointerDown={onDrag} onClick={() => onShow(tab.pane)}>
       {Icon && <Icon size={14} aria-hidden />}
       <span className={`strip__label overflow-part ${isFile(tab.kind, tab.pane) ? 'strip__label--file' : ''}`}>{tab.label}</span>
       {tab.id && tab.note && <span className="strip__note overflow-part">{tab.note}</span>}
       {tab.away === 'right' && <ArrowRightIcon className="strip__away" size={11} aria-hidden />}
     </button>
   )
+}
+
+/** How far a tab goes before it's dragged rather than clicked. */
+const DRAG_THRESHOLD = 4
+
+/**
+ * A pane's tab dragged along the strip, from a press on it: past DRAG_THRESHOLD it follows the pointer (along the
+ * pane tabs, no further) and the others slide aside to show where it'd go; let go, `drop` gets its place among the
+ * tabs shown (`shown`, their panes, it among them), the click that follows doesn't count, and it settles into its
+ * place. Esc, or the press cut short, puts it back. Under that, a click as any. Styled from the page (data-*, inline
+ * transforms), not React: nothing's drawn again while the pointer moves, and what React draws meanwhile is left be.
+ */
+function dragTab(event: React.PointerEvent<HTMLButtonElement>, drop: (to: number, shown: string[]) => void) {
+  if (event.button !== 0 || event.pointerType === 'touch') return
+  const tab = event.currentTarget
+  const strip = tab.closest<HTMLElement>('.strip')
+  // A pane's tab in the title bar's ··· isn't in the strip to drag along.
+  const tabs = [...strip?.querySelectorAll<HTMLElement>('.strip__tab[data-pane]') ?? []].filter((el) => !el.hasAttribute('data-out'))
+  const from = tabs.indexOf(tab)
+  if (!strip || from < 0) return
+  // Where each is laid out, apart from where it's slid to (a tab still settling from the last drag).
+  const slots = tabs.map((el) => ({ left: el.offsetLeft, width: el.offsetWidth }))
+  const self = slots[from]!
+  const size = self.width + (parseFloat(getComputedStyle(tab.parentElement!).columnGap) || 0)
+  const least = slots[0]!.left - self.left
+  const most = slots.at(-1)!.left + slots.at(-1)!.width - (self.left + self.width)
+  const startX = event.clientX
+  const root = document.documentElement
+  let started = false
+  let to = from
+  const place = (el: HTMLElement, x: number) => { el.style.transform = x ? `translateX(${x}px)` : '' }
+
+  const move = (e: PointerEvent) => {
+    const dx = e.clientX - startX
+    if (!started) {
+      if (Math.abs(dx) < DRAG_THRESHOLD) return
+      started = true
+      for (const el of tabs) el.removeAttribute('data-settling')
+      strip.setAttribute('data-dragging', '')
+      tab.setAttribute('data-dragged', '')
+      root.classList.add('is-dragging-tab')
+    }
+    const x = Math.min(most, Math.max(least, dx))
+    place(tab, x)
+    to = dropIndex(slots, from, x)
+    tabs.forEach((el, i) => { if (i !== from) place(el, slideOf(i, from, to, size)) })
+  }
+  const finish = (commit: boolean) => {
+    window.removeEventListener('pointermove', move)
+    window.removeEventListener('pointerup', up)
+    window.removeEventListener('pointercancel', cancel)
+    window.removeEventListener('keydown', key, true)
+    window.removeEventListener('blur', cancel)
+    if (!started) return
+    root.classList.remove('is-dragging-tab')
+    // The click the release makes isn't one.
+    const swallow = (e: MouseEvent) => { e.stopPropagation(); e.preventDefault() }
+    window.addEventListener('click', swallow, { capture: true, once: true })
+    setTimeout(() => window.removeEventListener('click', swallow, { capture: true }))
+    const at = tab.getBoundingClientRect().left
+    if (commit && to !== from) {
+      // In their new places at once: the others where they'd slid to, and this one from where it was let go.
+      strip.removeAttribute('data-dragging')
+      for (const el of tabs) place(el, 0)
+      drop(to, tabs.map((el) => el.dataset.pane!))
+    } else {
+      for (const el of tabs) if (el !== tab) place(el, 0)
+    }
+    tab.removeAttribute('data-dragged')
+    place(tab, 0)
+    // It settles into its place: from where it was let go, eased.
+    place(tab, at - tab.getBoundingClientRect().left)
+    void tab.offsetWidth
+    tab.setAttribute('data-settling', '')
+    place(tab, 0)
+    const done = () => { tab.removeAttribute('data-settling'); if (!strip.querySelector('[data-dragged]')) strip.removeAttribute('data-dragging') }
+    tab.addEventListener('transitionend', done, { once: true })
+    setTimeout(done, 250)
+  }
+  const up = () => finish(true)
+  const cancel = () => finish(false)
+  const key = (e: KeyboardEvent) => {
+    if (e.key !== 'Escape' || !started) return
+    e.preventDefault()
+    e.stopPropagation()
+    cancel()
+  }
+  window.addEventListener('pointermove', move)
+  window.addEventListener('pointerup', up)
+  window.addEventListener('pointercancel', cancel)
+  window.addEventListener('keydown', key, true)
+  window.addEventListener('blur', cancel)
 }
 
 /** What a pane says on its tab in the strip (Changes: +3 −1), by pane. */
@@ -429,8 +568,10 @@ function useScrolledUnder(column: RefObject<HTMLElement | null>) {
   }, [column])
 }
 
-function PaneColumn({ pane, title, focused, width, behind, maximized, onFocus, onClick, onClose, onMaximize, view, children }: {
+function PaneColumn({ pane, title, focused, width, order, last, behind, maximized, onFocus, onClick, onClose, onMaximize, view, children }: {
   pane: Pane; title: string; focused: boolean; width: number; behind: boolean
+  /** Its place in the row (CSS `order`), and whether it's the last one scrolled. */
+  order: number; last: boolean
   /** Whether it's the one maximized, while one is (undefined: none is). */
   maximized: boolean | undefined
   onFocus(): void; onClick(event: React.MouseEvent<HTMLElement>): void; onClose(): void
@@ -449,8 +590,8 @@ function PaneColumn({ pane, title, focused, width, behind, maximized, onFocus, o
   // of reach.
   const covered = maximized === false
   return (
-    <div ref={column} data-column={pane.id} tabIndex={-1} className={`panes__column ${behind ? 'is-behind' : ''} ${maximized ? 'is-maximized' : covered ? 'is-covered' : ''}`}
-      inert={behind || covered} style={maximized ? undefined : { width }} onPointerDownCapture={onFocus} onFocusCapture={onFocus} onClick={onClick}>
+    <div ref={column} data-column={pane.id} tabIndex={-1} className={`panes__column ${behind ? 'is-behind' : ''} ${last ? 'is-last' : ''} ${maximized ? 'is-maximized' : covered ? 'is-covered' : ''}`}
+      inert={behind || covered} style={maximized ? { order } : { width, order }} onPointerDownCapture={onFocus} onFocusCapture={onFocus} onClick={onClick}>
       <div className={`panes__tab ${focused ? 'is-active' : ''}`}>
         <button className="panes__label" title={title} onDoubleClick={onMaximize}>{title}</button>
         <span className="panes__tools" ref={setSlot} />

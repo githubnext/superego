@@ -2,7 +2,7 @@
 // forwarded to where they run (see `dispatch`). Every dispatch from this window is logged, and the log is one action
 // away (Show action log).
 import { useEffect, useState } from 'react'
-import { createRouter, int, lit, obj, opt, str, type Router, union, type ActionDef, type ActionInfo, type ActionLogEntry, type AppConfig, type Exposure, type Json, type JsonSchema, type Static } from '@superego/protocol'
+import { createRouter, int, lit, obj, offers, opt, str, type Router, union, type ActionDef, type ActionInfo, type ActionLogEntry, type AppConfig, type Exposure, type Json, type JsonSchema, type Static } from '@superego/protocol'
 import { Dialog } from '@superego/ui'
 import type { ReturnedMessage, ThreadInfo } from '@superego/protocol'
 import type { MachineEntry } from '../shared/bridge.ts'
@@ -202,6 +202,9 @@ export const coreActions = (app: AppConfig): WindowAction[] => [
   // Within a thread: the thread itself, then each pane beside it.
   defineWindowAction({ id: 'pane.next', title: 'Next pane', keys: 'ctrl+tab', run: (_p, c) => stepPane(c, 1) }),
   defineWindowAction({ id: 'pane.previous', title: 'Previous pane', keys: 'ctrl+shift+tab', run: (_p, c) => stepPane(c, -1) }),
+  // The focused pane a place along, as dragging its tab in the strip moves it; the thread stays first.
+  defineWindowAction({ id: 'pane.moveLeft', title: 'Move pane left', keys: 'mod+alt+shift+arrowleft', when: (c) => Boolean(paneMove(c, -1)), run: (_p, c) => movePane(c, -1) }),
+  defineWindowAction({ id: 'pane.moveRight', title: 'Move pane right', keys: 'mod+alt+shift+arrowright', when: (c) => Boolean(paneMove(c, 1)), run: (_p, c) => movePane(c, 1) }),
   // The panes side by side, scrolling past the window's edge, or stacked in one column: `layout`, else the other one.
   defineWindowAction({
     id: 'pane.layout', title: 'Toggle stacked panes', keys: 'mod+shift+\\',
@@ -374,6 +377,22 @@ async function stepPane(c: WindowContext, by: number) {
   const next = columns[(at + by + columns.length) % columns.length]
   await c.dispatch('pane.focus', { thread: thread.id, ...(next ? { pane: next } : {}) }, { machine: c.selection.machine, source: 'keys' })
   focusColumn(next)
+}
+
+/** The focused pane of the selected thread and where it'd go, `by` a place along: none at the end, or where the machine can't. */
+function paneMove(c: WindowContext, by: -1 | 1) {
+  const thread = c.selection && c.threadOf(c.selection)
+  const machine = c.machines.find((m) => m.id === c.selection?.machine)
+  const panes = thread?.panes ?? []
+  const index = panes.findIndex((p) => p.id === focusedColumn(thread))
+  if (!c.selection || !offers(machine, 'pane-move') || index < 0 || !panes[index + by]) return undefined
+  return { machine: c.selection.machine, thread: c.selection.thread, pane: panes[index]!.id, to: index + by }
+}
+
+async function movePane(c: WindowContext, by: -1 | 1) {
+  const move = paneMove(c, by)
+  if (!move) return
+  await c.dispatch('pane.move', { thread: move.thread, pane: move.pane, to: move.to }, { machine: move.machine, source: 'keys' })
 }
 
 /** Whether an action can run with no parameters (after the selection fills in a thread's): keys and the palette. */

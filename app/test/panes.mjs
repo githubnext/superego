@@ -1,6 +1,6 @@
 // Screenshots of a thread with three panes in each layout (run by `test/look.sh <dir> panes`): scrolled, then stacked
 // from the strip's switch, a pane brought to the front by ⌃Tab and one opened from outside the window, then scrolled again
-// by its shortcut; a pane maximized in each, and restored (Esc, a double click, another pane opening). Checks on the way that a stack never passes the window's edge, and that the last pane's handle is
+// by its shortcut; a pane's tab mid-drag; a pane maximized in each, and restored (Esc, a double click, another pane opening). Checks on the way that a stack never passes the window's edge, and that the last pane's handle is
 // clear of it and drags the pane wider. Light and dark, into
 // $SUPEREGO_SHOWCASE_OUT.
 import { execFileSync } from 'node:child_process'
@@ -65,6 +65,21 @@ await openApp({ name: 'panes', timeout: 240_000 }, async (t) => {
   await until(`document.querySelector('[data-column="${folder}"]').offsetWidth === ${before}`, 'the last pane put back')
   await run(`window.superego.call('local', 'pane.focus', { thread: '${id}', pane: '${editor}' })`)
   await t.settled()
+
+  // A pane's tab mid-drag along the strip: it follows the pointer, lifted, the one it passed slid aside. Esc puts it back.
+  await run(`(() => { const tab = document.querySelector('.strip__tab[data-pane="${editor}"]'); const r = tab.getBoundingClientRect(); const x = r.left + r.width / 2, y = r.top + r.height / 2
+    const to = document.querySelector('.strip__tab[data-pane="${folder}"]').getBoundingClientRect()
+    tab.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0, pointerType: 'mouse', clientX: x, clientY: y }))
+    window.dispatchEvent(new PointerEvent('pointermove', { pointerType: 'mouse', clientX: x + 6, clientY: y }))
+    window.dispatchEvent(new PointerEvent('pointermove', { pointerType: 'mouse', clientX: to.left + to.width / 2 + 6, clientY: y })) })()`)
+  const tabsNow = () => run(`[...document.querySelectorAll('.strip__tab')].map((el) => [el.dataset.pane, el.hasAttribute('data-out'), el.hasAttribute('data-dragged'), el.style.transform].join(' ')).join(' | ')`)
+  await until(`!!document.querySelector('.strip [data-dragged]') && !!document.querySelector('.strip__tab[data-pane="${folder}"]').style.transform`, 'a tab mid-drag, the next slid aside').catch(async (e) => { t.fail(`${e.message}: ${await tabsNow()}`) })
+  await t.settled()
+  await both('strip-drag')
+  await run(`window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))`)
+  await until(`!document.querySelector('.strip [data-dragged]')`, 'Esc ended the drag')
+  await run(`window.dispatchEvent(new PointerEvent('pointerup', { pointerType: 'mouse' }))`)
+  if (JSON.stringify(await paneIds()) !== JSON.stringify([diff, editor, folder])) t.fail(`Esc mid-drag: nothing moved, not ${await paneIds()}`)
 
   // Maximized from its tab's button: over the whole of the thread's area, the rest kept under it as they were (the
   // row's scroll too). An Esc the editor has no use for restores it.

@@ -182,8 +182,85 @@ export default async function panes(t, s) {
   await t.until(`Boolean(document.querySelector('.cm-content .cm-arrived'))`, 'the change flashes as it arrives')
   await t.until(`!document.querySelector('.cm-content .cm-arrived')`, 'and fades')
   await t.until(`Math.abs(document.querySelector('.file-editor__scroll').scrollTop - 1500) <= 4`, 'still where it was')
+  await reorder(t, paned, panesOf)
   // ⌘W closes the pane with the focus: the editor's, here (switching back put it in the prompt).
   await t.run(`document.querySelector('[data-column]:not([data-column="thread"]) .cm-content').focus()`)
   t.key('w')
   await t.until(`!document.querySelector('.panes__tab')`, 'editor closed')
+}
+
+/**
+ * A pane's tab dragged along the strip moves the pane, with Chromium's own pointer events: the thread keeps the order
+ * (and the columns follow), a press that moves less than the threshold is a click, Esc puts it back, the thread's tab
+ * stays put, and ⌘⌥⇧←/→ move the focused pane too.
+ */
+async function reorder(t, paned, panesOf) {
+  await t.call('pane.open', { thread: paned, kind: 'editor', params: { path: 'notes.md' } })
+  await t.call('pane.open', { thread: paned, kind: 'editor', params: { path: 'page.html' } })
+  const ids = async () => (await panesOf()).map((p) => p.id)
+  const start = await ids()
+  if (start.length !== 3) t.fail(`three panes to move, not ${start.length}`)
+  const [a, b, c] = start
+  await t.until(`document.querySelectorAll('.strip__tab[data-pane]:not([data-out])').length === 3`, 'three pane tabs in the strip')
+  // In the page's order, the tabs; the columns as they're laid out.
+  const tabs = `[...document.querySelectorAll('.strip__tab')].map((el) => el.dataset.pane ?? 'thread').join()`
+  const columns = `[...document.querySelectorAll('.panes > [data-column]')].sort((x, y) => x.getBoundingClientRect().left - y.getBoundingClientRect().left).map((el) => el.dataset.column).join()`
+  const at = (id) => t.run(`(() => { const r = document.querySelector('.strip__tab[data-pane="${id}"]').getBoundingClientRect(); return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2), width: r.width } })()`)
+  const send = (type, x, y) => t.contents().sendInputEvent({ type, x, y, button: 'left', clickCount: 1, ...(type === 'mouseMove' ? { modifiers: ['leftButtonDown'] } : {}) })
+  const drag = async (id, by, { release = true } = {}) => {
+    const from = await at(id)
+    send('mouseDown', from.x, from.y)
+    for (let step = 1; step <= 8; step++) { send('mouseMove', Math.round(from.x + (by * step) / 8), from.y); await t.settled() }
+    if (release) send('mouseUp', from.x + by, from.y)
+  }
+  const order = (...want) => `${['thread', ...want].join()}`
+
+  // Under the threshold, a click: it selects the tab, nothing moves.
+  const first = await at(a)
+  send('mouseDown', first.x, first.y)
+  send('mouseMove', first.x + 2, first.y)
+  send('mouseUp', first.x + 2, first.y)
+  await t.until(async () => (await t.call('thread.list')).find((x) => x.id === paned).pane === a, 'a short press selects the tab')
+  if (JSON.stringify(await ids()) !== JSON.stringify(start)) t.fail('a short press moved the pane')
+
+  // Dragged past the others: the thread has it last, the tabs and the columns follow, and it has the focus.
+  await drag(a, (await at(c)).x - first.x + 10)
+  await t.until(async () => JSON.stringify(await ids()) === JSON.stringify([b, c, a]), 'the drag moved it last in the thread')
+  await t.until(`${tabs} === ${JSON.stringify(order(b, c, a))}`, 'the tabs follow')
+  await t.until(`${columns} === ${JSON.stringify(order(b, c, a))}`, 'the columns follow')
+  await t.until(`document.activeElement?.closest('[data-column]')?.dataset.column === '${a}'`, 'the moved pane has the focus')
+  await t.until(`!document.querySelector('.strip [data-dragged], .strip [data-dragging]') && [...document.querySelectorAll('.strip__tab')].every((el) => !el.style.transform)`, 'the strip at rest')
+
+  // Esc mid-drag: put back, nothing moved.
+  await drag(a, -(await at(a)).width * 2, { release: false })
+  await t.until(`!!document.querySelector('.strip [data-dragged]')`, 'dragging')
+  t.key('Escape', [])
+  await t.until(`!document.querySelector('.strip [data-dragged]')`, 'Esc ends the drag')
+  const last = await at(a)
+  send('mouseUp', last.x, last.y)
+  await t.settled()
+  if (JSON.stringify(await ids()) !== JSON.stringify([b, c, a])) t.fail(`Esc should put it back, not ${await ids()}`)
+
+  // The thread's tab doesn't move.
+  const thread = await t.run(`(() => { const r = document.querySelector('.strip__tab:not([data-pane])').getBoundingClientRect(); return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) } })()`)
+  send('mouseDown', thread.x, thread.y)
+  for (let step = 1; step <= 4; step++) send('mouseMove', thread.x + step * 60, thread.y)
+  await t.check(`!document.querySelector('.strip [data-dragged]')`, "the thread's tab dragged")
+  send('mouseUp', thread.x + 240, thread.y)
+  await t.settled()
+  if (JSON.stringify(await ids()) !== JSON.stringify([b, c, a])) t.fail(`the thread's tab moved a pane: ${await ids()}`)
+
+  // ⌘⌥⇧← and → move the focused pane, a place at a time; the focus stays in it.
+  await t.run(`document.querySelector('[data-column="${a}"] .cm-content')?.focus()`)
+  await t.until(`document.activeElement?.closest('[data-column]')?.dataset.column === '${a}'`, 'the pane focused')
+  t.key('Left', ['meta', 'alt', 'shift'])
+  await t.until(async () => JSON.stringify(await ids()) === JSON.stringify([b, a, c]), '⌘⌥⇧← moved it left')
+  await t.until(`${columns} === ${JSON.stringify(order(b, a, c))}`, 'the columns follow the keys')
+  await t.check(`document.activeElement?.closest('[data-column]')?.dataset.column === '${a}'`, 'the moved pane kept the focus')
+  t.key('Right', ['meta', 'alt', 'shift'])
+  await t.until(async () => JSON.stringify(await ids()) === JSON.stringify([b, c, a]), '⌘⌥⇧→ moved it back')
+
+  await t.call('pane.close', { thread: paned, pane: b })
+  await t.call('pane.close', { thread: paned, pane: a })
+  await t.until(`document.querySelectorAll('.strip__tab[data-pane]').length === 1`, 'one pane again')
 }

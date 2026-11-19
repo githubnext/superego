@@ -17,7 +17,9 @@ const TYPED = 'input, textarea, select, [contenteditable]:not([contenteditable="
 /** The regions, left to right, as the window shows them now. */
 function regions(): HTMLElement[] {
   const sidebar = document.querySelector<HTMLElement>('.app__sidebar')
+  // Laid out in the thread's order, whatever theirs in the page (see panes.tsx).
   const columns = [...document.querySelectorAll<HTMLElement>('.app__main .panes > [data-column]:not(.is-covered)')]
+    .sort((a, b) => (Number(getComputedStyle(a).order) || 0) - (Number(getComputedStyle(b).order) || 0))
   const thread = columns.length ? [] : [document.querySelector<HTMLElement>('.app__main .thread')].filter((e): e is HTMLElement => Boolean(e))
   const beside = [...document.querySelectorAll<HTMLElement>('.app__beside')].filter((e) => getComputedStyle(e).display !== 'none')
   return [...(sidebar ? [sidebar] : []), ...thread, ...columns, ...beside]

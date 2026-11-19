@@ -51,3 +51,59 @@ export function frontOf(panes: string[], brought: string | undefined, focused: s
   if (focused && panes.includes(focused)) return focused
   return panes.at(-1)
 }
+
+/** `ids` with `id` moved to `to` (clamped to the ends). */
+export function moved(ids: string[], id: string, to: number): string[] {
+  const rest = ids.filter((other) => other !== id)
+  if (rest.length === ids.length) return ids
+  const at = Math.max(0, Math.min(rest.length, to))
+  return [...rest.slice(0, at), id, ...rest.slice(at)]
+}
+
+/**
+ * The panes in the order asked for (a move on its way to the thread), while that's the same panes; else as the thread
+ * has them. A pane opening or closing meanwhile, the thread's order is taken again.
+ */
+export function arranged<T extends { id: string }>(panes: T[], asked: string[] | undefined): T[] {
+  if (!asked || asked.length !== panes.length) return panes
+  const byId = new Map(panes.map((pane) => [pane.id, pane]))
+  const out = asked.flatMap((id) => byId.get(id) ?? [])
+  return out.length === panes.length ? out : panes
+}
+
+/**
+ * Where a tab being dragged lands among the tabs in the strip (`slots`, left to right, it among them at `from`), moved
+ * `by` from its place: past each whose middle its leading edge has passed (its right edge going right, its left going left).
+ */
+export function dropIndex(slots: { left: number; width: number }[], from: number, by: number): number {
+  const self = slots[from]!
+  const left = self.left + by
+  const right = left + self.width
+  let to = from
+  slots.forEach((slot, i) => {
+    const middle = slot.left + slot.width / 2
+    if (i > from && right > middle) to = Math.max(to, i)
+    if (i < from && left < middle) to = Math.min(to, i)
+  })
+  return to
+}
+
+/** How far the tab at `i` slides aside while the one at `from` is over `to`, the dragged one `size` wide (and its gap). */
+export function slideOf(i: number, from: number, to: number, size: number): number {
+  if (from < to && i > from && i <= to) return -size
+  if (to < from && i >= to && i < from) return size
+  return 0
+}
+
+/**
+ * The place among all the panes (`ids`) for `id`, dropped at `to` among those the strip shows (`shown`, it among them):
+ * before the one shown that's there now, else after the last one shown. The rest (in the title bar's ···) keep theirs.
+ */
+export function placeAmong(ids: string[], shown: string[], id: string, to: number): number {
+  const others = ids.filter((other) => other !== id)
+  const shownOthers = shown.filter((other) => other !== id)
+  const before = shownOthers[to]
+  if (before !== undefined) return others.indexOf(before)
+  const last = shownOthers.at(-1)
+  return last === undefined ? ids.indexOf(id) : others.indexOf(last) + 1
+}

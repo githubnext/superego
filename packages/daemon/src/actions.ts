@@ -3,7 +3,7 @@
 import { randomUUID } from 'node:crypto'
 import type { ConversationId, Harness, SubmissionId } from '@earendil-works/pi-durable'
 import { InboxDoc } from '@earendil-works/pi-durable'
-import { arr, bool, consentRefused, lit, obj, opt, RpcError, str, union, unknown, type Json, type MachineInfo, type Pane } from '@superego/protocol'
+import { arr, bool, consentRefused, int, lit, obj, opt, RpcError, str, union, unknown, type Json, type MachineInfo, type Pane } from '@superego/protocol'
 import { ATTACHMENT } from './attachments.ts'
 import { defineAction } from './extension.ts'
 import type { threadFiles } from './files.ts'
@@ -147,6 +147,29 @@ export function registerCoreActions(host: Host, { harness, machine, threads, pro
         if (!meta.panes!.length) delete meta.panes
       })
       if (closed) await threads.tellPaneClosed(id, [closed])
+      return null
+    },
+  }))
+  router.register(defineAction({
+    id: 'pane.move', title: 'Move a pane', expose: ['ui', 'cli'], ...thread,
+    description: "Move a pane to another place beside the thread: `to` is its place among the thread's panes, 0 first (past the end, last). The thread stays before them all.",
+    params: obj({ thread: str(), pane: str(), to: int({ minimum: 0 }) }),
+    async run({ thread: id, pane, to }) {
+      await threads.get(id)
+      let found = false
+      await threads.updateMeta(id, (meta) => {
+        const panes = meta.panes ?? []
+        const from = panes.findIndex((p) => p.id === pane)
+        if (from < 0) return
+        found = true
+        const at = Math.min(to, panes.length - 1)
+        if (at === from) return
+        // A plain copy: what the transaction hands over is only valid inside it.
+        const moved = clone(panes[from]!)
+        panes.splice(from, 1)
+        panes.splice(at, 0, moved)
+      })
+      if (!found) throw new RpcError('not_found', `No pane ${pane}`)
       return null
     },
   }))

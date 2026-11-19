@@ -351,6 +351,16 @@ describe('record and replay', () => {
     info = (await threads(peer)).find((s) => s.id === thread.id)!
     expect(info.panes?.map((p) => p.kind)).toEqual(['diff'])
     expect(info.pane).toBe(diff.id)
+    // Moved: to a place among the panes (past the end, last), the focus staying with it.
+    const folder = await peer.call<{ id: string }>('pane.open', { thread: thread.id, kind: 'folder' })
+    const order = async () => (await threads(peer)).find((s) => s.id === thread.id)!.panes?.map((p) => p.id)
+    await peer.call('pane.move', { thread: thread.id, pane: folder.id, to: 0 })
+    expect(await order()).toEqual([folder.id, diff.id])
+    await peer.call('pane.move', { thread: thread.id, pane: folder.id, to: 9 })
+    expect(await order()).toEqual([diff.id, folder.id])
+    expect((await threads(peer)).find((s) => s.id === thread.id)!.pane).toBe(diff.id)
+    await expect(peer.call('pane.move', { thread: thread.id, pane: 'nope', to: 0 })).rejects.toMatchObject({ kind: 'not_found' })
+    await peer.call('pane.close', { thread: thread.id, pane: folder.id })
     // Params sent as a string of JSON, as models sometimes do, are kept as what they say.
     const note = await peer.call<{ params: unknown }>('pane.open', { thread: thread.id, kind: 'editor', params: '{"path": "a.md"}' })
     expect(note.params).toEqual({ path: 'a.md' })

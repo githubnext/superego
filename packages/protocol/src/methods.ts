@@ -42,9 +42,9 @@ export const linkTo = (thread: Pick<ThreadInfo, 'id' | 'title'>) => `[${thread.t
  * feature before using it, so an older daemon of the generation keeps working with a newer app (and the other way
  * round) for whatever both know. `thread-read`: the `thread.read` method. `forward`: `forward` channels, a TCP
  * connection to a port on its loopback (forward.ts). `image-read`: the `image.read` method, and transcripts whose images
- * come without their pixels (`ImageStub`). `file-locate`: the `file.locate` method.
+ * come without their pixels (`ImageStub`). `file-locate`: the `file.locate` method. `pane-move`: the `pane.move` action.
  */
-export const FEATURES = ['thread-read', 'forward', 'image-read', 'file-locate'] as const
+export const FEATURES = ['thread-read', 'forward', 'image-read', 'file-locate', 'pane-move'] as const
 export type Feature = (typeof FEATURES)[number]
 
 export type ThreadId = string

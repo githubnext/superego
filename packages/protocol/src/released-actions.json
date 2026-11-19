@@ -158,6 +158,27 @@
     ],
     "additionalProperties": false
   },
+  "pane.move": {
+    "type": "object",
+    "properties": {
+      "thread": {
+        "type": "string"
+      },
+      "pane": {
+        "type": "string"
+      },
+      "to": {
+        "type": "integer",
+        "minimum": 0
+      }
+    },
+    "required": [
+      "thread",
+      "pane",
+      "to"
+    ],
+    "additionalProperties": false
+  },
   "pane.open": {
     "type": "object",
     "properties": {

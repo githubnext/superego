@@ -1,6 +1,6 @@
 // The pane row's arithmetic: column widths scrolled and stacked, and which pane a stack shows.
 import { describe, expect, it } from 'vitest'
-import { endShare, frontOf, GAP, MIN_COLUMN, roomFor, scrollWidths, SNAP, stackWidths } from '../src/renderer/pane-layout.ts'
+import { arranged, dropIndex, endShare, frontOf, GAP, MIN_COLUMN, moved, placeAmong, roomFor, scrollWidths, slideOf, SNAP, stackWidths } from '../src/renderer/pane-layout.ts'
 
 describe('scrolled', () => {
   it('gives each column its share and the last what the others leave', () => {
@@ -58,5 +58,50 @@ describe('stacked', () => {
     expect(frontOf(panes, 'gone', 'a')).toBe('a')
     expect(frontOf(panes, undefined, undefined)).toBe('c')
     expect(frontOf([], 'a', 'a')).toBeUndefined()
+  })
+})
+
+describe('moving a pane', () => {
+  it('moves one to a place, clamped to the ends', () => {
+    expect(moved(['a', 'b', 'c'], 'c', 0)).toEqual(['c', 'a', 'b'])
+    expect(moved(['a', 'b', 'c'], 'a', 9)).toEqual(['b', 'c', 'a'])
+    expect(moved(['a', 'b', 'c'], 'b', 1)).toEqual(['a', 'b', 'c'])
+    expect(moved(['a', 'b'], 'z', 0)).toEqual(['a', 'b'])
+  })
+
+  it('shows the order asked for while it is the same panes, else the thread\'s', () => {
+    const panes = [{ id: 'a' }, { id: 'b' }]
+    expect(arranged(panes, ['b', 'a']).map((p) => p.id)).toEqual(['b', 'a'])
+    expect(arranged(panes, undefined)).toBe(panes)
+    expect(arranged(panes, ['b', 'a', 'c'])).toBe(panes)
+    expect(arranged(panes, ['b', 'c'])).toBe(panes)
+  })
+
+  it('drops a dragged tab past each whose middle its leading edge has passed', () => {
+    const slots = [{ left: 0, width: 100 }, { left: 104, width: 60 }, { left: 168, width: 40 }]
+    expect(dropIndex(slots, 0, 20)).toBe(0)
+    // Its right edge (100 + 40) past the second's middle (134).
+    expect(dropIndex(slots, 0, 40)).toBe(1)
+    // As far as it goes (its right edge at the last's): last, however narrow the last.
+    expect(dropIndex(slots, 0, 108)).toBe(2)
+    expect(dropIndex(slots, 2, -50)).toBe(1)
+    expect(dropIndex(slots, 2, -130)).toBe(0)
+    expect(dropIndex(slots, 1, 0)).toBe(1)
+  })
+
+  it('slides the tabs between where it was and where it is aside by its size', () => {
+    expect([0, 1, 2, 3].map((i) => slideOf(i, 0, 2, 50))).toEqual([0, -50, -50, 0])
+    expect([0, 1, 2, 3].map((i) => slideOf(i, 3, 1, 50))).toEqual([0, 50, 50, 0])
+    expect([0, 1, 2].map((i) => slideOf(i, 1, 1, 50))).toEqual([0, 0, 0])
+  })
+
+  it('places it among all the panes by the ones shown, those out of sight keeping theirs', () => {
+    // b is out of sight (the title bar's ···, a kind not drawn here): d dropped first among the shown goes before a.
+    expect(placeAmong(['a', 'b', 'c', 'd'], ['a', 'c', 'd'], 'd', 0)).toBe(0)
+    // Between a and c: before c, so after b.
+    expect(placeAmong(['a', 'b', 'c', 'd'], ['a', 'c', 'd'], 'd', 1)).toBe(2)
+    // Last among the shown: after c, the last other shown.
+    expect(placeAmong(['a', 'b', 'c', 'd'], ['a', 'c', 'd'], 'a', 2)).toBe(3)
+    expect(placeAmong(['a', 'b', 'c'], ['a', 'b', 'c'], 'a', 2)).toBe(2)
   })
 })

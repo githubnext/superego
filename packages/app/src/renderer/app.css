@@ -669,7 +669,7 @@ button.app__mobiletitle > svg { flex: none; color: var(--superego-faint); }
 .panes__gap { flex: none; width: 8px; cursor: col-resize; position: relative; display: grid; place-items: center; box-shadow: inset 1px 0 0 var(--superego-line); }
 /* A column's edge on each side: the one before it always, the next one's only where there's a next (none at the
    window's edge, nor against the column beside, which draws its own). */
-.panes__gap:has(+ .panes__column) { box-shadow: inset 1px 0 0 var(--superego-line), inset -1px 0 0 var(--superego-line); }
+.panes__gap.is-between { box-shadow: inset 1px 0 0 var(--superego-line), inset -1px 0 0 var(--superego-line); }
 .panes__gap::after { content: ''; width: 3px; height: 28px; border-radius: 2px; background: var(--superego-faint); opacity: .45; transition: opacity .12s, height .12s, background-color .12s; }
 .panes__gap:hover::after, .panes__gap:active::after { opacity: 1; height: 40px; background: var(--superego-muted); }
 /* While a column is dragged: the cursor stays, and nothing under it is selected. */
@@ -705,7 +705,7 @@ button.app__mobiletitle > svg { flex: none; color: var(--superego-faint); }
 .panes__end { grid-area: 1 / 4; box-shadow: inset 1px 0 0 var(--superego-line); }
 /* Scrolled, the room past the last handle (END in pane-layout.ts); the last column, brought into view, shows it too. */
 .panes__tail { flex: none; }
-.panes__column:has(+ .panes__gap + .panes__tail) { scroll-margin-right: 28px; }
+.panes__column.is-last { scroll-margin-right: 28px; }
 .panes__column.is-behind { visibility: hidden; }
 /* Maximized: one pane over the whole of the thread's area; the rest stay as they were (their places, their sizes, the
    row's scroll) under it, out of sight. */
@@ -942,6 +942,19 @@ a.pane-header__url:hover { color: var(--superego-accent); }
 .app__strip .strip__tab.is-away { color: var(--superego-faint); }
 .app__strip .strip__tab:not(.is-focused):hover { background: var(--superego-hover); color: var(--superego-text); }
 .strip__layout { margin-left: 2px; }
+/* A pane's tab dragged along the strip (dragTab in panes.tsx): it follows the pointer, a little lifted, over the
+   others (a flex item, so its z-index counts), which slide aside; let go, it settles into its place. */
+.strip[data-dragging] .strip__tab:not([data-dragged]), .strip__tab[data-settling] { transition: transform .16s cubic-bezier(.2, .8, .3, 1); }
+.strip .strip__tab[data-dragged] { z-index: 1; background: var(--superego-raised); color: var(--superego-text); box-shadow: 0 0 0 .5px light-dark(rgb(0 0 0 / .12), rgb(255 255 255 / .1)), 0 3px 10px light-dark(rgb(0 0 0 / .14), rgb(0 0 0 / .45)); }
+.strip .strip__tab[data-dragged] svg { color: inherit; }
+.is-dragging-tab, .is-dragging-tab * { cursor: grabbing !important; user-select: none !important; }
+/* A move that didn't take: the tab shakes its head, and says why when pointed at. */
+.strip__tab.is-failed { color: var(--superego-status-error-text); animation: strip-tab-no .32s ease-in-out; }
+@keyframes strip-tab-no { 25% { translate: -3px 0; } 50% { translate: 3px 0; } 75% { translate: -2px 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .strip[data-dragging] .strip__tab:not([data-dragged]), .strip__tab[data-settling] { transition: none; }
+  .strip__tab.is-failed { animation: none; }
+}
 /* Narrow: a switcher, one column at a time. */
 .strip--narrow { height: 40px; border-bottom: 0; padding: 0 8px; }
 .strip--narrow .strip__tabs { padding: 2px; border-radius: 7px; background: var(--superego-fill); }

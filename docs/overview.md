@@ -96,6 +96,7 @@ project    a git repository (its worktrees too) or a folder, on a machine
 | `⌘⇧\` | Panes scrolled or stacked |
 | `⌘⇧↩` | Maximize the column with the focus (a pane, or the thread over its panes), or restore it (`Esc` too) |
 | `⌘⌥←` `⌘⌥→` | Focus the region beside: the sidebar, the thread, each pane (every one can hold the focus) |
+| `⌘⌥⇧←` `⌘⌥⇧→` | Move the pane with the focus left / right among the panes (or drag its tab in the title bar) |
 | `⌃I` | Focus the prompt (`Esc` there leaves it for the thread, to read and scroll; typing goes back to the prompt) |
 | `⌃D` `⌃U` | Scroll what has the focus (the thread, from its prompt) half a page down / up |
 | `⌃O` | The links in the thread, to follow from the keyboard |
