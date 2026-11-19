@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- The image viewer behaves like the other dialogs: the window behind it can't be scrolled or reached with a screen
+  reader while it's open.
 - The title bar fits any window: short of room, its chips and buttons (the model, MCP servers, the profile, pin,
   archive, an extension's) move into a ··· menu at its end, the panes' tabs shrink to icons and then follow, and they
   come back as the window widens. Nothing in it overlaps or wraps any more.

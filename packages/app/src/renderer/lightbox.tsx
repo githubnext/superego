@@ -1,10 +1,10 @@
 // The lightbox: an image of a thread's (one an agent showed, or one in a message or a rendered file) over the whole window, to look at closely. Click or tap to zoom in where you click (again to
 // fit), scroll or pinch to zoom, drag to pan; ←/→, the side buttons or a swipe go through the set; Esc, the close
-// button or a click beside the image close it. The focus stays inside while it is open and goes back where it was.
+// button or a click beside the image close it. A modal dialog (Base UI's): the window behind is inert and doesn't scroll,
+// the focus stays inside while it is open and goes back where it was.
 // It reads each image whole, showing its thumbnail (what the thread showed) meanwhile.
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react'
-import { createPortal } from 'react-dom'
-import { CaretLeftIcon, CaretRightIcon, ImageBrokenIcon, MagnifyingGlassMinusIcon, MagnifyingGlassPlusIcon, XIcon } from '@superego/ui'
+import { useCallback, useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react'
+import { CaretLeftIcon, CaretRightIcon, DialogParts, ImageBrokenIcon, MagnifyingGlassMinusIcon, MagnifyingGlassPlusIcon, usePortalAttributes, XIcon } from '@superego/ui'
 import type { MachineEntry } from '../shared/bridge.ts'
 import { describeImage, imageReadAlready, imageSourceOf, useImageSource, type ImageItem } from './images.tsx'
 import { CLICK_SCALE, clampPan, FIT, toggleAt, zoomAt, type Bounds, type Point, type View } from './zoom.ts'
@@ -48,6 +48,7 @@ export function Lightbox({ machine, thread, images, start, onClose }: {
   const [drawn, setDrawn] = useState<{ which: string | undefined; whole: boolean }>()
   const which = image.url ?? image.path ?? (image.entry && `${image.entry.id}:${image.entry.message}:${image.entry.block}`)
   const many = images.length > 1
+  const marked = usePortalAttributes()
 
   const go = useCallback((by: number) => {
     if (!many) return
@@ -62,13 +63,6 @@ export function Lightbox({ machine, thread, images, start, onClose }: {
     for (const by of [1, -1]) void imageSourceOf(machine, thread, images[(index + by + images.length) % images.length]!, 'whole').catch(() => {})
   }, [machine, thread, images, index, many])
 
-  // The focus inside while it's open, and back where it was after.
-  useLayoutEffect(() => {
-    const before = document.activeElement as HTMLElement | null
-    root.current?.focus()
-    return () => { before?.focus?.() }
-  }, [])
-
   const bounds = (): Bounds => ({
     width: img.current?.offsetWidth ?? 0, height: img.current?.offsetHeight ?? 0,
     stageWidth: stage.current?.clientWidth ?? 0, stageHeight: stage.current?.clientHeight ?? 0,
@@ -79,9 +73,10 @@ export function Lightbox({ machine, thread, images, start, onClose }: {
     return { x: x - (rect.left + rect.width / 2), y: y - (rect.top + rect.height / 2) }
   }
 
-  // Scrolling zooms: a trackpad's pinch arrives as a wheel with ctrl, in finer steps.
-  useEffect(() => {
-    const element = stage.current
+  // Scrolling zooms: a trackpad's pinch arrives as a wheel with ctrl, in finer steps. Listened to from the stage's ref:
+  // the dialog's portal puts it in the page after this component's first effects.
+  const stageRef = useCallback((element: HTMLDivElement | null) => {
+    stage.current = element
     if (!element) return
     const onWheel = (event: WheelEvent) => {
       event.preventDefault()
@@ -90,7 +85,7 @@ export function Lightbox({ machine, thread, images, start, onClose }: {
       setView((v) => zoomAt(v, v.scale * factor, at, bounds()))
     }
     element.addEventListener('wheel', onWheel, { passive: false })
-    return () => element.removeEventListener('wheel', onWheel)
+    return () => { stage.current = null; element.removeEventListener('wheel', onWheel) }
   }, [])
 
   const down = (event: PointerEvent) => {
@@ -152,8 +147,8 @@ export function Lightbox({ machine, thread, images, start, onClose }: {
 
   const zoomBy = (factor: number) => setView((v) => zoomAt(v, v.scale * factor, { x: 0, y: 0 }, bounds()))
   const onKeyDown = (event: KeyboardEvent) => {
+    // Esc is the dialog's own.
     const keys: Record<string, () => void> = {
-      Escape: onClose,
       ArrowLeft: () => go(-1),
       ArrowRight: () => go(1),
       '+': () => zoomBy(1.5),
@@ -161,59 +156,57 @@ export function Lightbox({ machine, thread, images, start, onClose }: {
       '-': () => zoomBy(1 / 1.5),
       '0': () => setView(FIT),
     }
-    if (event.key === 'Tab') {
-      // Round the lightbox's own buttons, never out behind it.
-      const stops = [...root.current!.querySelectorAll<HTMLElement>('button:not(:disabled)')]
-      const at = stops.indexOf(document.activeElement as HTMLElement)
-      const next = event.shiftKey ? (at <= 0 ? stops.length - 1 : at - 1) : (at + 1) % stops.length
-      stops[next]?.focus()
-    } else if (keys[event.key] && !event.metaKey && !event.ctrlKey && !event.altKey) keys[event.key]!()
-    else return
+    if (!keys[event.key] || event.metaKey || event.ctrlKey || event.altKey) return
+    keys[event.key]!()
     event.preventDefault()
     event.stopPropagation()
   }
 
   const label = describeImage(image)
   const zoomed = view.scale > 1
-  return createPortal(
-    <div ref={root} className="lightbox" role="dialog" aria-modal="true" aria-label={many ? `${label}, ${index + 1} of ${images.length}` : label} tabIndex={-1} onKeyDown={onKeyDown}>
-      <div
-        ref={stage}
-        className={`lightbox__stage ${zoomed ? 'is-zoomed' : ''} ${moving ? 'is-moving' : ''}`}
-        onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up}
-      >
-        {broken ? (
-          <div className="lightbox__broken"><ImageBrokenIcon size={32} aria-hidden /><span>{image.name} can’t be shown</span>{problem && <span className="lightbox__why">{problem}</span>}</div>
-        ) : src && (
-          <img
-            ref={img}
-            key={which}
-            src={src}
-            alt={image.alt ?? image.caption ?? ''}
-            draggable={false}
-            className={`lightbox__image ${drawn?.which === which ? 'is-ready' : ''}`}
-            onLoad={() => setDrawn({ which, whole: src === whole.src })}
-            style={{ transform: `translate(${view.x + drag}px, ${view.y}px) scale(${view.scale})` }}
-          />
-        )}
-        {!broken && !(drawn?.which === which && drawn?.whole) && <div className="lightbox__loading" aria-hidden />}
-      </div>
-      <div className="lightbox__bar">
-        {many && <span className="lightbox__count" aria-hidden>{index + 1} / {images.length}</span>}
-        <button type="button" className="lightbox__button" aria-label={zoomed ? 'Zoom out' : 'Zoom in'} title={zoomed ? 'Zoom out (0)' : 'Zoom in (+)'}
-          onClick={() => setView((v) => v.scale > 1 ? FIT : zoomAt(v, CLICK_SCALE, { x: 0, y: 0 }, bounds()))} disabled={broken}>
-          {zoomed ? <MagnifyingGlassMinusIcon size={18} aria-hidden /> : <MagnifyingGlassPlusIcon size={18} aria-hidden />}
-        </button>
-        <button type="button" className="lightbox__button" aria-label="Close" title="Close (Esc)" onClick={onClose}><XIcon size={18} aria-hidden /></button>
-      </div>
-      {many && (
-        <>
-          <button type="button" className="lightbox__button lightbox__side lightbox__side--prev" aria-label="Previous image" onClick={() => go(-1)}><CaretLeftIcon size={20} weight="bold" aria-hidden /></button>
-          <button type="button" className="lightbox__button lightbox__side lightbox__side--next" aria-label="Next image" onClick={() => go(1)}><CaretRightIcon size={20} weight="bold" aria-hidden /></button>
-        </>
-      )}
-      {image.caption && <div className="lightbox__caption">{image.caption}</div>}
-    </div>,
-    document.body,
+  // A click beside the image is the stage's to close it (the popup is the whole window, so there is no outside to press).
+  return (
+    <DialogParts.Root open onOpenChange={(open) => { if (!open) onClose() }} disablePointerDismissal>
+      <DialogParts.Portal>
+        <DialogParts.Popup {...marked} ref={root} initialFocus={root} className="lightbox" aria-label={many ? `${label}, ${index + 1} of ${images.length}` : label} onKeyDown={onKeyDown}>
+          <div
+            ref={stageRef}
+            className={`lightbox__stage ${zoomed ? 'is-zoomed' : ''} ${moving ? 'is-moving' : ''}`}
+            onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up}
+          >
+            {broken ? (
+              <div className="lightbox__broken"><ImageBrokenIcon size={32} aria-hidden /><span>{image.name} can’t be shown</span>{problem && <span className="lightbox__why">{problem}</span>}</div>
+            ) : src && (
+              <img
+                ref={img}
+                key={which}
+                src={src}
+                alt={image.alt ?? image.caption ?? ''}
+                draggable={false}
+                className={`lightbox__image ${drawn?.which === which ? 'is-ready' : ''}`}
+                onLoad={() => setDrawn({ which, whole: src === whole.src })}
+                style={{ transform: `translate(${view.x + drag}px, ${view.y}px) scale(${view.scale})` }}
+              />
+            )}
+            {!broken && !(drawn?.which === which && drawn?.whole) && <div className="lightbox__loading" aria-hidden />}
+          </div>
+          <div className="lightbox__bar">
+            {many && <span className="lightbox__count" aria-hidden>{index + 1} / {images.length}</span>}
+            <button type="button" className="lightbox__button" aria-label={zoomed ? 'Zoom out' : 'Zoom in'} title={zoomed ? 'Zoom out (0)' : 'Zoom in (+)'}
+              onClick={() => setView((v) => v.scale > 1 ? FIT : zoomAt(v, CLICK_SCALE, { x: 0, y: 0 }, bounds()))} disabled={broken}>
+              {zoomed ? <MagnifyingGlassMinusIcon size={18} aria-hidden /> : <MagnifyingGlassPlusIcon size={18} aria-hidden />}
+            </button>
+            <button type="button" className="lightbox__button" aria-label="Close" title="Close (Esc)" onClick={onClose}><XIcon size={18} aria-hidden /></button>
+          </div>
+          {many && (
+            <>
+              <button type="button" className="lightbox__button lightbox__side lightbox__side--prev" aria-label="Previous image" onClick={() => go(-1)}><CaretLeftIcon size={20} weight="bold" aria-hidden /></button>
+              <button type="button" className="lightbox__button lightbox__side lightbox__side--next" aria-label="Next image" onClick={() => go(1)}><CaretRightIcon size={20} weight="bold" aria-hidden /></button>
+            </>
+          )}
+          {image.caption && <div className="lightbox__caption">{image.caption}</div>}
+        </DialogParts.Popup>
+      </DialogParts.Portal>
+    </DialogParts.Root>
   )
 }
