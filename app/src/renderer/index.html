@@ -7,10 +7,16 @@
     <!-- Served by a daemon's Web access, Superego installs as an app on a phone's home screen. -->
     <link rel="manifest" href="./manifest.webmanifest" />
     <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
+    <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="Superego" />
-    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
-    <meta name="theme-color" content="#1e1e1e" media="(prefers-color-scheme: dark)" />
+    <!-- On the home screen, the page runs up under the status bar (its text dark or light with the system's), and the
+         phone layout's bar fills that strip with its own colour (app.css, .app__mobilebar). Without this, iOS keeps the
+         strip outside the page and, since iOS 26, blurs it into the top of the page. -->
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <!-- The phone layout's bar (--superego-sidebar-bg), for browsers that tint their own chrome above it. -->
+    <meta name="theme-color" content="#f2f2f4" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#262628" media="(prefers-color-scheme: dark)" />
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' blob: 'wasm-unsafe-eval'; connect-src 'self' data:; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: http: https:; manifest-src 'self'; frame-src 'self' http: https: superego-artifact:" />
   </head>
   <body>

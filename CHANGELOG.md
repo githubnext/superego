@@ -24,6 +24,8 @@
   dialogs keep clear of the status bar and the home indicator.
 - On iPhone and iPad, a link to a thread shows its status dot right before its title again, not spread across the line.
 - On a phone or tablet, the focused pane no longer wears a blue ring.
+- On an iPhone's home screen, the top of the page is no longer blurred under the status bar: the bar at the top now
+  runs up under it in its own colour. If you added Superego to your home screen before, remove it and add it again.
 
 ## 0.1.7
 

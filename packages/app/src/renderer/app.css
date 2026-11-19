@@ -64,6 +64,8 @@
    columns and what it says about itself at the right. Over the list, the side's grey runs up behind the window's
    buttons, with back and forward at its right edge. */
 .app__titlebar { position: relative; height: var(--superego-titlebar); display: flex; align-items: center; gap: var(--superego-space-3); min-width: 0; padding: 0 12px 0 84px; border-bottom: 1px solid var(--superego-line); container-type: inline-size; overflow: hidden; }
+/* On a tablet's home screen the page runs up under the status bar: the bar starts below it, its ground running up. */
+.app.is-web .app__titlebar { height: calc(var(--superego-titlebar) + env(safe-area-inset-top)); padding-top: env(safe-area-inset-top); }
 .app.has-sidebar:has(.app__sidebar:not(:empty)) .app__titlebar { padding-left: calc(var(--superego-rail) + var(--superego-sidebar) + 1px + var(--superego-space-3)); }
 .app.has-sidebar:has(.app__sidebar:not(:empty)) .app__titlebar::before { content: ''; position: absolute; top: 0; bottom: 0; left: 0; width: calc(var(--superego-rail) + var(--superego-sidebar)); background: var(--superego-chrome); border-right: 1px solid var(--superego-line); pointer-events: none; }
 /* Short of room, the bar gives way in one order (overflow.tsx): its items keep their size and go, in turn, to the ···
@@ -522,8 +524,9 @@ code { font-family: var(--superego-mono); font-size: .92em; }
 .web-device__actions { display: flex; gap: 6px; flex: none; }
 
 /* Phones and narrow windows: one column, the sidebar a drawer, nothing hovering where a thumb goes. */
-/* The bar is fixed at the top, the column under it: Safari (iOS 26) takes a fixed bar at the top edge for the page's own
-   and carries its colour up under the status bar, where it would otherwise blur what's there. */
+/* The bar is fixed at the top, the column under it, and runs up under the status bar (index.html's black-translucent):
+   Safari (iOS 26) samples a fixed bar at the top edge for the page's colour there and leaves out the blur it otherwise
+   draws under the status bar, over whatever's at the page's top. */
 .app { --mobilebar: calc(env(safe-area-inset-top) + 49px); }
 .app__mobilebar { position: fixed; z-index: 10; top: 0; left: 0; right: 0; height: var(--mobilebar); display: flex; align-items: center; gap: var(--superego-space-2); padding: env(safe-area-inset-top) max(var(--superego-space-3), env(safe-area-inset-right)) 0 max(var(--superego-space-3), env(safe-area-inset-left)); border-bottom: 1px solid var(--superego-line); background: var(--superego-sidebar-bg); }
 .app.is-narrow .app__main { padding-top: var(--mobilebar); }
