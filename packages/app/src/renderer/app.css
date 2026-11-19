@@ -526,7 +526,7 @@ code { font-family: var(--superego-mono); font-size: .92em; }
 /* Phones and narrow windows: one column, the sidebar a drawer, nothing hovering where a thumb goes. */
 /* Text reads a quarter bigger there, on top of the Text size setting. The narrow layout's width (media.ts's NARROW); set
    on the root, where the type tokens are worked out. */
-@media (max-width: 599px) { :root { --superego-text-device: 1.25; } }
+@media (max-width: 599px) { :root { --superego-text-device: 1.15; } }
 /* The bar is fixed at the top, the column under it, and runs up under the status bar (index.html's black-translucent):
    Safari (iOS 26) samples a fixed bar at the top edge for the page's colour there and leaves out the blur it otherwise
    draws under the status bar, over whatever's at the page's top. */
