@@ -13,7 +13,7 @@ export const BROWSER = 'browser'
 export type BrowserParams = { url?: string; path?: string }
 
 export const about = {
-  name: 'browser', version: '1.0.0', api: '^4', title: 'Browser', description: 'Web pages and HTML files the agent wrote, shown beside a thread.',
+  name: 'browser', version: '1.0.0', api: '^5', title: 'Browser', description: 'Web pages and HTML files the agent wrote, shown beside a thread.',
   panes: {
     [BROWSER]: '{ url } (a web page: a dev server running here at its localhost address, or any site) or { path } (an HTML file in the working folder; write it first)',
   },

@@ -1,19 +1,20 @@
-// A thread's composer: what you type (a draft per thread), files to send with it, completions extensions offer, and what
-// you sent while the agent was busy, waiting its turn. What's drawn above it can take what's typed (`useComposerClaim`)
-// or put words in it (`useComposer`).
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent } from 'react'
+// A thread's composer: what you type (a draft per thread) in the box (composer-box.tsx: files to send with it,
+// completions extensions offer), and what you sent while the agent was busy, waiting its turn. What's drawn above it
+// can take what's typed (`useComposerClaim`) or put words in it (`useComposer`).
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import type { InboxState } from '@earendil-works/pi-durable'
 import type { Attachment, ThreadInfo } from '@superego/protocol'
-import { autoFocusOnOpen, ArrowDownIcon, ArrowElbowRightIcon, ArrowUpIcon, Button, FileIcon, IconButton, ListIcon, PaperclipIcon, TextArea, XIcon } from '@superego/ui'
+import { autoFocusOnOpen, ArrowDownIcon, ArrowElbowRightIcon, ArrowUpIcon, Button, IconButton, ListIcon, XIcon } from '@superego/ui'
 import type { MachineEntry } from '../shared/bridge.ts'
 import { useRegistry } from './registry.tsx'
-import { completionsIn, sentWithIn } from './lookups.ts'
+import { sentWithIn } from './lookups.ts'
 import { Slot } from './placement.tsx'
 import { useShell } from './state.tsx'
 import { ctrlDigit } from '../shared/shortcuts.ts'
 import { useLocalState } from './local-state.ts'
-import { readAttachment, splitMessage } from './attachments.ts'
-import { askFor, complete, completing, menuFor, readSent, type Completion, type Offered } from './composer.ts'
+import { splitMessage } from './attachments.ts'
+import { readSent } from './composer.ts'
+import { ComposerBox } from './composer-box.tsx'
 import { onGivenBack, takeBack } from './returned.ts'
 import { ProfileSwitch } from './profile-pick.tsx'
 import { UnarchiveButton } from './thread-actions.tsx'
@@ -122,8 +123,6 @@ export function ComposerView({ machine, thread, busy, inbox, onJump }: { machine
   useEffect(() => { if (autoFocusOnOpen()) input.current?.focus() }, [thread.id])
   // Files going with the next message: picked, dropped on the composer or pasted into it.
   const [files, setFiles] = useState<Attachment[]>([])
-  const [dragging, setDragging] = useState(false)
-  const picker = useRef<HTMLInputElement>(null)
   useEffect(() => { setFiles([]) }, [thread.id])
   // Messages you'd queued, given back as the thread was stopped from this window: after what's typed, each its own
   // paragraph, in order, their files with them. Their words as the transcript shows them: without what extensions
@@ -146,33 +145,9 @@ export function ComposerView({ machine, thread, busy, inbox, onJump }: { machine
     take()
     return onGivenBack(take)
   }, [machine.id, thread.id])
-  const attach = async (list: FileList | File[]) => {
-    try {
-      const read = await Promise.all([...list].map(readAttachment))
-      setFiles((was) => [...was, ...read])
-      setError(undefined)
-    } catch (e) { setError({ message: (e as Error).message }) }
-  }
 
   // While the agent works, ⏎ steers it (the message joins the running work after its current step) and ⌃⏎ queues
   // the message for when it's done.
-  // Completing a word as it's typed, as extensions offer (`$co` → a skill, see composer.ts): ↑↓ pick, ⇥ or ⏎ takes
-  // one, esc leaves the word as typed.
-  useSyncExternalStore(registry.subscribe, () => registry.version)
-  const [caret, setCaret] = useState(0)
-  const [pick, setPick] = useState(0)
-  const [dismissed, setDismissed] = useState<number>()
-  const found = claim ? undefined : completing(completionsIn(registry, { machine: machine.id, thread }), text, caret)
-  const word = found?.word
-  // What the provider offered for the word, kept while it's asked again as the word grows (see menuFor).
-  const [offered, setOffered] = useState<Offered>()
-  useEffect(() => {
-    if (!found) return setOffered(undefined)
-    return askFor(found, { machine, thread }, setOffered)
-  }, [found?.provider, JSON.stringify(word), machine.id, thread.id])
-  const menu = menuFor(found, offered, dismissed)
-  useEffect(() => { setPick(0) }, [word?.query, word?.start])
-  useEffect(() => { if (!word) setDismissed(undefined) }, [word === undefined])
   // What an extension above offers, picked from with ←/→ while the box is empty, and what it puts in.
   const [offers, setOffers] = useState<{ messages: string[]; picked: number }>({ messages: [], picked: 0 })
   const offering = !claim && !text && !busy && offers.messages.length > 0
@@ -182,19 +157,11 @@ export function ComposerView({ machine, thread, busy, inbox, onJump }: { machine
     text,
     fill(next) {
       setText(next)
-      setCaret(next.length)
       requestAnimationFrame(() => { input.current?.focus(); input.current?.setSelectionRange(next.length, next.length) })
     },
     suggest,
     picked: offering ? offers.picked : undefined,
   }), [text, setText, suggest, offering, offers.picked])
-  const take = (item: Completion) => {
-    if (!word) return
-    const next = complete(text, caret, word.start, item.insert)
-    setText(next.text)
-    setCaret(next.caret)
-    requestAnimationFrame(() => { input.current?.setSelectionRange(next.caret, next.caret); input.current?.focus() })
-  }
 
   /** Send what the box holds (`typed`: a suggestion picked instead). */
   const send = async (whenBusy: 'steer' | 'followUp' = 'steer', typed?: string) => {
@@ -243,17 +210,8 @@ export function ComposerView({ machine, thread, busy, inbox, onJump }: { machine
     } catch (e) { setError(e as { kind?: string; message: string }) }
   }
   const sendable = Boolean(text.trim()) || (!claim && files.length > 0)
-  const onKeyDown = (event: KeyboardEvent) => {
+  const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (claim?.keyDown?.(event, text)) { event.preventDefault(); return }
-    if (menu && word && !event.metaKey && !event.altKey && !event.ctrlKey) {
-      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-        event.preventDefault()
-        setPick((pick + (event.key === 'ArrowDown' ? 1 : -1) + menu.length) % menu.length)
-        return
-      }
-      if (event.key === 'Tab' || (event.key === 'Enter' && !event.shiftKey)) { event.preventDefault(); take(menu[pick] ?? menu[0]!); return }
-      if (event.key === 'Escape') { event.preventDefault(); setDismissed(word.start); return }
-    }
     if (suggested && !event.metaKey && !event.altKey && !event.ctrlKey && !event.shiftKey) {
       if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
         event.preventDefault()
@@ -272,61 +230,19 @@ export function ComposerView({ machine, thread, busy, inbox, onJump }: { machine
   return (
     <ClaimContext.Provider value={register}>
     <ComposerContext.Provider value={composer}>
-    <div className={`dock ${dragging ? 'is-dropping' : ''}`}
-      onDragOver={(e) => { if (!claim && e.dataTransfer.types.includes('Files')) { e.preventDefault(); setDragging(true) } }}
-      onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragging(false) }}
-      onDrop={(e) => { setDragging(false); if (!claim && e.dataTransfer.files.length) { e.preventDefault(); void attach(e.dataTransfer.files) } }}>
-    {/* Over the box: back to the end, when you've scrolled away from it. */}
-    <div className="dock__bar">
-      {onJump && (
-        <Button className="dock__pill dock__jump" onClick={onJump}>
-          <ArrowDownIcon size={13} aria-hidden />
-          Jump to bottom
-        </Button>
-      )}
-    </div>
-    {!archived && <Queued machine={machine} thread={thread} inbox={inbox} />}
-    <div className="dock__above"><Slot name="composer.above" props={{ machine, thread }} /></div>
-    <div className="dock__box">
-    {files.length > 0 && !claim && (
-      <div className="composer__files">
-        {files.map((file, index) => (
-          <span key={`${file.name}-${index}`} className="attachment">
-            {file.mimeType.startsWith('image/') ? <img src={`data:${file.mimeType};base64,${file.data}`} alt="" /> : <span className="attachment__icon"><FileIcon size={14} aria-hidden /></span>}
-            <span className="attachment__name">{file.name}</span>
-            <button className="attachment__remove" aria-label={`Remove ${file.name}`} onClick={() => setFiles((was) => was.filter((_, i) => i !== index))}>×</button>
-          </span>
-        ))}
-      </div>
-    )}
-    {error && (
-      <div className="composer__error">
-        {error.kind === 'no_model' ? <>No model is set up on {machine.label}. <Button onClick={onOpenSettings}>Open Settings</Button></>
+    {/* The box holds the words and one button at their end: Send, Steer or Answer, one key, ⏎ (Unarchive, archived). */}
+    <ComposerBox className="dock" where={{ machine, cwd: thread.cwd, thread }} text={text} setText={setText} files={files} setFiles={setFiles}
+      open={!claim} disabled={disabled} inputRef={input} onKeyDown={onKeyDown}
+      onError={(message) => setError({ message })}
+      placeholder={archived ? 'Archived: read only' : disabled ? `${machine.label} is ${machine.state}` : claim ? claim.placeholder : busy ? 'Steer the agent…' : suggested ? `${suggested}  ⏎` : 'Reply…'}
+      error={error && (
+        error.kind === 'no_model' ? <>No model is set up on {machine.label}. <Button onClick={onOpenSettings}>Open Settings</Button></>
           // Its profile gone from under it: another picked for it.
           : error.kind === 'profile_missing' ? <ProfileSwitch machine={machine.id} thread={thread} onSwitched={() => void send()} />
           : error.kind === 'profile_not_allowed' && thread.profile ? <>{error.message} <Button onClick={() => void allowAndSend(thread.profile!.name)}>Allow and send</Button></>
-          : error.message}
-      </div>
-    )}
-    {menu && (
-      <div className="completions" role="listbox" aria-label={found!.provider.title}>
-        {menu.map((item, index) => (
-          <div key={`${item.label}-${index}`} role="option" aria-selected={index === pick} className={`completions__item ${index === pick ? 'is-active' : ''}`}
-            onMouseEnter={() => setPick(index)} onMouseDown={(e) => { e.preventDefault(); take(item) }}>
-            {item.icon && <span className="completions__icon" aria-hidden>{item.icon}</span>}
-            <span className="completions__label">{item.label}</span>
-            {item.detail && <span className="completions__detail">{item.detail}</span>}
-          </div>
-        ))}
-      </div>
-    )}
-    {/* The box holds the words and one button at their end: Send, Steer or Answer, one key, ⏎ (Unarchive, archived). */}
-    <div className="composer">
-      <TextArea ref={input} rows={1} value={text} disabled={disabled} onChange={(e) => { setText(e.target.value); setCaret(e.target.selectionStart) }} onKeyDown={onKeyDown}
-        onSelect={(e) => setCaret(e.currentTarget.selectionStart)}
-        onPaste={(e) => { if (!claim && e.clipboardData.files.length) { e.preventDefault(); void attach(e.clipboardData.files) } }}
-        placeholder={archived ? 'Archived: read only' : disabled ? `${machine.label} is ${machine.state}` : claim ? claim.placeholder : busy ? 'Steer the agent…' : suggested ? `${suggested}  ⏎` : 'Reply…'} />
-      {archived
+          : error.message
+      )}
+      action={archived
         ? <UnarchiveButton machine={machine} thread={thread} className="composer__unarchive" />
         : busy && !claim
           ? sendable && (
@@ -339,20 +255,9 @@ export function ComposerView({ machine, thread, busy, inbox, onJump }: { machine
               <ArrowUpIcon size={15} weight="bold" aria-hidden />
             </IconButton>
           )}
-    </div>
-    </div>
-    {/* Under the box, quietly: attach at the left; while the agent works, Queue and Stop at the right. */}
-    {!archived && (
-      <div className="dock__footer">
-        {!claim && (
-          <>
-            <Button variant="ghost" className="dock__action composer__attach" disabled={disabled} onClick={() => picker.current?.click()}>
-              <PaperclipIcon size={13} aria-hidden />Attach
-            </Button>
-            <input ref={picker} type="file" multiple hidden onChange={(e) => { if (e.target.files?.length) void attach(e.target.files); e.target.value = '' }} />
-          </>
-        )}
-        <span className="dock__footer-end">
+      // Under the box, quietly: attach at the left; while the agent works, Queue and Stop at the right.
+      footer={!archived && {
+        end: <>
           {busy && !claim && sendable && (
             <Button variant="ghost" className="dock__action composer__queue" disabled={disabled} onClick={() => void send('followUp')}>
               <ListIcon size={13} aria-hidden />Queue<kbd>⌃⏎</kbd>
@@ -363,12 +268,21 @@ export function ComposerView({ machine, thread, busy, inbox, onJump }: { machine
               <span className="composer__stop-mark" aria-hidden />Stop<kbd>esc</kbd>
             </Button>
           )}
-        </span>
+        </>,
+      }}>
+      {/* Over the box: back to the end, when you've scrolled away from it. */}
+      <div className="dock__bar">
+        {onJump && (
+          <Button className="dock__pill dock__jump" onClick={onJump}>
+            <ArrowDownIcon size={13} aria-hidden />
+            Jump to bottom
+          </Button>
+        )}
       </div>
-    )}
-    </div>
+      {!archived && <Queued machine={machine} thread={thread} inbox={inbox} />}
+      <div className="dock__above"><Slot name="composer.above" props={{ machine, thread }} /></div>
+    </ComposerBox>
     </ComposerContext.Provider>
     </ClaimContext.Provider>
   )
 }
-

@@ -30,12 +30,12 @@ async function open(extensions: DaemonExtension[] = [], dataDir = dir) {
 }
 
 it("refuses an extension that needs an extension API this host isn't, saying which", async () => {
-  await expect(open([defineDaemonExtension({ name: 'future', version: '1.0.0', api: '^5', setup() {} })]))
-    .rejects.toThrow(`Extension future needs extension API ^5, and this Superego has ${EXTENSION_API}: update Superego`)
+  await expect(open([defineDaemonExtension({ name: 'future', version: '1.0.0', api: '^6', setup() {} })]))
+    .rejects.toThrow(`Extension future needs extension API ^6, and this Superego has ${EXTENSION_API}: update Superego`)
   await expect(open([defineDaemonExtension({ name: 'sloppy', version: 'one', setup() {} })])).rejects.toThrow(/isn't major.minor.patch/)
   // Never set up: nothing of it ran.
   let ran = false
-  await expect(open([defineDaemonExtension({ name: 'future', api: '>=5', setup() { ran = true } })])).rejects.toThrow(/needs extension API >=5/)
+  await expect(open([defineDaemonExtension({ name: 'future', api: '>=6', setup() { ran = true } })])).rejects.toThrow(/needs extension API >=6/)
   expect(ran).toBe(false)
 })
 
@@ -44,25 +44,25 @@ it("refuses a profile's extension that needs a newer extension API, when the pro
   const profile = join(home, 'profiles', 'default')
   mkdirSync(profile, { recursive: true })
   writeFileSync(join(profile, 'profile.ts'), `import { defineProfile } from 'superego'\nexport default defineProfile({ extensions: ['./next.ts'] })\n`)
-  writeFileSync(join(profile, 'next.ts'), `import { defineDaemonExtension } from 'superego'\nexport default defineDaemonExtension({ name: 'next', version: '3.0.0', api: '^4.3', setup() {} })\n`)
+  writeFileSync(join(profile, 'next.ts'), `import { defineDaemonExtension } from 'superego'\nexport default defineDaemonExtension({ name: 'next', version: '3.0.0', api: '^5.1', setup() {} })\n`)
   const { peer, close } = await open([], home)
-  await expect(peer.call('thread.start', { cwd: dir })).rejects.toThrow(/Extension next needs extension API \^4.3, and this Superego has 4.2.0/)
+  await expect(peer.call('thread.start', { cwd: dir })).rejects.toThrow(/Extension next needs extension API \^5.1, and this Superego has 5.0.0/)
   await close()
 })
 
 it('announces each extension at its version, in hello and as it changes', async () => {
-  const git = defineDaemonExtension({ name: 'git', version: '1.3.0', api: '^4', setup() {} })
+  const git = defineDaemonExtension({ name: 'git', version: '1.3.0', api: '^5', setup() {} })
   const mine = defineDaemonExtension({ name: 'mine', setup() {} })
   const { peer, hello, close } = await open([git, mine])
   expect(hello.api).toBe(EXTENSION_API)
   // Extensions are in `extensions` only: `features` is the protocol's.
   expect(hello.features).toEqual([...FEATURES])
   const of = (list: ExtensionManifest[] | undefined, name: string) => list?.find((e) => e.name === name)
-  expect(of(hello.extensions, 'git')).toEqual({ name: 'git', version: '1.3.0', api: '^4' })
+  expect(of(hello.extensions, 'git')).toEqual({ name: 'git', version: '1.3.0', api: '^5' })
   // One that says no version is announced without one: clients count it 0.0.0.
   expect(of(hello.extensions, 'mine')).toEqual({ name: 'mine' })
   // The core's own are extensions too, at 1.0.0.
-  expect(of(hello.extensions, 'coding-tools')).toMatchObject({ version: '1.0.0', api: '^4' })
+  expect(of(hello.extensions, 'coding-tools')).toMatchObject({ version: '1.0.0', api: '^5' })
   const told: { features: string[]; extensions: ExtensionManifest[] }[] = []
   peer.on('features.changed', (params: (typeof told)[number]) => { told.push(params) })
   await peer.call('settings.set', { key: 'extensions.git', value: false })

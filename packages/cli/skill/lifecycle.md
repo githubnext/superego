@@ -111,7 +111,7 @@ superego.thread<{ path: string; branch: string }>({   // the state its starting 
   the daemon was down gets neither.
 - `stopped(thread, { withdrawn })` is told when a stop (`thread.stop`) withdrew messages others had queued for the
   thread (another thread's `thread_send`, an extension's): each one's origin, in order. The `turnEnd` of the run it stopped may be told
-  before or after it. The user's own aren't withdrawn: they come back to them to write again. (`api: '^4.1'`.)
+  before or after it. The user's own aren't withdrawn: they come back to them to write again.
 - `blocked` is told when a thread comes to need the user mid-run (an extension's `status`: `agent-ui`'s question), once
   each time: when the extension whose status it is calls `invalidate()`.
 - A thread archiving itself mid-turn is `threads.archive(id, { whenIdle: true })`: archived once its run ends, even
@@ -162,15 +162,15 @@ An extension says its version and the extension API it needs in `about` (bundled
 
 <!-- check: daemon -->
 ```ts
-export const about = { name: 'orders', version: '1.2.0', api: '^4', title: 'Orders' } satisfies ExtensionAbout
+export const about = { name: 'orders', version: '1.2.0', api: '^5', title: 'Orders' } satisfies ExtensionAbout
 ```
 
 - `version`: a **major** when something relying on its methods, actions, values or data views could no longer follow
   (a method's result changes shape, an action goes); a **minor** when something's added; a patch otherwise. Bundled
   extensions started at `1.0.0`. Unset: it counts as `0.0.0`.
-- `api`: the range of extension APIs it works with: `^4` for any 4.x, `^4.1` once it uses something 4.1 added. A host
-  outside the range refuses it before `setup` runs, with why: *Extension orders needs extension API ^4.1, and this
-  Superego has 4.0.0: update Superego*. A bundled one fails the build's tests; a profile's fails its profile's load
+- `api`: the range of extension APIs it works with: `^5` for any 5.x, `^5.1` once it uses something 5.1 added. A host
+  outside the range refuses it before `setup` runs, with why: *Extension orders needs extension API ^5.1, and this
+  Superego has 5.0.0: update Superego*. A bundled one fails the build's tests; a profile's fails its profile's load
   (the thread says so); a profile UI's is left out, the rest of the profile set up. Unset: any.
 
 The host's `EXTENSION_API` goes up a minor when the API grows, and a major when something an extension could rely on

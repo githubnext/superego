@@ -95,3 +95,25 @@ it('says a folder is one, and a thread that isn\'t there or on a machine out of 
   ].join('\n')])
   expect(await blocks('mail me@host or @nobody, not @/etc/hosts')).toEqual(['mail me@host or @nobody, not @/etc/hosts'])
 })
+
+it("completes in the New thread dialog too, before there's a thread: the folder's files, and threads", async () => {
+  const other = await daemon.thread(undefined, { title: 'Dates land a day early', cwd: dir })
+  ui = await mountUi({ window: true, extensions: [threads, filesUi, mentionsUi], machines: [daemon] })
+  await ui.key('mod+n')
+  await ui.until(() => Boolean($('.new-thread [aria-label="Prompt"]')), 'the dialog')
+  await ui.type('.new-thread [aria-label="Folder"]', dir)
+  await ui.type('.new-thread [aria-label="Prompt"]', 'Look at @dat')
+  await ui.until(() => offered().length === 2, 'the thread and the file in that folder offered')
+  expect(offered()).toEqual(['Dates land a day early', 'dates.tssrc'])
+  await ui.key('down')
+  await ui.key('enter')
+  await ui.until(() => ($('.new-thread [aria-label="Prompt"]') as HTMLTextAreaElement).value === 'Look at @src/dates.ts ', 'the file taken')
+  // Taken, ⏎ starts the thread, the mention told the agent.
+  await ui.key('enter')
+  await ui.until(() => !$('.new-thread'), 'started')
+  const started = (await daemon.call<{ id: string }[]>('thread.list', {})).find((t) => t.id !== other.id)!
+  await daemon.idle(started.id)
+  const sent = (JSON.parse(await daemon.transcript(started.id)) as { kind: string; model?: { content: { type: string; text?: string }[] }[] }[])
+    .find((e) => e.kind === MESSAGE_ENTRY)!.model![0]!.content
+  expect(sent.map((block) => block.text)).toEqual(['Look at @src/dates.ts', expect.stringContaining("@src/dates.ts is a file, relative to this thread's folder.")])
+})

@@ -85,7 +85,7 @@ project    a git repository (its worktrees too) or a folder, on a machine
 | `⌘L` | Go to a project, thread or pane (the navigator, after Fut's: ←→ parent and child, `⌃P` `⌃T` `⌃G` one kind) |
 | `⌘K` | Commands |
 | `⌘P` | Open a file in the thread's folder |
-| `⌘N` | New thread |
+| `⌘N` | New thread: in it, `⌃1`–`⌃7` go to the machine, folder, profile, model, thinking, prompt and name; `⏎` in the prompt or `⌘⏎` anywhere starts it |
 | `⌘⇧N` | New window |
 | `⌘U` | Unread threads: what needs you, then what failed, then what finished, to type a few letters of one and go there (the bell opens it too) |
 | `⌘.` | Next unread thread (everywhere, or in this project: Settings → Unread) |

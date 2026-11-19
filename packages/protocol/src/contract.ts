@@ -42,11 +42,14 @@ import type { ExtensionAbout } from './app.ts'
  * transcript's images come to windows without their pixels.
  * 4.1: the thread hook `stopped(thread, { withdrawn })`: a stop withdrew messages others had queued for it.
  * 4.2: the UI half's `style(css)`: CSS owned by the extension, a profile's scoped to what that profile draws.
+ * 5.0: the composer completes in the New thread dialog too, before there's a thread: a completion provider's `where`
+ * (`ComposerWhere`) has the folder it writes for (`cwd`), and its `thread` only once there is one. A `sentWith`
+ * component gets `{ machine, thread, items }`, as before.
  * Minor: something added (an extension that uses it asks for `^3.<minor>`); major: something an extension could rely
  * on changed or went, from 2.5 on without exception. An extension whose `api` range this doesn't satisfy is refused
  * when it's set up.
  */
-export const EXTENSION_API = '4.2.0'
+export const EXTENSION_API = '5.0.0'
 
 /** What a machine says of an extension set up there: `hello.extensions` and `features.changed` carry one each. */
 export type ExtensionManifest = Pick<ExtensionAbout, 'name' | 'version' | 'api'>

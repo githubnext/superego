@@ -8,18 +8,21 @@ import { mentionAt, offers } from './complete.ts'
 import { about, mentionLinks, sentMentions, type SentMention } from './shared.ts'
 
 /**
- * The thread's files, read once for each word being typed (where it starts in which thread) and filtered as it grows.
- * None where the machine has no files extension; a failure to read them is logged, and threads are still offered.
+ * The files where the composer is (the thread's folder, or the one a thread is about to start in), read once for each
+ * word being typed (where it starts, in which thread or folder) and filtered as it grows. None where the machine has no
+ * files extension, or for a thread yet to start in no folder in particular (the home folder); a failure to read them is
+ * logged, and threads are still offered.
  */
 let listed: { key: string; files: Promise<string[]> } | undefined
-const filesFor = ({ machine, thread }: ComposerWhere, start: number) => {
-  const key = `${machine.id}\u0000${thread.id}\u0000${start}`
+const filesFor = ({ machine, thread, cwd }: ComposerWhere, start: number) => {
+  const key = `${machine.id}\u0000${thread?.id ?? cwd}\u0000${start}`
   if (listed?.key !== key) {
+    const of = thread ? { thread: thread.id } : cwd.trim() ? { cwd: cwd.trim() } : undefined
     listed = {
       key,
-      files: has(machine, 'ext:files')
-        ? call<{ files: string[] }>(machine.id, 'files.list', { thread: thread.id }).then((list) => list.files, (error: unknown) => {
-          console.error(`Listing ${thread.cwd} to mention a file failed`, error)
+      files: of && has(machine, 'ext:files')
+        ? call<{ files: string[] }>(machine.id, 'files.list', of).then((list) => list.files, (error: unknown) => {
+          console.error(`Listing ${thread?.cwd ?? cwd} to mention a file failed`, error)
           return []
         })
         : Promise.resolve([]),
@@ -43,14 +46,14 @@ export default defineUiExtension({
       async items(word, where): Promise<Completion[]> {
         const files = await filesFor(where, word.start)
         const { machines, threads } = superego.window
-        return offers({ query: word.query, machine: where.machine.id, here: where.thread.id, machines, threads, files }).map((offer): Completion => {
+        return offers({ query: word.query, machine: where.machine.id, here: where.thread?.id, machines, threads, files }).map((offer): Completion => {
           if (offer.kind === 'file') {
             const { name, folder } = split(offer.path)
             return { label: name, ...(folder ? { detail: folder } : {}), icon: <FileIcon size={14} />, insert: offer.insert }
           }
           // Where it is, where that isn't this thread's project.
           const { project } = offer.thread
-          const detail = offer.machine.id !== where.machine.id ? `${project.name} on ${offer.machine.label}` : project.root !== where.thread.project.root ? project.name : undefined
+          const detail = offer.machine.id !== where.machine.id ? `${project.name} on ${offer.machine.label}` : project.root !== (where.thread?.project.root ?? where.cwd) ? project.name : undefined
           return {
             label: offer.thread.title,
             ...(detail ? { detail } : {}),

@@ -27,14 +27,14 @@ const machineName = (machine: MachineEntry) => /^[\w.-]+$/.test(machine.label) ?
 const fileScore = (path: string, query: string) => Math.max(score(path.split('/').at(-1)!, query) * 2, score(path, query))
 
 /**
- * What `query` could mention from the thread `here` on `machine`: threads by how well their titles match, the most
- * recently active first among equals (not `here` itself); then files by how well their paths do, the shorter first
- * among equals. `thread:` asks for threads alone.
+ * What `query` could mention from the thread `here` on `machine` (none: a thread yet to start): threads by how well
+ * their titles match, the most recently active first among equals (not `here` itself); then files by how well their
+ * paths do, the shorter first among equals. `thread:` asks for threads alone.
  */
 export function offers({ query, machine, here, machines, threads, files }: {
   query: string
   machine: string
-  here: string
+  here?: string
   machines: readonly MachineEntry[]
   threads: Readonly<Record<string, readonly ThreadInfo[] | undefined>>
   files: readonly string[]

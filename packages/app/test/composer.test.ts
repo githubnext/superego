@@ -81,7 +81,7 @@ describe('composer registrations', () => {
 })
 
 describe('asking a provider as the word is typed', () => {
-  const where = { machine: { id: 'local', label: 'local', state: 'connected' as const }, thread: { id: '1' } as ThreadInfo }
+  const where = { machine: { id: 'local', label: 'local', state: 'connected' as const }, cwd: '/p', thread: { id: '1' } as ThreadInfo }
   /** A provider whose answers come when the test says, one per ask; its word carries a field of its own (`trigger`). */
   const slow = () => {
     const asked: { word: CompletionWord & { trigger: string }; answer: (items: Completion[]) => void }[] = []

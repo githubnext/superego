@@ -79,9 +79,11 @@ export function focusThread() {
   focusRegion(document.querySelector<HTMLElement>('.app__main [data-column="thread"]') ?? document.querySelector<HTMLElement>('.app__main .thread'))
 }
 
-/** ⌃I: the prompt. */
+/** ⌃I: the prompt; the New thread dialog's, while it's open. */
 export function focusPrompt() {
-  document.querySelector<HTMLElement>('.app__main .composer textarea:not(:disabled)')?.focus()
+  const prompt = (where: string) => document.querySelector<HTMLElement>(`${where} .composer textarea:not(:disabled)`)
+  const shown = prompt('.new-thread') ?? prompt('.app__main')
+  shown?.focus()
 }
 
 /** A thread's column (a pane's id, or the thread's own), once it's drawn: after a pane was brought forward. */

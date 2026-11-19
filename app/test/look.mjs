@@ -206,6 +206,12 @@ await openApp({ name: 'look', timeout: 180_000 }, async (t) => {
   t.key('n')
   await until(`[...document.querySelectorAll('.new-thread .worktrees-check')].length > 0`, 'the new thread dialog')
   await t.both('new-thread')
+  // ⌃2: the folder, its list of the folders this machine's threads worked in open under it.
+  t.key('2', ['control'])
+  await until(`document.activeElement?.getAttribute('aria-label') === 'Folder' && !!document.querySelector('.folder-field__list')`, 'the folder list')
+  await t.both('new-thread-folders')
+  t.key('Escape', [])
+  await until(`!document.querySelector('.folder-field__list') && !!document.querySelector('.new-thread')`, 'only the folder list closed')
   t.key('Escape', [])
   await until(`!document.querySelector('.new-thread')`, 'the new thread dialog closed')
   // Settings: the app's own, and its Keyboard with a clash in it.

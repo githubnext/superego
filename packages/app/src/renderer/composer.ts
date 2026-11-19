@@ -15,8 +15,11 @@ export type CompletionWord = { start: number; query: string }
  */
 export type Completion = { label: string; detail?: string; icon?: ReactNode; insert: string }
 
-/** Where the composer is: the thread it sends to, on its machine. */
-export type ComposerWhere = { machine: MachineEntry; thread: ThreadInfo }
+/**
+ * Where the composer is: on a machine, writing for work in `cwd` (as typed: may start with `~`, or be empty for the
+ * machine's home), to `thread`; none for a thread yet to start (the New thread dialog's).
+ */
+export type ComposerWhere = { machine: MachineEntry; cwd: string; thread?: ThreadInfo }
 
 /** Completions for the composer, as the user types: a word at the caret (a `/skill`, say), and what it could be. */
 export type CompletionProvider<W extends CompletionWord = CompletionWord> = {
@@ -78,8 +81,8 @@ export type SentBlock = { type: string; text?: string; data?: string; mimeType?:
 export type SentWith<T = any> = {
   /** What it put in a sent message: the items to draw, and the blocks (by index) they were, which the message's text leaves out. */
   read(blocks: readonly SentBlock[]): { items: T[]; blocks: number[] } | undefined
-  /** Draws them under the message: a chip each, say. */
-  component?: ComponentType<ComposerWhere & { items: T[] }>
+  /** Draws them under the message (in its thread): a chip each, say. */
+  component?: ComponentType<{ machine: MachineEntry; thread: ThreadInfo; items: T[] }>
   /** The message's own words as Markdown to draw, given what was found: a name it mentions as a link, say. */
   words?(text: string, items: T[]): string
 }

@@ -55,10 +55,10 @@ export function coreExtensions({ agentsDir, where, panesOf, openPane, images, no
     })],
   })
   return [
-    { name: 'coding-tools', version: '1.0.0', api: '^4', title: 'Coding tools', description: 'Read, write and edit files, and run commands.', setup: (s) => s.agent(createCodingTools({ images })) },
+    { name: 'coding-tools', version: '1.0.0', api: '^5', title: 'Coding tools', description: 'Read, write and edit files, and run commands.', setup: (s) => s.agent(createCodingTools({ images })) },
     {
       // An image the model was refused is left out of what it's sent from then on: the user is told, in the thread.
-      name: 'model-images', version: '1.0.0', api: '^4', title: 'Images for the model', description: 'Say in the thread when an image is left out of what the model is sent.', required: true,
+      name: 'model-images', version: '1.0.0', api: '^5', title: 'Images for the model', description: 'Say in the thread when an image is left out of what the model is sent.', required: true,
       setup: (s) => s.agent(defineExtension({
         name: 'model-images',
         hooks: [hook(GenerationTask, {
@@ -72,22 +72,22 @@ export function coreExtensions({ agentsDir, where, panesOf, openPane, images, no
     },
     {
       // How messages show is the window's, not something to turn off.
-      name: 'markdown', version: '1.0.0', api: '^4', title: 'Markdown', description: 'Know how the thread shows messages, and write for it.', required: true,
+      name: 'markdown', version: '1.0.0', api: '^5', title: 'Markdown', description: 'Know how the thread shows messages, and write for it.', required: true,
       setup: (s) => s.agent(defineExtension({ name: 'markdown', sections: [section('markdown', () => MARKDOWN_PROMPT)] })),
     },
     {
       // Which computer the agent is on, next to the user's, is a fact of its world, not something to turn off.
-      name: 'where', version: '1.0.0', api: '^4', title: 'Where it runs', description: 'Know when the user\'s window is on another computer than the agent.', required: true,
+      name: 'where', version: '1.0.0', api: '^5', title: 'Where it runs', description: 'Know when the user\'s window is on another computer than the agent.', required: true,
       setup: (s) => s.agent(defineExtension({ name: 'where', sections: [section('where', () => where())] })),
     },
     {
-      name: 'panes', version: '1.0.0', api: '^4', title: 'Panes', description: 'Open panes beside a thread: files, other threads, and the kinds extensions add.',
+      name: 'panes', version: '1.0.0', api: '^5', title: 'Panes', description: 'Open panes beside a thread: files, other threads, and the kinds extensions add.',
       // The window's built-in kinds (its panes.tsx); extensions describe their own (git's Changes, browser's).
       panes: { editor: '{ path }: a file, for the user to read and edit', thread: '{ thread }: another conversation' },
       setup: (s) => s.agent(panesPart),
     },
     {
-      name: 'agents-md', version: '1.0.0', api: '^4', title: 'AGENTS.md', description: 'Follow the standing instructions in AGENTS.md files.',
+      name: 'agents-md', version: '1.0.0', api: '^5', title: 'AGENTS.md', description: 'Follow the standing instructions in AGENTS.md files.',
       setup: (s) => s.agent(defineExtension({ name: 'agents-md', sections: [section('agents_md', async ({ env }) => agentsInstructions(agentsDir, env?.cwd))] })),
     },
   ]

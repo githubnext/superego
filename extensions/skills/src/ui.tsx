@@ -7,12 +7,12 @@ import { matchSkills, sentSkills, skillAt } from './names.ts'
 import { about, LIST, type SkillInfo } from './shared.ts'
 
 /**
- * The machine's skills, read once for each word being named (where it starts in which thread) and filtered as it
- * grows, as the daemon reads every SKILL.md to list them.
+ * The machine's skills, read once for each word being named (where it starts in which thread, or in a thread yet to
+ * start in which folder) and filtered as it grows, as the daemon reads every SKILL.md to list them.
  */
 let listed: { key: string; skills: Promise<SkillInfo[]> } | undefined
-const skillsFor = ({ machine, thread }: ComposerWhere, start: number) => {
-  const key = `${machine.id}\u0000${thread.id}\u0000${start}`
+const skillsFor = ({ machine, thread, cwd }: ComposerWhere, start: number) => {
+  const key = `${machine.id}\u0000${thread?.id ?? cwd}\u0000${start}`
   if (listed?.key !== key) listed = { key, skills: call<SkillInfo[]>(machine.id, LIST).catch(() => []) }
   return listed.skills
 }

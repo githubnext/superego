@@ -1,9 +1,11 @@
-// files, daemon half: the files in a thread's folder, for the file tree and quick open. In a git repository, git's
-// own list (tracked, and new files not ignored), so .gitignore holds; elsewhere a walk that skips what's never wanted.
+// files, daemon half: the files in a thread's folder (or one a thread is about to start in), for the file tree, quick
+// open and mentions. In a git repository, git's own list (tracked, and new files not ignored), so .gitignore holds;
+// elsewhere a walk that skips what's never wanted.
 import { execFile } from 'node:child_process'
 import { readdir } from 'node:fs/promises'
-import { join } from 'node:path'
-import { obj, str } from '@earendil-works/pi-schema'
+import { homedir } from 'node:os'
+import { join, resolve } from 'node:path'
+import { obj, opt, str } from '@earendil-works/pi-schema'
 import { defineDaemonExtension } from '@superego/daemon'
 import { about, LIST, type FileList } from './shared.ts'
 
@@ -38,18 +40,24 @@ export async function listFiles(dir: string): Promise<FileList> {
   return { files: all.slice(0, LIMIT).sort((a, b) => a.localeCompare(b)), truncated }
 }
 
+/** A folder as typed for a thread yet to start (`~/dev/x`), as a path; asked for none, refused. */
+function folder(cwd: string | undefined): string {
+  if (!cwd?.trim()) throw new Error('files.list needs a thread or a folder (cwd)')
+  return resolve(cwd.trim().replace(/^~(?=\/|$)/, homedir()))
+}
+
 export default defineDaemonExtension({
   ...about,
   setup(superego) {
     // A short cache: the tree and quick open ask often, and a folder changes slowly.
     const cache = new Map<string, { at: number; list: Promise<FileList> }>()
-    superego.method(LIST, async ({ thread }) => {
-      const { cwd } = await superego.threads.get(thread)
+    superego.method(LIST, async ({ thread, cwd: asked }) => {
+      const cwd = thread ? (await superego.threads.get(thread)).cwd : folder(asked)
       const hit = cache.get(cwd)
       if (hit && Date.now() - hit.at < 3_000) return hit.list
       const list = listFiles(cwd)
       cache.set(cwd, { at: Date.now(), list })
       return list
-    }, { params: obj({ thread: str() }) })
+    }, { params: obj({ thread: opt(str()), cwd: opt(str()) }) })
   },
 })

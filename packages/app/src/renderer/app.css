@@ -483,24 +483,38 @@ code { font-family: var(--superego-mono); font-size: .92em; }
 .palette__none:not(:empty) { display: flex; align-items: center; height: 34px; margin: 6px; padding: 0 10px; }
 
 .new-thread__body { padding: var(--superego-space-4); display: flex; flex-direction: column; gap: var(--superego-space-3); }
-.new-thread__prompt { font-size: var(--superego-text-body); line-height: 1.5; border: 1px solid var(--superego-field-edge); border-radius: 8px; padding: var(--superego-space-3); min-height: 6.5em; background: var(--superego-field-bg); box-shadow: inset 0 1px 1px light-dark(rgb(0 0 0 / .06), rgb(0 0 0 / .2)); }
-.new-thread__prompt:focus { outline: 2px solid var(--superego-ring); outline-offset: 1px; }
 .new-thread__field { display: flex; flex-direction: column; gap: var(--superego-space-1); min-width: 0; }
-.new-thread__field > span { font-size: var(--superego-text-sm); font-weight: 500; }
+/* Each field's name, and the key that goes to it at its end. */
+.new-thread__label { display: flex; align-items: baseline; gap: var(--superego-space-2); font-size: var(--superego-text-sm); font-weight: 500; }
+.new-thread__label kbd { font: var(--superego-text-xs) var(--superego-mono); font-weight: 400; color: var(--superego-faint); }
+/* Where (the machine, then the folder, wider), and how (profile, model, thinking), each a row. */
+.new-thread__where { display: grid; grid-template-columns: minmax(140px, 1fr) 2.6fr; gap: var(--superego-space-3); }
+.new-thread__how { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--superego-space-3); }
+.new-thread__where .superego-select, .new-thread__how .superego-select { width: 100%; }
 .new-thread__row { display: flex; gap: 6px; }
-.new-thread__row .superego-field { flex: 1; }
-.new-thread__recent { display: flex; flex-wrap: wrap; gap: 4px; margin-top: -4px; }
-.new-thread__recent button { font: var(--superego-text-xs) var(--superego-mono); color: var(--superego-text); background: var(--superego-control); border: 0; box-shadow: var(--superego-control-edge); border-radius: 999px; padding: 2px 9px; }
-.new-thread__recent button:active { background: var(--superego-control-active); }
-.new-thread__recent button.is-on { background: var(--superego-accent); color: var(--superego-accent-text); }
-.new-thread__grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: var(--superego-space-3); }
-.new-thread__grid .superego-select { width: 100%; }
+.new-thread__row > .folder-field { flex: 1; min-width: 0; }
+/* The prompt: the composer's box, at rest in the dialog rather than floating over a thread. */
+.new-thread__composer .dock__box { box-shadow: 0 0 0 .5px light-dark(rgb(0 0 0 / .2), rgb(255 255 255 / .14)), 0 1px 3px light-dark(rgb(0 0 0 / .06), rgb(0 0 0 / .25)); }
+.new-thread__composer:focus-within .dock__box { outline: 2px solid var(--superego-ring); outline-offset: 1px; }
+.new-thread__composer .composer .superego-textarea { min-height: calc(4 * 22px + 6px); }
+.new-thread__composer .dock__footer { margin-top: 2px; }
+/* Completions open over the fields above, within the dialog. */
+.new-thread__composer .completions { max-height: 180px; }
 .new-thread__note { color: var(--superego-muted); margin: 0; }
+.new-thread__problem { color: var(--superego-status-error); margin: calc(-1 * var(--superego-space-2)) 0 0; font-size: var(--superego-text-sm); }
 .new-thread__error { color: var(--superego-status-error); margin: 0; font-size: var(--superego-text-ui); display: flex; align-items: center; justify-content: space-between; gap: var(--superego-space-3); }
 .new-thread__error p { margin: 0; }
-.new-thread__foot { display: flex; align-items: center; gap: var(--superego-space-2); padding: var(--superego-space-3) var(--superego-space-4); border-top: 1px solid var(--superego-border); background: var(--superego-sidebar-bg); }
-.new-thread__hint { flex: 1; font: var(--superego-text-xs) var(--superego-mono); color: var(--superego-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.new-thread__foot { display: flex; align-items: center; justify-content: flex-end; gap: var(--superego-space-2); padding: var(--superego-space-3) var(--superego-space-4); border-top: 1px solid var(--superego-border); background: var(--superego-sidebar-bg); }
 .new-thread__foot kbd { font: var(--superego-text-xs) var(--superego-mono); opacity: .75; }
+/* The folder field's list of recent folders, under it: each by its name, the folder it's in beside. */
+.folder-field { position: relative; }
+.folder-field .superego-field { width: 100%; }
+.folder-field__list { position: absolute; z-index: 1; left: 0; right: 0; top: calc(100% + 4px); max-height: min(300px, 40vh); overflow: auto; padding: 4px; background: var(--superego-raised); border-radius: var(--superego-radius-lg); box-shadow: var(--superego-shadow-float); font-size: var(--superego-text-ui); }
+.folder-field__item { display: flex; align-items: baseline; gap: var(--superego-space-3); padding: 5px 10px; border-radius: calc(var(--superego-radius-lg) - 4px); cursor: default; }
+.folder-field__item.is-active { background: var(--superego-selected); }
+.folder-field__name { flex: none; max-width: 70%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+.folder-field__path { flex: 0 1000 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--superego-muted); font: var(--superego-text-xs) var(--superego-mono); }
+.folder-field__problem { padding: 5px 10px; color: var(--superego-status-error); font-size: var(--superego-text-sm); }
 
 .action-log .superego-dialog__body { padding: 0 var(--superego-space-4) var(--superego-space-4); }
 .action-log__table { width: 100%; border-collapse: collapse; font-size: var(--superego-text-sm); }
@@ -850,7 +864,7 @@ a.pane-header__url:hover { color: var(--superego-accent); }
 .attachment--chip .attachment__icon { width: auto; height: auto; }
 /* What an extension offers for the word being typed (skills, say), floating above the composer. */
 .completions { position: absolute; left: 0; right: 0; bottom: calc(100% + 8px); max-height: 50vh; overflow: auto; padding: 4px; background: var(--superego-raised); border-radius: var(--superego-radius-lg); box-shadow: var(--superego-shadow-float); font-size: var(--superego-text-ui); }
-.dock:not(:focus-within) .completions { display: none; }
+.composer-box:not(:focus-within) .completions { display: none; }
 /* Concentric with the menu: its radius less its padding. */
 .completions__item { display: flex; align-items: baseline; gap: var(--superego-space-3); padding: 6px 10px; border-radius: calc(var(--superego-radius-lg) - 4px); cursor: default; }
 .completions__item.is-active { background: var(--superego-selected); }
@@ -871,7 +885,7 @@ a.pane-header__url:hover { color: var(--superego-accent); }
 
 
 
-.dock.is-dropping .dock__box { outline: 2px dashed var(--superego-ring); outline-offset: 2px; }
+.composer-box.is-dropping .dock__box { outline: 2px dashed var(--superego-ring); outline-offset: 2px; }
 
 /* Focus: the region holding it (the sidebar, the thread, a pane) wears the ring, its own border. The border is always
    there, clear until then, so nothing moves; it lies outside what's in the region, which the region clips, so nothing

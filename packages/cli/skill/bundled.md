@@ -55,7 +55,7 @@ the window from `@superego/app/ui` (`defineAction` for window actions, hooks, co
 <!-- check: module; import type { ExtensionAbout } from 'superego' -->
 ```ts
 export const about = {
-  name: 'orders', version: '1.0.0', api: '^4', title: 'Orders', description: 'Look orders up.',
+  name: 'orders', version: '1.0.0', api: '^5', title: 'Orders', description: 'Look orders up.',
   panes: { order: 'an order, with its lines and status. Params: { id }' },   // the kinds its UI half draws, for pane_open
 } satisfies ExtensionAbout
 // daemon.ts: defineDaemonExtension({ ...about, setup(superego) { … } })

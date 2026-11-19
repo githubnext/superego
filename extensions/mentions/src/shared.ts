@@ -4,7 +4,7 @@
 import type { ExtensionAbout } from '@superego/protocol'
 
 export const about = {
-  name: 'mentions', version: '1.0.0', api: '^4', title: 'Mentions',
+  name: 'mentions', version: '1.0.0', api: '^5', title: 'Mentions',
   description: '@ in the composer names another thread or a file, and the agent is told what it is.',
 } satisfies ExtensionAbout
 

@@ -18,7 +18,7 @@ const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
 /** A mark on a thread's row, as worktrees draws its branch. */
 const marks = defineUiExtension({
-  name: 'marks', version: '1.0.0', api: '^4', title: 'Marks', description: 'A branch mark.', required: true,
+  name: 'marks', version: '1.0.0', api: '^5', title: 'Marks', description: 'A branch mark.', required: true,
   setup(superego) {
     superego.slot('thread.badge', ({ thread }) => {
       const branch = (thread.facts?.marks as { branch?: string } | undefined)?.branch

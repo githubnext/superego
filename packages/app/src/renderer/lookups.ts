@@ -5,8 +5,8 @@ import type { Pane } from '@superego/protocol'
 import type { LinkHandler, LinkWhere, PaneKind, ToolRow, WorkPart, WorkRun } from './extension-api.ts'
 import { drawsFor, lookUp, preferProfile, scopeIsOn, scopeOf, seenIn, type Owner, type Registry, type Where } from './registry.tsx'
 
-/** The composer's completion providers for `where`, in the order registered. */
-export const completionsIn = (registry: Registry, where: Where) => seenIn(registry.completions, where)
+/** The composer's completion providers for `where`, in the order registered; for no thread yet, the app's. */
+export const completionsIn = (registry: Registry, where: Where | undefined) => seenIn(registry.completions, where)
 
 /**
  * What draws sent messages' blocks for `where`: those of the app's extensions (even one its thread goes without now,

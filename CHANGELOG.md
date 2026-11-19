@@ -6,6 +6,18 @@
   status bar.
 - The image viewer behaves like the other dialogs: the window behind it can't be scrolled or reached with a screen
   reader while it's open.
+- **Upgrade:** the extension API is now 5.0. A profile's extension that asks for `api: '^4'` (or `^4.x`) is refused
+  until it asks for `^5`. A composer completion provider's `items(word, where)` gets `where.cwd`, and `where.thread` only
+  once there is a thread: in the New thread dialog there isn't one yet.
+- The New thread dialog asks in the order you decide: the machine, then a folder on it, then the profile, model and
+  thinking, then what to work on. Picking another machine offers that machine's folders.
+- Its folder field lists every folder that machine's threads have worked in, archived ones' too, most recent first,
+  and narrows as you type: ↑↓ and ⏎ pick one.
+- Its prompt is the full composer: attach, paste or drop files, and complete skills (`$`, `/`) and mentions (`@`, a
+  folder's files too) as in a thread. ⏎ starts the thread, as it sends in a thread; ⌘⏎ starts it from any field.
+- Each of its fields has a key, shown beside its name: ⌃1 machine, ⌃2 folder, ⌃3 profile, ⌃4 model, ⌃5 thinking, ⌃6
+  prompt, ⌃7 name. ⌃I goes to its prompt too, as it does in a thread.
+- What you write there is kept if you close it without starting, and models or profiles that can't be listed say why.
 - A thread opened in a pane beside another has less padding at its sides: its messages line up with the composer.
 - `superego machines` no longer hangs on a machine that takes the connection but never answers: after 15 seconds it
   shows as "not answering (timed out connecting)" and the command finishes. `-m` on such a machine gives up after 30
@@ -60,6 +72,7 @@
   does.
 - On an iPhone's home screen, the top of the page is no longer blurred under the status bar: the bar at the top now
   runs up under it in its own colour.
+  still works, but styles the whole window: move it to `superego.style`.
 
 ## 0.1.7
 

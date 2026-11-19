@@ -9,8 +9,7 @@ import { BellIcon, IconButton, XIcon } from '@superego/ui'
 import { APP } from '../shared/app-settings.ts'
 import { BADGE, browserNotification, createNotices, NOTIFY, type ThreadNotification } from '../shared/notifications.ts'
 import { call, useAppSetting } from './client.ts'
-import type { ComposerWhere } from './composer.ts'
-import type { UiApi } from './extension-api.ts'
+import type { SlotProps, UiApi } from './extension-api.ts'
 import { useLocalState } from './local-state.ts'
 import { useAllThreads, useRejections, useSelection } from './state.tsx'
 
@@ -110,7 +109,7 @@ const asking = () => window.superego.web && typeof Notification !== 'undefined' 
   (pageNotifications ??= showsPageNotifications())
 
 /** In a browser that hasn't been asked: offered while the thread works, so you hear when it's done. */
-function Offer({ thread }: ComposerWhere) {
+function Offer({ thread }: SlotProps['composer.above']) {
   const [on] = useAppSetting<boolean>(NOTIFY)
   const [declined, setDeclined] = useLocalState('notifications.declined', false, { shared: true })
   const [, answered] = useState<NotificationPermission>()

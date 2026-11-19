@@ -1,21 +1,28 @@
-// The New thread dialog: what to work on, where (machine and folder), with which profile, model and thinking. Unset
-// choices follow the folder's default profile and that machine's settings. ⌘⏎ starts it. A project's profile that
-// isn't allowed yet (it runs that repo's code) can be allowed here, and started. Extensions add fields of their own
-// (worktrees' checkbox), each sent as `options[<extension>]`.
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
-import type { Json, ModelCatalog, ProfileInfo, ThreadInfo } from '@superego/protocol'
+// The New thread dialog, in the order it's decided: where (the machine, then a folder on it), how (the profile, model and
+// thinking; unset, the folder's default profile and that machine's settings), then what to work on, in the composer a
+// thread has (files, skills, mentions). ⌃1–⌃7 go to each field, as labelled; ⏎ in the prompt or ⌘⏎ anywhere starts it.
+// A project's profile that isn't allowed yet (it runs that repo's code) can be allowed here, and started. Extensions
+// add fields of their own (worktrees' checkbox), each sent as `options[<extension>]`.
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
+import type { Attachment, Json, ModelCatalog, ProfileInfo, ThreadInfo } from '@superego/protocol'
 import { useRegistry, type Registry } from './registry.tsx'
 import { Contained } from './contained.tsx'
-import { autoFocusOnOpen, Button, Dialog, Select, TextArea, TextField } from '@superego/ui'
+import { autoFocusOnOpen, Button, Dialog, Select, TextField } from '@superego/ui'
 import { has, machine as client } from './client.ts'
-import { shortPath } from './short-path.ts'
 import { ProfileSelect } from './profile-pick.tsx'
 import { useLocalState } from './local-state.ts'
-import { useAllThreads, useMachines, useSelection, type NewThreadStart } from './state.tsx'
+import { useAllThreads, useMachines, useSelection, useShell, type NewThreadStart } from './state.tsx'
 import { APP } from '../shared/app-settings.ts'
+import { ctrlDigit, keyLabel } from './keys.ts'
+import { ComposerBox } from './composer-box.tsx'
+import { FolderField, recentFolders, type FolderFieldHandle } from './folder-field.tsx'
 
-/** Where the last thread started from here was: its machine, and the folder on each machine. Every window's. */
-type Last = { machine?: string; cwd?: Record<string, string> }
+/** The machine the last thread started from here was on. Every window's. */
+type Last = { machine?: string }
+
+/** Each field's key: ⌃ and its number, in the order they're shown. */
+const KEYS = { machine: 1, folder: 2, profile: 3, model: 4, thinking: 5, prompt: 6, name: 7 } as const
+type FieldName = keyof typeof KEYS
 
 /**
  * What a thread started beside `thread` takes after it: its machine and project, profile, model, thinking, and what
@@ -35,10 +42,23 @@ export function startFrom(registry: Registry, machine: string, thread: ThreadInf
   }
 }
 
+/** A field with its label and its key (⌃1…), which goes to it. */
+function Field({ name, label, children, className = '' }: { name: FieldName; label: string; children: ReactNode; className?: string }) {
+  return (
+    <label className={`new-thread__field ${className}`} data-field={name}>
+      <span className="new-thread__label">{label}<kbd>{keyLabel(`ctrl+${KEYS[name]}`)}</kbd></span>
+      {children}
+    </label>
+  )
+}
+
+type Failure = { kind?: string; message: string }
+
 export function NewThreadDialog({ start: asked, onClose }: { start: NewThreadStart; onClose(): void }) {
   const machines = useMachines().filter((m) => m.state === 'connected')
   const threads = useAllThreads()
   const { select, selection, thread: shown } = useSelection()
+  const { openSettings } = useShell()
   const registry = useRegistry()
   const dispatch = registry.router.dispatch
   const [last, setLast] = useLocalState<Last>('newThread', {}, { shared: true })
@@ -52,14 +72,35 @@ export function NewThreadDialog({ start: asked, onClose }: { start: NewThreadSta
   const [machineId, setMachineId] = useState(start.machine && machines.some((m) => m.id === start.machine) ? start.machine
     : machines.some((m) => m.id === last.machine) ? last.machine! : 'local')
   const machine = machines.find((m) => m.id === machineId) ?? machines[0]
-  const [prompt, setPrompt] = useState('')
-  const [cwd, setCwd] = useState(start.machine === machineId && start.cwd ? start.cwd : last.cwd?.[machineId] ?? '')
+
+  // The folders each machine's threads worked in, archived ones too (asked for once a machine is picked).
+  const [archived, setArchived] = useState<Record<string, ThreadInfo[] | Failure>>({})
+  useEffect(() => {
+    if (!machine || archived[machine.id]) return
+    const id = machine.id
+    client(id).call('thread.list', { archived: true }).then(
+      (list) => setArchived((was) => ({ ...was, [id]: list })),
+      (error: Error) => {
+        console.error(`Listing ${id}'s archived threads for their folders failed`, error)
+        setArchived((was) => ({ ...was, [id]: { message: `Folders of archived threads aren't listed: ${error.message}` } }))
+      })
+  }, [machine?.id])
+  const foldersOn = (id: string) => {
+    const old = archived[id]
+    return recentFolders([...threads[id] ?? [], ...Array.isArray(old) ? old : []])
+  }
+  const folders = useMemo(() => machine ? foldersOn(machine.id) : [], [threads, archived, machine?.id])
+  const archivedProblem = machine && !Array.isArray(archived[machine.id]) ? archived[machine.id] as Failure | undefined : undefined
+
+  const [cwd, setCwd] = useState(start.machine === machineId && start.cwd ? start.cwd : foldersOn(machineId)[0] ?? '')
+  const [draft, setDraft] = useLocalState('newThread.draft', '', { shared: true })
+  const [files, setFiles] = useState<Attachment[]>([])
   const [title, setTitle] = useState('')
   const [model, setModel] = useState<string | null>(null)
   const [thinking, setThinking] = useState<string | null>(null)
-  const [catalog, setCatalog] = useState<ModelCatalog>()
-  const [error, setError] = useState<{ kind?: string; message: string }>()
-  const [profiles, setProfiles] = useState<ProfileInfo[]>([])
+  const [catalog, setCatalog] = useState<ModelCatalog | Failure>()
+  const [error, setError] = useState<Failure>()
+  const [profiles, setProfiles] = useState<ProfileInfo[] | Failure>()
   const [profile, setProfile] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   /** What extensions' fields are set to, by extension. */
@@ -67,7 +108,16 @@ export function NewThreadDialog({ start: asked, onClose }: { start: NewThreadSta
   // Those the machine picked has (an optional one may be off there).
   const fields = registry.newThreadFields.filter((f) => has(machine, `ext:${f.name}`))
   const fieldOptions = Object.fromEntries(fields.flatMap((f) => options[f.name] === undefined ? [] : [[f.name, options[f.name]!]]))
-  const promptRef = useRef<HTMLTextAreaElement>(null)
+  const prompt = useRef<HTMLTextAreaElement>(null)
+  const body = useRef<HTMLDivElement>(null)
+  const folderField = useRef<FolderFieldHandle>(null)
+
+  /** Go to a field, as its key does: the folder with its list open. */
+  const focus = (name: FieldName) => name === 'folder' ? folderField.current?.open()
+    : body.current?.querySelector<HTMLElement>(`[data-field="${name}"] :is(input:not([type=file]), select, textarea):not(:disabled)`)?.focus()
+  // It opens where it's still to be decided: the machine (where there's a choice), else the folder; asked for a
+  // project (the sidebar's +), what to work on there. Under a finger none takes it (no keyboard over the dialog).
+  const [first] = useState<FieldName | null>(() => !autoFocusOnOpen() ? null : asked.cwd ? 'prompt' : machines.length > 1 ? 'machine' : 'folder')
 
   // Each machine has its own models and default; what was picked on another doesn't carry over.
   useEffect(() => {
@@ -80,14 +130,21 @@ export function NewThreadDialog({ start: asked, onClose }: { start: NewThreadSta
       // On the machine it started on, the model and thinking it started with, where that machine has them.
       const from = machine.id === start.machine && c.models.find((m) => m.value === start.model)
       if (from) { setModel(from.value); if (start.thinking && from.thinking.includes(start.thinking)) setThinking(start.thinking) }
-    }, () => {})
+    }, (e: Error) => {
+      console.error(`Listing ${machine.id}'s models failed`, e)
+      if (live) setCatalog({ message: e.message })
+    })
     return () => { live = false }
   }, [machine?.id])
 
-  // The profiles a thread in this folder could start with, as the folder is typed (a moment after the last key).
+  // The profiles a thread in this folder could start with: at once, then as the folder is typed (a moment after the
+  // last key).
+  const profilesAsked = useRef(false)
   useEffect(() => {
     if (!machine) return
     let live = true
+    const wait = profilesAsked.current ? 250 : 0
+    profilesAsked.current = true
     const timer = setTimeout(() => {
       dispatch('profile.list', cwd.trim() ? { cwd: cwd.trim() } : {}, { machine: machine.id, source: 'new thread' })
         .then((list) => {
@@ -96,24 +153,32 @@ export function NewThreadDialog({ start: asked, onClose }: { start: NewThreadSta
           setProfiles(found)
           // The profile it started with, while the folder is the one it started in.
           setProfile(start.profile && start.profile !== 'default' && cwd.trim() === start.cwd && found.some((p) => p.name === start.profile) ? start.profile : null)
-        }, () => { if (live) setProfiles([]) })
-    }, 250)
+        }, (e: Error) => {
+          console.error(`Listing the profiles for ${cwd || 'the home folder'} failed`, e)
+          if (live) setProfiles({ message: e.message })
+        })
+    }, wait)
     return () => { live = false; clearTimeout(timer) }
   }, [machine?.id, cwd])
-  const picked = profiles.find((p) => p.name === (profile ?? 'default'))
+  const profileList = Array.isArray(profiles) ? profiles : undefined
+  const profilesFailed = profiles && !Array.isArray(profiles) ? profiles : undefined
+  const picked = profileList?.find((p) => p.name === (profile ?? 'default'))
 
-  /** This machine's projects (where its threads worked), most recent first. */
-  const recent = useMemo(() => {
-    const list = (threads[machine?.id ?? ''] ?? []).slice().sort((a, b) => (b.activeAt ?? b.createdAt) - (a.activeAt ?? a.createdAt))
-    return [...new Set(list.map((t) => t.project.root))].slice(0, 6)
-  }, [threads, machine?.id])
-
-  const chosen = catalog?.models.find((m) => m.value === (model ?? catalog.default.model))
+  const models = catalog && 'models' in catalog ? catalog : undefined
+  const modelsFailed = catalog && !('models' in catalog) ? catalog : undefined
+  const chosen = models?.models.find((m) => m.value === (model ?? models.default.model))
   const levels = chosen?.thinking ?? []
-  const defaultLabel = catalog?.default.model ? `Default · ${catalog.models.find((m) => m.value === catalog.default.model)?.label ?? catalog.default.model}` : 'Default'
+  const defaultLabel = models?.default.model ? `Default · ${models.models.find((m) => m.value === models.default.model)?.label ?? models.default.model}` : 'Default'
+
+  const pickMachine = (id: string) => {
+    setMachineId(id)
+    setCwd(foldersOn(id)[0] ?? '')
+  }
 
   const create = async ({ allow = false } = {}) => {
     if (!machine || busy) return
+    // What the box holds now: a keypress straight after typing can come before the typing's render.
+    const text = (prompt.current?.value ?? draft).trim()
     setBusy(true)
     setError(undefined)
     try {
@@ -121,93 +186,113 @@ export function NewThreadDialog({ start: asked, onClose }: { start: NewThreadSta
       const created = await dispatch('thread.start', {
         ...(profile ? { profile } : {}),
         ...(cwd.trim() ? { cwd: cwd.trim() } : {}), ...(title.trim() ? { title: title.trim() } : {}),
-        ...(model ? { model } : {}), ...(thinking && levels.length ? { thinking } : {}), ...(prompt.trim() ? { prompt: prompt.trim() } : {}),
+        ...(model ? { model } : {}), ...(thinking && levels.length ? { thinking } : {}),
+        ...(text ? { prompt: text } : {}), ...(files.length ? { attachments: files } : {}),
         ...(Object.keys(fieldOptions).length ? { options: fieldOptions } : {}),
       }, { machine: machine.id, source: 'new thread' }) as ThreadInfo
-      setLast({ machine: machine.id, cwd: { ...last.cwd, [machine.id]: created.project.root } })
+      setLast({ machine: machine.id })
+      setDraft('')
       onClose()
       select({ machine: machine.id, thread: created.id })
     } catch (e) {
-      setError(e as { kind?: string; message: string })
+      setError(e as Failure)
       setBusy(false)
     }
   }
   const onKeyDown = (event: KeyboardEvent) => {
+    const digit = ctrlDigit(event)
+    const field = (Object.keys(KEYS) as FieldName[]).find((name) => KEYS[name] === digit)
+    if (field) {
+      // Its own, here: not the window's shortcut on the same keys (⌘1… is Ctrl+1… off macOS).
+      event.preventDefault()
+      event.stopPropagation()
+      focus(field)
+      return
+    }
     if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) { event.preventDefault(); void create() }
   }
   const browse = async () => {
-    const picked = await window.superego.call(APP, 'app.pickFolder', { defaultPath: cwd || undefined }) as string | null
-    if (picked) setCwd(picked)
+    try {
+      const chosen = await window.superego.call(APP, 'app.pickFolder', { defaultPath: cwd || undefined }) as string | null
+      if (chosen) setCwd(chosen)
+    } catch (e) {
+      console.error('Picking a folder failed', e)
+      setError({ message: `Couldn't pick a folder: ${(e as Error).message}` })
+    }
   }
 
   return (
     <Dialog onClose={onClose} title="New thread" size="medium" className="new-thread">
-      <div className="new-thread__body" onKeyDown={onKeyDown}>
-        {machines.length === 0 ? <p className="new-thread__note">No machine is connected.</p> : <>
-          <TextArea ref={promptRef} autoFocus={autoFocusOnOpen()} rows={4} maxRows={10} className="new-thread__prompt" aria-label="Prompt"
-            placeholder="What should it work on? (optional)" value={prompt} onChange={(e) => setPrompt(e.target.value)} />
-
-          <label className="new-thread__field">
-            <span>Project</span>
-            <div className="new-thread__row">
-              <TextField aria-label="Project folder" placeholder="Folder (empty: home)" value={cwd} onChange={(e) => setCwd(e.target.value)} />
-              {machine?.id === 'local' && !window.superego.web && <Button onClick={() => void browse()}>Browse…</Button>}
-            </div>
-          </label>
-          {recent.length > 0 && (
-            <div className="new-thread__recent">
-              {recent.map((dir) => <button key={dir} type="button" className={dir === cwd ? 'is-on' : ''} onClick={() => setCwd(dir)}>{shortPath(dir)}</button>)}
-            </div>
-          )}
-
-          <div className="new-thread__grid">
-            {machines.length > 1 && (
-              <label className="new-thread__field"><span>Machine</span>
-                <Select aria-label="Machine" options={machines.map((m) => ({ value: m.id, label: m.label }))} value={machine?.id ?? null}
-                  onChange={(value) => { if (value) { setMachineId(value); setCwd(last.cwd?.[value] ?? '') } }} />
-              </label>
-            )}
-            {profiles.length > 0 && (
-              <label className="new-thread__field"><span>Profile</span>
-                <ProfileSelect profiles={profiles} value={profile} onChange={setProfile} />
-              </label>
-            )}
-            <label className="new-thread__field"><span>Model</span>
-              <Select aria-label="Model" options={catalog?.models ?? []} value={model} nullLabel={catalog ? defaultLabel : 'Loading…'} disabled={!catalog}
-                onChange={(value) => { setModel(value); setThinking(null) }} />
-            </label>
-            {levels.length > 0 && (
-              <label className="new-thread__field"><span>Thinking</span>
-                <Select aria-label="Thinking" options={levels.map((l) => ({ value: l, label: l }))} value={thinking}
-                  nullLabel={catalog?.default.thinking ? `Default · ${catalog.default.thinking}` : 'Default'} onChange={setThinking} />
-              </label>
-            )}
+      <div ref={body} className="new-thread__body" onKeyDown={onKeyDown}>
+        {!machine ? <p className="new-thread__note">No machine is connected.</p> : <>
+          <div className="new-thread__where">
+            <Field name="machine" label="Machine">
+              <Select aria-label="Machine" autoFocus={first === 'machine'} options={machines.map((m) => ({ value: m.id, label: m.label }))} value={machine.id}
+                onChange={(value) => { if (value) pickMachine(value) }} />
+            </Field>
+            <Field name="folder" label="Folder" className="new-thread__folder">
+              <div className="new-thread__row">
+                <FolderField ref={folderField} value={cwd} onChange={setCwd} folders={folders} problem={archivedProblem?.message} autoFocus={first === 'folder'} />
+                {machine.id === 'local' && !window.superego.web && <Button onClick={() => void browse()}>Browse…</Button>}
+              </div>
+            </Field>
           </div>
 
-          {machine && fields.map(({ name, component: Field }) => (
-            <Contained key={name} name={name}><Field machine={machine} cwd={cwd.trim()} value={options[name]}
+          {fields.map(({ name, component: Extra }) => (
+            <Contained key={name} name={name}><Extra machine={machine} cwd={cwd.trim()} value={options[name]}
               onChange={(value) => setOptions(({ [name]: _was, ...rest }) => value === undefined ? rest : { ...rest, [name]: value })} /></Contained>
           ))}
 
-          <label className="new-thread__field">
-            <span>Name</span>
+          <div className="new-thread__how">
+            <Field name="profile" label="Profile">
+              {profileList
+                ? <ProfileSelect profiles={profileList} value={profile} onChange={setProfile} />
+                : <Select aria-label="Profile" options={[]} value={null} nullLabel={profiles ? 'Unavailable' : 'Loading…'} disabled onChange={() => {}} />}
+            </Field>
+            <Field name="model" label="Model">
+              <Select aria-label="Model" options={models?.models ?? []} value={model} nullLabel={models ? defaultLabel : catalog ? 'Unavailable' : 'Loading…'} disabled={!models}
+                onChange={(value) => { setModel(value); setThinking(null) }} />
+            </Field>
+            <Field name="thinking" label="Thinking">
+              <Select aria-label="Thinking" options={levels.map((l) => ({ value: l, label: l }))} value={thinking} disabled={!levels.length}
+                nullLabel={!models ? (catalog ? 'Unavailable' : 'Loading…') : !levels.length ? 'Not offered' : models.default.thinking ? `Default · ${models.default.thinking}` : 'Default'} onChange={setThinking} />
+            </Field>
+          </div>
+          {profilesFailed && <p className="new-thread__problem">Couldn't list the profiles here: {profilesFailed.message}</p>}
+          {modelsFailed && <p className="new-thread__problem">Couldn't list {machine.label}'s models: {modelsFailed.message}</p>}
+
+          <div className="new-thread__field" data-field="prompt">
+            <span className="new-thread__label" onClick={() => focus('prompt')}>Prompt<kbd>{keyLabel(`ctrl+${KEYS.prompt}`)}</kbd></span>
+            <ComposerBox className="new-thread__composer" where={{ machine, cwd: cwd.trim() }} text={draft} setText={setDraft} files={files} setFiles={setFiles}
+              inputRef={prompt} aria-label="Prompt" autoFocus={first === 'prompt'} placeholder="What should it work on? (optional)" disabled={busy}
+              onError={(message) => setError({ message })}
+              onKeyDown={(event) => {
+                // ⏎ starts it, as the composer sends; with nothing to send, only ⌘⏎ (or Start) does.
+                if (event.key === 'Enter' && !event.shiftKey && !event.metaKey && !event.ctrlKey && !event.altKey) {
+                  event.preventDefault()
+                  if (event.currentTarget.value.trim() || files.length) void create()
+                }
+              }} />
+          </div>
+
+          <Field name="name" label="Name">
             <TextField aria-label="Name" placeholder="From the prompt (optional)" value={title} onChange={(e) => setTitle(e.target.value)} />
-          </label>
+          </Field>
         </>}
         {picked && !picked.allowed && !error && (
           <p className="new-thread__note">The {picked.name} profile runs this project's own code. Starting will ask to allow it.</p>
         )}
         {error && (
-          <div className="new-thread__error">
-            <p>{error.message}</p>
+          <div className="new-thread__error" role="alert">
+            <p>{error.kind === 'no_model' && machine ? `No model is set up on ${machine.label}.` : error.message}</p>
             {error.kind === 'profile_not_allowed' && <Button onClick={() => void create({ allow: true })}>Allow and start</Button>}
+            {error.kind === 'no_model' && <Button onClick={() => { onClose(); openSettings() }}>Open Settings</Button>}
           </div>
         )}
       </div>
       <footer className="new-thread__foot">
-        <span className="new-thread__hint">{machine ? `${machine.label}${cwd ? ` · ${shortPath(cwd)}` : ''}` : ''}</span>
         <Button onClick={onClose}>Cancel</Button>
-        <Button variant="primary" disabled={!machine || busy} onClick={() => void create()}>Start <kbd>⌘⏎</kbd></Button>
+        <Button variant="primary" disabled={!machine || busy} onClick={() => void create()}>Start <kbd>{keyLabel('mod+enter')}</kbd></Button>
       </footer>
     </Dialog>
   )
