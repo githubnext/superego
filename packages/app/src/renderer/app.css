@@ -546,8 +546,18 @@ button.app__mobiletitle > svg { flex: none; color: var(--superego-faint); }
 .app__drawer-sep { width: 1px; height: 20px; margin: 0 2px; background: var(--superego-line); }
 .app__drawer-sep:last-child, .app__drawer-sep:has(+ .app__drawer-end) { display: none; }
 /* A phone's thread sheet: the title bar's and what's beside the thread, up from the foot over the thread. */
-.app__scrim--sheet { z-index: 30; }
-.thread-sheet { position: fixed; z-index: 31; left: 0; right: 0; bottom: 0; max-height: 85dvh; overflow: auto; padding: var(--superego-space-4) var(--superego-space-4) calc(env(safe-area-inset-bottom) + var(--superego-space-4)); background: var(--superego-bg); border-radius: 14px 14px 0 0; box-shadow: var(--superego-shadow-float); display: flex; flex-direction: column; gap: var(--superego-space-4); }
+/* The thread's sheet (Base UI's Drawer, see Shell.tsx): up from the foot over a scrim. Under a finger it follows the
+   swipe down (`--drawer-swipe-movement-y`, the scrim `--drawer-swipe-progress`); let go, it slides the rest of the way,
+   as the sidebar's drawer does. */
+.app__scrim--sheet { z-index: 30; opacity: calc(1 - var(--drawer-swipe-progress, 0)); transition: opacity .4s cubic-bezier(.32, .72, 0, 1); }
+.app__scrim--sheet:is([data-starting-style], [data-ending-style]) { opacity: 0; }
+.app__sheet { position: fixed; inset: 0; z-index: 31; display: flex; flex-direction: column; justify-content: flex-end; }
+.thread-sheet { max-height: 85dvh; overflow: auto; overscroll-behavior: contain; outline: none; padding: var(--superego-space-4) var(--superego-space-4) calc(env(safe-area-inset-bottom) + var(--superego-space-4)); background: var(--superego-bg); border-radius: 14px 14px 0 0; box-shadow: var(--superego-shadow-float); display: flex; flex-direction: column; gap: var(--superego-space-4);
+  transform: translate3d(0, var(--drawer-swipe-movement-y, 0px), 0); transition: transform .4s cubic-bezier(.32, .72, 0, 1); will-change: transform; }
+.thread-sheet:is([data-starting-style], [data-ending-style]) { transform: translate3d(0, calc(100% + 24px), 0); }
+.thread-sheet[data-ending-style], .app__scrim--sheet[data-ending-style] { transition-duration: calc(var(--drawer-swipe-strength, 1) * 400ms); }
+.thread-sheet[data-swiping], .app__scrim--sheet[data-swiping] { transition-duration: 0s; }
+@media (prefers-reduced-motion: reduce) { .thread-sheet, .app__scrim--sheet { transition: none; } }
 .thread-sheet__head { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .thread-sheet__project { font-size: var(--superego-text-sm); color: var(--superego-muted); }
 .thread-sheet__title { display: flex; align-items: center; gap: 8px; font-weight: 600; overflow-wrap: anywhere; }

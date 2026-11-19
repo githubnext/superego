@@ -17,6 +17,9 @@
 - On a phone, swipe right from the screen's left edge to pull out the sidebar, and swipe it left to put it away. It
   follows your finger and slides open or shut when you let go, smoothly both ways, and slides in and out when you tap ☰
   or beside it too.
+- On a phone, the thread's sheet (from its title) slides up and follows your finger: swipe it down to put it away. While
+  it's open the thread behind it can't be reached by accident, Escape closes a menu in it before the sheet, and closing
+  it puts the focus back on the title.
 - On a phone, text is 15% bigger throughout, on top of the Text size you pick in Settings → Appearance.
 
 ### Fixes

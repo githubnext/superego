@@ -65,8 +65,10 @@ export function Shell() {
   // A phone (or a narrow window): the sidebar becomes a drawer over the thread, opened from a bar at the top.
   const { placed, narrow } = useLayout()
   const [drawer, setDrawer] = useState(false)
-  // On a phone, what the title bar and the column beside hold for the thread: a sheet from the foot, opened from its title.
+  // On a phone, what the title bar and the column beside hold for the thread: a sheet from the foot (Base UI's Drawer),
+  // opened from its title. Its own drawer, not one nested in the sidebar's, so the title opens it through a handle.
   const [sheet, setSheet] = useState(false)
+  const [sheetHandle] = useState(() => Drawer.createHandle())
   // The spaces, and the one the sidebar shows: as the window was left, else the first.
   const spaces = viewsIn(registry, placed, 'space')
   const [spaceId, setSpace] = useLocalState<string | undefined>('space', undefined)
@@ -206,9 +208,9 @@ export function Shell() {
                 : <PlacedViews place="titlebar" frame={withContextMenu('titlebar')} />}
               {thread && machine
                 ? (
-                  <button type="button" className="app__mobiletitle" aria-expanded={sheet} aria-label={`${thread.title}: the thread's tools`} onClick={() => setSheet((open) => !open)}>
+                  <Drawer.Trigger handle={sheetHandle} className="app__mobiletitle" aria-label={`${thread.title}: the thread's tools`}>
                     <StatusGlyph status={thread.status} quiet={thread.quiet} /><span className="app__mobiletitle-text">{thread.title}</span><CaretDownIcon size={12} aria-hidden />
-                  </button>
+                  </Drawer.Trigger>
                 )
                 : <span className="app__mobiletitle">{registry.app.name}</span>}
               {spaces.length > 0 || !placed.titlebar.length ? <Button onClick={() => openNewThread()} aria-label="New thread"><PlusIcon size={16} aria-hidden /></Button> : null}
@@ -240,7 +242,7 @@ export function Shell() {
           <aside className="app__beside"><PlacedViews place="beside" machine={machine} thread={thread} frame={withMenuButton('beside', where)} /></aside>
         )}
       </div>
-      {narrow && sheet && thread && machine && <ThreadSheet machine={machine} thread={thread} onClose={() => setSheet(false)} />}
+      {narrow && thread && machine && <ThreadSheet machine={machine} thread={thread} open={sheet} onOpenChange={setSheet} handle={sheetHandle} container={app} />}
       {narrow && settings.open && <SettingsView machines={machines} onClose={settings.close} />}
       {palette && <Palette onClose={() => setPalette(false)} />}
       {navigator && <Navigator onClose={() => setNavigator(false)} />}
@@ -292,45 +294,56 @@ function SpaceButton({ view, open, sidebarHidden, show, narrow = false }: { view
 
 /**
  * On a phone, the thread's sheet: what the title bar says of it wide (where it runs, the header's views, archiving),
- * the panes to open beside it, and the views the layout puts beside the thread. Over the thread, from the foot.
+ * the panes to open beside it, and the views the layout puts beside the thread. Over the thread, from the foot: Base
+ * UI's Drawer, back down with a swipe, a tap beside it, or Escape (a menu open in it closes first). Drawn into the
+ * window (`container`), under its styles.
  */
-function ThreadSheet({ machine, thread, onClose }: { machine: MachineEntry; thread: ThreadInfo; onClose(): void }) {
+function ThreadSheet({ machine, thread, open, onOpenChange, handle, container }: {
+  machine: MachineEntry; thread: ThreadInfo; open: boolean; onOpenChange(open: boolean): void
+  handle: Drawer.Handle<unknown>; container: HTMLElement | null
+}) {
   const registry = useRegistry()
   const where = { machine: machine.id, thread }
   const { placed } = useLayout(where)
   const kinds = paneMenu(registry, placed, where)
   const besides = viewsIn(registry, placed, 'beside', where)
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') { event.preventDefault(); onClose() } }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [])
-  const open = (kind: string) => {
-    onClose()
+  const popup = useRef<HTMLDivElement>(null)
+  // Closed by a pane opened from it, the focus is the pane's to take, not the title's again.
+  const opened = useRef(false)
+  const openPane = (kind: string) => {
+    opened.current = true
+    onOpenChange(false)
     void registry.router.dispatch('pane.open', { thread: thread.id, kind }, { machine: machine.id, source: 'sheet' }).catch((error) => console.error(error))
   }
   return (
-    <>
-      <div className="app__scrim app__scrim--sheet" onClick={onClose} />
-      <div className="thread-sheet" role="dialog" aria-label={thread.title}>
-        <div className="thread-sheet__head">
-          <span className="thread-sheet__project">{machine.id !== 'local' && `${machine.label} · `}{thread.project.name}</span>
-          <span className="thread-sheet__title"><StatusGlyph status={thread.status} quiet={thread.quiet} />{thread.title}</span>
-        </div>
-        <div className="thread-sheet__tools">
-          <ThreadTools machine={machine} thread={thread} panes={false} />
-          <PinButton machine={machine} thread={thread} />
-          {thread.hidden ? null : thread.archived ? <UnarchiveButton machine={machine} thread={thread} /> : <ArchiveButton machine={machine} thread={thread} />}
-        </div>
-        {kinds.length > 0 && (
-          <div className="thread-sheet__panes">
-            <h5>Open beside</h5>
-            {kinds.map(({ kind, title }) => <Button key={kind} variant="ghost" className="thread-sheet__pane" onClick={() => open(kind)}>{title}</Button>)}
-          </div>
-        )}
-        {besides.length > 0 && <div className="thread-sheet__beside"><PlacedViews place="beside" machine={machine} thread={thread} frame={withMenuButton('beside', where)} /></div>}
-      </div>
-    </>
+    <Drawer.Root open={open} onOpenChange={onOpenChange} handle={handle} swipeDirection="down">
+      <Drawer.Portal container={container}>
+        <Drawer.Backdrop className="app__scrim app__scrim--sheet" />
+        <Drawer.Viewport className="app__sheet">
+          {/* Opened by a finger, the sheet holds the focus itself (no keyboard over it); from the keyboard, its first control. */}
+          <Drawer.Popup ref={popup} className="thread-sheet" aria-label={thread.title}
+            initialFocus={(type) => type === 'touch' || !autoFocusOnOpen() ? popup.current : true}
+            finalFocus={() => { const back = !opened.current; opened.current = false; return back }}>
+            <div className="thread-sheet__head">
+              <span className="thread-sheet__project">{machine.id !== 'local' && `${machine.label} · `}{thread.project.name}</span>
+              <span className="thread-sheet__title"><StatusGlyph status={thread.status} quiet={thread.quiet} />{thread.title}</span>
+            </div>
+            <div className="thread-sheet__tools">
+              <ThreadTools machine={machine} thread={thread} panes={false} />
+              <PinButton machine={machine} thread={thread} />
+              {thread.hidden ? null : thread.archived ? <UnarchiveButton machine={machine} thread={thread} /> : <ArchiveButton machine={machine} thread={thread} />}
+            </div>
+            {kinds.length > 0 && (
+              <div className="thread-sheet__panes">
+                <h5>Open beside</h5>
+                {kinds.map(({ kind, title }) => <Button key={kind} variant="ghost" className="thread-sheet__pane" onClick={() => openPane(kind)}>{title}</Button>)}
+              </div>
+            )}
+            {besides.length > 0 && <div className="thread-sheet__beside"><PlacedViews place="beside" machine={machine} thread={thread} frame={withMenuButton('beside', where)} /></div>}
+          </Drawer.Popup>
+        </Drawer.Viewport>
+      </Drawer.Portal>
+    </Drawer.Root>
   )
 }
 
