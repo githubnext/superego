@@ -124,7 +124,7 @@
 .app__titlebar .thread__chips .titlebar__item { font-size: var(--superego-text-sm); color: var(--superego-faint); }
 /* A mark after a thread's title in the sidebar (the thread.badge slot): an icon, quiet, kept while the title truncates. */
 .thread-badge { flex: none; display: inline-flex; align-items: center; color: var(--superego-muted); }
-.thread-badge.is-spelled { gap: 4px; min-width: 0; }
+.thread-badge.is-spelled { flex: 0 1 auto; gap: 4px; min-width: 0; max-width: 100%; }
 .thread-badge.is-spelled > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .thread__parent { display: flex; align-items: baseline; gap: 4px; }
 /* The profile's badge, by the title: its name, quiet and cut short when long; pointed at, a card of what it is. */

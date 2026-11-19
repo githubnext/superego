@@ -15,7 +15,7 @@ const DRESS = {
   'Chief of Staff': { status: { state: 'working' }, model: 'claude-opus-4-5', provider: 'anthropic', cost: 4.12, profile },
   'Threads list: small info hover cards on rows': {
     status: { state: 'working' }, quiet: true, model: 'claude-opus-4-5', provider: 'anthropic', cost: 1.87, profile, ago: 2 * m,
-    facts: { worktrees: { branch: 'superego/hover-cards', path: '/tmp/hover-cards', root: project } },
+    facts: { worktrees: { branch: 'superego/threads-list-small-info-hover-cards-on-r-12ff05', path: '/tmp/hover-cards', root: project } },
   },
   'Title bar: provider icons': { status: { state: 'done', msg: 'Merged: the model shows as its provider' }, quiet: true, model: 'gpt-5', provider: 'openai-codex', cost: 0.64, ago: 6 * m },
   'Release notes for 0.9': { status: { state: 'blocked', kind: 'question', msg: 'Call it 0.9 or 1.0? The API broke once since 0.8.' }, model: 'gemini-2.5-pro', provider: 'google', cost: 0.21, ago: m },
