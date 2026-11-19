@@ -33,7 +33,7 @@ export default async function web(t, s) {
   browser.setContentSize(390, 844)
   await b.until(`Boolean(document.querySelector('.app__mobilebar')) && !document.querySelector('.app__sidebar')`, 'phone layout')
   await b.click('.app__mobilebar button')
-  await b.until(`Boolean(document.querySelector('.app.has-drawer .app__sidebar'))`, 'drawer open')
+  await b.until(`Boolean(document.querySelector('.app__drawer > .app__sidebar'))`, 'drawer open')
   await b.run(`${helloRow}.click()`)
   await b.until(`!document.querySelector('.app__sidebar')`, 'drawer closes on picking a thread')
   // A thread finishing while another is shown: Unread, beside Settings in the drawer, has it, and goes there.
@@ -85,7 +85,7 @@ export default async function web(t, s) {
 
   // Images over the WebSocket, on a phone: the thread's images load, and the lightbox fills the screen.
   await b.click('.app__mobilebar button')
-  await b.until(`Boolean(document.querySelector('.app.has-drawer .app__sidebar'))`, 'drawer open again')
+  await b.until(`Boolean(document.querySelector('.app__drawer > .app__sidebar'))`, 'drawer open again')
   await b.run(`[...document.querySelectorAll('.superego-list-item')].find((li) => li.textContent.includes('show me the screens')).click()`)
   // Each is read as it nears the screen: scrolled to in turn.
   await b.until(`(() => { document.querySelector('.images--single')?.scrollIntoView({ block: 'center' }); return Boolean(document.querySelector('.images--single .images__frame.is-ready')) })()`, 'an image read over the web')
