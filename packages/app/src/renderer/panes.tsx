@@ -9,7 +9,7 @@
 // - Stack: the thread, and beside it one column its panes share, one in front at a time; the row never passes the
 //   window's edge. The strip's tabs bring one to the front; so does its getting the focus (a click, ⌃Tab, ⌘⌥←/→, the
 //   navigator, pane.focus from anywhere) and its opening. The thread's handle drags the line between the two.
-// Either way, a pane can be maximized for a while: over the thread and the rest, which stay as they were under it (see
+// Either way, a column (the thread's or a pane's) can be maximized for a while: over the rest, which stay as they were under it (see
 // maximized.ts). ⌃Tab moves the focus along. On a phone each column is the screen's width, and a swipe moves between them.
 // Built in: editor and thread. Extensions and profiles add kinds with superego.pane(kind, …) (Changes is git's; a web
 // page or an HTML file, browser's). A pane of a kind only an extension the thread goes without draws isn't shown.
@@ -32,7 +32,7 @@ import { PaneMoveTo } from './view-menu.tsx'
 import { FileEditor } from './file-editor.tsx'
 import { BRING_FORWARD, focusRegion } from './focus.ts'
 import { DEFAULT_SHARE, END, endShare, frontOf, GAP, roomFor, scrollWidths, stackWidths } from './pane-layout.ts'
-import { maximizedPane, maximizedStore, restoresOn } from './maximized.ts'
+import { maximizedColumn, maximizedStore, restoresOn, THREAD_COLUMN } from './maximized.ts'
 import { useShortcut } from './keys.ts'
 import { OverflowBox, OverflowRow, PRIORITY, useOverflowItem } from './overflow.tsx'
 import { WebViewPane } from './web-view.tsx'
@@ -70,7 +70,7 @@ export function ThreadPanes({ machine, thread, main }: { machine: PaneProps['mac
   const [scrolled, setScrolled] = useState(0)
 
   // The columns, left to right: the thread, then its panes, each by the key its width is kept under.
-  const keys = ['thread', ...panes.map((pane) => pane.id)]
+  const keys = [THREAD_COLUMN, ...panes.map((pane) => pane.id)]
   const { rowWidth, widths, threadWidth, stackWidth, drag, reset } = useColumnWidths(row, {
     keys, stacked, narrow,
     kindShares: panes.map((pane) => paneKind(registry, pane.kind, where)?.width),
@@ -94,15 +94,16 @@ export function ThreadPanes({ machine, thread, main }: { machine: PaneProps['mac
     known.current = ids
     if (opened) bringForward(opened)
   }, [ids.join()])
-  // A pane maximized over the rest (see maximized.ts), while it lasts; forgotten once it doesn't, or the thread goes.
+  // A column maximized over the rest (see maximized.ts), while it lasts; forgotten once it doesn't, or the thread goes.
   // Wide only: on a phone each column is the screen's already.
   const stored = maximizedStore.use()
-  const maximized = narrow ? undefined : maximizedPane(stored, threadKey, ids)
+  const maximized = narrow ? undefined : maximizedColumn(stored, threadKey, ids)
+  const threadMaximized = maximized === THREAD_COLUMN
   const maximizedRef = useRef(maximized)
   maximizedRef.current = maximized
   useEffect(() => { if (stored && !maximized) maximizedStore.set(undefined) }, [stored, maximized])
   useEffect(() => () => maximizedStore.set(undefined), [])
-  // Esc restores it, unless something in the pane took it (an editor's search, a terminal) or it's pressed in a dialog.
+  // Esc restores it, unless something in the column took it (the prompt's, leaving it for the transcript) (an editor's search, a terminal) or it's pressed in a dialog.
   useEffect(() => {
     if (!maximized) return
     const onKey = (event: KeyboardEvent) => {
@@ -114,9 +115,9 @@ export function ThreadPanes({ machine, thread, main }: { machine: PaneProps['mac
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [maximized])
-  const maximize = (pane: Pane) => void dispatch('pane.maximize', { pane: pane.id }, { source: 'panes' })
+  const maximize = (pane: Pane) => void dispatch('pane.maximize', { column: pane.id }, { source: 'panes' })
   // One at the back the focus is going to (see focus.ts) comes to the front first, so it can take it; one under a
-  // maximized pane, the layout restored.
+  // maximized column, the layout restored.
   useEffect(() => {
     const el = row.current
     const bring = (event: Event) => {
@@ -124,7 +125,7 @@ export function ThreadPanes({ machine, thread, main }: { machine: PaneProps['mac
       if (!id) return
       flushSync(() => {
         if (maximizedRef.current && id !== maximizedRef.current) maximizedStore.set(undefined)
-        if (id !== 'thread') bringForward(id)
+        if (id !== THREAD_COLUMN) bringForward(id)
       })
     }
     el?.addEventListener(BRING_FORWARD, bring)
@@ -151,7 +152,7 @@ export function ThreadPanes({ machine, thread, main }: { machine: PaneProps['mac
   const close = (pane: Pane) => void dispatch('pane.close', { thread: thread.id, pane: pane.id }, { machine: machine.id, source: 'panes' })
 
   // How much of each column is in view, and on which side the rest are: for the strip. Stacked, the thread and the
-  // pane in front are; the rest are behind. Maximized, only that pane is: the rest are under it.
+  // pane in front are; the rest are behind. Maximized, only that column is: the rest are under it.
   const starts = widths.map((_, i) => widths.slice(0, i).reduce((sum, w) => sum + w + GAP, 0))
   const shown = widths.map((w, i) => maximized ? Number(keys[i] === maximized) : stacked ? Number(i === 0 || keys[i] === front)
     : w ? Math.max(0, Math.min(starts[i]! + w, scrolled + rowWidth) - Math.max(starts[i]!, scrolled)) / w : 0)
@@ -205,8 +206,11 @@ export function ThreadPanes({ machine, thread, main }: { machine: PaneProps['mac
       <div className={`panes ${narrow ? 'panes--narrow' : ''} ${stacked ? 'panes--stack' : ''} ${maximized ? 'has-maximized' : ''}`} ref={setRow} onScroll={onScroll}
         style={stacked ? { gridTemplateColumns: `${threadWidth}px ${GAP}px ${stackWidth}px ${GAP}px` } : undefined}>
         {/* Focus moving into a column (a click, a key) makes it the focused one: the app and the keyboard agree. */}
-        <div data-column="thread" tabIndex={-1} className={`panes__column panes__column--thread ${maximized ? 'is-covered' : ''}`} inert={Boolean(maximized)}
-          style={{ width: widths[0] }} onPointerDownCapture={() => focus(undefined)} onFocusCapture={() => focus(undefined)}>{main}</div>
+        <div data-column={THREAD_COLUMN} tabIndex={-1} className={`panes__column panes__column--thread ${threadMaximized ? 'is-maximized' : maximized ? 'is-covered' : ''}`}
+          inert={Boolean(maximized) && !threadMaximized} style={threadMaximized ? undefined : { width: widths[0] }}
+          onPointerDownCapture={() => focus(undefined)} onFocusCapture={() => focus(undefined)}>{main}</div>
+        {/* Scrolled, its place in the row is kept while it's over the rest, so they stay where they were. */}
+        {!stacked && threadMaximized && <div className="panes__kept" style={{ width: widths[0] }} aria-hidden />}
         {/* The gap after each column is its handle: drag it to make that one wider or narrower. */}
         {gap(0)}
         {panes.map((pane, index) => (

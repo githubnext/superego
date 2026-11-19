@@ -17,7 +17,7 @@ import { setLocalState, windowState } from './local-state.ts'
 import { giveBack } from './returned.ts'
 import { clearProblem, reportProblem } from './machine-problems.ts'
 import { showOnboarding } from './Onboarding.tsx'
-import { maximizedPane, maximizedStore, toggleMaximized } from './maximized.ts'
+import { maximizedStore, THREAD_COLUMN, toggleMaximized } from './maximized.ts'
 import { NARROW } from './media.ts'
 import { RAIL_TABS, tabAction, type RailTab } from './rail-tabs.ts'
 
@@ -255,18 +255,17 @@ export const coreActions = (app: AppConfig): WindowAction[] => [
       focusColumn(panes[index - 1]?.id)
     },
   }),
-  // A pane over the whole of the thread's area for a while (see maximized.ts), and back: `pane`, else the focused one.
+  // A column (the thread's or a pane's) over the whole of the thread's area for a while (see maximized.ts), and back:
+  // `column`, else the focused one.
   defineWindowAction({
-    id: 'pane.maximize', title: 'Maximize or restore pane', keys: 'mod+shift+enter',
-    params: obj({ pane: opt(str()) }),
-    when: (c) => {
-      const at = maximizable(c)
-      return Boolean(at && (maximizedPane(maximizedStore.get(), at.key, at.panes) || at.panes.includes(focusedColumn(at.thread) ?? '')))
-    },
-    run: ({ pane }, c) => {
+    id: 'pane.maximize', title: 'Maximize or restore column', keys: 'mod+shift+enter',
+    description: '`column`: a pane\'s id, or `thread` for the thread\'s own; else the one with the focus',
+    params: obj({ column: opt(str()) }),
+    when: (c) => Boolean(maximizable(c)),
+    run: ({ column }, c) => {
       const at = maximizable(c)
       if (!at) return
-      maximizedStore.set(toggleMaximized(maximizedStore.get(), at.key, at.panes, pane, focusedColumn(at.thread)))
+      maximizedStore.set(toggleMaximized(maximizedStore.get(), at.key, at.panes, column, focusedColumn(at.thread) ?? THREAD_COLUMN))
     },
   }),
   defineWindowAction({
@@ -359,7 +358,7 @@ function focusedColumn(thread: ThreadInfo | undefined): string | undefined {
   return thread?.pane
 }
 
-/** The selected thread and its panes' ids, for maximizing one: none in a window as narrow as a phone's. */
+/** The selected thread and its panes' ids, for maximizing a column: none without panes, or in a window as narrow as a phone's. */
 function maximizable(c: WindowContext) {
   const thread = c.selection && c.threadOf(c.selection)
   if (!c.selection || !thread?.panes?.length || matchMedia(NARROW).matches) return undefined

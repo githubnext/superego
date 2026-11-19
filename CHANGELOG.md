@@ -9,6 +9,8 @@
 - **Upgrade:** the extension API is now 5.0. A profile's extension that asks for `api: '^4'` (or `^4.x`) is refused
   until it asks for `^5`. A composer completion provider's `items(word, where)` gets `where.cwd`, and `where.thread` only
   once there is a thread: in the New thread dialog there isn't one yet.
+- ⌘⇧↩ maximizes the thread too: with the focus in its transcript or prompt, it takes the whole width over its panes,
+  until ⌘⇧↩ again, Esc, or a pane taking the focus.
 - ⌃T (Focus threads list) puts the keyboard in the sidebar's threads, on the selected thread, showing the sidebar if
   it's hidden; ⌃T again goes back to the prompt. A terminal keeps ⌃T for its shell.
 - In a file editor, ⌃D, ⌃O and ⌃T only do what the app binds them to, no longer editing the text as well.

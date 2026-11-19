@@ -114,6 +114,30 @@ export default async function panes(t, s) {
   await t.until(`Boolean(document.querySelector('.files-tree__row.is-current'))`, 'tree shown, at notes.md')
   await t.click('.files-tree__row', 'page.html')
   await t.until(`document.querySelectorAll('.panes__tab').length === 1 && document.querySelector('.panes__tab')?.textContent.startsWith('page.html')`, 'the tree showed page.html in the same editor')
+  // ⌘⇧↩ maximizes the column with the focus, the thread's too: from its prompt (what's typed there kept, not sent) or
+  // its transcript, over its panes, kept as they were under it. Again restores it; so does focusing a pane (⌃Tab).
+  const maximized = `document.querySelector('.panes.has-maximized > .is-maximized')?.dataset.column`
+  const restored = `!document.querySelector('.panes.has-maximized')`
+  await t.type('.composer textarea', 'a draft')
+  t.key('Enter', ['meta', 'shift'])
+  await t.until(`${maximized} === 'thread'`, 'the thread maximized from its prompt')
+  await t.check(`document.querySelector('.composer textarea').value === 'a draft'`, 'the prompt sent or changed its text on ⌘⇧↩')
+  await t.check(`document.querySelector('[data-column]:not([data-column="thread"])').inert && !document.querySelector('[data-column="thread"]').inert`, 'the panes under the maximized thread still in reach')
+  await t.check(`document.querySelector('.strip__tab.is-focused')?.textContent === 'Thread' && [...document.querySelectorAll('.strip__tab:not(.is-focused)')].every((tab) => tab.matches('.is-away'))`, 'the strip shows the thread maximized')
+  t.key('Enter', ['meta', 'shift'])
+  await t.until(restored, 'the thread restored by ⌘⇧↩ again')
+  await t.run(`document.querySelector('.thread__scroll').focus()`)
+  t.key('Enter', ['meta', 'shift'])
+  await t.until(`${maximized} === 'thread'`, 'the thread maximized from its transcript')
+  t.key('Tab', ['control'])
+  await t.until(`${restored} && Boolean(document.activeElement?.closest('[data-column]:not([data-column="thread"])'))`, 'focusing a pane restored the thread')
+  // ⌘↩ in the prompt sends, as ↩ does.
+  await t.type('.composer textarea', 'sent by cmd-return')
+  t.key('Enter', ['meta'])
+  await t.until(`document.querySelector('.composer textarea').value === '' && document.querySelector('.thread__scroll')?.textContent.includes('sent by cmd-return')`, '⌘↩ in the prompt sent')
+  await t.until(async () => (await t.call('thread.list')).find((x) => x.id === paned).status.state !== 'working' && await t.run(`document.querySelector('.thread__scroll').textContent.includes('echo: sent by cmd-return')`), 'the answer')
+  await t.check(restored, 'sending maximized something')
+
   // Clicking a pane's title takes the focus into it: the editor's text.
   await t.run(`document.querySelector('.composer textarea').focus()`)
   await t.click('.panes__label')
