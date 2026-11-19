@@ -195,6 +195,9 @@ overrides:
 
 pnpmfileChecksum: sha256-8RoD5CkWTubjdo8qG3mRkX7fEgwSEWupGaaz+qEClz4=
 
+patchedDependencies:
+  ghostty-web@0.4.0: fef2236870cb562d7c7419513ae06c0fc86a4b58069bd53043e3f9d9af56cb2e
+
 importers:
 
   .:
@@ -688,7 +691,7 @@ importers:
         version: link:../../packages/ui
       ghostty-web:
         specifier: 0.4.0
-        version: 0.4.0
+        version: 0.4.0(patch_hash=fef2236870cb562d7c7419513ae06c0fc86a4b58069bd53043e3f9d9af56cb2e)
     devDependencies:
       '@superego/sdk':
         specifier: workspace:*
@@ -4734,7 +4737,7 @@ snapshots:
       dunder-proto: 1.0.1
       es-object-atoms: 1.1.2
 
-  ghostty-web@0.4.0: {}
+  ghostty-web@0.4.0(patch_hash=fef2236870cb562d7c7419513ae06c0fc86a4b58069bd53043e3f9d9af56cb2e): {}
 
   google-auth-library@10.9.1:
     dependencies:

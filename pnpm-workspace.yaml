@@ -45,3 +45,5 @@ overrides:
   'node-releases': 2.0.61
   'tinybench': 6.2.2
   'ws': 8.22.0
+patchedDependencies:
+  ghostty-web@0.4.0: patches/ghostty-web@0.4.0.patch
