@@ -5,7 +5,7 @@
 // layout's (see shared/layout.ts).
 import { useEffect, useRef, useState, type ComponentType } from 'react'
 import type { SettingsSnapshot, ThreadInfo } from '@superego/protocol'
-import { ArrowLeftIcon, ArrowRightIcon, Button, CaretDownIcon, GearSixIcon, IconButton, ListIcon, NotePencilIcon, PlusIcon, Select, StatusGlyph } from '@superego/ui'
+import { ArrowLeftIcon, ArrowRightIcon, autoFocusOnOpen, Button, CaretDownIcon, Drawer, GearSixIcon, IconButton, ListIcon, NotePencilIcon, PlusIcon, Select, StatusGlyph } from '@superego/ui'
 import type { MachineEntry } from '../shared/bridge.ts'
 import { ACCENT, APP, INTERFACE_FONT, KEYMAP, MONO_FONT, TEXT_SIZE, textScale } from '../shared/app-settings.ts'
 import { useSettings, watched } from './client.ts'
@@ -29,7 +29,6 @@ import { Overflow, OverflowMenu, OverflowProvider } from './overflow.tsx'
 import { ArchiveButton, PinButton, UnarchiveButton } from './thread-actions.tsx'
 import { StripSlot } from './panes.tsx'
 import { useSidebarEdge } from './sidebar-edge.tsx'
-import { useDrawerSwipe } from './drawer-swipe.ts'
 import { SettingsView } from './SettingsView.tsx'
 import { Palette } from './Palette.tsx'
 import { Navigator } from './Navigator.tsx'
@@ -77,9 +76,12 @@ export function Shell() {
   const tab: 'settings' | 'thread' | 'space' = narrow ? 'space' : settings.open ? 'settings' : alone ? 'thread' : 'space'
   // Wide, the sidebar's edge resizes it, and hides it dragged narrow.
   const sidebarEdge = useSidebarEdge()
-  // Narrow, the drawer comes out with a swipe from the screen's left edge and goes back with one to the left, or slides
-  // back when tapped beside or a thread's picked in it.
-  const swipe = useDrawerSwipe(narrow && spaces.length > 0, drawer, setDrawer)
+  // Narrow, the sidebar is a drawer (Base UI's): out from ☰ or a swipe from the screen's left edge, back with a swipe to
+  // the left, a tap beside it, Escape, or a thread picked in it. Drawn into the window (`app`), under its styles.
+  const [app, setApp] = useState<HTMLDivElement | null>(null)
+  const drawerPopup = useRef<HTMLDivElement>(null)
+  // Closed by a thread picked in it, the focus is the thread's to take, not ☰'s again.
+  const picked = useRef(false)
   const where = selection && thread && machine ? { machine: machine.id, thread } : undefined
   // A space shown in the sidebar (\`open\`), or the sidebar hidden from its button: from Ego's thread, back to the
   // listed one it left; from Settings, back to the thread.
@@ -133,17 +135,34 @@ export function Shell() {
       <GearSixIcon size={18} aria-hidden />
     </IconButton>
   )
-  const sideOpen = spaces.length > 0 && (narrow ? drawer || swipe.moving : !sidebar.hidden && tab === 'space')
+  const sideOpen = spaces.length > 0 && (narrow ? drawer : !sidebar.hidden && tab === 'space')
   // The notices: wide, in the rail above Settings, each a mark that opens to all it says; on a phone, at the drawer's foot.
   const notices = <><AuthNotice rail={!narrow} /><ServiceNotice rail={!narrow} /><BuildNotice rail={!narrow} /><LayoutNotice rail={!narrow} /><RevokedUiNotice rail={!narrow} /></>
+  // What the sidebar holds: the space it shows; in the drawer, the notices, the other spaces and Settings at its foot.
+  const sidebarBody = <>
+    {narrow && <div className="app__drag" />}
+    {space && <SpaceView key={space.id} view={space} {...(where ? { machine, thread } : {})} />}
+    {narrow && <div className="app__footer">{notices}
+      {/* A phone's drawer: the other spaces to switch to, what the layout puts in the drawer, and Settings at the end. */}
+      <div className="app__drawer-bar">
+        {spaces.length > 1 && <>
+          {spaces.map((view) => (
+            <ViewContextMenu key={view.id} view={view.id} place="space"><SpaceButton view={view} open={view.id === space?.id} sidebarHidden={false} show={() => setSpace(view.id)} narrow /></ViewContextMenu>
+          ))}
+          <span className="app__drawer-sep" aria-hidden />
+        </>}
+        <PlacedViews place="drawer" frame={withContextMenu('drawer')} />
+        <span className="app__drawer-end">{settingsButton}</span>
+      </div>
+    </div>}
+  </>
   // Wide: across the top a title bar (the window's buttons, then where you are, the thread's columns and what the thread
   // says about itself); down the left a rail (what extensions put there, Settings) and the sidebar beside it; the rest holds the
   // thread and its panes. Narrow: one column under a bar of its own, the sidebar a drawer.
   return (
     <OverflowProvider value={narrow ? null : overflow}>
-    <div className={`app ${sideOpen ? 'has-sidebar' : ''} ${narrow ? 'is-narrow' : ''} ${drawer ? 'has-drawer' : ''} ${window.superego.web ? 'is-web' : ''} ${sidebarEdge.hiding ? 'is-hiding' : ''} ${swipe.dragging ? 'is-swiping' : ''}`}
-      style={narrow ? undefined : sidebarEdge.style}>
-      {narrow && spaces.length > 0 && (drawer || swipe.moving) && <div className={`app__scrim app__scrim--drawer ${drawer ? '' : 'is-leaving'}`} ref={swipe.scrim} onClick={swipe.close} />}
+    <div className={`app ${sideOpen ? 'has-sidebar' : ''} ${narrow ? 'is-narrow' : ''} ${window.superego.web ? 'is-web' : ''} ${sidebarEdge.hiding ? 'is-hiding' : ''}`}
+      style={narrow ? undefined : sidebarEdge.style} ref={setApp}>
       {!narrow && (
         <header className="app__drag app__titlebar" ref={overflow.setBar}>
           <BackForward />
@@ -175,33 +194,15 @@ export function Shell() {
           </nav>
         )}
         {tab === 'settings' && <main className="app__main"><SettingsView machines={machines} onClose={settings.close} pane /></main>}
-        {tab !== 'settings' && sideOpen && (
-          // In the drawer, picking a thread (even the open one) closes it.
-          <aside className="app__sidebar" ref={narrow ? swipe.drawer : undefined} onClick={narrow ? (event) => { if ((event.target as HTMLElement).closest('.superego-list-item')) swipe.close() } : undefined}>
-            {narrow && <div className="app__drag" />}
-            {space && <SpaceView key={space.id} view={space} {...(where ? { machine, thread } : {})} />}
-            {narrow && <div className="app__footer">{notices}
-              {/* A phone's drawer: the other spaces to switch to, what the layout puts in the drawer, and Settings at the end. */}
-              <div className="app__drawer-bar">
-                {spaces.length > 1 && <>
-                  {spaces.map((view) => (
-                    <ViewContextMenu key={view.id} view={view.id} place="space"><SpaceButton view={view} open={view.id === space?.id} sidebarHidden={false} show={() => setSpace(view.id)} narrow /></ViewContextMenu>
-                  ))}
-                  <span className="app__drawer-sep" aria-hidden />
-                </>}
-                <PlacedViews place="drawer" frame={withContextMenu('drawer')} />
-                <span className="app__drawer-end">{settingsButton}</span>
-              </div>
-            </div>}
-          </aside>
-        )}
+        {!narrow && tab !== 'settings' && sideOpen && <aside className="app__sidebar">{sidebarBody}</aside>}
         {!narrow && tab === 'space' && spaces.length > 0 && sidebarEdge.edge}
         {tab !== 'settings' && <main className="app__main">
           {narrow && (
-            // With no space there's no drawer: what stands in for one (the title bar's: the thread picker) and Settings.
+            <Drawer.Root open={drawer && spaces.length > 0} onOpenChange={setDrawer} swipeDirection="left">
+            {/* With no space there's no drawer: what stands in for one (the title bar's: the thread picker) and Settings. */}
             <div className="app__mobilebar">
               {spaces.length > 0
-                ? <Button onClick={() => setDrawer(true)} aria-label={space?.title}><ListIcon size={16} aria-hidden /></Button>
+                ? <Drawer.Trigger render={<Button aria-label={space?.title} />}><ListIcon size={16} aria-hidden /></Drawer.Trigger>
                 : <PlacedViews place="titlebar" frame={withContextMenu('titlebar')} />}
               {thread && machine
                 ? (
@@ -213,6 +214,23 @@ export function Shell() {
               {spaces.length > 0 || !placed.titlebar.length ? <Button onClick={() => openNewThread()} aria-label="New thread"><PlusIcon size={16} aria-hidden /></Button> : null}
               {!spaces.length && settingsButton}
             </div>
+            {spaces.length > 0 && <>
+              <Drawer.SwipeArea className="app__swipe-edge" />
+              <Drawer.Portal container={app}>
+                <Drawer.Backdrop className="app__scrim app__scrim--drawer" />
+                <Drawer.Viewport className="app__drawer">
+                  {/* Opened by a finger, the drawer holds the focus itself (no keyboard over it); from the keyboard, the
+                      selected thread. Picking a thread in it (even the open one) closes it. */}
+                  <Drawer.Popup ref={drawerPopup} className="app__sidebar" aria-label={space?.title}
+                    initialFocus={(type) => type === 'touch' || !autoFocusOnOpen() ? drawerPopup.current : drawerPopup.current?.querySelector<HTMLElement>('.superego-list-item.is-selected[tabindex]') ?? true}
+                    finalFocus={() => { const back = !picked.current; picked.current = false; return back }}
+                    onClick={(event) => { if ((event.target as HTMLElement).closest('.superego-list-item')) { picked.current = true; setDrawer(false) } }}>
+                    {sidebarBody}
+                  </Drawer.Popup>
+                </Drawer.Viewport>
+              </Drawer.Portal>
+            </>}
+            </Drawer.Root>
           )}
           {selection && thread && machine
             ? <StripSlot.Provider value={narrow ? null : strip}><ThreadView key={`${selection.machine}/${selection.thread}`} machine={machine} thread={thread} /></StripSlot.Provider>

@@ -15,7 +15,8 @@
   same class names, no longer restyle each other's threads. A profile that appends a `<style>` to `document.head`
   still works, but styles the whole window: move it to `superego.style` (`api: '^4.2'`).
 - On a phone, swipe right from the screen's left edge to pull out the sidebar, and swipe it left to put it away. It
-  follows your finger and slides open or shut when you let go, and slides in and out when you tap ☰ or beside it too.
+  follows your finger and slides open or shut when you let go, smoothly both ways, and slides in and out when you tap ☰
+  or beside it too.
 
 ### Fixes
 

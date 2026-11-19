@@ -564,18 +564,23 @@ button.app__mobiletitle > svg { flex: none; color: var(--superego-faint); }
 .app__scrim { position: fixed; inset: 0; z-index: 20; background: rgb(0 0 0 / .3); }
 .app.is-narrow { background: var(--superego-bg); }
 .app.is-narrow .app__main { border-radius: 0; box-shadow: none; }
-.app.is-narrow .app__sidebar { position: fixed; z-index: 21; top: 0; bottom: 0; left: 0; width: min(85vw, 320px); margin: 0; border-radius: 0; background: var(--superego-sidebar-bg); box-shadow: var(--superego-shadow-float); padding-top: env(safe-area-inset-top); }
 .app.is-narrow .app__sidebar .app__drag { height: 12px; }
-/* The drawer slides out and back, and its scrim fades (drawer-swipe.ts moves both under a finger, without transitions). */
-.app.is-narrow .app__sidebar { transition: transform .25s cubic-bezier(.2, .8, .2, 1), opacity .12s; will-change: transform; }
-.app__scrim--drawer { transition: opacity .25s; }
-.app__scrim--drawer.is-leaving { pointer-events: none; }
-@starting-style {
-  .app.is-narrow .app__sidebar { transform: translate3d(-100%, 0, 0); }
-  .app__scrim--drawer { opacity: 0; }
-}
-.app.is-swiping .app__sidebar, .app.is-swiping .app__scrim--drawer { transition: none; }
-@media (prefers-reduced-motion: reduce) { .app.is-narrow .app__sidebar, .app__scrim--drawer { transition: none; } }
+/* The drawer (Base UI's, see Shell.tsx): the sidebar out from the left over a scrim. Under a finger it follows the
+   swipe (`--drawer-swipe-movement-x`, the scrim `--drawer-swipe-progress`); let go, it slides the rest of the way, the
+   quicker the flick, the quicker. */
+.app__drawer { position: fixed; inset: 0; z-index: 21; display: flex; }
+.app__drawer > .app__sidebar { width: min(85vw, 320px); height: 100%; margin: 0; border-radius: 0; background: var(--superego-sidebar-bg); box-shadow: var(--superego-shadow-float); padding-top: env(safe-area-inset-top); outline: none; overscroll-behavior: contain;
+  transform: translate3d(var(--drawer-swipe-movement-x, 0px), 0, 0); transition: transform .4s cubic-bezier(.32, .72, 0, 1); will-change: transform; }
+.app__drawer > .app__sidebar:is([data-starting-style], [data-ending-style]) { transform: translate3d(calc(-100% - 24px), 0, 0); }
+.app__scrim--drawer { opacity: calc(1 - var(--drawer-swipe-progress, 0)); transition: opacity .4s cubic-bezier(.32, .72, 0, 1); }
+.app__scrim--drawer:is([data-starting-style], [data-ending-style]) { opacity: 0; }
+.app__drawer > .app__sidebar[data-ending-style], .app__scrim--drawer[data-ending-style] { transition-duration: calc(var(--drawer-swipe-strength, 1) * 400ms); }
+.app__drawer > .app__sidebar[data-swiping], .app__scrim--drawer[data-swiping] { transition-duration: 0s; }
+@media (prefers-reduced-motion: reduce) { .app__drawer > .app__sidebar, .app__scrim--drawer { transition: none; } }
+/* Where a swipe from the left edge pulls it out: a strip down the thread's margin, under the composer; under a finger
+   only (with a mouse it would only eat clicks). */
+.app__swipe-edge { display: none; position: absolute; z-index: 1; top: var(--mobilebar); bottom: 0; left: 0; width: var(--superego-space-4); }
+@media (pointer: coarse) { .app__swipe-edge { display: block; } }
 .app.is-narrow .thread__column { width: auto; max-width: none; padding: var(--superego-space-4) var(--superego-space-4) calc(var(--dock, 100px) + 50px); }
 .app.is-narrow .dock { left: var(--superego-space-2); right: var(--superego-space-2); bottom: calc(env(safe-area-inset-bottom) + var(--superego-space-1)); width: auto; max-width: none; transform: none; }
 /* Under a finger: the status bar's actions and the queued rows' buttons get room to be hit. */
