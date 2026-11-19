@@ -10,15 +10,13 @@ import { Contained } from './contained.tsx'
 import { useRegistry } from './registry.tsx'
 import { settingsEntry } from './lookups.ts'
 import { useLocalState } from './local-state.ts'
-import { useMedia } from './media.ts'
+import { COMPACT, useMedia } from './media.ts'
 import { Setting } from './settings/controls.tsx'
 import { AllMachines, machineGlyph, Machines } from './settings/machines.tsx'
 
 /** Settings → Machines (also opened by Update: see actions.tsx). */
 const MACHINES = '$machines'
 const ALL = '$all'
-/** Where Settings' sections go across the top, not down the side (app.css repeats this width). */
-const SETTINGS_ACROSS = '(max-width: 760px)'
 
 /** Settings: wide, a pane beside the rail (Escape goes back); on a phone, a dialog. */
 export function SettingsView({ machines, onClose, pane = false }: { machines: MachineEntry[]; onClose(): void; pane?: boolean }) {
@@ -38,7 +36,7 @@ export function SettingsView({ machines, onClose, pane = false }: { machines: Ma
   }, [pane, onClose])
 
   // Down the side, wide; across the top on a phone (app.css), where the arrow keys follow.
-  const across = useMedia(SETTINGS_ACROSS)
+  const across = useMedia(COMPACT)
   const body = (
     <BaseUI.Tabs.Root className="settings__body" orientation={across ? 'horizontal' : 'vertical'} value={target} onValueChange={(value: string) => setTarget(value)}>
       <BaseUI.Tabs.List className="settings__nav" render={<nav />}>

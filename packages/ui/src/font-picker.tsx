@@ -2,7 +2,7 @@ import { useCallback, useMemo, useRef, useState } from 'react'
 import { Combobox } from '@base-ui/react/combobox'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { usePortalAttributes } from './portal.tsx'
-import { autoFocusOnOpen } from './touch.ts'
+import { popupFocus } from './touch.ts'
 
 /** Whether `family` draws every glyph the same width: "iiii" and "WWWW" measure alike. */
 export function isMonospace(family: string): boolean {
@@ -58,6 +58,7 @@ export function FontPicker({ value, onChange, fonts: known, loadFonts, monospace
   }, [items, query])
 
   const scroller = useRef<HTMLDivElement | null>(null)
+  const popup = useRef<HTMLDivElement>(null)
   const virtualizer = useVirtualizer({
     enabled: open, count: shown.length, getScrollElement: () => scroller.current, estimateSize: () => ROW, overscan: 12,
   })
@@ -93,7 +94,7 @@ export function FontPicker({ value, onChange, fonts: known, loadFonts, monospace
       </Combobox.Trigger>
       <Combobox.Portal>
         <Combobox.Positioner {...marked} className="superego-layer" side="bottom" align="end" sideOffset={6}>
-          <Combobox.Popup className="superego-popover superego-font-picker__popover" initialFocus={autoFocusOnOpen()}>
+          <Combobox.Popup ref={popup} className="superego-popover superego-font-picker__popover" initialFocus={popupFocus(popup)}>
             <Combobox.Input className="superego-field" placeholder="Search fonts" aria-label={`Search ${label}`} />
             {monospace && (
               <label className="superego-font-picker__all"><input type="checkbox" checked={all} onChange={(e) => setAll(e.target.checked)} /> Show all fonts</label>

@@ -374,6 +374,8 @@ details[open] > .row > .row__chevron { transform: rotate(90deg); }
 .settings__nav button[data-active] .superego-status { color: inherit; }
 .settings__nav-label { color: var(--superego-muted); font-size: calc(11px * var(--superego-text-scale)); text-transform: uppercase; letter-spacing: .04em; padding: 12px 8px 4px; }
 .settings__content { overflow: auto; padding: 8px 28px 40px; outline: none; }
+/* A stop of its own for the keys (Base UI's tab panel), to scroll it by: ringed inside its edge, as a region is. */
+.settings__content:focus-visible { outline: 2px solid var(--superego-ring); outline-offset: -2px; }
 /* Wide, a pane beside the rail: its list where the sidebar is, on the side's grey. */
 .settings--pane { flex: 1; min-height: 0; }
 .settings--pane .settings__body { grid-template-columns: var(--superego-sidebar) 1fr; }
@@ -526,9 +528,9 @@ code { font-family: var(--superego-mono); font-size: .92em; }
 .web-device__actions { display: flex; gap: 6px; flex: none; }
 
 /* Phones and narrow windows: one column, the sidebar a drawer, nothing hovering where a thumb goes. */
-/* Text reads a quarter bigger there, on top of the Text size setting. The narrow layout's width (media.ts's NARROW); set
-   on the root, where the type tokens are worked out. */
-@media (max-width: 599px) { :root { --superego-text-device: 1.15; } }
+/* On a phone (the narrow layout's width, media.ts's NARROW, under a finger) text reads 15% bigger, on top of the Text
+   size setting; not in a narrow window on a desktop. Set on the root, where the type tokens are worked out. */
+@media (max-width: 599px) and (pointer: coarse) { :root { --superego-text-device: 1.15; } }
 /* The bar is fixed at the top, the column under it, and runs up under the status bar (index.html's black-translucent):
    Safari (iOS 26) samples a fixed bar at the top edge for the page's colour there and leaves out the blur it otherwise
    draws under the status bar, over whatever's at the page's top. */
@@ -584,6 +586,8 @@ button.app__mobiletitle > svg { flex: none; color: var(--superego-faint); }
    swipe (`--drawer-swipe-movement-x`, the scrim `--drawer-swipe-progress`); let go, it slides the rest of the way, the
    quicker the flick, the quicker. */
 .app__drawer { position: fixed; inset: 0; z-index: 21; display: flex; }
+/* Base UI's mark for what's pressed, not dragged, in a drawer or sheet (Shell.tsx): no box of its own. */
+.app__drawer-content { display: contents; }
 .app__drawer > .app__sidebar { width: min(85vw, 320px); height: 100%; margin: 0; border-radius: 0; background: var(--superego-sidebar-bg); box-shadow: var(--superego-shadow-float); padding-top: env(safe-area-inset-top); outline: none; overscroll-behavior: contain;
   transform: translate3d(var(--drawer-swipe-movement-x, 0px), 0, 0); transition: transform .4s cubic-bezier(.32, .72, 0, 1); will-change: transform; }
 .app__drawer > .app__sidebar:is([data-starting-style], [data-ending-style]) { transform: translate3d(calc(-100% - 24px), 0, 0); }
@@ -592,19 +596,23 @@ button.app__mobiletitle > svg { flex: none; color: var(--superego-faint); }
 .app__drawer > .app__sidebar[data-ending-style], .app__scrim--drawer[data-ending-style] { transition-duration: calc(var(--drawer-swipe-strength, 1) * 400ms); }
 .app__drawer > .app__sidebar[data-swiping], .app__scrim--drawer[data-swiping] { transition-duration: 0s; }
 @media (prefers-reduced-motion: reduce) { .app__drawer > .app__sidebar, .app__scrim--drawer { transition: none; } }
-/* Where a swipe from the left edge pulls it out: a strip down the thread's margin, under the composer; under a finger
-   only (with a mouse it would only eat clicks). */
-.app__swipe-edge { display: none; position: absolute; z-index: 1; top: var(--mobilebar); bottom: 0; left: 0; width: var(--superego-space-4); }
+/* Where a swipe from the left edge pulls it out: a strip down the thread's margin (at the start of the row of columns,
+   Shell.tsx), under the composer; on a finger-sized device only (with a mouse it would only eat clicks). */
+.app__swipe-edge { display: none; position: absolute; z-index: 1; top: 0; bottom: 0; left: 0; width: var(--superego-space-4); }
+.app__main > .app__swipe-edge { top: var(--mobilebar); }
 @media (pointer: coarse) { .app__swipe-edge { display: block; } }
 .app.is-narrow .thread__column { width: auto; max-width: none; padding: var(--superego-space-4) var(--superego-space-4) calc(var(--dock, 100px) + 50px); }
 .app.is-narrow .dock { left: var(--superego-space-2); right: var(--superego-space-2); bottom: calc(env(safe-area-inset-bottom) + var(--superego-space-1)); width: auto; max-width: none; transform: none; }
-/* Under a finger: the status bar's actions and the queued rows' buttons get room to be hit. */
-.app.is-narrow .dock__footer { margin-top: 2px; }
-.app.is-narrow .dock__action { height: 32px; min-height: 32px; padding: 0 8px; }
-.app.is-narrow .queued-row { height: 32px; }
-.app.is-narrow .queued-row__action { width: 28px; height: 28px; min-height: 28px; }
+/* On a phone: the status bar's actions and the queued rows' buttons get room for a finger. */
+@media (pointer: coarse) {
+  .app.is-narrow .dock__footer { margin-top: 2px; }
+  .app.is-narrow .dock__action { height: 32px; min-height: 32px; padding: 0 8px; }
+  .app.is-narrow .queued-row { height: 32px; }
+  .app.is-narrow .queued-row__action { width: 28px; height: 28px; min-height: 28px; }
+}
 .app.is-narrow .msg--user { max-width: 88%; }
 .app.is-narrow .md pre, .app.is-narrow .step__output, .app.is-narrow .step__diff { margin-left: 0; margin-right: 0; }
+/* media.ts's COMPACT: a dialog fills the window, Settings' list goes across the top. */
 @media (max-width: 760px) {
   .superego-dialog { width: 100vw !important; max-width: 100vw; height: 100dvh !important; max-height: 100dvh; border-radius: 0; }
   /* Filling a phone's screen: clear of the status bar, the notch at its side and the home indicator. */
@@ -667,7 +675,7 @@ button.app__mobiletitle > svg { flex: none; color: var(--superego-faint); }
 .panes__close, .panes__maximize { display: grid; place-items: center; width: 22px; height: 22px; flex: none; color: var(--superego-faint); background: none; border: 0; border-radius: 5px; padding: 0; cursor: default; }
 .panes__close:hover, .panes__maximize:hover { color: var(--superego-text); background: var(--superego-hover); }
 .panes__body { flex: 1; min-height: 0; display: flex; flex-direction: column; position: relative; }
-.panes--narrow { scroll-snap-type: x mandatory; scrollbar-width: none; }
+.panes--narrow { position: relative; scroll-snap-type: x mandatory; scrollbar-width: none; }
 .panes--narrow .panes__column { scroll-snap-align: start; scroll-snap-stop: always; }
 /* Stacked: the thread, its handle, the panes in one cell on top of each other (the one in front shown), room at the end. */
 .panes--stack { display: grid; grid-template-rows: minmax(0, 1fr); overflow: hidden; }
@@ -870,9 +878,9 @@ a.pane-header__url:hover { color: var(--superego-accent); }
    small control reached from the keyboard (see @superego/ui's styles). */
 .app__sidebar, .panes > .panes__column { border: 2px solid transparent; }
 :is(.app__sidebar, .panes > .panes__column):focus-within { border-color: var(--superego-ring); }
-/* None on a phone or under a finger: one region shows at a time, and what's tapped is where you are. */
-.app.is-narrow :is(.app__sidebar, .panes > .panes__column) { border: 0; }
-@media (pointer: coarse) { :is(.app__sidebar, .panes > .panes__column) { border: 0; } }
+/* None while a finger works it (touch.ts): what's tapped is where you are. A mouse or a keyboard brings it back, on a
+   phone or an iPad too. */
+:root[data-finger] :is(.app__sidebar, .panes > .panes__column) { border-color: transparent; }
 
 /* Over the row: a tab for the thread and each pane (the focused one tinted, those out of view faint, with which way
    they are), the row in small, and + for another pane. */

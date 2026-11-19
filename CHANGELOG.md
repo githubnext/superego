@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- If you added Superego to an iPhone's home screen, remove it and add it again, so its top bar is drawn under the
+  status bar.
 - The image viewer behaves like the other dialogs: the window behind it can't be scrolled or reached with a screen
   reader while it's open.
 - The title bar fits any window: short of room, its chips and buttons (the model, MCP servers, the profile, pin,
@@ -16,7 +18,7 @@
   profile draws, on its machine. The same profile from two machines at different versions, or two profiles with the
   same class names, no longer restyle each other's threads. A profile that appends a `<style>` to `document.head`
   still works, but styles the whole window: move it to `superego.style` (`api: '^4.2'`).
-- On a phone, swipe right from the screen's left edge to pull out the sidebar, and swipe it left to put it away. It
+- On a phone, swipe right from a thread's left edge to pull out the sidebar, and swipe it left to put it away. It
   follows your finger and slides open or shut when you let go, smoothly both ways, and slides in and out when you tap ☰
   or beside it too.
 - On a phone, the thread's sheet (from its title) slides up and follows your finger: swipe it down to put it away. While
@@ -43,10 +45,12 @@
   dialogs keep clear of the status bar and the home indicator.
 - On iPhone and iPad, a link to a thread shows its status dot right before its title again, not spread across the line.
 - On a phone or tablet, the keyboard no longer pops up over what you just opened: the New thread dialog, a thread,
-  the palettes, a pane or a blank page leave their fields alone until you tap one.
-- On a phone or tablet, the focused pane no longer wears a blue ring.
+  the palettes, a pane or a blank page leave their fields alone until you tap one. Used with a keyboard or trackpad,
+  an iPad or a touchscreen laptop puts you in them as a computer does.
+- On a phone or tablet, the focused pane no longer wears a blue ring while you tap; with a keyboard or trackpad it
+  does.
 - On an iPhone's home screen, the top of the page is no longer blurred under the status bar: the bar at the top now
-  runs up under it in its own colour. If you added Superego to your home screen before, remove it and add it again.
+  runs up under it in its own colour.
 
 ## 0.1.7
 

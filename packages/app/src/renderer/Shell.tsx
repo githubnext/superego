@@ -4,8 +4,9 @@
 // (fonts, ⌘, , threads shown from the command line or a notification). It knows no extension: what's where is the
 // layout's (see shared/layout.ts).
 import { useEffect, useRef, useState, type ComponentType } from 'react'
+import { createPortal } from 'react-dom'
 import type { SettingsSnapshot, ThreadInfo } from '@superego/protocol'
-import { ArrowLeftIcon, ArrowRightIcon, autoFocusOnOpen, BaseUI, Button, CaretDownIcon, GearSixIcon, IconButton, ListIcon, NotePencilIcon, PlusIcon, Select, StatusGlyph } from '@superego/ui'
+import { ArrowLeftIcon, ArrowRightIcon, BaseUI, Button, CaretDownIcon, GearSixIcon, IconButton, ListIcon, NotePencilIcon, PlusIcon, popupFocus, Select, StatusGlyph } from '@superego/ui'
 import type { MachineEntry } from '../shared/bridge.ts'
 import { ACCENT, APP, INTERFACE_FONT, KEYMAP, MONO_FONT, TEXT_SIZE, textScale } from '../shared/app-settings.ts'
 import { useSettings, watched } from './client.ts'
@@ -27,7 +28,7 @@ import { ThreadView } from './ThreadView.tsx'
 import { ThreadTitle, ThreadTools } from './thread-header.tsx'
 import { Overflow, OverflowMenu, OverflowProvider } from './overflow.tsx'
 import { ArchiveButton, PinButton, UnarchiveButton } from './thread-actions.tsx'
-import { StripSlot } from './panes.tsx'
+import { StripSlot, SwipeEdgeRef } from './panes.tsx'
 import { useSidebarEdge } from './sidebar-edge.tsx'
 import { SettingsView } from './SettingsView.tsx'
 import { Palette } from './Palette.tsx'
@@ -103,6 +104,7 @@ export function Shell() {
   const threadPlaced = useLayout(where).placed
   // Where the thread's columns show their tabs: in the title bar, wide.
   const [strip, setStrip] = useState<HTMLElement | null>(null)
+  const [swipeEdgeHost, setSwipeEdgeHost] = useState<HTMLElement | null>(null)
   // What the title bar gives way with, short of room (overflow.tsx).
   const [overflow] = useState(() => new Overflow())
   useEffect(() => { setDrawer(false); setSheet(false); setPanePicker(false) }, [selection?.machine, selection?.thread, narrow])
@@ -217,17 +219,21 @@ export function Shell() {
               {!spaces.length && settingsButton}
             </div>
             {spaces.length > 0 && <>
-              <BaseUI.Drawer.SwipeArea className="app__swipe-edge" />
+              {/* The edge to swipe it out from: the thread's, not a pane's (the terminal's first column, the editor's
+                  gutter, a page), so in the row of columns, where a pane scrolling in takes it away; with no thread,
+                  the screen's. */}
+              {selection && thread ? swipeEdgeHost && createPortal(<BaseUI.Drawer.SwipeArea className="app__swipe-edge" />, swipeEdgeHost) : <BaseUI.Drawer.SwipeArea className="app__swipe-edge" />}
               <BaseUI.Drawer.Portal container={app}>
                 <BaseUI.Drawer.Backdrop className="app__scrim app__scrim--drawer" />
                 <BaseUI.Drawer.Viewport className="app__drawer">
                   {/* Opened by a finger, the drawer holds the focus itself (no keyboard over it); from the keyboard, the
-                      selected thread. Picking a thread in it (even the open one) closes it. */}
+                      selected thread. Picking a thread in it (even the open one) closes it. Its content (Base UI's) is
+                      to press, not to drag shut with a mouse: a drag would capture the press, and the click with it. */}
                   <BaseUI.Drawer.Popup ref={drawerPopup} className="app__sidebar" aria-label={space?.title}
-                    initialFocus={(type) => type === 'touch' || !autoFocusOnOpen() ? drawerPopup.current : drawerPopup.current?.querySelector<HTMLElement>('.superego-list-item.is-selected[tabindex]') ?? true}
+                    initialFocus={popupFocus(drawerPopup, () => drawerPopup.current?.querySelector<HTMLElement>('.superego-list-item.is-selected[tabindex]'))}
                     finalFocus={() => { const back = !picked.current; picked.current = false; return back }}
                     onClick={(event) => { if ((event.target as HTMLElement).closest('.superego-list-item')) { picked.current = true; setDrawer(false) } }}>
-                    {sidebarBody}
+                    <BaseUI.Drawer.Content className="app__drawer-content">{sidebarBody}</BaseUI.Drawer.Content>
                   </BaseUI.Drawer.Popup>
                 </BaseUI.Drawer.Viewport>
               </BaseUI.Drawer.Portal>
@@ -235,7 +241,11 @@ export function Shell() {
             </BaseUI.Drawer.Root>
           )}
           {selection && thread && machine
-            ? <StripSlot.Provider value={narrow ? null : strip}><ThreadView key={`${selection.machine}/${selection.thread}`} machine={machine} thread={thread} /></StripSlot.Provider>
+            ? (
+              <StripSlot.Provider value={narrow ? null : strip}><SwipeEdgeRef.Provider value={narrow ? setSwipeEdgeHost : null}>
+                <ThreadView key={`${selection.machine}/${selection.thread}`} machine={machine} thread={thread} />
+              </SwipeEdgeRef.Provider></StripSlot.Provider>
+            )
             : onboarding ? <Onboarding /> : <div className="app__empty">{spaces.length ? 'Select or start a thread.' : `Start a thread with: ${registry.app.id}`}</div>}
         </main>}
         {tab !== 'settings' && !narrow && where && viewsIn(registry, threadPlaced, 'beside', where).length > 0 && (
@@ -322,24 +332,26 @@ function ThreadSheet({ machine, thread, open, onOpenChange, handle, container }:
         <BaseUI.Drawer.Viewport className="app__sheet">
           {/* Opened by a finger, the sheet holds the focus itself (no keyboard over it); from the keyboard, its first control. */}
           <BaseUI.Drawer.Popup ref={popup} className="thread-sheet" aria-label={thread.title}
-            initialFocus={(type) => type === 'touch' || !autoFocusOnOpen() ? popup.current : true}
+            initialFocus={popupFocus(popup)}
             finalFocus={() => { const back = !opened.current; opened.current = false; return back }}>
-            <div className="thread-sheet__head">
-              <span className="thread-sheet__project">{machine.id !== 'local' && `${machine.label} · `}{thread.project.name}</span>
-              <span className="thread-sheet__title"><StatusGlyph status={thread.status} quiet={thread.quiet} />{thread.title}</span>
-            </div>
-            <div className="thread-sheet__tools">
-              <ThreadTools machine={machine} thread={thread} panes={false} />
-              <PinButton machine={machine} thread={thread} />
-              {thread.hidden ? null : thread.archived ? <UnarchiveButton machine={machine} thread={thread} /> : <ArchiveButton machine={machine} thread={thread} />}
-            </div>
-            {kinds.length > 0 && (
-              <div className="thread-sheet__panes">
-                <h5>Open beside</h5>
-                {kinds.map(({ kind, title }) => <Button key={kind} variant="ghost" className="thread-sheet__pane" onClick={() => openPane(kind)}>{title}</Button>)}
+            <BaseUI.Drawer.Content className="app__drawer-content">
+              <div className="thread-sheet__head">
+                <span className="thread-sheet__project">{machine.id !== 'local' && `${machine.label} · `}{thread.project.name}</span>
+                <span className="thread-sheet__title"><StatusGlyph status={thread.status} quiet={thread.quiet} />{thread.title}</span>
               </div>
-            )}
-            {besides.length > 0 && <div className="thread-sheet__beside"><PlacedViews place="beside" machine={machine} thread={thread} frame={withMenuButton('beside', where)} /></div>}
+              <div className="thread-sheet__tools">
+                <ThreadTools machine={machine} thread={thread} panes={false} />
+                <PinButton machine={machine} thread={thread} />
+                {thread.hidden ? null : thread.archived ? <UnarchiveButton machine={machine} thread={thread} /> : <ArchiveButton machine={machine} thread={thread} />}
+              </div>
+              {kinds.length > 0 && (
+                <div className="thread-sheet__panes">
+                  <h5>Open beside</h5>
+                  {kinds.map(({ kind, title }) => <Button key={kind} variant="ghost" className="thread-sheet__pane" onClick={() => openPane(kind)}>{title}</Button>)}
+                </div>
+              )}
+              {besides.length > 0 && <div className="thread-sheet__beside"><PlacedViews place="beside" machine={machine} thread={thread} frame={withMenuButton('beside', where)} /></div>}
+            </BaseUI.Drawer.Content>
           </BaseUI.Drawer.Popup>
         </BaseUI.Drawer.Viewport>
       </BaseUI.Drawer.Portal>

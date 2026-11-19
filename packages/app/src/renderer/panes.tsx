@@ -13,7 +13,7 @@
 // maximized.ts). ⌃Tab moves the focus along. On a phone each column is the screen's width, and a swipe moves between them.
 // Built in: editor and thread. Extensions and profiles add kinds with superego.pane(kind, …) (Changes is git's; a web
 // page or an HTML file, browser's). A pane of a kind only an extension the thread goes without draws isn't shown.
-import { createContext, Fragment, useContext, useEffect, useLayoutEffect, useRef, useState, type ButtonHTMLAttributes, type ReactNode, type RefObject } from 'react'
+import { createContext, Fragment, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState, type ButtonHTMLAttributes, type ReactNode, type RefObject } from 'react'
 import { createPortal, flushSync } from 'react-dom'
 import type { Pane, ThreadInfo } from '@superego/protocol'
 import { ArrowRightIcon, CardsIcon, ChatTextIcon, ColumnsPlusRightIcon, CornersInIcon, CornersOutIcon, DotsThreeIcon, FileTextIcon, IconButton, Menu, SegmentedControl, usePortalAttributes, XIcon, type SegmentedOption } from '@superego/ui'
@@ -46,6 +46,12 @@ const LAYOUTS: SegmentedOption<PaneLayout>[] = [
 /** Where the strip goes, when the window has a place for it (the title bar); without one, it heads the columns. */
 export const StripSlot = createContext<HTMLElement | null>(null)
 
+/**
+ * Told the row of columns as it mounts, on a phone: the drawer's swipe edge goes in it (Shell.tsx), at its start, over
+ * the thread's column, and scrolls out of the way with it as a pane comes in.
+ */
+export const SwipeEdgeRef = createContext<((row: HTMLElement | null) => void) | null>(null)
+
 export function ThreadPanes({ machine, thread, main }: { machine: PaneProps['machine']; thread: ThreadInfo; main: ReactNode }) {
   const registry = useRegistry()
   const dispatch = registry.router.dispatch
@@ -54,11 +60,13 @@ export function ThreadPanes({ machine, thread, main }: { machine: PaneProps['mac
   const title = (pane: Pane) => paneTitle(registry, pane, where)
   // A pane of a view's kind can move to the other places the view fits, from its tab's ···.
   const isView = (pane: Pane) => registry.views.some((v) => v.id === pane.kind && v.fits.includes('pane'))
+  const swipeEdgeRef = useContext(SwipeEdgeRef)
   const narrow = useNarrow()
   const [layout] = useAppSetting<PaneLayout>(PANE_LAYOUT)
   // On a phone each column is the screen's width either way.
   const stacked = layout === 'stack' && !narrow && panes.length > 0
   const row = useRef<HTMLDivElement>(null)
+  const setRow = useCallback((element: HTMLDivElement | null) => { row.current = element; swipeEdgeRef?.(element) }, [swipeEdgeRef])
   const [scrolled, setScrolled] = useState(0)
 
   // The columns, left to right: the thread, then its panes, each by the key its width is kept under.
@@ -194,7 +202,7 @@ export function ThreadPanes({ machine, thread, main }: { machine: PaneProps['mac
     <div className={`sheet ${panes.length ? 'has-panes' : ''}`}>
       {panes.length > 0 && <PaneStrip tabs={tabs} current={current} stacked={stacked} narrow={narrow} onShow={show} />}
       {/* Stacked, a grid: the thread, its handle, the panes on top of each other, the room at the end. */}
-      <div className={`panes ${narrow ? 'panes--narrow' : ''} ${stacked ? 'panes--stack' : ''} ${maximized ? 'has-maximized' : ''}`} ref={row} onScroll={onScroll}
+      <div className={`panes ${narrow ? 'panes--narrow' : ''} ${stacked ? 'panes--stack' : ''} ${maximized ? 'has-maximized' : ''}`} ref={setRow} onScroll={onScroll}
         style={stacked ? { gridTemplateColumns: `${threadWidth}px ${GAP}px ${stackWidth}px ${GAP}px` } : undefined}>
         {/* Focus moving into a column (a click, a key) makes it the focused one: the app and the keyboard agree. */}
         <div data-column="thread" tabIndex={-1} className={`panes__column panes__column--thread ${maximized ? 'is-covered' : ''}`} inert={Boolean(maximized)}

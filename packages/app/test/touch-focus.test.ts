@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
-// Under a finger (`pointer: coarse`), nothing typed in takes the focus by itself as it opens: the on-screen keyboard
-// would come up over it. With a mouse, it does, as it always has.
+// Under a finger (a tap last, or `pointer: coarse` before any), nothing typed in takes the focus by itself as it opens:
+// the on-screen keyboard would come up over it. With a mouse or a hardware keyboard, it does, as it always has.
 import { act, createElement as h } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -55,5 +55,47 @@ describe.each([['a mouse', false], ['a finger', true]] as const)('under %s', (_,
     await act(() => new Promise((resolve) => setTimeout(resolve, 50)))
     const field = document.querySelector('input[aria-label="Name"]')
     expect(document.activeElement).toBe(coarse ? field!.closest('.superego-dialog') : field)
+  })
+})
+
+// Last: what's in use sticks, for the rest of the file.
+describe('on a finger-sized device (an iPad), what was used last', () => {
+  beforeEach(() => pointer(true))
+  const press = (pointerType: string) => window.dispatchEvent(new PointerEvent('pointerdown', { pointerType }))
+  const key = (key: string, init: KeyboardEventInit = {}) => window.dispatchEvent(new KeyboardEvent('keydown', { key, ...init }))
+  const finger = () => document.documentElement.hasAttribute('data-finger')
+
+  it('a hardware keyboard\'s shortcut or Tab hands the focus back to fields', () => {
+    key('k', { metaKey: true })
+    expect(autoFocusOnOpen()).toBe(true)
+    expect(finger()).toBe(false)
+    press('touch')
+    expect(autoFocusOnOpen()).toBe(false)
+    expect(finger()).toBe(true)
+    key('Tab')
+    expect(autoFocusOnOpen()).toBe(true)
+  })
+
+  it('typing on the on-screen keyboard doesn\'t', () => {
+    press('touch')
+    key('a')
+    key('Enter')
+    expect(autoFocusOnOpen()).toBe(false)
+  })
+
+  it('a trackpad does', () => {
+    press('touch')
+    press('mouse')
+    expect(autoFocusOnOpen()).toBe(true)
+    expect(finger()).toBe(false)
+  })
+
+  it('opens a dialog from a shortcut with its field focused', async () => {
+    key('n', { metaKey: true })
+    const container = document.body.appendChild(document.createElement('div'))
+    root = createRoot(container)
+    await act(async () => { root!.render(h(Dialog, { onClose() {}, label: 'Rename', children: h(TextField, { 'aria-label': 'Name' }) })) })
+    await act(() => new Promise((resolve) => setTimeout(resolve, 50)))
+    expect(document.activeElement).toBe(document.querySelector('input[aria-label="Name"]'))
   })
 })

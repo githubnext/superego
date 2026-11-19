@@ -9,7 +9,7 @@ import {
   type Block, type BlocksUse, type Button as BlockButton, type ChoiceOption, type Json, type ListItem, type Reply, type ThreadInfo, type Value,
 } from '@superego/protocol'
 import {
-  ArrowRightIcon, BaseUI, Button, CheckIcon, Select, Slider, StatusGlyph, Switch, TextArea, TextField,
+  ArrowRightIcon, BaseUI, Button, CheckIcon, hovering, Select, Slider, StatusGlyph, Switch, TextArea, TextField,
 } from '@superego/ui'
 import type { MachineEntry } from '../../shared/bridge.ts'
 import { useImageSource } from '../images.tsx'
@@ -218,9 +218,8 @@ function Choice({ block }: { block: Extract<Block, { type: 'choice' }> }) {
   // Buttons for a few short options; a list where they say more.
   const style = block.style ?? (block.options.length <= 4 && block.options.every((o) => !o.description && !o.preview && o.label.length <= 24) ? 'buttons' : 'list')
   const preview = (looking ?? block.options.find(chosen))?.preview
-  // An option's preview shows while a mouse points at it; not on a tap, where iOS would take a preview appearing for
-  // something to see before the tap goes through, and want a second one.
-  const look = (option?: ChoiceOption) => (event: PointerEvent) => { if (event.pointerType === 'mouse') setLooking(option) }
+  // An option's preview shows while a mouse points at it, not on a tap.
+  const look = (option?: ChoiceOption) => (event: PointerEvent) => { if (hovering(event)) setLooking(option) }
   const named = block.label ? { 'aria-labelledby': labelId } : { 'aria-label': block.id }
   const option = (option: ChoiceOption) => (
     <>

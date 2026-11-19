@@ -86,7 +86,7 @@
   padding: 6px 12px; border-radius: 8px; background: rgb(0 0 0 / .45); color: rgb(255 255 255 / .9); font-size: var(--superego-text-ui); line-height: 1.45; text-align: center;
   -webkit-user-select: text; user-select: text;
 }
-/* A phone: the image takes the width; the side buttons sit low, out from under the thumb's swipe. */
+/* A phone (media.ts's COMPACT): the image takes the width; the side buttons sit low, out from under the thumb's swipe. */
 @media (max-width: 760px) {
   .lightbox__stage { padding: 56px 8px 72px; }
   .lightbox__side { top: auto; bottom: calc(env(safe-area-inset-bottom) + 12px); translate: none; width: 40px; height: 40px; }
