@@ -23,6 +23,8 @@
 - On a phone, the bar at the top is drawn cleanly under the status bar, its ☰ and + plain icons, and full-screen
   dialogs keep clear of the status bar and the home indicator.
 - On iPhone and iPad, a link to a thread shows its status dot right before its title again, not spread across the line.
+- On a phone or tablet, the keyboard no longer pops up over what you just opened: the New thread dialog, a thread,
+  the palettes, a pane or a blank page leave their fields alone until you tap one.
 - On a phone or tablet, the focused pane no longer wears a blue ring.
 - On an iPhone's home screen, the top of the page is no longer blurred under the status bar: the bar at the top now
   runs up under it in its own colour. If you added Superego to your home screen before, remove it and add it again.

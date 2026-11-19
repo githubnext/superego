@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Popover } from './popover.tsx'
+import { autoFocusOnOpen } from './touch.ts'
 
 /** Whether `family` draws every glyph the same width: "iiii" and "WWWW" measure alike. */
 export function isMonospace(family: string): boolean {
@@ -51,7 +52,7 @@ export function FontPicker({ value, onChange, fonts: known, loadFonts, monospace
     <div className="superego-font-picker">
       <Popover open={open} onOpenChange={toggle} className="superego-font-picker__popover"
         trigger={<button type="button" className="superego-field superego-select superego-font-picker__button" aria-label={label} style={value ? { fontFamily: `"${value}"` } : undefined}>{value ?? nullLabel}</button>}>
-        <input className="superego-field" autoFocus placeholder="Search fonts" value={query} onChange={(e) => setQuery(e.target.value)}
+        <input className="superego-field" autoFocus={autoFocusOnOpen()} placeholder="Search fonts" value={query} onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter' && shown[0]) choose(shown[0]) }} />
         {monospace && (
           <label className="superego-font-picker__all"><input type="checkbox" checked={all} onChange={(e) => setAll(e.target.checked)} /> Show all fonts</label>

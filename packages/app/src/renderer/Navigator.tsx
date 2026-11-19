@@ -2,7 +2,7 @@
 // anywhere; pinned threads first, as the sidebar lists them. Typing searches the whole path ("superego login diff"); without a query the tree is browsable: ← to the parent,
 // → to the first child. ⌃P, ⌃T and ⌃G show only projects, threads or panes (again: everything). Enter goes there.
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
-import { Dialog, PushPinIcon, StatusGlyph } from '@superego/ui'
+import { autoFocusOnOpen, Dialog, PushPinIcon, StatusGlyph } from '@superego/ui'
 import { unread, type Status, type ThreadInfo } from '@superego/protocol'
 import { score } from './score.ts'
 import { useRegistry } from './registry.tsx'
@@ -136,7 +136,7 @@ export function Navigator({ onClose }: { onClose(): void }) {
 
   return (
     <Dialog onClose={onClose} size="medium" className="palette navigator" label="Go to">
-      <input className="palette__input" autoFocus value={query} onKeyDown={onKeyDown}
+      <input className="palette__input" autoFocus={autoFocusOnOpen()} value={query} onKeyDown={onKeyDown}
         placeholder={only ? `Go to a ${only}` : 'Go to a project, thread or pane'}
         onChange={(e) => setQuery(e.target.value)} />
       <ul className="palette__list" role="listbox" ref={list}>

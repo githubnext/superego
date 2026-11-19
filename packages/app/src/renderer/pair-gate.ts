@@ -1,6 +1,7 @@
 // In a browser that isn't paired with the daemon: a form for a pairing code, over everything. A page added to the home
 // screen (Safari's standalone mode) keeps its own cookies, apart from the browser's, so it is a device of its own, and
 // pairs with the code Settings → Web access shows beside the link.
+import { autoFocusOnOpen } from '@superego/ui/touch'
 import './pair-gate.css'
 
 export type Pairing = 'ok' | 'wrong' | 'limited'
@@ -41,6 +42,6 @@ export function askPairing(pair: (code: string) => Promise<Pairing>, why?: strin
       input.select()
     })
     document.body.append(gate)
-    input.focus()
+    if (autoFocusOnOpen()) input.focus()
   })
 }

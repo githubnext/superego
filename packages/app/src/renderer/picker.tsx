@@ -2,7 +2,7 @@
 // thing (the palette, quick open, links). ↑↓ (or ⌃P/⌃N) move, ⏎ picks, ⌘⏎ picks it beside, esc closes. With `digits`,
 // ⌃1–⌃9 pick the first nine (⌃⌘ beside), each showing its key.
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
-import { Dialog } from '@superego/ui'
+import { autoFocusOnOpen, Dialog } from '@superego/ui'
 import { keyLabel } from './keys.ts'
 
 /** An item as a line of the list: a glyph before it, its title, more after it, and its key. */
@@ -66,7 +66,7 @@ export function Picker<T>({ label, placeholder, className = '', items, filter, r
   }
   return (
     <Dialog onClose={onClose} size="medium" className={`palette ${className}`} label={label}>
-      <input className="palette__input" autoFocus placeholder={placeholder} value={query}
+      <input className="palette__input" autoFocus={autoFocusOnOpen()} placeholder={placeholder} value={query}
         onChange={(e) => { setQuery(e.target.value); setActive(0) }} onKeyDown={onKeyDown} />
       <ul className="palette__list" role="listbox" ref={list}>
         {shown.map((item, index) => {

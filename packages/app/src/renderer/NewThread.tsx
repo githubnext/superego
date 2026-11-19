@@ -6,7 +6,7 @@ import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import type { Json, ModelCatalog, ProfileInfo, ThreadInfo } from '@superego/protocol'
 import { useRegistry, type Registry } from './registry.tsx'
 import { Contained } from './contained.tsx'
-import { Button, Dialog, Select, TextArea, TextField } from '@superego/ui'
+import { autoFocusOnOpen, Button, Dialog, Select, TextArea, TextField } from '@superego/ui'
 import { has, machine as client } from './client.ts'
 import { shortPath } from './short-path.ts'
 import { ProfileSelect } from './profile-pick.tsx'
@@ -144,7 +144,7 @@ export function NewThreadDialog({ start: asked, onClose }: { start: NewThreadSta
     <Dialog onClose={onClose} title="New thread" size="medium" className="new-thread">
       <div className="new-thread__body" onKeyDown={onKeyDown}>
         {machines.length === 0 ? <p className="new-thread__note">No machine is connected.</p> : <>
-          <TextArea ref={promptRef} autoFocus rows={4} maxRows={10} className="new-thread__prompt" aria-label="Prompt"
+          <TextArea ref={promptRef} autoFocus={autoFocusOnOpen()} rows={4} maxRows={10} className="new-thread__prompt" aria-label="Prompt"
             placeholder="What should it work on? (optional)" value={prompt} onChange={(e) => setPrompt(e.target.value)} />
 
           <label className="new-thread__field">

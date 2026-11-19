@@ -4,7 +4,7 @@
 // Everything goes through the extension's actions on that machine (`target`), so a remote one works the same.
 import { useEffect, useState, type ReactNode } from 'react'
 import { SignInFlow, useDispatch, type SettingsComponentProps } from '@superego/app/ui'
-import { Button, CaretRightIcon, Dialog, DotsThreeIcon, Glyph, IconButton, Menu, SegmentedControl, Select, Switch, TextField } from '@superego/ui'
+import { autoFocusOnOpen, Button, CaretRightIcon, Dialog, DotsThreeIcon, Glyph, IconButton, Menu, SegmentedControl, Select, Switch, TextField } from '@superego/ui'
 import { CATALOG } from './catalog.ts'
 import { authMenu, checkText, commandLine, configOf, DOT, emptyForm, formOf, nameFrom, needs, secretLabel, secretPlaceholder, signInDetails, signInText, splitCommandLine, stateText, type ServerForm } from './describe.ts'
 import { ACTIONS, type CheckResult, type LogResult, type SectionData, type ServerInfo } from './shared.ts'
@@ -166,7 +166,7 @@ function Secrets({ machine, server, onClose }: { machine: string; server: Server
       {server.secrets.map((secret, index) => (
         <label key={secret.name} className="mcp-secrets__field">
           <span>{secretLabel(secret.name) ?? <code>{secret.name}</code>}</span>
-          <TextField name={secret.name} type="password" autoFocus={index === 0} autoComplete="off" placeholder={secretPlaceholder(secret)}
+          <TextField name={secret.name} type="password" autoFocus={index === 0 && autoFocusOnOpen()} autoComplete="off" placeholder={secretPlaceholder(secret)}
             onKeyDown={(e) => { if (e.key === 'Escape') { e.preventDefault(); onClose() } }} />
         </label>
       ))}
@@ -247,9 +247,9 @@ function ServerDialog({ machine, editing, taken, onClose, onSignIn }: {
         <SegmentedControl label="Runs" value={form.kind} onChange={(kind) => change({ kind })}
           options={[{ value: 'command', label: 'Command' }, { value: 'url', label: 'URL' }]} />
         {form.kind === 'command' ? (
-          <TextField aria-label="Command" autoFocus={!editing} placeholder="npx -y @sentry/mcp-server" value={form.line} spellCheck={false} onChange={(e) => change({ line: e.target.value })} />
+          <TextField aria-label="Command" autoFocus={!editing && autoFocusOnOpen()} placeholder="npx -y @sentry/mcp-server" value={form.line} spellCheck={false} onChange={(e) => change({ line: e.target.value })} />
         ) : (
-          <TextField aria-label="URL" autoFocus={!editing} placeholder="https://mcp.linear.app/mcp" value={form.url} spellCheck={false} onChange={(e) => change({ url: e.target.value })} />
+          <TextField aria-label="URL" autoFocus={!editing && autoFocusOnOpen()} placeholder="https://mcp.linear.app/mcp" value={form.url} spellCheck={false} onChange={(e) => change({ url: e.target.value })} />
         )}
         <div className="mcp-dialog__pair">
           <label><span>Name</span><TextField value={form.name} spellCheck={false} onChange={(e) => { setNamed(true); setForm({ ...form, name: e.target.value }) }} /></label>

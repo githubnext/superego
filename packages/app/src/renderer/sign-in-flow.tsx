@@ -3,7 +3,7 @@
 // opens the page it gives in the browser, asks what it asks (answered with `auth.respond`), and stops it on Cancel.
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import type { AuthEvent, AuthPrompt, Notifications } from '@superego/protocol'
-import { Button, TextField } from '@superego/ui'
+import { autoFocusOnOpen, Button, TextField } from '@superego/ui'
 import { machine as client } from './client.ts'
 import { useRegistry } from './registry.tsx'
 
@@ -104,7 +104,7 @@ function PromptField({ prompt, onAnswer }: { prompt: AuthPrompt; onAnswer(value:
     <form className="auth-flow__prompt" onSubmit={(e) => { e.preventDefault(); if (input.current?.value) onAnswer(input.current.value) }}>
       <label>{prompt.message}</label>
       <div className="auth-flow__row">
-        <TextField ref={input} autoFocus type={prompt.type === 'secret' ? 'password' : 'text'} placeholder={prompt.placeholder} />
+        <TextField ref={input} autoFocus={autoFocusOnOpen()} type={prompt.type === 'secret' ? 'password' : 'text'} placeholder={prompt.placeholder} />
         <Button type="submit" variant="primary">Continue</Button>
       </div>
     </form>

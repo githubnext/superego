@@ -6,8 +6,13 @@
 // (⌃Tab, the navigator) takes the focus with it. A pane at the back of a stack (see panes.tsx) is a region too: going
 // there brings it to the front. Those under a maximized pane aren't, until it's restored (going to one restores it).
 
+import { autoFocusOnOpen } from '@superego/ui'
+
 /** Sent to a pane's column at the back of a stack, as the focus goes there: brought to the front, it can take it. */
 export const BRING_FORWARD = 'superego:bring-forward'
+
+/** Typed in: focused, it brings up the on-screen keyboard under a finger. */
+const TYPED = 'input, textarea, select, [contenteditable]:not([contenteditable="false"])'
 
 /** The regions, left to right, as the window shows them now. */
 function regions(): HTMLElement[] {
@@ -41,8 +46,13 @@ function target(region: HTMLElement): HTMLElement | null {
  * in a page, or a click before it, leaves that wrong. Moved there by a click (`visible: false`), it doesn't.
  */
 export function focusRegion(region: HTMLElement | null | undefined, { visible = true }: { visible?: boolean } = {}): boolean {
-  if (region?.inert && region.matches('[data-column]')) region.dispatchEvent(new Event(BRING_FORWARD, { bubbles: true }))
-  const el = region && target(region)
+  if (!region) return false
+  if (region.inert && region.matches('[data-column]')) region.dispatchEvent(new Event(BRING_FORWARD, { bubbles: true }))
+  const found = target(region)
+  // Under a finger, a region opened or tapped on (a pane, its tab) doesn't bring up the keyboard for what's typed in
+  // there (an editor's text, a blank page's address bar): the region itself takes the focus, if it can; the field is a
+  // tap away.
+  const el = found?.matches(TYPED) && !autoFocusOnOpen() ? (region.hasAttribute('tabindex') ? region : null) : found
   if (!el) return false
   // Focus never scrolls what's read: an editor keeps its place (the browser would bring its caret into view), and
   // the thread its own. A row in a list is scrolled to only if it's out of sight.

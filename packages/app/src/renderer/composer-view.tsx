@@ -4,7 +4,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent } from 'react'
 import type { InboxState } from '@earendil-works/pi-durable'
 import type { Attachment, ThreadInfo } from '@superego/protocol'
-import { ArrowDownIcon, ArrowElbowRightIcon, ArrowUpIcon, Button, FileIcon, IconButton, ListIcon, PaperclipIcon, TextArea, XIcon } from '@superego/ui'
+import { autoFocusOnOpen, ArrowDownIcon, ArrowElbowRightIcon, ArrowUpIcon, Button, FileIcon, IconButton, ListIcon, PaperclipIcon, TextArea, XIcon } from '@superego/ui'
 import type { MachineEntry } from '../shared/bridge.ts'
 import { useRegistry } from './registry.tsx'
 import { completionsIn, sentWithIn } from './lookups.ts'
@@ -119,7 +119,7 @@ export function ComposerView({ machine, thread, busy, inbox, onJump }: { machine
   // Archived, it can be read, not written to, until it's brought back (the Unarchive button where Send would be).
   const archived = Boolean(thread.archived)
   const disabled = machine.state !== 'connected' || archived
-  useEffect(() => { input.current?.focus() }, [thread.id])
+  useEffect(() => { if (autoFocusOnOpen()) input.current?.focus() }, [thread.id])
   // Files going with the next message: picked, dropped on the composer or pasted into it.
   const [files, setFiles] = useState<Attachment[]>([])
   const [dragging, setDragging] = useState(false)

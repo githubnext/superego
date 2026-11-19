@@ -12,7 +12,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { askText, call, defineAction, defineUiExtension, hasWebViews, PaneMessage, useApp, useAppSetting, useDispatch, thisComputer, WebView, type PaneProps, type PermissionAsk, type WebViewEvent, type WebViewHandle } from '@superego/app/ui'
 import type { Pane } from '@superego/protocol'
-import { ArrowClockwiseIcon, ArrowLeftIcon, ArrowRightIcon, ArrowSquareOutIcon, Button, GlobeIcon, IconButton, XIcon } from '@superego/ui'
+import { autoFocusOnOpen, ArrowClockwiseIcon, ArrowLeftIcon, ArrowRightIcon, ArrowSquareOutIcon, Button, GlobeIcon, IconButton, XIcon } from '@superego/ui'
 import './styles.css'
 import { about, BROWSER, type BrowserParams } from './shared.ts'
 import { DEFAULT_SEARCH_ENGINE, destination, SEARCH_ENGINE, SEARCH_ENGINES, webAddress, type Destination, type SearchEngine } from './address.ts'
@@ -217,7 +217,9 @@ function Address({ title, parts: [quiet, rest], onEdit, children }: { title: str
 function AddressField({ address, blank, onGo, onCancel, onLeave }: { address: string; blank: boolean; onGo(text: string): void; onCancel(): void; onLeave(): void }) {
   const [text, setText] = useState(address)
   const input = useRef<HTMLInputElement>(null)
+  // Opened by a click on the address, it's to type in; opened with a blank page, as any field on open (not under a finger).
   useEffect(() => {
+    if (blank && !autoFocusOnOpen()) return
     input.current?.focus({ preventScroll: true })
     input.current?.select()
   }, [])

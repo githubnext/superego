@@ -1,7 +1,8 @@
-import type { ReactNode } from 'react'
+import { useRef, type ReactNode } from 'react'
 import { Dialog as Base } from '@base-ui/react/dialog'
 import { IconButton } from './button.tsx'
 import { usePortalAttributes } from './portal.tsx'
+import { autoFocusOnOpen } from './touch.ts'
 
 /**
  * A modal dialog (Base UI): the page behind it is inert, focus stays inside, and it closes on Escape, on a click on
@@ -21,11 +22,15 @@ export function Dialog({ open = true, onClose, title, actions, children, classNa
   label?: string
 }) {
   const marked = usePortalAttributes()
+  // Opened, the focus goes to the first thing in it to use, unless that could bring up the on-screen keyboard: opened by
+  // a tap (Base UI's own rule) or mounted open under a finger, the dialog itself holds it.
+  const popup = useRef<HTMLDivElement>(null)
+  const initialFocus = (type: string) => type === 'touch' || !autoFocusOnOpen() ? popup.current : true
   return (
     <Base.Root open={open} onOpenChange={(next) => { if (!next) onClose() }}>
       <Base.Portal>
         <Base.Backdrop {...marked} className="superego-dialog__backdrop" />
-        <Base.Popup {...marked} className={`superego-dialog superego-dialog--${size} ${className}`} aria-label={label}>
+        <Base.Popup {...marked} ref={popup} initialFocus={initialFocus} className={`superego-dialog superego-dialog--${size} ${className}`} aria-label={label}>
           <div className="superego-dialog__frame">
             {(title || actions) && (
               <header className="superego-dialog__header">

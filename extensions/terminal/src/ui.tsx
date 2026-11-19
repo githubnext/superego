@@ -5,7 +5,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { call, channel as openChannel, defineAction, defineUiExtension, MONO_FONT, PaneButton, StatusGlyph, useAppSetting, useTabNote, useValue, type BridgeChannel, type PaneProps } from '@superego/app/ui'
 import type { Pane } from '@superego/protocol'
-import { TerminalIcon } from '@superego/ui'
+import { autoFocusOnOpen, TerminalIcon } from '@superego/ui'
 import './styles.css'
 import { about, Framing, IO, RESIZE, STATUS, TERMINAL, type TerminalStatuses } from './shared.ts'
 import { lookOf } from './theme.ts'
@@ -129,8 +129,9 @@ function TerminalPane({ machine, thread, pane }: PaneProps) {
       fit.observeResize()
       cleanups.push(() => fit.dispose())
       channel.onClose((reason) => { if (!disposed) setProblem(reason ?? 'The terminal closed.') })
-      // The pane took the focus before the terminal was there: it's the terminal's now.
-      if (element.closest('[data-column]')?.contains(document.activeElement)) term.focus()
+      // The pane took the focus before the terminal was there: it's the terminal's now (as a field's on open: not
+      // under a finger, where the keyboard would come up; a tap on the terminal brings it).
+      if (autoFocusOnOpen() && element.closest('[data-column]')?.contains(document.activeElement)) term.focus()
     })().catch((error: Error) => { if (!disposed) setProblem(error.message) })
     return () => {
       disposed = true
