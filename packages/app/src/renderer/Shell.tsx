@@ -79,7 +79,7 @@ export function Shell() {
   // Wide, the sidebar's edge resizes it, and hides it dragged narrow.
   const sidebarEdge = useSidebarEdge()
   // Narrow, the sidebar is a drawer (Base UI's): out from ☰ or a swipe from the screen's left edge, back with a swipe to
-  // the left, a tap beside it, Escape, or a thread picked in it. Drawn into the window (`app`), under its styles.
+  // the left, a tap beside it, Escape, or a thread picked in it. Drawn into the window's root element, under its styles.
   const [app, setApp] = useState<HTMLDivElement | null>(null)
   const drawerPopup = useRef<HTMLDivElement>(null)
   // Closed by a thread picked in it, the focus is the thread's to take, not ☰'s again.
