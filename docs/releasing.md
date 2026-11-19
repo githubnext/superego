@@ -134,7 +134,8 @@ sg extension new foo && sg extension test foo && sg extension new bar --ui && sg
 
 - **pnpm won't run** (`ERR_PNPM_PNPM_ENGINE_IDENTITY_UNVERIFIABLE`): where registry.npmjs.org is blocked, pnpm
   verifies the version `packageManager` pins against the registry in its own config, not `NPM_CONFIG_REGISTRY`. Set
-  the mirror there once, from outside the repo: `cd ~ && pnpm config set --global registry "$NPM_CONFIG_REGISTRY"`.
+  the mirror there once, from outside the repo: `cd ~ && pnpm config set --global registry "$NPM_CONFIG_REGISTRY"`
+  (see [a registry mirror](overview.md#a-registry-mirror)).
 - **No Developer ID / no notarytool profile**: see [Once per Mac](#once-per-mac).
 - **Notarization Invalid**: the error prints Apple's log; it names each file and what was wrong with it (usually
   something unsigned, or signed without the hardened runtime or a timestamp).

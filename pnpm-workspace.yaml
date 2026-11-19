@@ -8,6 +8,8 @@ allowBuilds:
   esbuild: true
   '@google/genai': false
   protobufjs: false
+# No `registry` here or in a project .npmrc: the lockfile names only registry.npmjs.org, and a machine that needs a
+# mirror sets it in its own pnpm config (docs/overview.md#a-registry-mirror).
 minimumReleaseAgeExclude:
   - '@earendil-works/*'
 # The six @earendil-works packages Superego is built on aren't on the approved package feed at 1.5.0 (npmjs.org is

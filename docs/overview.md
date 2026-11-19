@@ -187,6 +187,22 @@ older (or newer) than this computer's gets a dot beside its name in the sidebar 
 (⌘K *Update Superego on a machine*, or `superego machines update <host>`) runs its install-machine.sh over the same ssh
 and reconnects, asking first if agents are working there, since the daemon restarts.
 
+### A registry mirror
+
+`pnpm-lock.yaml` names only the public npm registry: integrity hashes, no tarball URLs, so pnpm fetches each package
+from whatever registry the machine is configured with. A machine that can't reach registry.npmjs.org names its mirror
+in its own pnpm config, never in the repo (a project `.npmrc` would override every machine's):
+
+```sh
+cd ~ && pnpm config set --global registry https://packagefeedproxy.microsoft.io/npm/
+```
+
+(or `registry=` in `~/.npmrc`, `PNPM_CONFIG_REGISTRY` for one shell, `SUPEREGO_REGISTRY` for one run of
+install-machine.sh). A frozen install (`pnpm install --frozen-lockfile`, or any install in CI) never rewrites the lockfile,
+and neither does a plain `pnpm install` while the manifests match it. Adding or updating a dependency does resolve through
+the mirror, and a mirror that serves its tarballs from another host (this one does) writes those URLs into the lockfile:
+resolve dependency changes against `--registry=https://registry.npmjs.org/`, or leave them to a machine that reaches it.
+
 `superego mcp` is an MCP server on stdio, for agents outside Superego (Claude Code, Codex, an editor's): each action a
 machine exposes to outside agents is a tool named as the action (`thread.start` as `thread_start`, `pane.open` as
 `pane_open`: the same names as the tools of agents inside), run as `superego do` runs it and in the same action log,

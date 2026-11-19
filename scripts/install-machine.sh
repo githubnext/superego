@@ -18,6 +18,10 @@
 #   gh repo clone githubnext/superego ~/dev/superego && ~/dev/superego/scripts/install-machine.sh
 #
 # Node comes from mise when it's there (see mise.toml), else from PATH: it needs to run TypeScript (22.18+).
+#
+# Packages come from the registry in this machine's pnpm config (registry.npmjs.org unless it names a mirror; see
+# docs/overview.md#a-registry-mirror), or SUPEREGO_REGISTRY's for this run. The install is frozen: it never rewrites
+# pnpm-lock.yaml.
 set -euo pipefail
 
 # In braces, so bash reads it all before `git checkout` below changes it.
@@ -75,7 +79,6 @@ fi
 
 # This script's checkout; read from stdin (`bash -s`), ~/dev/superego's or SUPEREGO_DIR's.
 if [[ -f $0 ]]; then dir=$(cd "$(dirname "$0")/.." && pwd); else dir=${SUPEREGO_DIR:-$HOME/dev/superego}; fi
-registry=${SUPEREGO_REGISTRY:-https://packagefeedproxy.microsoft.io/npm/}
 cd "$dir"
 
 . "$dir/scripts/machine-path.sh"
@@ -98,8 +101,7 @@ else
   git symbolic-ref --quiet HEAD > /dev/null || git checkout --quiet main
   git pull --ff-only --quiet || echo "install-machine: not updated from git; installing what's checked out" >&2
 fi
-# The lockfile is resolved through this feed; pnpm refuses tarballs from anywhere else.
-ELECTRON_SKIP_BINARY_DOWNLOAD=1 CI=1 pnpm install --frozen-lockfile --registry="$registry"
+ELECTRON_SKIP_BINARY_DOWNLOAD=1 CI=1 pnpm install --frozen-lockfile ${SUPEREGO_REGISTRY:+--registry="$SUPEREGO_REGISTRY"}
 
 # The window's build, for Web access. Only that: with a built main, `superego` would run the daemon on Electron, which
 # isn't here; without, it runs app/src/daemon.ts on Node.
