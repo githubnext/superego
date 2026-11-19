@@ -4,9 +4,6 @@ import { IconButton } from './button.tsx'
 import { usePortalAttributes } from './portal.tsx'
 import { autoFocusOnOpen } from './touch.ts'
 
-/** Base UI's Dialog, as it is: its parts, for a modal that isn't a framed sheet with a header (the image lightbox). */
-export { Dialog as DialogParts } from '@base-ui/react/dialog'
-
 /**
  * A modal dialog (Base UI): the page behind it is inert, focus stays inside, and it closes on Escape, on a click on
  * the backdrop, or with its close button, all through `onClose`. Menus, popovers and tooltips inside it layer above it

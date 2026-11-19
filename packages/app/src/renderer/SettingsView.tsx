@@ -2,7 +2,7 @@
 // may name a custom component (`ui`) drawn below their settings; the Providers section is one.
 import { useEffect } from 'react'
 import type { Json, SectionInfo, SettingsSnapshot } from '@superego/protocol'
-import { Dialog, Glyph, Tabs } from '@superego/ui'
+import { BaseUI, Dialog, Glyph } from '@superego/ui'
 import { APP } from '../shared/app-settings.ts'
 import type { MachineEntry } from '../shared/bridge.ts'
 import { useSettings, useValue } from './client.ts'
@@ -40,25 +40,25 @@ export function SettingsView({ machines, onClose, pane = false }: { machines: Ma
   // Down the side, wide; across the top on a phone (app.css), where the arrow keys follow.
   const across = useMedia(SETTINGS_ACROSS)
   const body = (
-    <Tabs.Root className="settings__body" orientation={across ? 'horizontal' : 'vertical'} value={target} onValueChange={(value: string) => setTarget(value)}>
-      <Tabs.List className="settings__nav" render={<nav />}>
-        <Tabs.Tab value={APP}>General</Tabs.Tab>
-        <Tabs.Tab value={MACHINES}>Machines</Tabs.Tab>
-        {editable.length > 1 && <Tabs.Tab value={ALL}>All machines</Tabs.Tab>}
+    <BaseUI.Tabs.Root className="settings__body" orientation={across ? 'horizontal' : 'vertical'} value={target} onValueChange={(value: string) => setTarget(value)}>
+      <BaseUI.Tabs.List className="settings__nav" render={<nav />}>
+        <BaseUI.Tabs.Tab value={APP}>General</BaseUI.Tabs.Tab>
+        <BaseUI.Tabs.Tab value={MACHINES}>Machines</BaseUI.Tabs.Tab>
+        {editable.length > 1 && <BaseUI.Tabs.Tab value={ALL}>All machines</BaseUI.Tabs.Tab>}
         {machines.filter((m) => m.state !== 'disabled').map((m) => (
-          <Tabs.Tab key={m.id} value={m.id} className="settings__nav-machine">
+          <BaseUI.Tabs.Tab key={m.id} value={m.id} className="settings__nav-machine">
             <Glyph shape={machineGlyph(m.state)} /> {m.label}
-          </Tabs.Tab>
+          </BaseUI.Tabs.Tab>
         ))}
-      </Tabs.List>
-      <Tabs.Panel value={target} className="settings__content">
+      </BaseUI.Tabs.List>
+      <BaseUI.Tabs.Panel value={target} className="settings__content">
         {target === MACHINES ? <Machines machines={machines} onOpen={setTarget} />
           : target === ALL ? <AllMachines machines={editable} />
           : !connected ? <p className="settings__note">{machine?.label} is {machine?.state}. Its settings live on it, so they show once it is back.</p>
           : !snapshot ? <p className="settings__note">Loading…</p>
           : snapshot.sections.filter((section) => section.ui || section.settings.some((s) => !s.hidden)).map((section) => <Section key={section.id} machine={machine} target={target} section={section} values={snapshot.values} />)}
-      </Tabs.Panel>
-    </Tabs.Root>
+      </BaseUI.Tabs.Panel>
+    </BaseUI.Tabs.Root>
   )
   return pane
     ? <section className="settings settings--pane" aria-label="Settings">{body}</section>

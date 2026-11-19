@@ -5,7 +5,7 @@
 // layout's (see shared/layout.ts).
 import { useEffect, useRef, useState, type ComponentType } from 'react'
 import type { SettingsSnapshot, ThreadInfo } from '@superego/protocol'
-import { ArrowLeftIcon, ArrowRightIcon, autoFocusOnOpen, Button, CaretDownIcon, Drawer, GearSixIcon, IconButton, ListIcon, NotePencilIcon, PlusIcon, Select, StatusGlyph } from '@superego/ui'
+import { ArrowLeftIcon, ArrowRightIcon, autoFocusOnOpen, BaseUI, Button, CaretDownIcon, GearSixIcon, IconButton, ListIcon, NotePencilIcon, PlusIcon, Select, StatusGlyph } from '@superego/ui'
 import type { MachineEntry } from '../shared/bridge.ts'
 import { ACCENT, APP, INTERFACE_FONT, KEYMAP, MONO_FONT, TEXT_SIZE, textScale } from '../shared/app-settings.ts'
 import { useSettings, watched } from './client.ts'
@@ -68,7 +68,7 @@ export function Shell() {
   // On a phone, what the title bar and the column beside hold for the thread: a sheet from the foot (Base UI's Drawer),
   // opened from its title. Its own drawer, not one nested in the sidebar's, so the title opens it through a handle.
   const [sheet, setSheet] = useState(false)
-  const [sheetHandle] = useState(() => Drawer.createHandle())
+  const [sheetHandle] = useState(() => BaseUI.Drawer.createHandle())
   // The spaces, and the one the sidebar shows: as the window was left, else the first.
   const spaces = viewsIn(registry, placed, 'space')
   const [spaceId, setSpace] = useLocalState<string | undefined>('space', undefined)
@@ -200,39 +200,39 @@ export function Shell() {
         {!narrow && tab === 'space' && spaces.length > 0 && sidebarEdge.edge}
         {tab !== 'settings' && <main className="app__main">
           {narrow && (
-            <Drawer.Root open={drawer && spaces.length > 0} onOpenChange={setDrawer} swipeDirection="left">
+            <BaseUI.Drawer.Root open={drawer && spaces.length > 0} onOpenChange={setDrawer} swipeDirection="left">
             {/* With no space there's no drawer: what stands in for one (the title bar's: the thread picker) and Settings. */}
             <div className="app__mobilebar">
               {spaces.length > 0
-                ? <Drawer.Trigger render={<Button aria-label={space?.title} />}><ListIcon size={16} aria-hidden /></Drawer.Trigger>
+                ? <BaseUI.Drawer.Trigger render={<Button aria-label={space?.title} />}><ListIcon size={16} aria-hidden /></BaseUI.Drawer.Trigger>
                 : <PlacedViews place="titlebar" frame={withContextMenu('titlebar')} />}
               {thread && machine
                 ? (
-                  <Drawer.Trigger handle={sheetHandle} className="app__mobiletitle" aria-label={`${thread.title}: the thread's tools`}>
+                  <BaseUI.Drawer.Trigger handle={sheetHandle} className="app__mobiletitle" aria-label={`${thread.title}: the thread's tools`}>
                     <StatusGlyph status={thread.status} quiet={thread.quiet} /><span className="app__mobiletitle-text">{thread.title}</span><CaretDownIcon size={12} aria-hidden />
-                  </Drawer.Trigger>
+                  </BaseUI.Drawer.Trigger>
                 )
                 : <span className="app__mobiletitle">{registry.app.name}</span>}
               {spaces.length > 0 || !placed.titlebar.length ? <Button onClick={() => openNewThread()} aria-label="New thread"><PlusIcon size={16} aria-hidden /></Button> : null}
               {!spaces.length && settingsButton}
             </div>
             {spaces.length > 0 && <>
-              <Drawer.SwipeArea className="app__swipe-edge" />
-              <Drawer.Portal container={app}>
-                <Drawer.Backdrop className="app__scrim app__scrim--drawer" />
-                <Drawer.Viewport className="app__drawer">
+              <BaseUI.Drawer.SwipeArea className="app__swipe-edge" />
+              <BaseUI.Drawer.Portal container={app}>
+                <BaseUI.Drawer.Backdrop className="app__scrim app__scrim--drawer" />
+                <BaseUI.Drawer.Viewport className="app__drawer">
                   {/* Opened by a finger, the drawer holds the focus itself (no keyboard over it); from the keyboard, the
                       selected thread. Picking a thread in it (even the open one) closes it. */}
-                  <Drawer.Popup ref={drawerPopup} className="app__sidebar" aria-label={space?.title}
+                  <BaseUI.Drawer.Popup ref={drawerPopup} className="app__sidebar" aria-label={space?.title}
                     initialFocus={(type) => type === 'touch' || !autoFocusOnOpen() ? drawerPopup.current : drawerPopup.current?.querySelector<HTMLElement>('.superego-list-item.is-selected[tabindex]') ?? true}
                     finalFocus={() => { const back = !picked.current; picked.current = false; return back }}
                     onClick={(event) => { if ((event.target as HTMLElement).closest('.superego-list-item')) { picked.current = true; setDrawer(false) } }}>
                     {sidebarBody}
-                  </Drawer.Popup>
-                </Drawer.Viewport>
-              </Drawer.Portal>
+                  </BaseUI.Drawer.Popup>
+                </BaseUI.Drawer.Viewport>
+              </BaseUI.Drawer.Portal>
             </>}
-            </Drawer.Root>
+            </BaseUI.Drawer.Root>
           )}
           {selection && thread && machine
             ? <StripSlot.Provider value={narrow ? null : strip}><ThreadView key={`${selection.machine}/${selection.thread}`} machine={machine} thread={thread} /></StripSlot.Provider>
@@ -300,7 +300,7 @@ function SpaceButton({ view, open, sidebarHidden, show, narrow = false }: { view
  */
 function ThreadSheet({ machine, thread, open, onOpenChange, handle, container }: {
   machine: MachineEntry; thread: ThreadInfo; open: boolean; onOpenChange(open: boolean): void
-  handle: Drawer.Handle<unknown>; container: HTMLElement | null
+  handle: BaseUI.Drawer.Handle<unknown>; container: HTMLElement | null
 }) {
   const registry = useRegistry()
   const where = { machine: machine.id, thread }
@@ -316,12 +316,12 @@ function ThreadSheet({ machine, thread, open, onOpenChange, handle, container }:
     void registry.router.dispatch('pane.open', { thread: thread.id, kind }, { machine: machine.id, source: 'sheet' }).catch((error) => console.error(error))
   }
   return (
-    <Drawer.Root open={open} onOpenChange={onOpenChange} handle={handle} swipeDirection="down">
-      <Drawer.Portal container={container}>
-        <Drawer.Backdrop className="app__scrim app__scrim--sheet" />
-        <Drawer.Viewport className="app__sheet">
+    <BaseUI.Drawer.Root open={open} onOpenChange={onOpenChange} handle={handle} swipeDirection="down">
+      <BaseUI.Drawer.Portal container={container}>
+        <BaseUI.Drawer.Backdrop className="app__scrim app__scrim--sheet" />
+        <BaseUI.Drawer.Viewport className="app__sheet">
           {/* Opened by a finger, the sheet holds the focus itself (no keyboard over it); from the keyboard, its first control. */}
-          <Drawer.Popup ref={popup} className="thread-sheet" aria-label={thread.title}
+          <BaseUI.Drawer.Popup ref={popup} className="thread-sheet" aria-label={thread.title}
             initialFocus={(type) => type === 'touch' || !autoFocusOnOpen() ? popup.current : true}
             finalFocus={() => { const back = !opened.current; opened.current = false; return back }}>
             <div className="thread-sheet__head">
@@ -340,10 +340,10 @@ function ThreadSheet({ machine, thread, open, onOpenChange, handle, container }:
               </div>
             )}
             {besides.length > 0 && <div className="thread-sheet__beside"><PlacedViews place="beside" machine={machine} thread={thread} frame={withMenuButton('beside', where)} /></div>}
-          </Drawer.Popup>
-        </Drawer.Viewport>
-      </Drawer.Portal>
-    </Drawer.Root>
+          </BaseUI.Drawer.Popup>
+        </BaseUI.Drawer.Viewport>
+      </BaseUI.Drawer.Portal>
+    </BaseUI.Drawer.Root>
   )
 }
 

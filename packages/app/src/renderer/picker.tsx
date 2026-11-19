@@ -3,8 +3,7 @@
 // ⌃1–⌃9 pick the first nine (⌃⌘ beside), each showing its key. On Base UI's Autocomplete: the box is a combobox and
 // the lit row its active descendant, so a screen reader follows along.
 import { useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
-import { Autocomplete } from '@base-ui/react/autocomplete'
-import { autoFocusOnOpen, Dialog } from '@superego/ui'
+import { autoFocusOnOpen, BaseUI, Dialog } from '@superego/ui'
 import { keyLabel } from './keys.ts'
 
 /** An item as a line of the list: a glyph before it, its title, more after it, and its key. */
@@ -66,28 +65,28 @@ export function Picker<T>({ label, placeholder, className = '', items, filter, r
   }
   return (
     <Dialog onClose={onClose} size="medium" className={`palette ${className}`} label={label}>
-      <Autocomplete.Root inline open items={items} filteredItems={shown} autoHighlight="always" keepHighlight loopFocus={false}
+      <BaseUI.Autocomplete.Root inline open items={items} filteredItems={shown} autoHighlight="always" keepHighlight loopFocus={false}
         value={query} onValueChange={(value, details) => { if (details.reason !== 'item-press') setQuery(value) }}
         onItemHighlighted={(item) => { lit.current = item }}>
-        <Autocomplete.Input className="palette__input" autoFocus={autoFocusOnOpen()} placeholder={placeholder} onKeyDown={onKeyDown} />
-        <Autocomplete.List className="palette__list" render={<ul />}>
+        <BaseUI.Autocomplete.Input className="palette__input" autoFocus={autoFocusOnOpen()} placeholder={placeholder} onKeyDown={onKeyDown} />
+        <BaseUI.Autocomplete.List className="palette__list" render={<ul />}>
           {shown.map((item, index) => {
             const line = row(item)
             const keys = line.keys ?? (digits && index < 9 ? `ctrl+${index + 1}` : undefined)
             return (
-              <Autocomplete.Item key={line.key} value={item} index={index} render={<li />}
+              <BaseUI.Autocomplete.Item key={line.key} value={item} index={index} render={<li />}
                 className={(state) => `${line.className ?? ''} ${state.highlighted ? 'is-active' : ''}`.trim()}
                 onClick={(event) => onPick(item, { beside: event.metaKey })}>
                 {line.glyph !== undefined && <span className="palette__glyph">{line.glyph}</span>}
                 <span className="palette__title">{line.title}</span>
                 {line.detail !== undefined && line.detail !== null && line.detail !== '' && line.detail !== false && <span className="palette__detail">{line.detail}</span>}
                 {keys && <kbd>{keyLabel(keys)}</kbd>}
-              </Autocomplete.Item>
+              </BaseUI.Autocomplete.Item>
             )
           })}
-        </Autocomplete.List>
-        <Autocomplete.Empty className="palette__none">{empty}</Autocomplete.Empty>
-      </Autocomplete.Root>
+        </BaseUI.Autocomplete.List>
+        <BaseUI.Autocomplete.Empty className="palette__none">{empty}</BaseUI.Autocomplete.Empty>
+      </BaseUI.Autocomplete.Root>
       {footer}
     </Dialog>
   )

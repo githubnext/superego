@@ -4,7 +4,7 @@
 // the focus stays inside while it is open and goes back where it was.
 // It reads each image whole, showing its thumbnail (what the thread showed) meanwhile.
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react'
-import { CaretLeftIcon, CaretRightIcon, DialogParts, ImageBrokenIcon, MagnifyingGlassMinusIcon, MagnifyingGlassPlusIcon, usePortalAttributes, XIcon } from '@superego/ui'
+import { BaseUI, CaretLeftIcon, CaretRightIcon, ImageBrokenIcon, MagnifyingGlassMinusIcon, MagnifyingGlassPlusIcon, usePortalAttributes, XIcon } from '@superego/ui'
 import type { MachineEntry } from '../shared/bridge.ts'
 import { describeImage, imageReadAlready, imageSourceOf, useImageSource, type ImageItem } from './images.tsx'
 import { CLICK_SCALE, clampPan, FIT, toggleAt, zoomAt, type Bounds, type Point, type View } from './zoom.ts'
@@ -166,9 +166,9 @@ export function Lightbox({ machine, thread, images, start, onClose }: {
   const zoomed = view.scale > 1
   // A click beside the image is the stage's to close it (the popup is the whole window, so there is no outside to press).
   return (
-    <DialogParts.Root open onOpenChange={(open) => { if (!open) onClose() }} disablePointerDismissal>
-      <DialogParts.Portal>
-        <DialogParts.Popup {...marked} ref={root} initialFocus={root} className="lightbox" aria-label={many ? `${label}, ${index + 1} of ${images.length}` : label} onKeyDown={onKeyDown}>
+    <BaseUI.Dialog.Root open onOpenChange={(open) => { if (!open) onClose() }} disablePointerDismissal>
+      <BaseUI.Dialog.Portal>
+        <BaseUI.Dialog.Popup {...marked} ref={root} initialFocus={root} className="lightbox" aria-label={many ? `${label}, ${index + 1} of ${images.length}` : label} onKeyDown={onKeyDown}>
           <div
             ref={stageRef}
             className={`lightbox__stage ${zoomed ? 'is-zoomed' : ''} ${moving ? 'is-moving' : ''}`}
@@ -205,8 +205,8 @@ export function Lightbox({ machine, thread, images, start, onClose }: {
             </>
           )}
           {image.caption && <div className="lightbox__caption">{image.caption}</div>}
-        </DialogParts.Popup>
-      </DialogParts.Portal>
-    </DialogParts.Root>
+        </BaseUI.Dialog.Popup>
+      </BaseUI.Dialog.Portal>
+    </BaseUI.Dialog.Root>
   )
 }

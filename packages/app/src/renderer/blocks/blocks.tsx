@@ -9,7 +9,7 @@ import {
   type Block, type BlocksUse, type Button as BlockButton, type ChoiceOption, type Json, type ListItem, type Reply, type ThreadInfo, type Value,
 } from '@superego/protocol'
 import {
-  ArrowRightIcon, Button, Checkbox, CheckboxGroup, CheckIcon, Radio, RadioGroup, Select, Slider, StatusGlyph, Switch, TextArea, TextField, Toggle, ToggleGroup,
+  ArrowRightIcon, BaseUI, Button, CheckIcon, Select, Slider, StatusGlyph, Switch, TextArea, TextField,
 } from '@superego/ui'
 import type { MachineEntry } from '../../shared/bridge.ts'
 import { useImageSource } from '../images.tsx'
@@ -236,31 +236,31 @@ function Choice({ block }: { block: Extract<Block, { type: 'choice' }> }) {
     <div className="blocks-choice">
       {block.label && <div className="blocks-field__label" id={labelId}>{block.label}</div>}
       {style === 'buttons' ? (
-        <ToggleGroup className="blocks-choice__buttons" {...named} multiple={Boolean(block.multiple)} value={picked} onPointerLeave={look()}
+        <BaseUI.ToggleGroup className="blocks-choice__buttons" {...named} multiple={Boolean(block.multiple)} value={picked} onPointerLeave={look()}
           // A single choice keeps its pick: pressing it again leaves it picked. Where a pick answers, the press does that.
           onValueChange={(next) => { if (!picks && (block.multiple || next.length)) set(next) }}>
           {block.options.map((option, i) => (
-            <Toggle key={i} value={optionValue(option)} render={<Button variant={chosen(option) ? 'primary' : 'default'} />}
+            <BaseUI.Toggle key={i} value={optionValue(option)} render={<Button variant={chosen(option) ? 'primary' : 'default'} />}
               disabled={form.locked && !chosen(option) || form.busy} title={option.description} onPointerEnter={look(option)}
               onClick={picks && (() => picks.onClick(option))}>
               {option.label}
-            </Toggle>
+            </BaseUI.Toggle>
           ))}
-        </ToggleGroup>
+        </BaseUI.ToggleGroup>
       ) : block.multiple ? (
-        <CheckboxGroup className="blocks-choice__list" {...named} value={picked} disabled={form.locked || form.busy} onValueChange={set} onPointerLeave={look()}>
+        <BaseUI.CheckboxGroup className="blocks-choice__list" {...named} value={picked} disabled={form.locked || form.busy} onValueChange={set} onPointerLeave={look()}>
           {block.options.map((o, i) => (
-            <Checkbox.Root key={i} value={optionValue(o)} className="blocks-option" onPointerEnter={look(o)} onFocus={() => setLooking(o)}>{option(o)}</Checkbox.Root>
+            <BaseUI.Checkbox.Root key={i} value={optionValue(o)} className="blocks-option" onPointerEnter={look(o)} onFocus={() => setLooking(o)}>{option(o)}</BaseUI.Checkbox.Root>
           ))}
-        </CheckboxGroup>
+        </BaseUI.CheckboxGroup>
       ) : (
-        <RadioGroup<string | null> className="blocks-choice__list" {...named} value={picked[0] ?? null} disabled={form.locked || form.busy}
+        <BaseUI.RadioGroup<string | null> className="blocks-choice__list" {...named} value={picked[0] ?? null} disabled={form.locked || form.busy}
           onValueChange={(next) => set(next === null ? [] : [next])} onPointerLeave={look()}>
           {block.options.map((o, i) => (
-            <Radio.Root key={i} value={optionValue(o)} className="blocks-option" onPointerEnter={look(o)} onFocus={() => setLooking(o)}
-              onClick={picks && (() => picks.onClick(o))} onKeyDown={picks?.onEnter(o)}>{option(o)}</Radio.Root>
+            <BaseUI.Radio.Root key={i} value={optionValue(o)} className="blocks-option" onPointerEnter={look(o)} onFocus={() => setLooking(o)}
+              onClick={picks && (() => picks.onClick(o))} onKeyDown={picks?.onEnter(o)}>{option(o)}</BaseUI.Radio.Root>
           ))}
-        </RadioGroup>
+        </BaseUI.RadioGroup>
       )}
       {preview && !form.answered && <div className="blocks-preview"><BlockView block={preview} /></div>}
     </div>

@@ -102,7 +102,9 @@ client agrees.
    `@lydell/node-pty`'s N-API prebuilds, which load in Electron as Node and in plain Node alike); the window draws them
    with ghostty-web (Ghostty's emulator as WebAssembly), the same on desktop and web.
 4. **Chord:** delta ops only (`applyImmutable` in the window), not its facet/plugin system.
-5. **Base UI** for the kit's overlays: portals, positioning, focus and Escape done right, instead of hand-rolled.
+5. **Base UI** for the kit's overlays: portals, positioning, focus and Escape done right, instead of hand-rolled. Only
+   `packages/ui` depends on it: its components (`Dialog`, `Switch`, `Slider`, …) wrap Base UI's parts, and the parts
+   themselves, unstyled, are `BaseUI.X` from `@superego/ui`. One copy, so popups nested across packages layer right.
 
 ## Open
 
