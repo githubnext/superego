@@ -168,6 +168,12 @@ it('adds the archived threads to ⌘L on ⌥A, after the rest, and opens one pic
   await ui.until(() => options().some((o) => o.includes('live reconcile')), 'the navigator')
   expect(options().some((o) => o.includes('old reconcile'))).toBe(false)
   expect($('.navigator__chip[aria-pressed=true]')).toBeNull()
+  // ⌃T there is the navigator's (threads only), not the window's.
+  await ui.key('ctrl+t')
+  expect($('.navigator .palette__input')?.getAttribute('placeholder')).toBe('Go to a thread')
+  expect($('.navigator__chip[aria-pressed=true]')?.textContent).toContain('Threads')
+  await ui.key('ctrl+t')
+  expect($('.navigator__chip[aria-pressed=true]')).toBeNull()
 
   // ⌥A from the field: in, muted, under its heading, after the live ones; again: out.
   await ui.key('alt+a')
