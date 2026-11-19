@@ -2,7 +2,7 @@
 // may name a custom component (`ui`) drawn below their settings; the Providers section is one.
 import { useEffect } from 'react'
 import type { Json, SectionInfo, SettingsSnapshot } from '@superego/protocol'
-import { Dialog, Glyph } from '@superego/ui'
+import { Dialog, Glyph, Tabs } from '@superego/ui'
 import { APP } from '../shared/app-settings.ts'
 import type { MachineEntry } from '../shared/bridge.ts'
 import { useSettings, useValue } from './client.ts'
@@ -10,12 +10,15 @@ import { Contained } from './contained.tsx'
 import { useRegistry } from './registry.tsx'
 import { settingsEntry } from './lookups.ts'
 import { useLocalState } from './local-state.ts'
+import { useMedia } from './media.ts'
 import { Setting } from './settings/controls.tsx'
 import { AllMachines, machineGlyph, Machines } from './settings/machines.tsx'
 
 /** Settings → Machines (also opened by Update: see actions.tsx). */
 const MACHINES = '$machines'
 const ALL = '$all'
+/** Where Settings' sections go across the top, not down the side (app.css repeats this width). */
+const SETTINGS_ACROSS = '(max-width: 760px)'
 
 /** Settings: wide, a pane beside the rail (Escape goes back); on a phone, a dialog. */
 export function SettingsView({ machines, onClose, pane = false }: { machines: MachineEntry[]; onClose(): void; pane?: boolean }) {
@@ -34,26 +37,28 @@ export function SettingsView({ machines, onClose, pane = false }: { machines: Ma
     return () => window.removeEventListener('keydown', onKey)
   }, [pane, onClose])
 
+  // Down the side, wide; across the top on a phone (app.css), where the arrow keys follow.
+  const across = useMedia(SETTINGS_ACROSS)
   const body = (
-      <div className="settings__body">
-        <nav className="settings__nav">
-          <button className={target === APP ? 'is-selected' : ''} onClick={() => setTarget(APP)}>General</button>
-          <button className={target === MACHINES ? 'is-selected' : ''} onClick={() => setTarget(MACHINES)}>Machines</button>
-          {editable.length > 1 && <button className={target === ALL ? 'is-selected' : ''} onClick={() => setTarget(ALL)}>All machines</button>}
-          {machines.filter((m) => m.state !== 'disabled').map((m) => (
-            <button key={m.id} className={`settings__nav-machine ${target === m.id ? 'is-selected' : ''}`} onClick={() => setTarget(m.id)}>
-              <Glyph shape={machineGlyph(m.state)} /> {m.label}
-            </button>
-          ))}
-        </nav>
-        <div className="settings__content">
-          {target === MACHINES ? <Machines machines={machines} onOpen={setTarget} />
-            : target === ALL ? <AllMachines machines={editable} />
-            : !connected ? <p className="settings__note">{machine?.label} is {machine?.state}. Its settings live on it, so they show once it is back.</p>
-            : !snapshot ? <p className="settings__note">Loading…</p>
-            : snapshot.sections.filter((section) => section.ui || section.settings.some((s) => !s.hidden)).map((section) => <Section key={section.id} machine={machine} target={target} section={section} values={snapshot.values} />)}
-        </div>
-      </div>
+    <Tabs.Root className="settings__body" orientation={across ? 'horizontal' : 'vertical'} value={target} onValueChange={(value: string) => setTarget(value)}>
+      <Tabs.List className="settings__nav" render={<nav />}>
+        <Tabs.Tab value={APP}>General</Tabs.Tab>
+        <Tabs.Tab value={MACHINES}>Machines</Tabs.Tab>
+        {editable.length > 1 && <Tabs.Tab value={ALL}>All machines</Tabs.Tab>}
+        {machines.filter((m) => m.state !== 'disabled').map((m) => (
+          <Tabs.Tab key={m.id} value={m.id} className="settings__nav-machine">
+            <Glyph shape={machineGlyph(m.state)} /> {m.label}
+          </Tabs.Tab>
+        ))}
+      </Tabs.List>
+      <Tabs.Panel value={target} className="settings__content">
+        {target === MACHINES ? <Machines machines={machines} onOpen={setTarget} />
+          : target === ALL ? <AllMachines machines={editable} />
+          : !connected ? <p className="settings__note">{machine?.label} is {machine?.state}. Its settings live on it, so they show once it is back.</p>
+          : !snapshot ? <p className="settings__note">Loading…</p>
+          : snapshot.sections.filter((section) => section.ui || section.settings.some((s) => !s.hidden)).map((section) => <Section key={section.id} machine={machine} target={target} section={section} values={snapshot.values} />)}
+      </Tabs.Panel>
+    </Tabs.Root>
   )
   return pane
     ? <section className="settings settings--pane" aria-label="Settings">{body}</section>

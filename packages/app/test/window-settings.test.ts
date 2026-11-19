@@ -70,3 +70,14 @@ it('signs a provider in with an API key, puts the flow away, and signs it out', 
   button('Sign out')!.click()
   await ui.until(() => !button('Sign out'), 'signed out again')
 })
+
+it('goes through its sections as tabs: the arrow keys move down the list, a click opens one', async () => {
+  const tabs = () => $$('.settings__nav [role="tab"]')
+  expect($('.settings__nav')!.getAttribute('role')).toBe('tablist')
+  expect(tabs().map((t) => t.getAttribute('aria-selected'))[0]).toBe('true')
+  tabs()[0]!.focus()
+  tabs()[0]!.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }))
+  await ui.until(() => document.activeElement === tabs()[1], 'Machines focused')
+  tabs()[1]!.click()
+  await ui.until(() => tabs()[1]!.hasAttribute('data-active') && $('.settings__content')?.getAttribute('role') === 'tabpanel', 'Machines open')
+})

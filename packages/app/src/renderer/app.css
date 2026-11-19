@@ -369,11 +369,11 @@ details[open] > .row > .row__chevron { transform: rotate(90deg); }
 .settings__body { display: grid; grid-template-columns: 180px 1fr; height: 100%; }
 .settings__nav { padding: 12px 8px; border-right: 1px solid var(--superego-line); background: var(--superego-sidebar-bg); display: flex; flex-direction: column; gap: 2px; }
 .settings__nav button { font: inherit; color: inherit; text-align: left; background: none; border: 0; padding: 5px 8px; border-radius: var(--superego-radius); }
-.settings__nav button:hover:not(.is-selected) { background: var(--superego-hover); }
-.settings__nav button.is-selected { background: var(--superego-accent); color: var(--superego-accent-text); }
-.settings__nav button.is-selected .superego-status { color: inherit; }
+.settings__nav button:hover:not([data-active]) { background: var(--superego-hover); }
+.settings__nav button[data-active] { background: var(--superego-accent); color: var(--superego-accent-text); }
+.settings__nav button[data-active] .superego-status { color: inherit; }
 .settings__nav-label { color: var(--superego-muted); font-size: calc(11px * var(--superego-text-scale)); text-transform: uppercase; letter-spacing: .04em; padding: 12px 8px 4px; }
-.settings__content { overflow: auto; padding: 8px 28px 40px; }
+.settings__content { overflow: auto; padding: 8px 28px 40px; outline: none; }
 /* Wide, a pane beside the rail: its list where the sidebar is, on the side's grey. */
 .settings--pane { flex: 1; min-height: 0; }
 .settings--pane .settings__body { grid-template-columns: var(--superego-sidebar) 1fr; }
@@ -389,7 +389,6 @@ details[open] > .row > .row__chevron { transform: rotate(90deg); }
 .setting__control { flex: none; }
 .setting__control .superego-select { max-width: 280px; }
 .step-slider { display: flex; flex-direction: column; gap: 2px; width: 220px; }
-.step-slider input { width: 100%; margin: 0; accent-color: var(--superego-accent); }
 /* The names sit under the stops: the first and last at the track's ends, the rest spaced evenly between. */
 .step-slider__stops { display: flex; justify-content: space-between; font-size: var(--superego-text-xs); color: var(--superego-faint); }
 .step-slider__stops .is-current { color: var(--superego-text); }

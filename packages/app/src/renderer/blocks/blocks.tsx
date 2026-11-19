@@ -3,12 +3,14 @@
 // its own actions. `<Blocks>` checks them as they land, keeps the inputs' values (across new blocks too, by id), and
 // hands what the user does to its host; given an `answer`, it shows that, locked. An html block is a page of its own
 // in a sandboxed frame (see frame.html).
-import { createContext, useContext, useEffect, useMemo, useRef, useState, type PointerEvent, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react'
 import {
   blockErrors, initialValues, keptValues, needsSubmit, optionValue, picksAnswer, showValue,
   type Block, type BlocksUse, type Button as BlockButton, type ChoiceOption, type Json, type ListItem, type Reply, type ThreadInfo, type Value,
 } from '@superego/protocol'
-import { ArrowRightIcon, Button, CheckIcon, Select, StatusGlyph, Switch, TextArea, TextField } from '@superego/ui'
+import {
+  ArrowRightIcon, Button, Checkbox, CheckboxGroup, CheckIcon, Radio, RadioGroup, Select, Slider, StatusGlyph, Switch, TextArea, TextField, Toggle, ToggleGroup,
+} from '@superego/ui'
 import type { MachineEntry } from '../../shared/bridge.ts'
 import { useImageSource } from '../images.tsx'
 import { Markdown } from '../Markdown.tsx'
@@ -198,51 +200,67 @@ function Field({ label, children, inline }: { label: string | undefined; childre
   )
 }
 
+/**
+ * A choice: toggle buttons for a few short options, else a list of radios (one) or checkboxes (any), each a group the
+ * arrow keys move through. Its value is the picked option's (a single choice; null for none) or the list of them.
+ */
 function Choice({ block }: { block: Extract<Block, { type: 'choice' }> }) {
   const form = useForm()
+  const labelId = useId()
   const value = form.values[block.id]
-  const chosen = (option: ChoiceOption) => Array.isArray(value) ? value.includes(optionValue(option)) : value === optionValue(option)
+  const picked = Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string') : typeof value === 'string' ? [value] : []
+  const chosen = (option: ChoiceOption) => picked.includes(optionValue(option))
   const [looking, setLooking] = useState<ChoiceOption>()
-  const pick = (option: ChoiceOption) => {
-    const v = optionValue(option)
-    if (block.multiple) {
-      const list = Array.isArray(value) ? value : []
-      form.set(block.id, list.includes(v) ? list.filter((x) => x !== v) : [...list, v])
-    } else if (form.picks) form.act({ values: { [block.id]: v }, button: 'submit' })
-    else form.set(block.id, v)
-  }
+  const set = (next: string[]) => { if (!form.locked) form.set(block.id, block.multiple ? next : next[0] ?? null) }
+  // The only input, a single choice: picking one answers at once (a click, Space or Enter; the arrow keys only move).
+  const answer = (option: ChoiceOption) => form.act({ values: { [block.id]: optionValue(option) }, button: 'submit' })
+  const picks = form.picks ? { onClick: answer, onEnter: (option: ChoiceOption) => (event: KeyboardEvent) => { if (event.key === 'Enter') answer(option) } } : undefined
   // Buttons for a few short options; a list where they say more.
   const style = block.style ?? (block.options.length <= 4 && block.options.every((o) => !o.description && !o.preview && o.label.length <= 24) ? 'buttons' : 'list')
   const preview = (looking ?? block.options.find(chosen))?.preview
   // An option's preview shows while a mouse points at it; not on a tap, where iOS would take a preview appearing for
   // something to see before the tap goes through, and want a second one.
   const look = (option?: ChoiceOption) => (event: PointerEvent) => { if (event.pointerType === 'mouse') setLooking(option) }
+  const named = block.label ? { 'aria-labelledby': labelId } : { 'aria-label': block.id }
+  const option = (option: ChoiceOption) => (
+    <>
+      <span className={`blocks-option__mark ${block.multiple ? 'is-check' : ''}`}>{chosen(option) && <CheckIcon weight="bold" />}</span>
+      <span className="blocks-option__body">
+        <span className="blocks-option__label">{option.label}</span>
+        {option.description && <span className="blocks-option__description">{option.description}</span>}
+      </span>
+      {picks && !form.locked && <ArrowRightIcon className="blocks-option__go" />}
+    </>
+  )
   return (
-    <div className="blocks-choice" role="group" aria-label={block.label ?? block.id}>
-      {block.label && <div className="blocks-field__label">{block.label}</div>}
+    <div className="blocks-choice">
+      {block.label && <div className="blocks-field__label" id={labelId}>{block.label}</div>}
       {style === 'buttons' ? (
-        <div className="blocks-choice__buttons" onPointerLeave={look()}>
+        <ToggleGroup className="blocks-choice__buttons" {...named} multiple={Boolean(block.multiple)} value={picked} onPointerLeave={look()}
+          // A single choice keeps its pick: pressing it again leaves it picked. Where a pick answers, the press does that.
+          onValueChange={(next) => { if (!picks && (block.multiple || next.length)) set(next) }}>
           {block.options.map((option, i) => (
-            <Button key={i} variant={chosen(option) ? 'primary' : 'default'} aria-pressed={chosen(option)} disabled={form.locked && !chosen(option) || form.busy}
-              title={option.description} onPointerEnter={look(option)} onClick={() => pick(option)}>
+            <Toggle key={i} value={optionValue(option)} render={<Button variant={chosen(option) ? 'primary' : 'default'} />}
+              disabled={form.locked && !chosen(option) || form.busy} title={option.description} onPointerEnter={look(option)}
+              onClick={picks && (() => picks.onClick(option))}>
               {option.label}
-            </Button>
+            </Toggle>
           ))}
-        </div>
+        </ToggleGroup>
+      ) : block.multiple ? (
+        <CheckboxGroup className="blocks-choice__list" {...named} value={picked} disabled={form.locked || form.busy} onValueChange={set} onPointerLeave={look()}>
+          {block.options.map((o, i) => (
+            <Checkbox.Root key={i} value={optionValue(o)} className="blocks-option" onPointerEnter={look(o)} onFocus={() => setLooking(o)}>{option(o)}</Checkbox.Root>
+          ))}
+        </CheckboxGroup>
       ) : (
-        <div className="blocks-choice__list" onPointerLeave={look()}>
-          {block.options.map((option, i) => (
-            <button key={i} type="button" className={`blocks-option ${chosen(option) ? 'is-chosen' : ''}`} aria-pressed={chosen(option)}
-              disabled={form.locked || form.busy} onPointerEnter={look(option)} onFocus={() => setLooking(option)} onClick={() => pick(option)}>
-              <span className={`blocks-option__mark ${block.multiple ? 'is-check' : ''}`}>{chosen(option) && <CheckIcon weight="bold" />}</span>
-              <span className="blocks-option__body">
-                <span className="blocks-option__label">{option.label}</span>
-                {option.description && <span className="blocks-option__description">{option.description}</span>}
-              </span>
-              {form.picks && !form.locked && <ArrowRightIcon className="blocks-option__go" />}
-            </button>
+        <RadioGroup<string | null> className="blocks-choice__list" {...named} value={picked[0] ?? null} disabled={form.locked || form.busy}
+          onValueChange={(next) => set(next === null ? [] : [next])} onPointerLeave={look()}>
+          {block.options.map((o, i) => (
+            <Radio.Root key={i} value={optionValue(o)} className="blocks-option" onPointerEnter={look(o)} onFocus={() => setLooking(o)}
+              onClick={picks && (() => picks.onClick(o))} onKeyDown={picks?.onEnter(o)}>{option(o)}</Radio.Root>
           ))}
-        </div>
+        </RadioGroup>
       )}
       {preview && !form.answered && <div className="blocks-preview"><BlockView block={preview} /></div>}
     </div>
@@ -296,8 +314,8 @@ function FieldInput({ block }: { block: Extract<Block, { type: 'text' | 'textare
     case 'slider': return (
       <Field label={block.label}>
         <span className="blocks-slider">
-          <input type="range" min={block.min} max={block.max} step={block.step ?? 'any'} value={Number(value ?? block.min)} disabled={form.locked}
-            onChange={(e) => form.set(block.id, Number(e.target.value))} />
+          <Slider label={block.label ?? block.id} min={block.min} max={block.max} step={block.step} value={Number(value ?? block.min)} disabled={form.locked}
+            onChange={(v) => form.set(block.id, v)} />
           <output>{String(value ?? block.min)}</output>
         </span>
       </Field>

@@ -5,7 +5,7 @@
 // and pinned threads at the top, from every project and machine; projects, Pinned and a thread's offshoots folded.
 import { mkdir } from 'node:fs/promises'
 import { join } from 'node:path'
-import { afterEach, beforeEach, expect, it } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { daemonMachine, mountUi, testDaemon, type TestDaemon, type TestWindow } from '@superego/sdk/testing'
 import threads from '../src/ui.tsx'
 
@@ -89,6 +89,21 @@ it('keeps the archived at its end, closed; opened, one list across projects', as
   expect(rowOf('old', '.threads-archived')).toBeDefined()
   $('.composer__unarchive')!.click()
   await ui.until(() => Boolean(rowOf('old')) && !rowOf('old', '.threads-archived'), 'unarchived, back in its project')
+})
+
+it("says where the archived would be why they couldn't be listed", async () => {
+  ui = await mountUi({ window: true, extensions: [threads], machines: [daemon] })
+  const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+  const call = window.superego.call
+  window.superego.call = (machine, method, params) => method === 'thread.list' && (params as { archived?: boolean })?.archived
+    ? Promise.reject(new Error('the store is locked')) : call(machine, method, params)
+  await ui.until(() => Boolean($('.threads-archived__head')), 'the archived, closed')
+  $('.threads-archived__head')!.click()
+  await ui.until(() => Boolean($('.threads-archived__error')?.textContent?.includes('the store is locked')), 'why, where the list would be')
+  expect($('.threads-archived')!.textContent).not.toContain('Nothing archived')
+  expect(errors.mock.calls.flat().join(' ')).toContain('the store is locked')
+  window.superego.call = call
+  errors.mockRestore()
 })
 
 it('puts a thread another started right under it, though newer, and steps down and up the rows as shown', async () => {

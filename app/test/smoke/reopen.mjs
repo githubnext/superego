@@ -43,7 +43,7 @@ export default async function reopen(t) {
   await openNotice(t, 'auth', 'the rejected key')
   await t.until(`document.querySelector('.rail-notice__popup .auth-notice')?.textContent.startsWith('faux rejected the API key on Second.2 threads are waiting.')`, 'the rejected key, in full')
   await t.click('.rail-notice__popup .auth-notice button', 'Sign in again')
-  await t.until(`document.querySelector('.settings__nav-machine.is-selected')?.textContent.includes('Second') && document.querySelector('.settings')?.textContent.includes('Providers')`, "sign in again: that machine's Providers")
+  await t.until(`document.querySelector('.settings__nav-machine[data-active]')?.textContent.includes('Second') && document.querySelector('.settings')?.textContent.includes('Providers')`, "sign in again: that machine's Providers")
   await t.click('.app__rail [aria-label="Threads"]')
   await t.until(`!document.querySelector('.settings')`, 'Settings left for Threads')
   writeFileSync(secondAuth, JSON.stringify({}))

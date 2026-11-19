@@ -2,7 +2,7 @@
 // colour field, the layout's buttons).
 import { useEffect, useState, useSyncExternalStore } from 'react'
 import type { Json, SettingInfo } from '@superego/protocol'
-import { Button, FontPicker, Select, Switch, TextField } from '@superego/ui'
+import { Button, FontPicker, Select, Slider, Switch, TextField } from '@superego/ui'
 import { fonts } from '../fonts.ts'
 import { Keymap } from '../Keymap.tsx'
 import { useRegistry } from '../registry.tsx'
@@ -72,8 +72,8 @@ function StepSlider({ label, options, value, disabled, onChange }: {
   const at = Math.max(0, options.findIndex((o) => o.value === value))
   return (
     <span className="step-slider">
-      <input type="range" aria-label={label} aria-valuetext={options[at]?.label} min={0} max={options.length - 1} step={1} value={at} disabled={disabled}
-        onChange={(e) => onChange(options[Number(e.target.value)]!.value)} />
+      <Slider label={label} valueText={(i) => options[i]?.label ?? ''} min={0} max={options.length - 1} step={1} value={at} disabled={disabled}
+        onChange={(i) => onChange(options[i]!.value)} />
       <span className="step-slider__stops" aria-hidden>
         {options.map((option, index) => <span key={option.value} className={index === at ? 'is-current' : ''}>{option.label}</span>)}
       </span>

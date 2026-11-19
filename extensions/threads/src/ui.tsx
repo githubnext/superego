@@ -313,6 +313,8 @@ function Archived({ machines, live }: { machines: MachineEntry[]; live: Project[
   const [open, setOpen] = useLocalState('threads.archived.open', false)
   const { selection, select } = useSelection()
   const [threads, setThreads] = useState<{ machine: MachineEntry; thread: ThreadInfo }[]>()
+  // The machines that couldn't say theirs, and why: said where the list is, the rest listed.
+  const [failed, setFailed] = useState<{ machine: MachineEntry; error: string }[]>([])
   const connected = machines.filter((m) => m.state === 'connected')
   // Asked again whenever the threads in use change: archiving one moves it here, unarchiving moves it back.
   const inUse = live.flatMap((s) => s.threads.map((t) => `${s.machine.id}/${t.id}`)).sort().join(' ')
@@ -320,9 +322,15 @@ function Archived({ machines, live }: { machines: MachineEntry[]; live: Project[
   useEffect(() => {
     if (!open) return
     let alive = true
-    void Promise.all(connected.map((machine) => call<ThreadInfo[]>(machine.id, 'thread.list', { archived: true })
-      .then((list) => list.map((thread) => ({ machine, thread })), () => [])))
-      .then((lists) => { if (alive) setThreads(lists.flat().sort((a, b) => b.thread.activeAt - a.thread.activeAt)) })
+    void Promise.allSettled(connected.map((machine) => call<ThreadInfo[]>(machine.id, 'thread.list', { archived: true })
+      .then((list) => list.map((thread) => ({ machine, thread })))))
+      .then((results) => {
+        if (!alive) return
+        const errors = results.flatMap((result, i) => result.status === 'rejected' ? [{ machine: connected[i]!, error: (result.reason as Error)?.message ?? String(result.reason) }] : [])
+        for (const { machine, error } of errors) console.error(`Archived threads on ${machine.label}: ${error}`)
+        setFailed(errors)
+        setThreads(results.flatMap((result) => result.status === 'fulfilled' ? result.value : []).sort((a, b) => b.thread.activeAt - a.thread.activeAt))
+      })
     return () => { alive = false }
   }, [open, inUse, asked])
   return (
@@ -332,8 +340,11 @@ function Archived({ machines, live }: { machines: MachineEntry[]; live: Project[
         Archived
         {open && threads && <em>{threads.length}</em>}
       </button>
+      {open && failed.map(({ machine, error }) => (
+        <div key={machine.id} className="threads__empty threads-archived__error" role="alert">Couldn’t list {machine.label}’s archived threads: {error}</div>
+      ))}
       {open && (threads?.length === 0
-        ? <div className="threads__empty">Nothing archived.</div>
+        ? !failed.length && <div className="threads__empty">Nothing archived.</div>
         : (
           <List>
             {(threads ?? []).map(({ machine, thread }) => (

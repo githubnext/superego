@@ -83,3 +83,55 @@ it("answers an agent with a row's button", async () => {
   await press('Stop')
   expect(replies).toEqual([{ button: 'stop-a', values: {} }])
 })
+
+const agentReplies = () => {
+  const replies: Reply[] = []
+  return { replies, host: { by: 'agent', reply: async (r: Reply) => { replies.push(r) } } satisfies BlocksHost }
+}
+const click = (el: Element) => act(async () => { (el as HTMLElement).click() })
+const role = (name: string) => [...container.querySelectorAll(`[role="${name}"]`)]
+
+it('answers with a lone choice’s pick at once, its default too, from buttons or a list', async () => {
+  const { replies, host } = agentReplies()
+  const options = [{ label: 'Yes', value: 'y' }, { label: 'No', value: 'n' }]
+  await draw([{ type: 'choice', id: 'ok', options, default: 'y' }], host)
+  expect(button('Yes').getAttribute('aria-pressed')).toBe('true')
+  await press('Yes')
+  await draw([{ type: 'choice', id: 'ok2', options, style: 'list' }], host)
+  expect(role('radio')).toHaveLength(2)
+  await click(role('radio')[1]!)
+  expect(replies).toEqual([{ button: 'submit', values: { ok: 'y' } }, { button: 'submit', values: { ok2: 'n' } }])
+})
+
+it('keeps a choice’s picks for the submit: one (radios), any (checkboxes or toggles), in the order picked', async () => {
+  const { replies, host } = agentReplies()
+  const options = [{ label: 'X', value: 'x' }, { label: 'Y' }, { label: 'Z', value: 'z' }]
+  await draw([
+    { type: 'choice', id: 'one', options, style: 'list', default: 'x' },
+    { type: 'choice', id: 'any', options, style: 'list', multiple: true },
+    { type: 'choice', id: 'some', options, style: 'buttons', multiple: true, default: ['x'] },
+  ], host)
+  const [radios, checks] = [role('radio'), role('checkbox')]
+  expect(radios[0]!.getAttribute('aria-checked')).toBe('true')
+  await click(radios[1]!)
+  expect(radios[0]!.getAttribute('aria-checked')).toBe('false')
+  await click(checks[2]!)
+  await click(checks[0]!)
+  await click(checks[1]!)
+  await click(checks[1]!)
+  await press('Z')
+  await press('X')
+  await press('Submit')
+  expect(replies).toEqual([{ button: 'submit', values: { one: 'Y', any: ['z', 'x'], some: ['z'] } }])
+})
+
+it('moves a slider by its steps from the keyboard, and answers with the number', async () => {
+  const { replies, host } = agentReplies()
+  await draw([{ type: 'slider', id: 'n', label: 'How many', min: 0, max: 10, step: 2, default: 4 }], host)
+  expect(container.querySelectorAll('.superego-slider__tick')).toHaveLength(6)
+  const input = container.querySelector<HTMLInputElement>('input[type="range"]')!
+  await act(async () => { input.focus(); input.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true })) })
+  expect(container.querySelector('output')!.textContent).toBe('6')
+  await press('Submit')
+  expect(replies).toEqual([{ button: 'submit', values: { n: 6 } }])
+})

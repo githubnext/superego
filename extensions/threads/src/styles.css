@@ -90,6 +90,7 @@
 .threads-archived__caret { flex: none; transition: transform .12s; }
 .threads-archived.is-open .threads-archived__caret { transform: rotate(90deg); }
 .threads-archived .superego-list-item { color: var(--superego-muted); }
+.threads-archived__error { color: var(--superego-status-error); }
 .threads-archived__where { font-style: normal; margin-left: 6px; color: var(--superego-faint); font-size: var(--superego-text-sm); }
 
 /* The thread's model in the title bar: a quiet button that shows its details., truncated last. */
