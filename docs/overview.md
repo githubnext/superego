@@ -200,8 +200,12 @@ cd ~ && pnpm config set --global registry https://packagefeedproxy.microsoft.io/
 (or `registry=` in `~/.npmrc`, `PNPM_CONFIG_REGISTRY` for one shell, `SUPEREGO_REGISTRY` for one run of
 install-machine.sh). A frozen install (`pnpm install --frozen-lockfile`, or any install in CI) never rewrites the lockfile,
 and neither does a plain `pnpm install` while the manifests match it. Adding or updating a dependency does resolve through
-the mirror, and a mirror that serves its tarballs from another host (this one does) writes those URLs into the lockfile:
-resolve dependency changes against `--registry=https://registry.npmjs.org/`, or leave them to a machine that reaches it.
+the mirror, whose metadata names tarballs on another host and often only sha1 hashes. `.pnpmfile.mjs` puts each package
+resolved that way back as registry.npmjs.org has it (its `afterAllResolved` hook): no tarball URL, npm's sha512, once
+npm's metadata for that version confirms the mirror's tarball is the same one. That needs registry.npmjs.org's metadata
+(not its tarballs); where it can't be reached, the change fails, naming the packages, and leaves the lockfile alone: make
+it with `--registry=https://registry.npmjs.org/`, or on a machine that reaches npm. The lockfile records the pnpmfile's
+checksum, so a change to `.pnpmfile.mjs` goes with a `pnpm install` that updates it.
 
 `superego mcp` is an MCP server on stdio, for agents outside Superego (Claude Code, Codex, an editor's): each action a
 machine exposes to outside agents is a tool named as the action (`thread.start` as `thread_start`, `pane.open` as
