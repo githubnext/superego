@@ -26,6 +26,8 @@
 - The font pickers in Settings → Appearance work from the keyboard: the arrow keys move through the fonts, typing
   highlights the first match, Enter picks the highlighted one, and screen readers hear a list. Opening one scrolls to
   the current font, and long font lists scroll smoothly.
+- Screen readers read out the row you move to in the command palette and the other pick lists (open a pane, unread
+  threads, an extension's quick open).
 
 ### Fixes
 

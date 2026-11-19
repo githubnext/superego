@@ -816,6 +816,9 @@ importers:
 
   packages/app:
     dependencies:
+      '@base-ui/react':
+        specifier: ^1.9.0
+        version: 1.9.0(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
       '@codemirror/commands':
         specifier: 6.11.1
         version: 6.11.1
