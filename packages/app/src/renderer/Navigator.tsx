@@ -1,7 +1,7 @@
 // The navigator (⌘L), after Fut's: every project, its threads, and their panes, as one tree to go anywhere from
 // anywhere; pinned threads first, as the sidebar lists them. Typing searches the whole path ("superego login diff"); without a query the tree is browsable: ← to the parent,
 // → to the first child. ⌃P, ⌃T and ⌃G show only projects, threads or panes (again: everything). Enter goes there.
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
+import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { autoFocusOnOpen, Dialog, PushPinIcon, StatusGlyph } from '@superego/ui'
 import { unread, type Status, type ThreadInfo } from '@superego/protocol'
 import { score } from './score.ts'
@@ -110,6 +110,9 @@ export function Navigator({ onClose }: { onClose(): void }) {
   const [active, setActive] = useState(() => Math.max(0, rows.findIndex((r) => r.current)))
   useEffect(() => { setActive(query ? 0 : Math.max(0, shown.findIndex((r) => r.current))) }, [query, only])
   const list = useRef<HTMLUListElement>(null)
+  // The box is a combobox and the lit row its active descendant, as in the palette: a screen reader follows along.
+  const listId = useId()
+  const optionId = (index: number) => `${listId}-${index}`
   useEffect(() => { list.current?.querySelector('.is-active')?.scrollIntoView({ block: 'nearest' }) }, [active])
 
   const browsing = !query && !only
@@ -137,11 +140,13 @@ export function Navigator({ onClose }: { onClose(): void }) {
   return (
     <Dialog onClose={onClose} size="medium" className="palette navigator" label="Go to">
       <input className="palette__input" autoFocus={autoFocusOnOpen()} value={query} onKeyDown={onKeyDown}
+        role="combobox" aria-expanded aria-controls={listId} aria-autocomplete="list"
+        aria-activedescendant={shown[active] ? optionId(active) : undefined}
         placeholder={only ? `Go to a ${only}` : 'Go to a project, thread or pane'}
         onChange={(e) => setQuery(e.target.value)} />
-      <ul className="palette__list" role="listbox" ref={list}>
+      <ul className="palette__list" role="listbox" id={listId} aria-label="Projects, threads and panes" ref={list}>
         {shown.map((row, index) => (
-          <li key={row.key} role="option" aria-selected={index === active}
+          <li key={row.key} id={optionId(index)} role="option" aria-selected={index === active}
             className={`navigator__row navigator__row--${row.kind} ${index === active ? 'is-active' : ''} ${row.current ? 'is-current' : ''}`}
             style={browsing ? { paddingLeft: `${12 + row.depth * 18}px` } : undefined}
             onMouseMove={() => setActive(index)} onClick={row.go}>
@@ -152,7 +157,7 @@ export function Navigator({ onClose }: { onClose(): void }) {
             {row.detail && <span className="palette__detail">{row.detail}</span>}
           </li>
         ))}
-        {shown.length === 0 && <li className="palette__none">Nothing matches</li>}
+        {shown.length === 0 && <li className="palette__none" role="presentation">Nothing matches</li>}
       </ul>
       <div className="navigator__keys">↑↓ move · ←→ parent, child · ⌃P ⌃T ⌃G projects, threads, panes · ↩ go</div>
     </Dialog>

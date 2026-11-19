@@ -26,8 +26,8 @@
 - The font pickers in Settings → Appearance work from the keyboard: the arrow keys move through the fonts, typing
   highlights the first match, Enter picks the highlighted one, and screen readers hear a list. Opening one scrolls to
   the current font, and long font lists scroll smoothly.
-- Screen readers read out the row you move to in the command palette and the other pick lists (open a pane, unread
-  threads, an extension's quick open).
+- Screen readers read out the row you move to in the command palette, Go to (⌘L) and the other pick lists (open a
+  pane, unread threads, an extension's quick open).
 - Sliders, in Settings and in an agent's UI, mark their stops on the track when stepped, and take a finger anywhere
   near them on a phone.
 - Settings' sections move with the arrow keys, and an agent's choices with the arrow keys within them (Enter or Space
