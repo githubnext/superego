@@ -168,10 +168,20 @@ await openApp({ name: 'profile', timeout: (MINUTES + 45) * 60_000, shots: OUT, m
   const stateOf = async (id) => (await list()).find((thread) => thread.id === id)?.status.state
   const start = async (title, cwd = PROJECT) => (await run(`window.superego.call('local', 'thread.start', ${JSON.stringify({ cwd, title })})`)).id
   const sendTo = (id, text) => run(`window.superego.call('local', 'thread.send', ${JSON.stringify({ thread: id, text })})`)
-  /** The run just sent to it answered. */
+  /** The run just sent to it answered. A wait cut short (its connection closed, say) is waited again. */
   const answered = async (id, label, ms = 120_000) => {
-    const read = run(`window.superego.call('local', 'thread.read', ${JSON.stringify({ thread: id, wait: true })})`)
-    await Promise.race([read, tick(ms).then(() => t.fail(`waiting for ${label}`))])
+    const end = Date.now() + ms
+    for (;;) {
+      const read = run(`window.superego.call('local', 'thread.read', ${JSON.stringify({ thread: id, wait: true })})`)
+      try {
+        await Promise.race([read, tick(end - Date.now()).then(() => t.fail(`waiting for ${label}`))])
+        return
+      } catch (error) {
+        if (Date.now() >= end || String(error.message).startsWith('waiting for')) throw error
+        console.log(`profile: waiting for ${label} again: ${error.message}`)
+        await tick(1000)
+      }
+    }
   }
   /** Started on a turn it won't finish: working, its turn taken (so the next send takes the next). */
   const working = async (id, label) => {
