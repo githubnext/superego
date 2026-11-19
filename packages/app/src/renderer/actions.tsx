@@ -41,6 +41,11 @@ export type WindowContext = {
   /** Fold sections or threads in the sidebar, by key (projects.ts's `fold`), or unfold them. */
   fold(keys: readonly string[], folded: boolean): void
   toggleSidebar(): void
+  /**
+   * Show the space `id` in the sidebar (the sidebar shown if it was hidden; on a phone, its drawer opened) and focus what's
+   * used there: its selected row, else its first. Throws when `id` isn't one of the window's spaces.
+   */
+  focusSpace(id: string): void
   toggleNavigator(): void
   /** The picker of panes to open beside the selected thread (⌘⇧P). */
   togglePanePicker(): void

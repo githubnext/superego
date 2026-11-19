@@ -56,10 +56,12 @@ const places = new Map<string, { top: number; anchor: number; head: number }>()
 /**
  * The editor's keys: typing's own (moving, selecting, deleting, Enter, select all, macOS's Ctrl ones), undo and redo,
  * and find. Not CodeMirror's other defaults (⌘/ comment, ⌘L select line, ⌘I, ⌘[ ⌘], ⌥↑ ⌥↓, ⌘U ⌘⇧U undo and redo a
- * selection, …): those keys are the app's, and an editor with the focus would otherwise keep them from it.
+ * selection, …): those keys are the app's, and an editor with the focus would otherwise keep them from it. Nor the Ctrl
+ * ones the app binds (⌃D scrolls, ⌃O lists links, ⌃T goes to the threads): pressed in an editor, they'd do both.
  */
+const APP_CTRL_KEYS = new Set(['Ctrl-d', 'Ctrl-o', 'Ctrl-t'])
 const EDITING_KEYS = [
-  ...standardKeymap, ...historyKeymap.filter((binding) => binding.run === undo || binding.run === redo),
+  ...standardKeymap.filter((binding) => !binding.mac || !APP_CTRL_KEYS.has(binding.mac)), ...historyKeymap.filter((binding) => binding.run === undo || binding.run === redo),
   { key: 'Mod-f', run: openSearchPanel, scope: 'editor search-panel' },
   { key: 'Mod-g', run: findNext, shift: findPrevious, scope: 'editor search-panel', preventDefault: true },
   { key: 'Escape', run: closeSearchPanel, scope: 'editor search-panel' },

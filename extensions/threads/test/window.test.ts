@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 // The sidebar in the window drawn whole (superego/testing's mountUi) over a real daemon: its ··· menu (sorting, hiding
 // it), ⌘/ to hide it (the threads as dots in the rail) and show it again, the details beside the thread (⌘I, the model
-// button), the archived threads at its end, a thread another started right under it, ⌘⇧] ⌘⇧[ down and up the rows,
+// button), ⌃T into the list, the archived threads at its end, a thread another started right under it, ⌘⇧] ⌘⇧[ down and up the rows,
 // and pinned threads at the top, from every project and machine; projects, Pinned and a thread's offshoots folded.
 import { mkdir } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -70,6 +70,43 @@ it('shows the details beside the thread from ⌘I and from the model button, the
   await ui.until(() => Boolean($('.threads-details')), 'the details with the sidebar hidden')
   await ui.key('mod+i')
   await ui.until(() => !$('.threads-details') && !$('.threads-model')?.classList.contains('is-on'), 'and off')
+})
+
+it('puts the keyboard in the list from ⌃T, on the selected row: from the prompt, from a pane, with the sidebar hidden', async () => {
+  const other = await daemon.thread(undefined, { title: 'other' })
+  const thread = await daemon.thread(undefined, { title: 'focused' })
+  ui = await mountUi({ window: true, extensions: [threads], machines: [daemon], select: { thread: thread.id } })
+  await ui.until(() => titled() === 'focused' && Boolean(rowOf('other')), 'the thread shown, the others listed')
+  const prompt = () => $('.app__main .composer textarea')
+  const listFocused = () => document.activeElement === rowOf('focused') && Boolean(document.activeElement?.closest('.app__sidebar'))
+
+  // From the prompt, and again: back to it.
+  await ui.until(() => Boolean(prompt()), 'the prompt')
+  prompt()!.focus()
+  await ui.key('ctrl+t')
+  await ui.until(listFocused, 'the selected row focused, from the prompt')
+  await ui.key('down')
+  await ui.until(() => document.activeElement === rowOf('other'), 'its arrows go on down the rows')
+  await ui.key('ctrl+t')
+  await ui.until(() => document.activeElement === prompt(), 'pressed in the list, back to the prompt')
+
+  // From a pane beside the thread.
+  await ui.dispatch('pane.open', { thread: thread.id, kind: 'thread', params: { thread: other.id } })
+  await ui.until(() => Boolean(document.activeElement?.closest('[data-column]:not([data-column="thread"])')), 'the pane focused')
+  await ui.key('ctrl+t')
+  await ui.until(listFocused, 'the selected row focused, from a pane')
+
+  // Hidden: shown first. Nothing selected: the first row.
+  await ui.key('mod+/')
+  await ui.until(() => !sidebar(), 'the sidebar hidden')
+  prompt()!.focus()
+  await ui.key('ctrl+t')
+  await ui.until(() => sidebar() && listFocused(), 'shown, and the selected row focused')
+  await ui.select(undefined)
+  await ui.until(() => !titled(), 'nothing selected')
+  ;(document.activeElement as HTMLElement | null)?.blur()
+  await ui.key('ctrl+t')
+  await ui.until(() => document.activeElement === rows()[0], 'the first row focused')
 })
 
 it('keeps the archived at its end, closed; opened, one list across projects', async () => {

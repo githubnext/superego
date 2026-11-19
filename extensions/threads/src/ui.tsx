@@ -5,7 +5,7 @@
 // projects.ts). Its views:
 // - the list (`threads.list`), a space: sorted recently active, newest first, needs you first or alphabetically (an app
 //   setting); with the sidebar hidden, a rail of status glyphs; the key to go anywhere (⌘L) beside its heading, while
-//   pointed at. A row's title is followed by other extensions' marks (the `thread.badge` slot: a worktree's branch,
+//   pointed at; ⌃T puts the keyboard in it, on the selected thread's row (and again, back in the prompt). A row's title is followed by other extensions' marks (the `thread.badge` slot: a worktree's branch,
 //   say); a right-click on it pins or unpins it, or archives it. Pinned rows are dragged to reorder them, and a
 //   project's row dragged among them is pinned there. Pointed at or focused for a moment, a row (or a rail's dot) shows
 //   a card of its thread (card.tsx)
@@ -27,6 +27,9 @@ import { ThreadCard } from './card.tsx'
 import { registerLinks, registerRows } from './rows.tsx'
 import { about } from './shared.ts'
 
+/** The list, the Threads space; and the action that puts the keyboard in it. */
+const LIST = 'threads.list'
+const LIST_FOCUS = 'threads.focus'
 /** The details view, and the action that puts it beside the thread or takes it away. */
 const DETAILS = 'threads.details'
 /** The shell's action that hides the sidebar, and shows it again: hidden, the list is dots in the rail. */
@@ -41,7 +44,7 @@ const set = (c: Pick<WindowContext, 'dispatch'>, key: string, value: string | bo
 export default defineUiExtension({
   ...about,
   setup(superego) {
-    superego.view('threads.list', { title: 'Threads', icon: ChatsIcon, context: 'window', fits: ['space'], default: 'space', component: ThreadsSpace, railButton: ThreadsRail })
+    superego.view(LIST, { title: 'Threads', icon: ChatsIcon, context: 'window', fits: ['space'], default: 'space', component: ThreadsSpace, railButton: ThreadsRail })
     superego.view(DETAILS, { title: 'Thread details', context: 'thread', fits: ['beside', 'pane'], component: DetailsPane })
     superego.view('threads.model', { title: 'Model', icon: SparkleIcon, context: 'thread', fits: ['header'], default: 'header', component: ModelButton, menuItem: ModelItem })
     registerRows(superego)
@@ -53,6 +56,11 @@ export default defineUiExtension({
     // ⌘⌥↓ and ⌘⌥↑ too: the same step as thread.next and thread.previous, down the rows the sidebar shows.
     action('threads.next', 'Next thread', (c) => void c.dispatch('thread.next', {}, { source: 'threads' }), 'mod+alt+arrowdown')
     action('threads.previous', 'Previous thread', (c) => void c.dispatch('thread.previous', {}, { source: 'threads' }), 'mod+alt+arrowup')
+    // ⌃T: the keyboard in the list, on the selected thread's row (the sidebar shown first); pressed there, back to the prompt.
+    action(LIST_FOCUS, 'Focus threads list', (c) => {
+      if (document.activeElement?.closest('.threads')) void c.dispatch('focus.prompt', {}, { source: 'threads' })
+      else c.focusSpace(LIST)
+    }, 'ctrl+t')
     action('threads.collapse', 'Collapse all threads', (c) => c.fold([...c.sidebar.pinned.length ? [fold.pinned] : [], ...c.sidebar.projects.map(fold.project)], true))
     action('threads.expand', 'Expand all threads', (c) => c.fold(c.sidebar.folded, false))
   },

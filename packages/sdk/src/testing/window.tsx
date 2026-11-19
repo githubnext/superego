@@ -489,7 +489,7 @@ export async function mountUi(options: MountOptions = {}): Promise<TestWindow> {
     registry.router.setContext({
       app, machines: list, selection, select, openSettings() {}, newThread() {}, togglePalette() {}, toggleNavigator() {}, togglePanePicker() {}, showLog() {},
       threadOf: (s) => all[s.machine]?.find((t) => t.id === s.thread), projects: [], sidebar: { pinned: [], projects: [], folded: [] }, lastThread: {}, fold() {},
-      appSetting: (key) => appSide.settings.get(key) as never, toggleSidebar() {}, back() {}, forward() {}, railTabs: () => [],
+      appSetting: (key) => appSide.settings.get(key) as never, toggleSidebar() {}, focusSpace() { throw new Error('No sidebar to focus: mount the whole window (window: true)') }, back() {}, forward() {}, railTabs: () => [],
     })
     return <>{children}</>
   }

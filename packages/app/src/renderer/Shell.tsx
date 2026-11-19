@@ -13,6 +13,7 @@ import { useSettings, watched } from './client.ts'
 import type { SpaceRailProps, View, ViewProps } from './extension-api.ts'
 import { scopeOfEntry, useRegistry, whose } from './registry.tsx'
 import { shownPanes } from './lookups.ts'
+import { focusSidebar } from './focus.ts'
 import { paneMenu, PlacedViews, Slot, useLayout, viewsIn } from './placement.tsx'
 import { Contained } from './contained.tsx'
 import { RailButton } from './marks.tsx'
@@ -126,6 +127,12 @@ export function Shell() {
     },
     projects, sidebar: rows, lastThread, fold, appSetting: (key) => watched<SettingsSnapshot>(APP, 'settings.watch', {})?.values[key] as never,
     toggleSidebar: () => narrow ? setDrawer((open) => !open) : sidebar.show(),
+    focusSpace: (id) => {
+      const view = spaces.find((v) => v.id === id)
+      if (!view) throw new Error(`${id} isn't a space in this window`)
+      if (narrow) { setSpace(id); setDrawer(true) } else showSpace(view)
+      focusSidebar(id)
+    },
     back: history.back, forward: history.forward,
     railTabs: tabsNow,
   })
@@ -199,7 +206,7 @@ export function Shell() {
           </nav>
         )}
         {tab === 'settings' && <main className="app__main"><SettingsView machines={machines} onClose={settings.close} pane /></main>}
-        {!narrow && tab !== 'settings' && sideOpen && <aside className="app__sidebar">{sidebarBody}</aside>}
+        {!narrow && tab !== 'settings' && sideOpen && <aside className="app__sidebar" data-space={space?.id}>{sidebarBody}</aside>}
         {!narrow && tab === 'space' && spaces.length > 0 && sidebarEdge.edge}
         {tab !== 'settings' && <main className="app__main">
           {narrow && (
@@ -230,7 +237,7 @@ export function Shell() {
                   {/* Opened by a finger, the drawer holds the focus itself (no keyboard over it); from the keyboard, the
                       selected thread. Picking a thread in it (even the open one) closes it. Its content (Base UI's) is
                       to press, not to drag shut with a mouse: a drag would capture the press, and the click with it. */}
-                  <BaseUI.Drawer.Popup ref={drawerPopup} className="app__sidebar" aria-label={space?.title}
+                  <BaseUI.Drawer.Popup ref={drawerPopup} className="app__sidebar" data-space={space?.id} aria-label={space?.title}
                     initialFocus={popupFocus(drawerPopup, () => drawerPopup.current?.querySelector<HTMLElement>('.superego-list-item.is-selected[tabindex]'))}
                     finalFocus={() => { const back = !picked.current; picked.current = false; return back }}
                     onClick={(event) => { if ((event.target as HTMLElement).closest('.superego-list-item')) { picked.current = true; setDrawer(false) } }}>
