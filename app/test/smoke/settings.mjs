@@ -9,9 +9,12 @@ export default async function settings(t, s) {
   // Fonts: the picker lists installed families (the harness's, here; it needs a user gesture), and a choice sets the
   // CSS variable.
   await t.run(`document.querySelector('[data-key="app.font.interface"] .superego-font-picker__button').click()`, true)
-  await t.until(`document.querySelectorAll('.superego-font-picker__list button').length > 5`, 'installed fonts listed')
-  await t.run(`[...document.querySelectorAll('.superego-font-picker__list button')].find((b) => b.textContent === 'Helvetica' || b.textContent === 'Arial').click()`)
-  await t.until(`/Helvetica|Arial/.test(document.documentElement.style.getPropertyValue('--superego-font'))`, 'interface font applied')
+  await t.until(`document.querySelectorAll('.superego-font-picker__item').length > 5`, 'installed fonts listed')
+  // Typing highlights the first match; Enter picks it.
+  await t.type('.superego-font-picker__popover input.superego-field', 'Arial')
+  await t.until(`document.querySelector('.superego-font-picker__item[data-highlighted]')?.textContent === 'Arial'`, 'first match highlighted')
+  t.key('Enter', [])
+  await t.until(`/Arial/.test(document.documentElement.style.getPropertyValue('--superego-font'))`, 'interface font applied')
   await t.call('app.settings.set', { key: 'app.font.mono', value: 'Menlo' }, 'app')
   await t.until(`document.documentElement.style.getPropertyValue('--superego-mono').includes('Menlo')`, 'mono font applied')
 

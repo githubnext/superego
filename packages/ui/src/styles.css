@@ -179,15 +179,21 @@ button, summary { -webkit-user-select: none; user-select: none; }
 .superego-segmented__item:hover:not([data-pressed]) { background: var(--superego-hover); color: var(--superego-text); }
 .superego-segmented__item[data-pressed] { background: var(--superego-raised); color: var(--superego-text); box-shadow: 0 0 0 .5px light-dark(rgb(0 0 0 / .12), rgb(255 255 255 / .08)), 0 1px 2px light-dark(rgb(0 0 0 / .08), rgb(0 0 0 / .3)); }
 
-.superego-font-picker { position: relative; }
 .superego-font-picker__button { min-width: 220px; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 280px; }
 .superego-font-picker__popover { width: 300px; display: flex; flex-direction: column; gap: 6px; padding: 8px; }
 .superego-font-picker__all { font-size: calc(12px * var(--superego-text-scale)); color: var(--superego-muted); display: flex; gap: 6px; align-items: center; }
-.superego-font-picker__list { max-height: 280px; overflow: auto; display: flex; flex-direction: column; }
-.superego-font-picker__list button { font-size: calc(14px * var(--superego-text-scale)); color: inherit; text-align: left; background: none; border: 0; padding: 4px 8px; border-radius: 4px; }
-.superego-font-picker__list button:hover { background: var(--superego-accent); color: var(--superego-accent-text); }
-.superego-font-picker__list button[aria-selected="true"]:not(:hover) { background: var(--superego-selected); }
+/* Only the rows in view are drawn: each the same height, placed down the scroller by the virtualizer. */
+.superego-font-picker__list { outline: none; }
+.superego-font-picker__scroller { max-height: 280px; overflow: auto; overscroll-behavior: contain; }
+.superego-font-picker__item {
+  position: absolute; top: 0; left: 0; width: 100%; box-sizing: border-box; height: calc(26px * var(--superego-text-scale));
+  display: flex; align-items: center; padding: 0 8px; border-radius: 4px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+  font-size: calc(14px * var(--superego-text-scale)); cursor: default; user-select: none; outline: none;
+}
+.superego-font-picker__item[data-selected]:not([data-highlighted]) { background: var(--superego-selected); }
+.superego-font-picker__item[data-highlighted] { background: var(--superego-accent); color: var(--superego-accent-text); }
 .superego-font-picker__note { color: var(--superego-muted); font-size: calc(12px * var(--superego-text-scale)); padding: 4px 8px; }
+.superego-font-picker__note:empty { display: none; }
 
 /* Layers: dialogs, then what opens from anything (menus, popovers, tooltips) above them. */
 .superego-layer { z-index: 100; outline: none; }

@@ -23,6 +23,9 @@
   it's open the thread behind it can't be reached by accident, Escape closes a menu in it before the sheet, and closing
   it puts the focus back on the title.
 - On a phone, text is 15% bigger throughout, on top of the Text size you pick in Settings → Appearance.
+- The font pickers in Settings → Appearance work from the keyboard: the arrow keys move through the fonts, typing
+  highlights the first match, Enter picks the highlighted one, and screen readers hear a list. Opening one scrolls to
+  the current font, and long font lists scroll smoothly.
 
 ### Fixes
 
