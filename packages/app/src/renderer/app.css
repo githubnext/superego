@@ -466,21 +466,26 @@ code { font-family: var(--superego-mono); font-size: .92em; }
 .superego-dialog.palette { top: 12vh; transform: translateX(-50%); }
 .superego-dialog.palette[data-starting-style], .superego-dialog.palette[data-ending-style] { transform: translate(-50%, 6px) scale(.985); }
 .palette .superego-dialog__body { overflow: hidden; display: flex; flex-direction: column; }
-.palette__input { font: inherit; font-size: calc(15px * var(--superego-text-scale)); color: inherit; background: none; border: 0; border-bottom: 1px solid var(--superego-border); outline: none; padding: 14px var(--superego-space-4); }
-.palette__list { list-style: none; margin: 0; padding: 6px; max-height: 360px; overflow: auto; }
-.palette__list li { display: flex; align-items: center; gap: var(--superego-space-2); height: 34px; padding: 0 10px; border-radius: var(--superego-radius); cursor: default; }
-.palette__list li.is-active { background: var(--superego-accent); color: var(--superego-accent-text); }
-.palette__list li.is-active :is(.palette__glyph, .palette__detail, kbd, .superego-status) { color: inherit; }
-.palette__glyph { width: 1em; color: var(--superego-muted); font-family: var(--superego-mono); text-align: center; }
+/* The list: rows as the sidebar's, the lit one grey as its selected row is; a thin scrollbar clear of them. */
+.palette__list { list-style: none; margin: 0; padding: 6px; max-height: min(420px, 56vh); overflow: auto; scroll-padding: 6px; }
+.palette__list::-webkit-scrollbar { width: 8px; }
+.palette__list::-webkit-scrollbar-thumb { border-width: 2px; }
+.palette__list li { display: flex; align-items: center; gap: var(--superego-space-2); height: 28px; padding: 0 8px; border-radius: var(--superego-radius); cursor: default; }
+.palette__list li.is-active { background: var(--superego-selected); }
+.palette__glyph { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 14px; color: var(--superego-muted); }
 .palette__title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .palette__title.is-unread { font-weight: 600; }
 /* More after the title (where a link goes, a file's folder): cut short before the title is. */
 .palette__detail { flex: 0 1 auto; min-width: 0; max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--superego-muted); font-size: var(--superego-text-sm); }
-.palette__list kbd { font: var(--superego-text-xs) var(--superego-mono); color: var(--superego-muted); }
+.palette__list kbd { flex: none; font: var(--superego-text-xs) var(--superego-mono); color: var(--superego-faint); }
+.palette__list li.is-active kbd { color: var(--superego-muted); }
+/* A group's name over its rows, as the sidebar heads a project's. */
+.palette__list li.palette__group { height: 26px; padding-top: 4px; font-size: var(--superego-text-sm); font-weight: 600; color: var(--superego-muted); }
+.palette__list li.palette__group:not(:first-child) { margin-top: 6px; }
 /* Under an empty list, in a row's place: it stays in the page, empty, to tell a screen reader when nothing matches. */
 .palette__list:empty { padding: 0; }
 .palette__none { color: var(--superego-muted); }
-.palette__none:not(:empty) { display: flex; align-items: center; height: 34px; margin: 6px; padding: 0 10px; }
+.palette__none:not(:empty) { display: flex; align-items: center; justify-content: center; height: 64px; margin: 6px; padding: 0 10px; }
 
 .new-thread__body { padding: var(--superego-space-4); display: flex; flex-direction: column; gap: var(--superego-space-3); }
 .new-thread__field { display: flex; flex-direction: column; gap: var(--superego-space-1); min-width: 0; }
@@ -836,15 +841,25 @@ a.pane-header__url:hover { color: var(--superego-accent); }
 
 
 
-/* The navigator (⌘L): the palette's list, as a tree. */
+/* The navigator (⌘L): the palette's list, as a tree; the archived threads muted. */
 .navigator__row--project .palette__title { font-weight: 600; }
-.navigator__row--pane .palette__title { color: var(--superego-muted); }
+.navigator__row--pane .palette__title, .navigator__row.is-archived .palette__title { color: var(--superego-muted); }
+.navigator__row.is-archived .palette__glyph { color: var(--superego-faint); }
 .navigator__row.is-current .palette__title::after { content: ' ·'; color: var(--superego-accent); }
 .navigator__pin { flex: none; color: var(--superego-faint); }
 .navigator__crumb { color: var(--superego-faint); font-size: var(--superego-text-sm); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 40%; }
-.navigator__keys { padding: 8px 14px; border-top: 1px solid var(--superego-border); font-size: var(--superego-text-xs); color: var(--superego-faint); }
+.navigator__failed { padding: 4px 8px; color: var(--superego-status-error-text); font-size: var(--superego-text-sm); }
+/* Its foot: a chip per filter, lit while on, each with its key. */
+.navigator__foot { display: flex; align-items: center; gap: 4px; padding: 6px 8px; border-top: 1px solid var(--superego-border); font-size: var(--superego-text-xs); }
+.navigator__hint { flex: 1; padding: 0 6px; color: var(--superego-faint); text-align: right; }
+.navigator__chip {
+  display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 8px; border: 0; border-radius: 999px; background: none;
+  font: inherit; color: var(--superego-muted); cursor: default; transition: background .12s, color .12s;
+}
+.navigator__chip:hover { background: var(--superego-hover); color: var(--superego-text); }
+.navigator__chip.is-on { background: var(--superego-selected); color: var(--superego-text); }
+.navigator__chip kbd { font: var(--superego-text-xs) var(--superego-mono); color: var(--superego-faint); }
 
-.palette__input:focus { outline: 2px solid var(--superego-ring); outline-offset: -2px; }
 
 /* Attachments: chips, an image's with its thumbnail; waiting above the composer, then under the message they went with. */
 .composer__files, .msg__files { display: flex; flex-wrap: wrap; gap: 6px; }

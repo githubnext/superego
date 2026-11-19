@@ -232,6 +232,13 @@ button, summary { -webkit-user-select: none; user-select: none; }
 .superego-dialog__title { font-size: calc(13px * var(--superego-text-scale)); font-weight: 600; margin: 0; }
 .superego-dialog__actions { display: flex; gap: 4px; align-items: center; }
 .superego-dialog__body { flex: 1; min-height: 0; overflow: auto; }
+/* A dialog's search: the field that fills its top (a picker's), borderless, a hairline under it. It wears no ring (see
+   Focus below). */
+.superego-dialog__search {
+  flex: none; width: 100%; font: inherit; font-size: calc(15px * var(--superego-text-scale)); color: inherit; background: none;
+  border: 0; border-bottom: 1px solid var(--superego-border); padding: 12px 16px;
+}
+.superego-dialog__search::placeholder { color: var(--superego-faint); }
 
 .superego-menu, .superego-popover {
   min-width: 200px; background: var(--superego-raised); border: 0; border-radius: 10px;
@@ -262,7 +269,8 @@ button, summary { -webkit-user-select: none; user-select: none; }
 .superego-hover-card[data-starting-style], .superego-hover-card[data-ending-style] { opacity: 0; }
 
 /* Focus: the region holding it wears the ring (the app's), and a text field its own. Nothing else does, but a small
-   control reached from the keyboard: one solid outline in the accent colour, inside its edge, so nothing clips it. */
+   control reached from the keyboard: one solid outline in the accent colour, inside its edge, so nothing clips it. A
+   dialog's search wears none: the dialog is what has the keyboard, and the caret and the lit row say where. */
 :focus { outline: none; }
 :is(button, a, summary, .superego-list-item):focus-visible { outline: 2px solid var(--superego-ring); outline-offset: -2px; }
 

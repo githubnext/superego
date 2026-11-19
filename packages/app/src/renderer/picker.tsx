@@ -1,13 +1,17 @@
 // A picker: a dialog with a box to type in and a list under it that narrows as you type, for going to or running one
 // thing (the palette, quick open, links). ↑↓ (or ⌃P/⌃N) move, ⏎ picks, ⌘⏎ picks it beside, esc closes. With `digits`,
-// ⌃1–⌃9 pick the first nine (⌃⌘ beside), each showing its key. On Base UI's Autocomplete: the box is a combobox and
+// ⌃1–⌃9 pick the first nine (⌃⌘ beside), each showing its key. Browsing (nothing typed), items in a group of their own
+// run under its name; searching, they're one list, best first. On Base UI's Autocomplete: the box is a combobox and
 // the lit row its active descendant, so a screen reader follows along.
-import { useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
+import { Fragment, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { autoFocusOnOpen, BaseUI, Dialog } from '@superego/ui'
 import { keyLabel } from './keys.ts'
 
 /** An item as a line of the list: a glyph before it, its title, more after it, and its key. */
 export type PickerRow = { key: string; title: ReactNode; glyph?: ReactNode; detail?: ReactNode; keys?: string; className?: string }
+
+/** A run of a `Picker`'s list, its group's name over it when given. */
+export type PickerRun<T> = { group?: string; items: T[] }
 
 /** A `Picker`'s items, how each looks, and what picking one does. */
 export type PickerProps<T> = {
@@ -19,7 +23,9 @@ export type PickerProps<T> = {
   items: readonly T[]
   /** The items that match what's typed, best first. Default: all of them. */
   filter?: (items: readonly T[], query: string) => readonly T[]
-  row(item: T): PickerRow
+  row(item: T, options: { grouped: boolean }): PickerRow
+  /** Browsing (nothing typed): an item's group, named over the run of items in it. Items of a group come together. */
+  group?(item: T): string | undefined
   /** An item picked: by ⏎ or a click, `beside` with ⌘. The picker doesn't close itself. */
   onPick(item: T, options: { beside: boolean }): void
   onClose(): void
@@ -49,9 +55,12 @@ export function pickerKey(event: PickerKey, { digits = false }: { digits?: boole
 }
 
 /** A dialog to pick an item from a list, filtered as you type: the palette's, for an extension's own (a quick open). */
-export function Picker<T>({ label, placeholder, className = '', items, filter, row, onPick, onClose, digits, empty = 'Nothing matches', footer }: PickerProps<T>) {
+export function Picker<T>({ label, placeholder, className = '', items, filter, row, group, onPick, onClose, digits, empty = 'Nothing matches', footer }: PickerProps<T>) {
   const [query, setQuery] = useState('')
-  const shown = useMemo(() => filter ? filter(items, query) : items, [items, query, filter])
+  const grouped = Boolean(group) && !query.trim()
+  const runs = useMemo(() => pickerRuns(filter ? filter(items, query) : items, grouped ? group : undefined), [items, query, filter, grouped, group])
+  // As listed, run after run: what the keys go through.
+  const shown = useMemo(() => runs.flatMap((run) => run.items), [runs])
   // The row lit, as the Autocomplete has it (it keeps the index itself): for ⌘⏎, which it leaves to us.
   const lit = useRef<T | undefined>(undefined)
   const onKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
@@ -68,26 +77,46 @@ export function Picker<T>({ label, placeholder, className = '', items, filter, r
       <BaseUI.Autocomplete.Root inline open items={items} filteredItems={shown} autoHighlight="always" keepHighlight loopFocus={false}
         value={query} onValueChange={(value, details) => { if (details.reason !== 'item-press') setQuery(value) }}
         onItemHighlighted={(item) => { lit.current = item }}>
-        <BaseUI.Autocomplete.Input className="palette__input" autoFocus={autoFocusOnOpen()} placeholder={placeholder} onKeyDown={onKeyDown} />
+        <BaseUI.Autocomplete.Input className="superego-dialog__search palette__input" autoFocus={autoFocusOnOpen()} placeholder={placeholder} onKeyDown={onKeyDown} />
         <BaseUI.Autocomplete.List className="palette__list" render={<ul />}>
-          {shown.map((item, index) => {
-            const line = row(item)
-            const keys = line.keys ?? (digits && index < 9 ? `ctrl+${index + 1}` : undefined)
-            return (
-              <BaseUI.Autocomplete.Item key={line.key} value={item} index={index} render={<li />}
-                className={(state) => `${line.className ?? ''} ${state.highlighted ? 'is-active' : ''}`.trim()}
-                onClick={(event) => onPick(item, { beside: event.metaKey })}>
-                {line.glyph !== undefined && <span className="palette__glyph">{line.glyph}</span>}
-                <span className="palette__title">{line.title}</span>
-                {line.detail !== undefined && line.detail !== null && line.detail !== '' && line.detail !== false && <span className="palette__detail">{line.detail}</span>}
-                {keys && <kbd>{keyLabel(keys)}</kbd>}
-              </BaseUI.Autocomplete.Item>
-            )
-          })}
+          {runs.map((run, at) => (
+            <Fragment key={run.group ?? `run-${at}`}>
+              {run.group && <li className="palette__group" role="presentation">{run.group}</li>}
+              {run.items.map((item, within) => {
+                const index = runs.slice(0, at).reduce((n, before) => n + before.items.length, 0) + within
+                const line = row(item, { grouped })
+                const keys = line.keys ?? (digits && index < 9 ? `ctrl+${index + 1}` : undefined)
+                return (
+                  <BaseUI.Autocomplete.Item key={line.key} value={item} index={index} render={<li />}
+                    className={(state) => `${line.className ?? ''} ${state.highlighted ? 'is-active' : ''}`.trim()}
+                    onClick={(event) => onPick(item, { beside: event.metaKey })}>
+                    {line.glyph !== undefined && <span className="palette__glyph">{line.glyph}</span>}
+                    <span className="palette__title">{line.title}</span>
+                    {line.detail !== undefined && line.detail !== null && line.detail !== '' && line.detail !== false && <span className="palette__detail">{line.detail}</span>}
+                    {keys && <kbd>{keyLabel(keys)}</kbd>}
+                  </BaseUI.Autocomplete.Item>
+                )
+              })}
+            </Fragment>
+          ))}
         </BaseUI.Autocomplete.List>
         <BaseUI.Autocomplete.Empty className="palette__none">{empty}</BaseUI.Autocomplete.Empty>
       </BaseUI.Autocomplete.Root>
       {footer}
     </Dialog>
   )
+}
+
+/**
+ * `items` as the picker lists them: by `group`, each group's items run together (where its first is), named over them;
+ * without one, a single run.
+ */
+export function pickerRuns<T>(items: readonly T[], group?: (item: T) => string | undefined): PickerRun<T>[] {
+  if (!group) return [{ items: [...items] }]
+  const runs = new Map<string | undefined, T[]>()
+  for (const item of items) {
+    const name = group(item)
+    runs.set(name, [...runs.get(name) ?? [], item])
+  }
+  return [...runs].map(([name, list]) => ({ ...(name !== undefined ? { group: name } : {}), items: list }))
 }

@@ -21,6 +21,11 @@
 - Each of its fields has a key, shown beside its name: ⌃1 machine, ⌃2 folder, ⌃3 profile, ⌃4 model, ⌃5 thinking, ⌃6
   prompt, ⌃7 name. ⌃I goes to its prompt too, as it does in a thread.
 - What you write there is kept if you close it without starting, and models or profiles that can't be listed say why.
+- The command palette, ⌘L, ⌘⇧P and the other pickers are lighter: tighter rows, the lit one grey as in the sidebar, no
+  chevrons, and no focus ring cut off at the dialog's corners. ⌘K groups the thread's commands and the views to show
+  under headings until you type.
+- ⌘L can list archived threads too: ⌥A (or its Archived chip) adds them, muted, after the rest; picking one opens it.
+  Its foot has chips for ⌃P, ⌃T and ⌃G as well.
 - A thread opened in a pane beside another has less padding at its sides: its messages line up with the composer.
 - `superego machines` no longer hangs on a machine that takes the connection but never answers: after 15 seconds it
   shows as "not answering (timed out connecting)" and the command finishes. `-m` on such a machine gives up after 30

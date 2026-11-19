@@ -157,3 +157,57 @@ it('goes back and forward through the threads shown, by key and by its buttons',
   forward().click()
   await ui.until(() => titled() === 'second', 'the forward button')
 })
+
+it('adds the archived threads to ⌘L on ⌥A, after the rest, and opens one picked', async () => {
+  await daemon.thread(undefined, { title: 'live reconcile' })
+  const old = await daemon.thread(undefined, { title: 'old reconcile' })
+  await daemon.call('thread.archive', { thread: old.id })
+  ui = await mountUi({ window: true, machines: [daemon] })
+  const options = () => $$('.navigator [role=option]').map((li) => li.textContent ?? '')
+  await ui.key('mod+l')
+  await ui.until(() => options().some((o) => o.includes('live reconcile')), 'the navigator')
+  expect(options().some((o) => o.includes('old reconcile'))).toBe(false)
+  expect($('.navigator__chip[aria-pressed=true]')).toBeNull()
+
+  // ⌥A from the field: in, muted, under its heading, after the live ones; again: out.
+  await ui.key('alt+a')
+  await ui.until(() => options().some((o) => o.includes('old reconcile')), 'the archived thread listed')
+  expect($$('.navigator [role=option]').at(-1)?.classList.contains('is-archived')).toBe(true)
+  expect($$('.navigator .palette__group').map((h) => h.textContent)).toContain('Archived')
+  expect($('.navigator__chip[aria-pressed=true]')?.textContent).toContain('Archived')
+  expect(document.activeElement).toBe($('.navigator .palette__input'))
+  await ui.key('alt+a')
+  await ui.until(() => !options().some((o) => o.includes('old reconcile')), 'the archived thread left out again')
+
+  // Its chip does as its key; searched, the archived match comes after the live one.
+  await ui.window!.click('.navigator__foot > .navigator__chip:last-child')
+  await ui.type('.navigator .palette__input', 'reconcile')
+  await ui.until(() => options().length === 2, 'both found')
+  expect(options()[0]).toContain('live reconcile')
+  expect(options()[1]).toContain('old reconcile')
+  await ui.key('down')
+  await ui.key('enter')
+  await ui.until(() => !$('.navigator') && titled() === 'old reconcile', 'the archived thread opened')
+
+  // Each opening starts without them.
+  await ui.key('mod+l')
+  await ui.until(() => options().some((o) => o.includes('live reconcile')), 'the navigator again')
+  expect(options().some((o) => o.includes('old reconcile'))).toBe(false)
+})
+
+it('groups ⌘K by what its commands act on while browsing, one list searched', async () => {
+  const thread = await daemon.thread(undefined, { title: 'grouped' })
+  ui = await mountUi({ window: true, extensions: [notes], machines: [daemon], select: { thread: thread.id } })
+  await ui.until(() => titled() === 'grouped', 'the thread shown')
+  await ui.key('mod+k')
+  await ui.until(() => Boolean($('.palette__input')), 'the palette')
+  const headings = () => $$('.palette__group').map((h) => h.textContent)
+  expect(headings()).toEqual(['This thread', 'Views'])
+  // The rows under a heading come after it, and the keys go through them in the order shown.
+  const rows = $$('.palette__list li')
+  const firstThread = rows.findIndex((li) => li.textContent === 'This thread') + 1
+  expect(rows[firstThread]?.getAttribute('role')).toBe('option')
+  await ui.type('.palette__input', 'show notes')
+  await ui.until(() => headings().length === 0, 'one list, searched')
+  expect($('.palette__list li.is-active')?.textContent).toContain('Show Notes')
+})
