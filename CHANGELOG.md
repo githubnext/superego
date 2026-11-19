@@ -2,13 +2,15 @@
 
 ## Unreleased
 
+## 0.1.8
+
+- **Upgrade:** the extension API is now 5.0. A profile's extension that asks for `api: '^4'` (or `^4.x`) is refused
+  until it asks for `^5`. A composer completion provider's `items(word, where)` gets `where.cwd`, and `where.thread` only
+  once there is a thread: in the New thread dialog there isn't one yet.
 - If you added Superego to an iPhone's home screen, remove it and add it again, so its top bar is drawn under the
   status bar.
 - The image viewer behaves like the other dialogs: the window behind it can't be scrolled or reached with a screen
   reader while it's open.
-- **Upgrade:** the extension API is now 5.0. A profile's extension that asks for `api: '^4'` (or `^4.x`) is refused
-  until it asks for `^5`. A composer completion provider's `items(word, where)` gets `where.cwd`, and `where.thread` only
-  once there is a thread: in the New thread dialog there isn't one yet.
 - ⌘⇧↩ maximizes the thread too: with the focus in its transcript or prompt, it takes the whole width over its panes,
   until ⌘⇧↩ again, Esc, or a pane taking the focus.
 - Drag a pane's tab in the title bar to move the pane: the others slide aside, the columns follow, and the order is
@@ -63,7 +65,7 @@
 - A profile's styles no longer leak into the rest of the window: with `superego.style(css)` they reach only what that
   profile draws, on its machine. The same profile from two machines at different versions, or two profiles with the
   same class names, no longer restyle each other's threads. A profile that appends a `<style>` to `document.head`
-  still works, but styles the whole window: move it to `superego.style` (`api: '^4.2'`).
+  still works, but styles the whole window: move it to `superego.style`.
 - On a phone, swipe right from a thread's left edge to pull out the sidebar, and swipe it left to put it away. It
   follows your finger and slides open or shut when you let go, smoothly both ways, and slides in and out when you tap ☰
   or beside it too.
@@ -97,7 +99,6 @@
   does.
 - On an iPhone's home screen, the top of the page is no longer blurred under the status bar: the bar at the top now
   runs up under it in its own colour.
-  still works, but styles the whole window: move it to `superego.style`.
 
 ## 0.1.7
 
