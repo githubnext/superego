@@ -260,7 +260,16 @@ async function reorder(t, paned, panesOf) {
   t.key('Right', ['meta', 'alt', 'shift'])
   await t.until(async () => JSON.stringify(await ids()) === JSON.stringify([b, c, a]), '⌘⌥⇧→ moved it back')
 
-  await t.call('pane.close', { thread: paned, pane: b })
+  // A middle click on a pane's tab closes it, as in a browser; on the thread's it does nothing.
+  const middle = async (selector) => {
+    const r = await t.run(`(() => { const r = document.querySelector('${selector}').getBoundingClientRect(); return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) } })()`)
+    for (const type of ['mouseDown', 'mouseUp']) t.contents().sendInputEvent({ type, x: r.x, y: r.y, button: 'middle', clickCount: 1 })
+  }
+  await middle('.strip__tab:not([data-pane])')
+  await t.settled()
+  if (JSON.stringify(await ids()) !== JSON.stringify([b, c, a])) t.fail(`a middle click on the thread's tab changed its panes: ${await ids()}`)
+  await middle(`.strip__tab[data-pane="${b}"]`)
+  await t.until(async () => JSON.stringify(await ids()) === JSON.stringify([c, a]), "a middle click closes a pane's tab")
   await t.call('pane.close', { thread: paned, pane: a })
   await t.until(`document.querySelectorAll('.strip__tab[data-pane]').length === 1`, 'one pane again')
 }

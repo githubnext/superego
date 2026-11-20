@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- A middle click on a pane's tab in the title bar closes the pane.
 - The Browser pane shows a page loading: a thin line under its address bar that fills as it loads, a spinner on its
   tab and in the address, and Stop in place of Reload (Esc in the address bar stops it too). Quick loads show nothing.
 

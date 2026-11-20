@@ -234,7 +234,7 @@ export function ThreadPanes({ machine, thread, main }: { machine: PaneProps['mac
 
   return (
     <div className={`sheet ${panes.length ? 'has-panes' : ''}`}>
-      {panes.length > 0 && <PaneStrip tabs={tabs} current={current} stacked={stacked} narrow={narrow} onShow={show}
+      {panes.length > 0 && <PaneStrip tabs={tabs} current={current} stacked={stacked} narrow={narrow} onShow={show} onClose={close}
         {...(has(machine, 'pane-move') ? { onMove: (id: string, to: number) => { flushSync(() => move(id, to)); show(panes.find((p) => p.id === id)) } } : {})} />}
       {/* Stacked, a grid: the thread, its handle, the panes on top of each other, the room at the end. */}
       <div className={`panes ${narrow ? 'panes--narrow' : ''} ${stacked ? 'panes--stack' : ''} ${maximized ? 'has-maximized' : ''}`} ref={setRow} onScroll={onScroll}
@@ -354,8 +354,9 @@ type StripTab = {
  * small (scrolled) and the switch between the layouts. In the title bar, where the window has a place for it. A pane's
  * tab drags along it to move the pane (`onMove`, its place among the panes; none where the machine can't).
  */
-function PaneStrip({ tabs, current, stacked, narrow, onShow, onMove }: {
-  tabs: StripTab[]; current: string | undefined; stacked: boolean; narrow: boolean; onShow(pane: Pane | undefined): void; onMove?: (pane: string, to: number) => void
+function PaneStrip({ tabs, current, stacked, narrow, onShow, onClose, onMove }: {
+  tabs: StripTab[]; current: string | undefined; stacked: boolean; narrow: boolean; onShow(pane: Pane | undefined): void; onClose(pane: Pane): void
+  onMove?: (pane: string, to: number) => void
 }) {
   const dispatch = useRegistry().router.dispatch
   const slot = useContext(StripSlot)
@@ -370,7 +371,7 @@ function PaneStrip({ tabs, current, stacked, narrow, onShow, onMove }: {
       {/* Stacked, the thread stands on its own beside the stack's tabs: one tablist still, in the same order. */}
       {(stacked ? [tabs.filter((tab) => !tab.id), tabs.filter((tab) => tab.id)] : [tabs]).map((group, i) => (
         <div key={i} className={`strip__tabs ${stacked && i === 0 ? 'strip__tabs--thread' : ''}`}>
-          {group.map((tab) => <StripTabButton key={tab.id ?? 'thread'} tab={tab} focused={tab.id === current} inBar={inBar} onShow={onShow}
+          {group.map((tab) => <StripTabButton key={tab.id ?? 'thread'} tab={tab} focused={tab.id === current} inBar={inBar} onShow={onShow} onClose={onClose}
             {...(onMove && tab.id ? { onDrag: (event: React.PointerEvent<HTMLButtonElement>) => dragTab(event, (to, shown) => onMove(tab.id!, placeAmong(paneIds, shown, tab.id!, to))) } : {})} />)}
         </div>
       ))}
@@ -395,8 +396,8 @@ function PaneStrip({ tabs, current, stacked, narrow, onShow, onMove }: {
 }
 
 /** A column's tab: in the title bar, short of room, one not focused shrinks to its glyph, then goes to the ···. */
-function StripTabButton({ tab, focused, inBar, onShow, onDrag }: {
-  tab: StripTab; focused: boolean; inBar: boolean; onShow(pane: Pane | undefined): void; onDrag?: (event: React.PointerEvent<HTMLButtonElement>) => void
+function StripTabButton({ tab, focused, inBar, onShow, onClose, onDrag }: {
+  tab: StripTab; focused: boolean; inBar: boolean; onShow(pane: Pane | undefined): void; onClose(pane: Pane): void; onDrag?: (event: React.PointerEvent<HTMLButtonElement>) => void
 }) {
   const Icon = tab.kind?.icon
   // The whole of what the tab may cut short: a file's path, a page's address, or its title.
@@ -409,7 +410,10 @@ function StripTabButton({ tab, focused, inBar, onShow, onDrag }: {
     <button ref={ref} type="button" role="tab" aria-selected={focused} data-pane={tab.id}
       className={`strip__tab ${focused ? 'is-focused' : tab.away ? 'is-away' : 'is-shown'} ${tab.failed ? 'is-failed' : ''}`}
       title={tab.failed ? `Couldn't move ${tab.label}: ${tab.failed}` : full}
-      onPointerDown={onDrag} onClick={() => onShow(tab.pane)}>
+      onPointerDown={onDrag} onClick={() => onShow(tab.pane)}
+      // A middle click closes a pane's tab, as in a browser; on the thread's it does nothing (and doesn't autoscroll).
+      onMouseDown={(event) => { if (event.button === 1) event.preventDefault() }}
+      onAuxClick={(event) => { if (event.button === 1 && tab.pane) onClose(tab.pane) }}>
       {tab.glyph ?? (Icon && <Icon size={14} aria-hidden />)}
       <span className={`strip__label overflow-part ${isFile(tab.kind, tab.pane) ? 'strip__label--file' : ''}`}>{tab.label}</span>
       {tab.id && tab.note && <span className="strip__note overflow-part">{tab.note}</span>}
