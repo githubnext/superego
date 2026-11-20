@@ -283,7 +283,7 @@ const components: Components = {
   img: ({ node: _node, src, srcSet, alt, title, width, height, ...props }) => {
     if (!useContext(Images)) {
       const img = <img src={src} alt={alt} title={title} width={width} height={height} {...props} />
-      return src && /^https?:/i.test(src) ? <WebImage url={src} alt={alt}>{img}</WebImage> : img
+      return src ? <WebImage url={src} alt={alt}>{img}</WebImage> : img
     }
     return <InlineImage src={src} srcSet={srcSet} alt={alt} title={title} width={width} height={height} />
   },

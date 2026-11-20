@@ -16,12 +16,7 @@ import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { dirname, join, relative, resolve } from 'node:path'
 import { trusted } from '@superego/daemon'
-
-/**
- * A folder's Claude Code configuration as it is now: its files (from the folder, or absolute when above it), and their
- * hash. `unsafe`: a folder or file Claude Code takes it from that another user could change, so it can't be allowed.
- */
-export type ProjectConfig = { cwd: string; files: string[]; hash: string; unsafe?: string }
+import type { ProjectConfig } from './shared.ts'
 
 const real = (path: string) => { try { return realpathSync(path) } catch { return resolve(path) } }
 

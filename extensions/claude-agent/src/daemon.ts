@@ -10,8 +10,8 @@ import { isAbsolute, join } from 'node:path'
 import { defineAction, defineDaemonExtension } from '@superego/daemon'
 import { obj, opt, RpcError, str, type Json } from '@superego/protocol'
 import { claudeEnv, findClaude } from './claude.ts'
-import { projectConfig, ProjectAllowances, type ProjectConfig } from './project.ts'
-import { about, ALLOW, type ProjectFacts } from './shared.ts'
+import { projectConfig, ProjectAllowances } from './project.ts'
+import { about, ALLOW, type ProjectConfig, type ProjectFacts } from './shared.ts'
 import { turnTask, type TurnHost } from './turn.ts'
 
 /** What a thread's folder had of Claude Code configuration when last looked at: `{}` for a Claude Agent thread not looked at yet. */

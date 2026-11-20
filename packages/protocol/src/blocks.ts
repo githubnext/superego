@@ -351,14 +351,14 @@ export function showValue(input: InputBlock | undefined, value: Value | undefine
   return typeof value === 'object' ? JSON.stringify(value) : String(value)
 }
 
+/** What an html block's `superego.reply(value)` says, in words: a string as it is, anything else as JSON. */
+export const showHtmlValue = (value: Value | undefined) => typeof value === 'string' ? value : JSON.stringify(value ?? null)
+
 /**
  * A reply as the message it sends to the thread: `→ Option B`, the button pressed with the inputs under it (a row's
  * button with its row, `→ Cancel: npm run build`, as rows repeat the same buttons), or what was written. For UI that
  * doesn't wait (show_ui, a pane): the agent reads it as the user's next message.
  */
-/** What an html block's `superego.reply(value)` says, in words: a string as it is, anything else as JSON. */
-export const showHtmlValue = (value: Value | undefined) => typeof value === 'string' ? value : JSON.stringify(value ?? null)
-
 export function describeReply(blocks: Block[], reply: Reply, { submit = 'Submit' }: { submit?: string } = {}): string {
   if (reply.text !== undefined) return reply.text
   const inputs = inputsOf(blocks)

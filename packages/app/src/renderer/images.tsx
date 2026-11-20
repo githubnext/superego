@@ -3,9 +3,9 @@
 // the desktop, the WebSocket in a browser), made there as small as the transcript shows it, then a blob URL, shared by
 // all that show it and swapped for a newer one when its file changes (image-cache.ts); the lightbox reads it whole. A web
 // image is used as its address, once the user asks for it (`loadWebImages`): until then it shows where it's from, to
-// click. Each is read only as it nears the screen, its place kept while it loads when its size
-// is known, shimmers until drawn, and says quietly when it can't be. One much taller than wide (a whole page's
-// screenshot) shows its top, fading out, for the lightbox to show whole.
+// click. Each is read only as it nears the screen, its place kept while it loads when its size is known, shimmers until
+// drawn, and says quietly when it can't be. One much taller than wide (a whole page's screenshot) shows its top, fading
+// out, for the lightbox to show whole.
 import { useEffect, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode, type RefObject } from 'react'
 import { GlobeIcon, ImageBrokenIcon } from '@superego/ui'
 import type { ImageRef, ThreadInfo } from '@superego/protocol'
@@ -78,7 +78,7 @@ export const useHeld = (image: ImageItem | undefined) => useSyncExternalStore(on
 export const useWebImagesAsked = () => useSyncExternalStore(onAsked, () => asked.size)
 
 /** The host a web image is from, as the user knows it. */
-const hostOf = (url: string) => URL.parse(url)?.host || url
+export const hostOf = (url: string) => URL.parse(url)?.host || url
 
 /** What a web image shows until it's loaded: that it's one, and where it's from. */
 function HeldLabel({ url }: { url: string }) {
@@ -86,8 +86,8 @@ function HeldLabel({ url }: { url: string }) {
 }
 
 /**
- * A web image in place of one shown as it is (an `<img>`'s, a block's): where it's from, until it's clicked to load;
- * then itself (`children`).
+ * An image shown as it is (an `<img>`'s, a block's): on the web, where it's from until it's clicked to load; then, or
+ * any other, itself (`children`).
  */
 export function WebImage({ url, alt, children }: { url: string; alt?: string | undefined; children: ReactNode }) {
   const held = useHeld({ name: url, url })

@@ -6,7 +6,7 @@
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react'
 import { BaseUI, CaretLeftIcon, CaretRightIcon, GlobeIcon, ImageBrokenIcon, MagnifyingGlassMinusIcon, MagnifyingGlassPlusIcon, usePortalAttributes, XIcon } from '@superego/ui'
 import type { MachineEntry } from '../shared/bridge.ts'
-import { describeImage, imageReadAlready, imageSourceOf, loadWebImages, useImageSource, type ImageItem } from './images.tsx'
+import { describeImage, hostOf, imageReadAlready, imageSourceOf, loadWebImages, useImageSource, type ImageItem } from './images.tsx'
 import { CLICK_SCALE, clampPan, FIT, toggleAt, zoomAt, type Bounds, type Point, type View } from './zoom.ts'
 
 /** How far a finger or the mouse may move and still be a click; how far a swipe must go to turn the page. */
@@ -176,7 +176,7 @@ export function Lightbox({ machine, thread, images, start, onClose }: {
           >
             {held ? (
               <div className="lightbox__broken">
-                <GlobeIcon size={32} aria-hidden /><span>{URL.parse(image.url!)?.host || image.url}</span>
+                <GlobeIcon size={32} aria-hidden /><span>{hostOf(image.url!)}</span>
                 <button type="button" className="lightbox__load" onClick={() => loadWebImages([image.url!])}>Load image</button>
               </div>
             ) : broken ? (

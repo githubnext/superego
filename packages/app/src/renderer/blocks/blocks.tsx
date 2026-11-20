@@ -52,9 +52,10 @@ type Form = {
   act(reply: Partial<Reply>): void
   /** A button pressed: an agent's replies with it; an extension's runs its action. */
   press(button: BlockButton): void
-  /** The html blocks may answer or message (an agent's); an extension's are display only. */
-  replies: boolean
-  /** An agent's blocks: what they open is its choice. */
+  /**
+   * An agent's blocks: their html blocks may answer or message, and what they open is its choice. An extension's html
+   * blocks are display only.
+   */
   agent: boolean
   /** Nothing can be changed: answered, or only shown. */
   locked: boolean
@@ -106,7 +107,7 @@ function BlockForm({ machine, thread, blocks, host, answer, submitLabel = 'Submi
   }
   const form: Form = {
     machine, thread, values, locked, answered: Boolean(answer), busy, done: agent ? answer?.button ?? sent : undefined,
-    picks: agent && picksAnswer(blocks), submits: submits && !locked, replies: agent, agent,
+    picks: agent && picksAnswer(blocks), submits: submits && !locked, agent,
     set: (id, value) => setState((now) => ({ ...now, values: { ...now.values, [id]: value } })),
     act(reply) {
       if (locked || busy || host.by !== 'agent') return
@@ -394,7 +395,7 @@ function BlockImage({ src, alt, caption }: { src: string; alt?: string | undefin
   const img = loaded.src ? <img src={loaded.src} alt={alt ?? ''} /> : <div className="blocks-image__missing">{loaded.broken ? `Image ${loaded.problem ?? 'not found'}` : 'Loading…'}</div>
   return (
     <figure className="blocks-image">
-      {loaded.held ? <WebImage url={src} alt={alt}>{img}</WebImage> : img}
+      <WebImage url={src} alt={alt}>{img}</WebImage>
       {caption && <figcaption>{caption}</figcaption>}
     </figure>
   )
@@ -444,8 +445,8 @@ type Proposal = { reply: Partial<Reply>; text: string }
 const PROPOSAL_DELAY = 500
 
 /**
- * A page of its own: sandboxed (scripts, nothing else), offline (frame.html), sized to its content. An agent's talks back through
- * `superego.reply`/`send`; an extension's is display only, and the frame is told so (it has neither).
+ * A page of its own: sandboxed (scripts, nothing else), offline (frame.html), sized to its content. An agent's talks
+ * back through `superego.reply`/`send`; an extension's is display only, and the frame is told so (it has neither).
  *
  * The frame's scripts are the agent's, or whatever it copied in, and run beside the helpers that post for them, so
  * nothing the frame says shows the user meant it. What it would say is only proposed: shown here, under the frame, in
@@ -467,10 +468,10 @@ function HtmlFrame({ block }: { block: Extract<Block, { type: 'html' }> }) {
       const data = event.data as { superego?: unknown; kind?: unknown; height?: unknown } | null | undefined
       if (!frame.current || event.source !== frame.current.contentWindow || typeof data !== 'object' || !data?.superego) return
       const { form, css, html } = latest.current
-      if (data.kind === 'ready') frame.current.contentWindow!.postMessage({ superego: true, kind: 'render', html, css, replies: form.replies }, '*')
+      if (data.kind === 'ready') frame.current.contentWindow!.postMessage({ superego: true, kind: 'render', html, css, replies: form.agent }, '*')
       else if (data.kind === 'resize') {
         if (!block.height && typeof data.height === 'number' && Number.isFinite(data.height)) setHeight(Math.min(Math.max(data.height, 20), 2000))
-      } else if (form.replies && !form.locked) {
+      } else if (form.agent && !form.locked) {
         const next = proposalOf(data, id)
         if (next) setProposal((now) => ({ ...next, n: (now?.n ?? 0) + 1, html }))
       }
