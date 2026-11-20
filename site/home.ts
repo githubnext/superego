@@ -102,7 +102,7 @@ function ring([cx, cy, rx, ry]: Callout['ring'], seed: number): string {
   return `M${left.join(' L')} L${right.reverse().join(' L')}Z`
 }
 
-export function homeBody(o: { base: string; download: string }) {
+export function homeBody(o: { base: string; download: string; repo: string }) {
   const W = 1440
   const H = 900
   const pc = (v: number, of: number) => `${((v / of) * 100).toFixed(2)}%`
@@ -117,7 +117,7 @@ export function homeBody(o: { base: string; download: string }) {
 <h1>Superego</h1>
 <p class="tagline">An agent workbench you make your own.</p>
 <p class="sub">A small shell for running agents: threads, panes beside them, and machines to run them on. The rest is profiles and extensions, which you get by asking an agent for them.</p>
-<p class="links"><a class="button" href="${o.download}">Download</a><a href="${o.base}docs/">Docs</a></p>
+<p class="links"><a class="button" href="${o.download}">Download</a><a href="${o.base}docs/">Docs</a><a href="${o.repo}">GitHub</a></p>
 <p class="byline">An experimental project by <a href="https://github.com/mikker"><img src="${o.base}mikker.png" alt="" width="20" height="20">mikker</a> at <a href="https://githubnext.com"><img src="${o.base}githubnext.png" alt="" width="20" height="20">GitHub Next</a></p>
 
 <figure class="shot">

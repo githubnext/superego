@@ -180,7 +180,7 @@ const DESCRIPTION =
   'An agent workbench you make your own: a small shell for running agents, on this Mac or over ssh, with panes beside them. The rest is profiles and extensions.'
 
 function home() {
-  return layout({ title: 'Superego', body: homeBody({ base: BASE, download: DOWNLOAD }) })
+  return layout({ title: 'Superego', body: homeBody({ base: BASE, download: DOWNLOAD, repo: REPO }) })
 }
 
 function docPage(page: Page, { html, toc }: Rendered) {
