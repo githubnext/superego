@@ -26,23 +26,27 @@ export function claudeEnv(env: NodeJS.ProcessEnv = process.env): Record<string, 
   return out
 }
 
-/** What `claude` is to the user's login, interactive shell (where mise, Homebrew and npm put it on PATH), if anything. */
-function fromShell(): Promise<string | undefined> {
+/**
+ * The PATH of the user's login, interactive shell (where mise, Homebrew and npm put `claude`), if there's a shell to
+ * ask. Its PATH, not its `command -v claude`: that answers with an alias (`claude --dangerously-skip-permissions`, say)
+ * when the user has one, which isn't a file to run, and would carry flags Superego must not pass.
+ */
+function shellPath(): Promise<string | undefined> {
   let shell = process.env.SHELL
   if (!shell) try { shell = userInfo().shell ?? undefined } catch { /* no passwd entry: no shell to ask */ }
   if (!shell) return Promise.resolve(undefined)
   // Between markers: an interactive shell's startup files may print what they like.
-  const mark = '__superego_claude__'
+  const mark = '__superego_path__'
   return new Promise((done) => {
-    execFile(shell, ['-ilc', `printf '${mark}%s${mark}' "$(command -v claude)"`], { timeout: 5000, env: claudeEnv() }, (_error, stdout) => {
-      done(String(stdout ?? '').match(new RegExp(`${mark}(/.*?)${mark}`))?.[1])
+    execFile(shell, ['-ilc', `printf '${mark}%s${mark}' "$PATH"`], { timeout: 5000, env: claudeEnv() }, (_error, stdout) => {
+      done(String(stdout ?? '').match(new RegExp(`${mark}(.*?)${mark}`, 's'))?.[1] || undefined)
     })
   })
 }
 
-/** `claude` on the daemon's own PATH, if it's there. */
-async function fromPath(): Promise<string | undefined> {
-  for (const dir of (process.env.PATH ?? '').split(delimiter).filter(Boolean)) {
+/** The first executable `claude` on `path`, if any. */
+export async function onPath(path: string | undefined): Promise<string | undefined> {
+  for (const dir of (path ?? '').split(delimiter).filter(Boolean)) {
     const file = join(dir, 'claude')
     if (await access(file, constants.X_OK).then(() => true, () => false)) return file
   }
@@ -54,7 +58,7 @@ async function fromPath(): Promise<string | undefined> {
  * else the daemon's PATH's. Undefined when it isn't installed.
  */
 export async function findClaude(given?: string): Promise<string | undefined> {
-  return given || (await fromShell() ?? await fromPath())
+  return given || (await onPath(await shellPath()) ?? await onPath(process.env.PATH))
 }
 
 /** The message for a machine without `claude`. */
