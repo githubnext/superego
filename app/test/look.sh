@@ -1,6 +1,6 @@
 #!/bin/sh
 # The window's layout in the states the design covers, screenshotted:
-# `test/look.sh <dir> [look|focus|panes|panehead|composer|images|mcp|web|terminal|toolbar|titlebar|titlebar-fit|pins|folds|states|cards|dialogs]` (look, unless given), each a script of
+# `test/look.sh <dir> [look|focus|panes|panehead|composer|images|mcp|web|terminal|toolbar|titlebar|titlebar-fit|pins|folds|states|cards|dialogs|machines]` (look, unless given), each a script of
 # that name here:
 # - `look`: the sidebar shown, dragged and hidden, the thread alone and with panes, details, a phone; the first-launch
 #   page, ⌘N's dialog, Settings and its Keyboard;
@@ -22,6 +22,8 @@
 # - `states`: every thread state in the sidebar, the rail, the title bar and ⌘U.
 # - `cards`: a thread's card, pointed at in the sidebar (in a worktree, waiting on you, folded) and in the rail.
 # - `dialogs`: the palette, ⌘L (archived threads too), the pane picker and ⌘N's fields.
+# - `machines`: Settings → Machines with two other machines, one behind and needing a service, wide and narrow, and a
+#   row's menu.
 set -e
 cd "$(dirname "$0")/.."
 # A heavy check: it waits for a slot (../scripts/check.ts), is stopped after 8 minutes (SUPEREGO_SHOWCASE_TIMEOUT, in

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Settings → Machines is calmer: each machine is one line with its name and host, Update shows only when a machine is
+  behind (with how far), and Settings, Connect and Remove are in the row's ··· menu, with the machine's route. A daemon
+  that stops at logout gets an Install service button that runs `superego daemon install` there for you, and a
+  machine's allowed profile UIs are one line that opens to the list to revoke.
 - The Browser pane can show its page at a phone's, tablet's or laptop's width, or one you type in (`1024` or
   `1024×768`), from a size menu in its toolbar: the page sees that width, scaled down when the pane is narrower. Each
   pane keeps its own size.

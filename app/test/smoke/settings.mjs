@@ -21,13 +21,17 @@ export default async function settings(t, s) {
   // Machines: add one over ssh that can't connect; it shows its error, then goes away again.
   await t.click('.settings__nav button', 'Machines')
   await t.call('machine.add', { label: 'Nowhere', target: 'superego-smoke.invalid' }, 'app')
-  await t.until(`[...document.querySelectorAll('.machine-row')].some((row) => row.textContent.includes('superego-smoke.invalid') && /disconnected/.test(row.textContent))`, 'ssh machine listed with its error')
-  await t.run(`(async () => { const list = await window.superego.machines(); await window.superego.call('app', 'machine.remove', { id: list.find((m) => m.label === 'Nowhere').id }) })()`)
-  await t.until(`![...document.querySelectorAll('.machine-row')].some((row) => row.textContent.includes('superego-smoke.invalid'))`, 'machine removed')
+  await t.until(`[...document.querySelectorAll('.machine-row')].some((row) => row.querySelector('input')?.value === 'Nowhere' && /disconnected/.test(row.textContent))`, 'ssh machine listed with its error')
+  // Removed from its ··· menu.
+  await t.run(`[...document.querySelectorAll('.machine-row')].find((row) => row.querySelector('input')?.value === 'Nowhere').querySelector('.machine-row__menu').setAttribute('data-nowhere', '')`)
+  await t.mouse('[data-nowhere]')
+  await t.until(`[...document.querySelectorAll('.superego-menu__item')].some((item) => item.textContent === 'Remove')`, 'the machine\'s menu')
+  await t.click('.superego-menu__item', 'Remove')
+  await t.until(`![...document.querySelectorAll('.machine-row')].some((row) => row.querySelector('input')?.value === 'Nowhere')`, 'machine removed')
   // A second machine: another daemon, reached through a command that pipes stdio to it (as docker exec would).
   const via = `SUPEREGO_HOME='${home}/second' SUPEREGO_MODEL=faux node '${new URL('../../bin/superego.ts', import.meta.url).pathname}' connect --start`
   await t.call('machine.add', { label: 'Second', via }, 'app')
-  await t.until(`[...document.querySelectorAll('.machine-row')].some((row) => row.querySelector('input')?.value === 'Second' && / · connected/.test(row.textContent))`, 'second machine connected', 30_000)
+  await t.until(`[...document.querySelectorAll('.machine-row')].some((row) => row.querySelector('input')?.value === 'Second' && row.dataset.state === 'connected')`, 'second machine connected', 30_000)
   // All machines: a disagreement shows as Mixed, and one change reaches both.
   await t.call('settings.set', { key: 'agent.model', value: 'faux/faux-1' })
   await t.click('.settings__nav button', 'All machines')

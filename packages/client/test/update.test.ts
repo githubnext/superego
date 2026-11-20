@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { defineApp } from '@superego/protocol'
 import type { MachineConfig } from '../src/shared.ts'
-import { runUpdate, updateCommand, updateScript, wrapperOf } from '../src/update.ts'
+import { installServiceOn, runUpdate, serviceCommand, updateCommand, updateScript, wrapperOf } from '../src/update.ts'
 
 const app = defineApp({ name: 'Superego', id: 'superego' })
 const machine = (patch: Partial<MachineConfig>): MachineConfig => ({ id: 'm', label: 'mbp', target: 'mbp', enabled: true, ...patch })
@@ -120,5 +120,16 @@ describe('updating a machine', () => {
     expect(said).toContain('installing')
     await expect(runUpdate(machine({ via: `FAIL=1 sh ${stub} connect --start` }), app, { onOutput: () => {} }))
       .rejects.toMatchObject({ kind: 'update_failed', message: 'git pull failed in /x' })
+  })
+
+  it('installs the service there the way the machine is reached, saying what it said', async () => {
+    const ssh = serviceCommand(machine({ command: '~/.local/bin/superego connect --start' }), app)
+    expect(ssh.args).toEqual(['-T', '-o', 'BatchMode=yes', 'mbp', `sh -c 'exec "$HOME/.local/bin/superego" daemon install'`])
+    expect(serviceCommand(machine({ via: "ssh -J jump box 'superego connect --start'" }), app).args[1]).toBe("ssh -J jump box 'superego daemon install'")
+    expect(() => serviceCommand(machine({ via: 'docker exec -i box nc localhost 9' }), app)).toThrow(/run superego daemon install there/)
+    const stub = join(home, 'stub.sh')
+    writeFileSync(stub, 'case "$*" in *"daemon install"*) [ -n "$FAIL" ] && { echo "superego: no service manager here" >&2; exit 1; }; echo "Installed the systemd service."; exit 0;; esac; exit 2\n')
+    await expect(installServiceOn(machine({ via: `sh ${stub} connect --start` }), app)).resolves.toBe('Installed the systemd service.')
+    await expect(installServiceOn(machine({ via: `FAIL=1 sh ${stub} connect` }), app)).rejects.toMatchObject({ kind: 'install_failed', message: 'superego: no service manager here' })
   })
 })

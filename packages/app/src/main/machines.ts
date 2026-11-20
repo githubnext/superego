@@ -6,7 +6,7 @@ import { hostname } from 'node:os'
 import { join } from 'node:path'
 import type { BrowserWindow } from 'electron'
 import { daemonStarting, socketPath, spawnDaemon } from '@superego/daemon/client'
-import { Link, loginInTerminal, MachineLinks, MachineStore, openLocal, runUpdate, UiAllowStore } from '@superego/client'
+import { installServiceOn, Link, loginInTerminal, MachineLinks, MachineStore, openLocal, runUpdate, UiAllowStore } from '@superego/client'
 import {
   arr, AUTH_REJECTED, compareVersions, defineAction, int, lit, obj, opt, RpcError, str, union, bool,
   type AppConfig, type Notifications, type ProfileRef, type ProviderRejection, type Router, type ThreadInfo,
@@ -236,6 +236,19 @@ export function createMachines({ app: appConfig, dataDir, headless, broadcast, o
       id: 'profile.revokeUi', title: "Revoke a machine's profile UI in this app's windows", runs: 'app', expose: ['ui'],
       params: obj({ machine: str(), dir: str() }),
       async run({ machine, dir }) { await uiAllowed.revoke(machine, dir); return null },
+    }))
+    router.register(defineAction({
+      id: 'machine.installService', title: "Keep a machine's daemon running past logout and reboot", runs: 'app', expose: ['ui', 'cli'],
+      description: `Runs ${appConfig.id} daemon install there; answers what it said`,
+      params: obj({ id: str() }),
+      async run({ id }) {
+        const config = store.get(id)
+        if (!config) throw new RpcError('not_found', `No machine ${id}`)
+        const said = await installServiceOn(config, appConfig)
+        // Its daemon may have been handed over to the service: reach that one, and hear whether it keeps running now.
+        restartLink(id)
+        return { said }
+      },
     }))
     router.register(defineAction({
       id: 'machine.trust', title: 'Trust the machine answering now', runs: 'app', expose: ['ui', 'cli'],

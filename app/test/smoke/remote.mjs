@@ -49,6 +49,8 @@ export default async function remote(t, s) {
   // Settings lists it under its machine; Revoke takes it out.
   await t.click('.app__settings')
   await t.click('.settings__nav button', 'Machines')
+  await t.until(`document.querySelector('.machine-row__ui-summary')?.textContent === 'UI from 1 profile runs here'`, 'allowed profile UI summed up in Settings')
+  await t.click('.machine-row__ui-summary')
   await t.until(`document.querySelector('.machine-row__ui')?.textContent.includes('default')`, 'allowed profile UI listed in Settings')
   await t.click('.machine-row__ui button', 'Revoke')
   await t.until(`!document.querySelector('.machine-row__ui') && !document.querySelector('.remote-badge')`, 'revoked: the remote profile UI stops')

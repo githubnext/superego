@@ -74,11 +74,25 @@ export function updateCommand(config: MachineConfig, app: AppConfig, now = false
 }
 
 /**
- * Update a machine, passing on what the update prints as it goes. Rejects with the reason it gave up (the last line it
- * said), once it ends badly.
+ * How to install the daemon's service on a machine (`daemon install` there), so it outlives a logout and a reboot: the
+ * program and its arguments, run here. Over ssh, the machine's own wrapper; through a `via` command, its `connect`
+ * becomes `daemon install`.
  */
-export function runUpdate(config: MachineConfig, app: AppConfig, { now = false, onOutput }: { now?: boolean; onOutput(text: string): void }): Promise<void> {
-  const { program, args } = updateCommand(config, app, now)
+export function serviceCommand(config: MachineConfig, app: AppConfig): { program: string; args: string[] } {
+  if (config.via) {
+    const pattern = /\bconnect(\s+--start)?(?=['"]?\s*$)/
+    if (!pattern.test(config.via)) throw new RpcError('invalid', `Can't tell how to reach ${app.id} through \`${config.via}\`: run ${app.id} daemon install there`)
+    return { program: '/bin/sh', args: ['-c', config.via.replace(pattern, 'daemon install')] }
+  }
+  const script = `exec ${wrapperOf(config.command ?? remoteCommand(app))} daemon install`
+  return { program: 'ssh', args: ['-T', '-o', 'BatchMode=yes', config.target, `sh -c '${script.replaceAll("'", `'\\''`)}'`] }
+}
+
+/**
+ * Run a command reaching a machine, passing on what it prints as it goes. Rejects with `kind` and the last thing it said
+ * (its line starting `<prefix>`, else its last), once it ends badly.
+ */
+function runOn({ program, args }: { program: string; args: string[] }, kind: string, onOutput: (text: string) => void): Promise<string> {
   return new Promise((resolve, reject) => {
     const child = spawn(program, args, { stdio: ['ignore', 'pipe', 'pipe'] })
     let tail = ''
@@ -89,12 +103,25 @@ export function runUpdate(config: MachineConfig, app: AppConfig, { now = false, 
     }
     child.stdout.on('data', take)
     child.stderr.on('data', take)
-    child.once('error', (error) => reject(new RpcError('update_failed', `Could not run ${program}: ${error.message}`)))
+    child.once('error', (error) => reject(new RpcError(kind, `Could not run ${program}: ${error.message}`)))
     child.once('close', (code) => {
-      if (code === 0) return resolve()
+      if (code === 0) return resolve(tail)
       const lines = tail.split('\n').map((line) => line.trim()).filter(Boolean)
       const said = lines.findLast((line) => line.startsWith('superego update:') || line.startsWith('superego:')) ?? lines.at(-1)
-      reject(new RpcError('update_failed', said?.replace(/^superego update: /, '') ?? `The update ended with ${code}`))
+      reject(new RpcError(kind, said?.replace(/^superego update: /, '') ?? `${program} ended with exit code ${code}`))
     })
   })
+}
+
+/**
+ * Update a machine, passing on what the update prints as it goes. Rejects with the reason it gave up (the last line it
+ * said), once it ends badly.
+ */
+export async function runUpdate(config: MachineConfig, app: AppConfig, { now = false, onOutput }: { now?: boolean; onOutput(text: string): void }): Promise<void> {
+  await runOn(updateCommand(config, app, now), 'update_failed', onOutput)
+}
+
+/** Install the daemon's service on a machine (see `serviceCommand`): what it said, or why it failed. */
+export async function installServiceOn(config: MachineConfig, app: AppConfig): Promise<string> {
+  return (await runOn(serviceCommand(config, app), 'install_failed', () => {})).trim()
 }
