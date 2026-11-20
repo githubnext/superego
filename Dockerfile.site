@@ -1,5 +1,5 @@
 # Coolify: Dockerfile build pack, Base Directory /, Dockerfile Location /Dockerfile.site, port 80.
-# Make SITE_URL (e.g. https://superego.example.com/) available during build. SITE_BASE defaults to /.
+# Uses Coolify's configured domain automatically. SITE_URL is an optional override; SITE_BASE defaults to /.
 # Local build: docker build -f Dockerfile.site --build-arg SITE_URL=https://superego.example.com/ .
 # Uses the corporate registry mirror by default; override with --build-arg npm_config_registry=... if needed.
 FROM node:26-bookworm-slim AS build
@@ -15,7 +15,18 @@ RUN pnpm install --frozen-lockfile --filter @superego/site
 
 ARG SITE_BASE=/
 ARG SITE_URL
-RUN SITE_BASE="$SITE_BASE" SITE_URL="${SITE_URL:?Set SITE_URL to the public website URL, including its trailing slash}" \
+ARG COOLIFY_URL
+ARG COOLIFY_FQDN
+# Older Coolify resources swap URL/FQDN meanings. Use the first full HTTP(S) URL, not a bare hostname.
+RUN if [ -z "$SITE_URL" ]; then \
+        for candidate in "$COOLIFY_URL" "$COOLIFY_FQDN"; do \
+            candidate="${candidate%%,*}"; \
+            case "$candidate" in \
+                http://*|https://*) SITE_URL="$candidate"; break ;; \
+            esac; \
+        done; \
+    fi; \
+    SITE_BASE="$SITE_BASE" SITE_URL="${SITE_URL:?Configure a domain in Coolify or pass --build-arg SITE_URL=https://your-domain/}" \
     pnpm --filter @superego/site build
 
 FROM nginx:stable-alpine
