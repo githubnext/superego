@@ -33,6 +33,18 @@ export function isLocalHost(host: string): boolean {
   return a === 127 || a === 10 || (a === 192 && b === 168) || (a === 172 && b >= 16 && b <= 31) || (a === 169 && b === 254)
 }
 
+/**
+ * Whether a page the agent chose waits for the user before it loads: one beyond this computer and its network (a
+ * one-part name, `workbox:5173`, is on it). Loading a page sends its address, and the agent could have put what it
+ * read in there; a dev server here, or near, is no one else's to hear it.
+ */
+export function asksFirst(url: string): boolean {
+  const parsed = URL.parse(url)
+  if (!parsed || !/^https?:$/.test(parsed.protocol)) return true
+  const host = parsed.hostname
+  return !isLocalHost(host) && (host.includes('.') || host.startsWith('['))
+}
+
 /** Where `typed` goes; nothing for nothing typed. */
 export function destination(typed: string, engine: SearchEngine = DEFAULT_SEARCH_ENGINE): Destination | undefined {
   const text = typed.trim()

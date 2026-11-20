@@ -45,7 +45,7 @@ export function coreExtensions({ agentsDir, where, panesOf, openPane, images, no
         // Only the kinds this thread is told of: another (its extension off, or gone without) would be kept but not drawn.
         const kinds = panesOf(String(api.conversationId)).map((k) => k.kind)
         if (!kinds.includes(kind)) throw new Error(`There is no "${kind}" pane here. The kinds there are: ${kinds.map((k) => `"${k}"`).join(', ')}.`)
-        const pane = await openPane(String(api.conversationId), { kind, ...(title ? { title } : {}), ...(params !== undefined ? { params: params as Json } : {}) })
+        const pane = await openPane(String(api.conversationId), { kind, ...(title ? { title } : {}), ...(params !== undefined ? { params: params as Json } : {}), by: 'agent' })
         return { output: [{ type: 'text', text: `Opened the ${kind} pane (${pane.id}).` }] }
       },
     })],

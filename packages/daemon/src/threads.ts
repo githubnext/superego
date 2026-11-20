@@ -560,7 +560,8 @@ export function createThreads(host: Host, { harness, extensions, profiles }: { h
   /**
    * Open a pane beside thread `id` (or find the same one already open). Opening isn't focusing: the agent's pane opens
    * beside, and the focus stays where it is. A window that asked for one moves its focus into it, which brings it
-   * forward (pane.focus): the focus is in one place, the prompt or the pane.
+   * forward (pane.focus): the focus is in one place, the prompt or the pane. The agent's is `by: 'agent'` (Pane);
+   * opened by anyone else, the same one isn't anymore.
    */
   async function openPane(id: string, pane: Omit<Pane, 'id'>): Promise<Pane> {
     await get(id)
@@ -570,7 +571,10 @@ export function createThreads(host: Host, { harness, extensions, profiles }: { h
       const same = (meta.panes ?? []).find((p) => p.kind === pane.kind && JSON.stringify(p.params ?? null) === JSON.stringify(pane.params ?? null))
       opened = same ?? { id: randomUUID().slice(0, 8), ...pane }
       if (!same) meta.panes = [...(meta.panes ?? []), opened]
-      else if (pane.title) same.title = pane.title
+      else {
+        if (pane.title) same.title = pane.title
+        if (!pane.by) delete same.by
+      }
       // A plain copy: what the transaction hands over is only valid inside it.
       opened = clone(opened)
     })

@@ -286,6 +286,11 @@ search engine); Return points the pane there (`pane.update`). It has no shortcut
 in a Browser pane too. In a browser (Web access) the page is framed, with the same address bar, and the pane says many
 sites refuse that.
 
+A page the agent opens (`pane_open`) beyond this computer and its network waits for the user: the pane shows its whole
+address and Open page, which makes the pane the user's (`pane.update`; a Pane's `by: 'agent'` goes). Loading it would
+send its address, and the agent, prompt-injected by what it read, could have put that in there. A dev server (localhost,
+a private address, `.local`, a one-part name like `workbox:5173`) loads at once, as does anything the user opens.
+
 The daemon takes model keys from the providers' own variables (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, …) when none is
 stored in Settings. A restart keeps the environment it was started with and adds that of the shell asking for it. Where
 those keys are sealed, as on a [workbox](https://github.com/githubnext/workboxes), restart it from a terminal on the box,

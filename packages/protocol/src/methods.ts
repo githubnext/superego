@@ -139,9 +139,11 @@ export type ModelCatalog = {
 
 /**
  * A pane: a view beside a thread (a diff, an editor, a web page, a profile's graph, another thread). `kind` names what
- * draws it; `params` are its own. Kept with the thread, so it follows the thread to every client.
+ * draws it; `params` are its own. Kept with the thread, so it follows the thread to every client. `by: 'agent'`: what
+ * it shows is its agent's choice (`pane_open`), until the user opens or changes it themselves. What would load from
+ * the web on it (a page anywhere) waits for the user to say so: its address could carry what the agent read.
  */
-export type Pane = { id: string; kind: string; title?: string; params?: Json }
+export type Pane = { id: string; kind: string; title?: string; params?: Json; by?: 'agent' }
 
 /**
  * A profile: the user's (`~/.superego/profiles/<name>`, or a profile source's `profiles/<name>`) or a project's

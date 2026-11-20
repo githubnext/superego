@@ -17,6 +17,10 @@
 //
 // Select element (⌘⇧C, pick.tsx): the element clicked in the page, in a card at the pane's foot, to add to the thread's
 // composer or copy the selector of.
+//
+// A page the agent opened (the pane's `by`) beyond this computer and its network waits for the user: its address in
+// full, and Open page (AgentPage). It's the agent's to choose and could carry what it read, so loading it unasked would
+// send that out. A dev server here or near loads at once.
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
 import { askText, call, Chip, defineAction, defineUiExtension, hasWebViews, PaneMessage, useApp, useAppSetting, useDispatch, useShortcut, useTabGlyph, thisComputer, WebView, type PaneProps, type PermissionAsk, type WebViewEvent, type WebViewHandle } from '@superego/app/ui'
 import type { Pane } from '@superego/protocol'
@@ -26,7 +30,7 @@ import { about, BROWSER, type BrowserParams, type Viewport } from './shared.ts'
 import { fit, isViewport, parseViewport, PRESETS, presetOf, viewportText, type Fit } from './viewport.ts'
 import { PickButton, PickedCard, usePicking } from './pick.tsx'
 import { readElement, type SentElement } from './element.ts'
-import { DEFAULT_SEARCH_ENGINE, destination, SEARCH_ENGINE, SEARCH_ENGINES, webAddress, type Destination, type SearchEngine } from './address.ts'
+import { asksFirst, DEFAULT_SEARCH_ENGINE, destination, SEARCH_ENGINE, SEARCH_ENGINES, webAddress, type Destination, type SearchEngine } from './address.ts'
 
 const params = (pane: Pane) => (pane.params ?? {}) as BrowserParams
 /** The file a pane shows, by name: its tab's title. */
@@ -86,7 +90,34 @@ type Target = { src: string; partition: 'browser' | 'artifact'; revision?: strin
 /** What a page did that its pane tells of, until it's dismissed: a file it saved, something it was refused. */
 type Notice = { text: string; path?: string }
 
-function BrowserPane({ machine, thread, pane }: PaneProps) {
+function BrowserPane(props: PaneProps) {
+  const { url: given } = params(props.pane)
+  const url = given === undefined ? undefined : webAddress(given)
+  return props.pane.by === 'agent' && url && asksFirst(url) ? <AgentPage {...props} url={url} /> : <BrowserPage {...props} />
+}
+
+/** A page the agent opened, beyond this computer: where it goes, all of it, until the user says to load it. */
+function AgentPage({ machine, thread, pane, url }: PaneProps & { url: string }) {
+  const dispatch = useDispatch()
+  const [error, setError] = useState<string>()
+  // As it is: the user's from then (`by` goes), and it loads.
+  const open = () => dispatch('pane.update', { thread: thread.id, pane: pane.id, params: pane.params }, { machine: machine.id, source: 'browser' })
+    .then(() => setError(undefined), (e: Error) => { console.error(`Opening ${url}:`, e); setError(e.message) })
+  const host = URL.parse(url)?.host ?? url
+  return (
+    <div className="browser-frame">
+      <div className="browser-agent-page" role="group" aria-label={`The agent opened a page on ${host}`}>
+        <GlobeIcon size={24} aria-hidden />
+        <p>The agent opened a page on <strong>{host}</strong></p>
+        <code className="browser-agent-page__url">{url}</code>
+        <Button variant="primary" onClick={() => void open()}>Open page</Button>
+        {error && <p className="browser-agent-page__error" role="alert">{error}</p>}
+      </div>
+    </div>
+  )
+}
+
+function BrowserPage({ machine, thread, pane }: PaneProps) {
   const { url: given, path, viewport: asked } = params(pane)
   const viewport = isViewport(asked) ? asked : undefined
   const url = given === undefined ? undefined : webAddress(given)

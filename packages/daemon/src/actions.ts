@@ -121,7 +121,11 @@ export function registerCoreActions(host: Host, { harness, machine, threads, pro
         const target = meta.panes?.find((p) => p.id === pane)
         if (!target) return
         found = true
-        if (params !== undefined) target.params = paneParams(params)
+        // What it shows is the user's now (Pane's `by`).
+        if (params !== undefined) {
+          target.params = paneParams(params)
+          delete target.by
+        }
         if (title !== undefined) target.title = title || undefined
         else delete target.title
       })

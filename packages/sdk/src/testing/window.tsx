@@ -276,8 +276,8 @@ export type MountOptions = {
 export type RenderWhat<S extends BehaviourSlot = BehaviourSlot> = { machine?: string; thread?: string | ThreadInfo } & (
   /** A view by its id in a place, or everything the layout puts in a place. */
   | { view?: string; place: Place }
-  /** A pane of a kind, as the thread's panes draw it, with its params. */
-  | { pane: { kind: string; params?: Json; title?: string; id?: string } }
+  /** A pane of a kind, as the thread's panes draw it, with its params (`by: 'agent'`: one its agent opened). */
+  | { pane: { kind: string; params?: Json; title?: string; id?: string; by?: 'agent' } }
   /** Everything in a slot, as the window draws it, with the props it gives (a thread's slots: its machine and thread; the editor's: `path`, `open`). */
   | { slot: S; props?: Partial<SlotProps[S]> }
   /** A tool call's row in the transcript, as the extension that describes the tool says (`superego.tool`): `state` done unless given. */
@@ -577,8 +577,8 @@ export async function mountUi(options: MountOptions = {}): Promise<TestWindow> {
             const theirs = registry.panes.some((p) => p.kind === what.pane.kind && p.owner.profile)
             throw new Error(`No pane kind ${what.pane.kind} in thread ${info.id}${theirs ? ` (a profile's pane kinds are its threads': ${ofProfile(info)})` : ''}: ${kinds.join(', ') || 'none'}`)
           }
-          const { kind, params, title, id = 'pane-1' } = what.pane
-          const pane = { id, kind, ...(params !== undefined ? { params } : {}), ...(title !== undefined ? { title } : {}) }
+          const { kind, params, title, id = 'pane-1', by } = what.pane
+          const pane = { id, kind, ...(params !== undefined ? { params } : {}), ...(title !== undefined ? { title } : {}), ...(by ? { by } : {}) }
           node = <InThread machine={at} thread={thread} draw={(machine, info) => <PaneBody machine={machine} thread={info} pane={pane} />} />
         } else {
           const slot = slotNamed(what.slot)

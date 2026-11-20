@@ -1,7 +1,7 @@
 // What's typed in the address bar, as where to go: a web address as it is, a bare host given its scheme (plain http on
 // this computer and its network), an HTML file's path in the working folder, anything else a search.
 import { describe, expect, it } from 'vitest'
-import { destination, isLocalHost, webAddress } from '../src/address.ts'
+import { asksFirst, destination, isLocalHost, webAddress } from '../src/address.ts'
 
 describe('the address bar', () => {
   it('goes to a web address as it is', () => {
@@ -60,5 +60,19 @@ describe('the address bar', () => {
   it('knows this computer and its network', () => {
     for (const host of ['localhost', 'LOCALHOST', 'x.localhost', '127.0.0.1', '[::1]', '10.1.2.3', '172.16.0.1', '172.31.255.1', '192.168.0.1', '169.254.1.1', 'nas.local']) expect(isLocalHost(host)).toBe(true)
     for (const host of ['example.com', '172.32.0.1', '8.8.8.8', 'localhost.example.com']) expect(isLocalHost(host)).toBe(false)
+  })
+})
+
+describe("a page the agent opened", () => {
+  it('waits for the user beyond this computer and its network', () => {
+    for (const url of ['https://example.com/?d=x', 'http://8.8.8.8/', 'https://workbox.tail1ffbc8.ts.net/', 'http://localhost.example.com/', 'http://127.0.0.1.nip.io/', 'http://[2001:db8::1]/', 'ftp://example.com/', 'nonsense']) {
+      expect(asksFirst(url), url).toBe(true)
+    }
+  })
+
+  it('loads at once here or near: localhost, private addresses, .local, a one-part name', () => {
+    for (const url of ['http://localhost:5173/', 'http://app.localhost/', 'http://127.0.0.1:3000/', 'http://[::1]:8080/', 'http://10.0.0.2/', 'http://192.168.1.4:8000/', 'http://printer.local/', 'http://workbox:5173/']) {
+      expect(asksFirst(url), url).toBe(false)
+    }
   })
 })

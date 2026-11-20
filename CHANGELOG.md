@@ -21,6 +21,8 @@
   images from the web, or navigate away. Agents are told to put everything in the page.
 - Images on the web in a thread (in a message, a rendered file, an image an agent shows or a block it draws) load
   only when you click them: until then they say where they're from. One click loads the rest in the same message.
+- A web page an agent opens in a Browser pane waits for you to press Open page, showing its whole address, unless it's a
+  dev server on this computer or its network.
 - Allowing a project's profile now covers everything it can load: a change to any file it runs asks to allow it again.
 - Claude Agent threads no longer run a folder's own Claude Code settings (`.claude/`, `.mcp.json`) until you allow
   them: their hooks, MCP servers and permissions can run commands. The thread asks over its composer, listing the files
