@@ -103,9 +103,10 @@ export type SubagentSteps = {
 
 /**
  * A folder's Claude Code configuration as it is now: its files (from the folder, or absolute when above it), and their
- * hash. `unsafe`: a folder or file Claude Code takes it from that another user could change, so it can't be allowed.
+ * hash. `onlyInstructions`: all of it is instructions (`CLAUDE.md`, what it imports, rules), no settings. `unsafe`: a
+ * folder or file Claude Code takes it from that another user could change, so it can't be allowed.
  */
-export type ProjectConfig = { cwd: string; files: string[]; hash: string; unsafe?: string }
+export type ProjectConfig = { cwd: string; files: string[]; hash: string; onlyInstructions: boolean; unsafe?: string }
 
 /** What a Claude Agent thread says of its folder's own Claude Code configuration, when it has some (its facts). */
 export type ProjectFacts = ProjectConfig & {

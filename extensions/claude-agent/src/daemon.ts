@@ -3,9 +3,9 @@
 // `/login`, through the Agent SDK; Superego never sees, keeps or passes on a Claude credential (see
 // docs/research/claude-code-agent.md). Off unless a profile picks it.
 //
-// Claude Code runs with the user's own settings, and a folder's own (`.claude/`, `.mcp.json`: project.ts) only once
-// the user allowed them as they are, and never where another user could change them: a thread with some not loaded
-// says so (its facts), for the window's notice.
+// Claude Code runs with the user's own settings, and a folder's own (`.claude/`, `.mcp.json`, `CLAUDE.md`: project.ts)
+// only once the user allowed them as they are, and never where another user could change them: a thread with some not
+// loaded says so (its facts), for the window's notice.
 //
 // What Claude Code asks before it goes on (a tool call to allow, a plan to approve) waits here, one queue per thread,
 // oldest first, published in the thread's scope for every client to answer (`claude-agent.answer`); while it waits,
@@ -69,12 +69,12 @@ export function claudeAgent({ skills = [], executable, env = () => claudeEnv(), 
 
       superego.action(defineAction({
         id: ALLOW, title: "Allow a folder's Claude Code settings", expose: ['ui', 'cli'], consent: true,
-        description: "Load a folder's own Claude Code settings (.claude/, .mcp.json) in Claude Agent threads there, as they are now: their hooks, MCP servers and permissions run commands. Again after they change. `hash`: the one shown, refused if they changed since.",
+        description: "Load a folder's own Claude Code settings (.claude/, .mcp.json) and instructions (CLAUDE.md, CLAUDE.local.md) in Claude Agent threads there, as they are now: their hooks, MCP servers and permissions run commands, and Claude Code follows the instructions. Again after they change. `hash`: the one shown, refused if they changed since.",
         params: obj({ cwd: str(), hash: opt(str()) }),
         async run({ cwd, hash }) {
           if (!isAbsolute(cwd)) throw new RpcError('invalid', `${cwd}: give the folder's whole path`, { hint: 'superego do claude-agent.allow --cwd "$PWD"' })
           const project = projectConfig(cwd, userConfig)
-          if (!project) throw new RpcError('not_found', `${cwd} has no Claude Code settings of its own`)
+          if (!project) throw new RpcError('not_found', `${cwd} has no Claude Code settings or CLAUDE.md of its own`)
           if (hash && hash !== project.hash) throw new RpcError('changed', `${cwd}'s Claude Code settings changed since: look at them again`)
           if (project.unsafe) throw new RpcError('unsafe', `Claude Code would also load settings from ${project.unsafe} there, which another user on this computer can change: they can't be allowed`)
           await allowances.allow(project)

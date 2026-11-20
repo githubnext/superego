@@ -27,6 +27,9 @@
   MCP servers can run commands, until you allow them: the thread asks over its composer, listing the files, and asks
   again after they change. Until then Claude Code runs with your settings only, without the folder's `CLAUDE.md`.
   Where another user on the computer could change those settings, there's nothing to allow.
+- Claude Agent threads ask before following a folder's `CLAUDE.md` too (and `CLAUDE.local.md`, and the files they
+  import), even in a folder with no other Claude Code settings: until now such a folder's `CLAUDE.md` was silently
+  left out. A change to any of them asks again.
 - Another user account on the same computer can no longer pass as you through Web access over Tailscale.
 - A malformed request to Web access, or to a sign-in page's callback, no longer stops the daemon and every agent with
   it.

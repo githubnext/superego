@@ -60,7 +60,7 @@ it("draws a subagent's steps under its Agent call, and how it stands", async () 
   expect(drawn.text()).toContain('notes.txt')
 })
 
-const project: ProjectFacts = { cwd: '/repo', files: ['.claude/settings.json', '/.mcp.json'], hash: 'abc', allowed: false, changed: false }
+const project: ProjectFacts = { cwd: '/repo', files: ['.claude/settings.json', '/.mcp.json'], hash: 'abc', onlyInstructions: false, allowed: false, changed: false }
 async function notice(facts: ProjectFacts | undefined) {
   const thread = testThread({ id: 't1', cwd: '/repo', ...(facts ? { facts: { [about.name]: facts } } : {}) })
   const machine = fakeMachine({ threads: [thread], methods: { [ALLOW]: () => null, 'pane.open': () => null } })
@@ -93,4 +93,23 @@ it('offers nothing to allow where another user could change them, and says where
   expect(drawn!.text()).toContain('Claude Code also reads settings from /tmp, which other users on this computer can change')
   await expect(drawn!.click('Allow')).rejects.toThrow()
   await drawn!.click('Dismiss')
+})
+
+it("says plainly when it's only a CLAUDE.md, and opens it", async () => {
+  const facts: ProjectFacts = { ...project, files: ['CLAUDE.md'], onlyInstructions: true }
+  const { machine, drawn } = await notice(facts)
+  expect(drawn!.text()).toContain('This folder has a CLAUDE.md.')
+  expect(drawn!.text()).toContain('Claude Code takes it as instructions, so it runs here without it until you allow it.')
+  expect(drawn!.text()).not.toContain('hooks')
+  await drawn!.click('CLAUDE.md')
+  expect(machine.calls).toContainEqual({ method: 'action.run', params: { id: 'pane.open', params: { thread: 't1', kind: 'editor', params: { path: '/repo/CLAUDE.md' } } } })
+  await drawn!.click('Allow')
+  expect(machine.calls).toContainEqual({ method: 'action.run', params: { id: ALLOW, params: { cwd: '/repo', hash: 'abc' } } })
+  await ui!.unmount()
+  ui = undefined
+  expect((await notice({ ...facts, changed: true })).drawn!.text()).toContain('This folder’s CLAUDE.md changed since you allowed it.')
+  await ui!.unmount()
+  ui = undefined
+  const unsafe = (await notice({ ...facts, unsafe: '/tmp' })).drawn!.text()
+  expect(unsafe).toContain('Claude Code also reads instructions from /tmp, which other users on this computer can change, so it runs here without the folder’s CLAUDE.md.')
 })

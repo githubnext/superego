@@ -198,6 +198,51 @@ describe.skipIf(!claude)("a Claude Agent thread, on the user's claude against a 
     await expect(d.call('action.run', { id: ALLOW, params: { cwd: repo, hash } })).rejects.toMatchObject({ kind: 'changed' })
   }, 60_000)
 
+  it("follows a folder's CLAUDE.md only once allowed as it is, and asks again after it changes or settings appear", async () => {
+    const d = await start()
+    const repo = join(dir, 'instructed')
+    mkdirSync(repo, { recursive: true })
+    const instruct = (text: string) => writeFileSync(join(repo, 'CLAUDE.md'), `${text}\n`)
+    instruct('Speak like a pirate: ARR-MARKER-ONE.')
+    const facts = async (thread: { id: string }) => (await d.info(thread)).facts?.[about.name] as ProjectFacts | undefined
+    /**
+     * What Claude Code gave the model with a turn's prompt: its system prompt, and the prompt's message, where it puts a
+     * CLAUDE.md as it starts (each turn resumes the session, whose earlier messages carry what it read then).
+     */
+    const sent = async (thread: ThreadInfo, text: string) => {
+      const before = api.requests.length
+      expect((await d.send(thread, text)).status.state).toBe('done')
+      const request = api.requests.slice(before).at(-1)!
+      return request.system + JSON.stringify(request.messages.at(-1))
+    }
+
+    // Instructions only: the thread says so, and its turn goes without them.
+    const thread = await d.thread(undefined, { cwd: repo })
+    expect(await facts(thread)).toMatchObject({ files: ['CLAUDE.md'], onlyInstructions: true, allowed: false, changed: false })
+    expect(await sent(thread, 'Say hi')).not.toContain('ARR-MARKER-ONE')
+
+    // Allowed: Claude Code gets the folder's settings, and the instructions reach the model.
+    await d.call('action.run', { id: ALLOW, params: { cwd: repo, hash: (await facts(thread))!.hash } })
+    expect(await facts(thread)).toMatchObject({ allowed: true })
+    expect(await sent(thread, 'Again')).toContain('ARR-MARKER-ONE')
+
+    // Changed: not followed until allowed again.
+    instruct('Speak like a pirate: ARR-MARKER-TWO.')
+    expect(await sent(thread, 'Once more')).not.toContain('ARR-MARKER-TWO')
+    expect(await facts(thread)).toMatchObject({ allowed: false, changed: true, onlyInstructions: true })
+    await d.call('action.run', { id: ALLOW, params: { cwd: repo, hash: (await facts(thread))!.hash } })
+    expect(await sent(thread, 'And again')).toContain('ARR-MARKER-TWO')
+
+    // Settings showing up later aren't let in with the instructions: the folder asks again, as settings now.
+    mkdirSync(join(repo, '.claude'))
+    writeFileSync(join(repo, '.claude', 'settings.json'), JSON.stringify({
+      hooks: { SessionStart: [{ hooks: [{ type: 'command', command: `touch ${dir}/later-hook-ran` }] }] },
+    }))
+    expect(await sent(thread, 'Last time')).not.toContain('ARR-MARKER-TWO')
+    expect(existsSync(join(dir, 'later-hook-ran'))).toBe(false)
+    expect(await facts(thread)).toMatchObject({ files: ['.claude/settings.json', 'CLAUDE.md'], onlyInstructions: false, allowed: false, changed: true })
+  }, 90_000)
+
   it('streams the answer as it comes, and Stop interrupts it, keeping what it said', async () => {
     const d = await start()
     const thread = await d.thread(undefined, { cwd: dir })
@@ -490,9 +535,10 @@ describe("a folder's own Claude Code configuration", () => {
   afterAll(() => rmSync(root, { recursive: true, force: true }))
   const write = (path: string, text = '{}') => { mkdirSync(join(root, path, '..'), { recursive: true }); writeFileSync(join(root, path), text) }
 
-  it("is its .claude/ and every .mcp.json from it up: not the user's own, nor Claude Code's checkouts", () => {
+  it("is its .claude/, CLAUDE.md, CLAUDE.local.md and .mcp.json, from it up: not the user's own, nor Claude Code's checkouts", () => {
     const user = join(root, 'home', '.claude')
     write('home/.claude/settings.json')
+    write('home/.claude/CLAUDE.md', 'mine')
     expect(projectConfig(join(root, 'home'), user)).toBeUndefined()
     write('.mcp.json')
     write('repo/.claude/settings.json')
@@ -501,17 +547,49 @@ describe("a folder's own Claude Code configuration", () => {
     write('repo/.claude/worktrees/feature/.claude/settings.json')
     write('repo/.claude/hooks/node_modules/x.js')
     write('repo/CLAUDE.md', 'notes')
+    write('repo/CLAUDE.local.md', 'my notes')
+    write('repo/src/CLAUDE.md', 'notes for src')
     symlinkSync(join(root, 'repo', '.claude', 'hooks'), join(root, 'repo', '.claude', 'again'))
     const config = projectConfig(join(root, 'repo'), user)!
-    expect(config.files).toEqual(['.claude/again/start.sh', '.claude/settings.json', '.claude/settings.local.json', join(root, '.mcp.json')])
-    write('repo/.claude/hooks/start.sh', 'echo changed')
-    const changed = projectConfig(join(root, 'repo'), user)!.hash
-    expect(changed).not.toBe(config.hash)
+    expect(config.files).toEqual([
+      '.claude/again/start.sh', '.claude/settings.json', '.claude/settings.local.json', 'CLAUDE.md', 'CLAUDE.local.md', join(root, '.mcp.json'),
+    ])
+    expect(config.onlyInstructions).toBe(false)
+    for (const [path, text] of [['repo/.claude/hooks/start.sh', 'echo changed'], ['repo/CLAUDE.md', 'other notes'], ['repo/CLAUDE.local.md', 'my other notes']]) {
+      const before = projectConfig(join(root, 'repo'), user)!.hash
+      write(path!, text)
+      expect(projectConfig(join(root, 'repo'), user)!.hash, path).not.toBe(before)
+    }
     // What isn't in it changes nothing.
-    write('repo/CLAUDE.md', 'other notes')
+    const changed = projectConfig(join(root, 'repo'), user)!.hash
     write('repo/.claude/worktrees/feature/.claude/settings.json', '{"x":1}')
+    write('repo/src/CLAUDE.md', 'other notes for src')
     expect(projectConfig(join(root, 'repo'), user)!.hash).toBe(changed)
     expect(config.unsafe).toBeUndefined()
+    rmSync(join(root, '.mcp.json'))
+  })
+
+  it("is instructions only where it's CLAUDE.md files (above too), their rules and what they import, followed as Claude Code does", () => {
+    const user = join(root, 'nobody', '.claude')
+    write('docs-repo/CLAUDE.md', 'Read @docs/guide.md and @~/never-there.md, and @./later.md when it exists; mail me@example.com')
+    write('docs-repo/docs/guide.md', 'See @../style.md too')
+    write('docs-repo/style.md', 'Tabs.')
+    write('docs-repo/.claude/rules/tests.md', 'Test it.')
+    write('docs-repo/sub/CLAUDE.md', 'Above the folder.')
+    const at = join(root, 'docs-repo', 'sub')
+    const config = projectConfig(at, user)!
+    // Nearest first, then what's imported.
+    expect(config.files).toEqual(['CLAUDE.md', ...['.claude/rules/tests.md', 'CLAUDE.md', 'docs/guide.md', 'style.md'].map((file) => join(root, 'docs-repo', file))])
+    expect(config.onlyInstructions).toBe(true)
+    // A file imported two deep changing, or an import showing up, asks again.
+    write('docs-repo/style.md', 'Spaces.')
+    const restyled = projectConfig(at, user)!.hash
+    expect(restyled).not.toBe(config.hash)
+    write('docs-repo/later.md', 'Now here.')
+    expect(projectConfig(at, user)!.hash).not.toBe(restyled)
+    // Settings anywhere in it make it settings.
+    write('docs-repo/.mcp.json')
+    expect(projectConfig(at, user)!.onlyInstructions).toBe(false)
   })
 
   it("can't be allowed where another user could change what Claude Code loads: a folder above it, or a file", async () => {
@@ -525,12 +603,19 @@ describe("a folder's own Claude Code configuration", () => {
     const writable = projectConfig(join(root, 'own', 'repo'))!
     expect(writable.unsafe).toBe(join(root, 'own', '.mcp.json'))
 
+    // A CLAUDE.md alike: another user could rewrite the instructions.
+    write('notes/repo/CLAUDE.md', 'notes')
+    chmodSync(join(root, 'notes', 'repo', 'CLAUDE.md'), 0o666)
+    const notes = projectConfig(join(root, 'notes', 'repo'))!
+    expect(notes).toMatchObject({ files: ['CLAUDE.md'], onlyInstructions: true, unsafe: join(root, 'notes', 'repo', 'CLAUDE.md') })
+
     const allowances = new ProjectAllowances(join(root, 'allowed.json'))
     await allowances.allow(under)
     expect(allowances.allowed(under)).toBe(false)
     const d = await testDaemon({ extensions: [claudeAgent({ executable: async () => '/bin/false' })] })
     try {
       await expect(d.call('action.run', { id: ALLOW, params: { cwd: join(root, 'own', 'repo'), hash: writable.hash } })).rejects.toMatchObject({ kind: 'unsafe' })
+      await expect(d.call('action.run', { id: ALLOW, params: { cwd: join(root, 'notes', 'repo'), hash: notes.hash } })).rejects.toMatchObject({ kind: 'unsafe' })
     } finally { await d.close() }
   })
 })

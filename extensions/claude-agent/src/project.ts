@@ -1,17 +1,22 @@
-// A folder's own Claude Code configuration, and whether the user allowed it. Claude Code loads a project's settings
-// (`settingSources` 'project' and 'local') from the folder it runs in: its `.claude/` (settings with hooks, statusLine
-// and apiKeyHelper commands, permissions and env; hook scripts; agents, skills and commands that can carry hooks of
-// their own) and `.mcp.json` there and in every folder above it, short of `/`. In a cloned repository that's the
-// repository's code, run as the user on the first message, so a turn loads it only for a folder the user allowed as it
-// is now: a change to any of it asks again, as a project's profile does. Not in it: a file elsewhere that a hook's
-// command names (the command is, for whoever allows it to read).
+// A folder's own Claude Code configuration, and whether the user allowed it. Claude Code loads a project's
+// (`settingSources` 'project' and 'local') from the folder it runs in and every folder above it, short of `/` (some of
+// it from the folder alone: taken from all of them here, which is only stricter): its `.claude/` (settings with hooks,
+// statusLine and apiKeyHelper commands, permissions and env; hook scripts; agents, skills and commands that can carry
+// hooks of their own; `CLAUDE.md` and `rules/`), `.mcp.json`, and the instructions it follows (`CLAUDE.md`,
+// `CLAUDE.local.md`) with every file they import (`@path`, up to five deep). In a cloned repository that's the
+// repository's code and words, run and followed as the user from the first message, so a turn loads it only for a
+// folder the user allowed as it is now: a change to any of it (a file added too, or one an import names showing up)
+// asks again, as a project's profile does. Not in it: a file elsewhere that a hook's command names (the command is, for
+// whoever allows it to read); nor a `CLAUDE.md` in a folder below, which Claude Code reads only as it works on a file
+// there (finding them would mean walking the whole tree, a home folder's say, at every turn), and then as part of what
+// it reads there anyway, unallowed as the rest of it.
 //
-// What's allowed is what Claude Code loads: every `.mcp.json` above the folder too, not only the project's (Superego's
-// own project files stop at its top: project-files.ts in the daemon). So where another user could put one of those
-// files there (a folder on the way, or a file, that's writable by others or not the user's: /tmp, say), nothing makes
-// the allowing hold: such a folder's settings can't be allowed, and Claude Code runs there with the user's own only.
+// What's allowed is what Claude Code loads: the folders above the project's too (Superego's own project files stop at
+// its top: project-files.ts in the daemon). So where another user could put one of those files there (a folder on the
+// way, or a file, that's writable by others or not the user's: /tmp, say), nothing makes the allowing hold: such a
+// folder's settings can't be allowed, and Claude Code runs there with the user's own only.
 import { createHash } from 'node:crypto'
-import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from 'node:fs'
+import { readdirSync, readFileSync, realpathSync, statSync } from 'node:fs'
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { dirname, join, relative, resolve } from 'node:path'
@@ -20,6 +25,9 @@ import type { ProjectConfig } from './shared.ts'
 
 /** A folder as it really is (symlinks resolved), where it exists. */
 export const real = (path: string) => { try { return realpathSync(path) } catch { return resolve(path) } }
+
+const isFile = (path: string) => { try { return statSync(path).isFile() } catch { return false } }
+const isDirectory = (path: string) => { try { return statSync(path).isDirectory() } catch { return false } }
 
 /**
  * The files under `dir`, symlinks followed (a folder once): not a repository's or packages' folders, nor, at the top
@@ -41,35 +49,88 @@ function filesUnder(dir: string, top = true, seen = new Set<string>()): string[]
   return files
 }
 
+/** How deep Claude Code follows imports: a file imported by one imported by… up to this many. */
+const IMPORT_DEPTH = 5
+/** An import, as Claude Code finds them: `@` at a line's start or after a space, up to the next space (`\ ` escapes one). */
+const IMPORT = /(?:^|\s)@((?:[^\s\\]|\\ )+)/g
+
 /**
- * The Claude Code configuration `cwd` has of its own, if any: what its project settings would load. The user's own
- * `.claude` (`CLAUDE_CONFIG_DIR`, else `~/.claude`) isn't a project's, whatever folder it's in.
+ * The files `text` (a `CLAUDE.md`, or a file one imports, in `dir`) imports, as Claude Code reads them: relative to
+ * `dir`, from the home folder (`~/`) or whole. Wherever they are: Claude Code reads those outside its folder only
+ * where the user said so in its own settings, but a fingerprint covering them is merely stricter. Inside code too,
+ * which Claude Code skips: the same.
+ */
+export function importsOf(text: string, dir: string): string[] {
+  const paths: string[] = []
+  for (const [, given = ''] of text.matchAll(IMPORT)) {
+    const path = given.split('#')[0]!.replaceAll('\\ ', ' ')
+    if (!path || path === '/' || !/^(\.\/|~\/|\/|[a-zA-Z0-9._-])/.test(path)) continue
+    paths.push(path.startsWith('~/') ? join(homedir(), path.slice(2)) : resolve(dir, path))
+  }
+  return paths
+}
+
+/** Whether a file in a `.claude/` (at `path` in it) is instructions Claude Code follows, not settings. */
+const instructionsIn = (path: string) => path === 'CLAUDE.md' || path.startsWith('rules/')
+
+/**
+ * The Claude Code configuration `cwd` has of its own, if any: what its project and local settings would load. The
+ * user's own `.claude` (`CLAUDE_CONFIG_DIR`, and the home folder's `~/.claude`: the user's, whatever reads it) isn't
+ * a project's, whatever folder it's in.
  */
 export function projectConfig(cwd: string, userConfig = process.env.CLAUDE_CONFIG_DIR || join(homedir(), '.claude')): ProjectConfig | undefined {
   const folder = resolve(cwd)
   // Where Claude Code runs: the folder as it really is.
   const at = real(folder)
-  const found: string[] = []
+  const users = new Set([real(userConfig), real(join(homedir(), '.claude'))])
+  /** What it loads, each file whether it's instructions (rather than settings): from the folder up, nearest first. */
+  const found = new Map<string, boolean>()
+  /** Files imported that aren't there: one showing up would be loaded too. */
+  const absent = new Set<string>()
   let unsafe: string | undefined
-  const check = (path: string) => { if (!unsafe && !trusted(path)) unsafe = path }
-  const claude = join(at, '.claude')
-  if (existsSync(claude) && statSync(claude).isDirectory() && real(claude) !== real(userConfig)) {
-    check(claude)
-    found.push(...filesUnder(claude))
+  const checked = new Set<string>()
+  /** Whether only the user could have put `path` there: it, and every folder it's in. */
+  const check = (path: string) => {
+    for (let p = path; !checked.has(p) && dirname(p) !== p; p = dirname(p)) {
+      checked.add(p)
+      if (!unsafe && !trusted(p)) unsafe = p
+    }
   }
+  check(at)
   for (let dir = at; dirname(dir) !== dir; dir = dirname(dir)) {
-    check(dir)
-    const mcp = join(dir, '.mcp.json')
-    if (existsSync(mcp) && statSync(mcp).isFile()) { check(mcp); found.push(mcp) }
+    const claude = join(dir, '.claude')
+    if (isDirectory(claude) && !users.has(real(claude))) {
+      for (const file of filesUnder(claude)) found.set(file, instructionsIn(relative(claude, file)))
+    }
+    for (const name of ['CLAUDE.md', 'CLAUDE.local.md']) if (isFile(join(dir, name))) found.set(join(dir, name), true)
+    if (isFile(join(dir, '.mcp.json'))) found.set(join(dir, '.mcp.json'), false)
   }
-  if (!found.length) return undefined
+  // What the instructions import, and what that imports.
+  const follow = (file: string, depth: number) => {
+    if (depth >= IMPORT_DEPTH) return
+    for (const path of importsOf(readFileSync(file, 'utf8'), dirname(file))) {
+      if (found.has(path) || absent.has(path)) continue
+      if (!isFile(path)) { absent.add(path); continue }
+      found.set(path, true)
+      follow(path, depth + 1)
+    }
+  }
+  for (const [file, instructions] of [...found]) if (instructions) follow(file, 0)
+  if (!found.size) return undefined
+
+  const nameOf = (file: string) => file.startsWith(at + '/') ? relative(at, file) : file
   const hash = createHash('sha256')
-  const files = found.map((file) => {
-    const name = file.startsWith(at + '/') ? relative(at, file) : file
+  const files = [...found.keys()].map((file) => {
+    check(file)
+    const name = nameOf(file)
     hash.update(name).update('\0').update(createHash('sha256').update(readFileSync(file)).digest('hex')).update('\0')
     return name
   })
-  return { cwd: folder, files, hash: hash.digest('hex').slice(0, 16), ...(unsafe ? { unsafe } : {}) }
+  for (const file of absent) hash.update(nameOf(file)).update('\0absent\0')
+  return {
+    cwd: folder, files, hash: hash.digest('hex').slice(0, 16), onlyInstructions: [...found.values()].every(Boolean),
+    ...(unsafe ? { unsafe } : {}),
+  }
 }
 
 /** The folders whose Claude Code configuration the user allowed, each at the hash it was allowed at: a file in the data folder. */
