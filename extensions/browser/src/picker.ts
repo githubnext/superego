@@ -44,7 +44,8 @@ export function pick(win: Window, options: PickOptions): Promise<Picked | null> 
   const held = win as unknown as Record<symbol, ((picked: null) => void) | undefined>
   held[KEY]?.(null)
   const doc = win.document
-  const esc = (text: string) => typeof win.CSS?.escape === 'function' ? win.CSS.escape(text) : text.replace(/[^\w-]/g, (c) => `\\${c}`)
+  const css = (win as Window & typeof globalThis).CSS as typeof CSS | undefined
+  const esc = (text: string) => typeof css?.escape === 'function' ? css.escape(text) : text.replace(/[^\w-]/g, (c) => `\\${c}`)
   const unique = (selector: string) => {
     try { return doc.querySelectorAll(selector).length === 1 } catch { return false }
   }

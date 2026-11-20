@@ -50,7 +50,7 @@ function desktopPage(html: string) {
     const el = page.document.querySelector(selector)!
     // Where it's drawn (this DOM lays nothing out): partly out of view, at the top.
     el.getBoundingClientRect = () => ({ left: 10, top: -10, width: 100, height: 30, right: 110, bottom: 20, x: 10, y: -10 }) as never
-    page.document.elementsFromPoint = () => [host()!, el] as never
+    Object.assign(page.document, { elementsFromPoint: () => [host()!, el] })
     host()!.dispatchEvent(new page.PointerEvent('pointermove', { bubbles: true, clientX: 5, clientY: 5 }) as never)
     host()!.dispatchEvent(new page.MouseEvent('click', { bubbles: true, cancelable: true }) as never)
   }
