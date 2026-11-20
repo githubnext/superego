@@ -22,6 +22,8 @@ const REPO = 'https://github.com/githubnext/superego'
 const DOWNLOAD = `${REPO}/releases/latest`
 const BASE = (process.env.SITE_BASE ?? '/').replace(/\/?$/, '/')
 const DEV = Boolean(process.env.SITE_DEV)
+/** Where the site is published, for what needs a full address: the link preview's image. */
+const SITE_URL = (process.env.SITE_URL ?? 'https://githubnext.github.io/superego').replace(/\/?$/, '/')
 
 const docs = sections.flatMap((s) => s.pages)
 const pageBySrc = new Map([...docs, changelog].map((p) => [p.src, p]))
@@ -162,6 +164,15 @@ function layout(o: { title: string; description?: string; current?: 'docs' | 'ch
 <title>${escape(o.title)}</title>
 <meta name="description" content="${escape(o.description ?? DESCRIPTION)}">
 <meta name="color-scheme" content="light dark">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Superego">
+<meta property="og:title" content="${escape(o.title)}">
+<meta property="og:description" content="${escape(o.description ?? DESCRIPTION)}">
+<meta property="og:image" content="${SITE_URL}og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="The Superego icon, a halo over a dot, on a blue swirl">
+<meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="${BASE}icon.png">
 <link rel="stylesheet" href="${BASE}style.css">
 </head>
@@ -280,6 +291,8 @@ export function build() {
   for (const shot of ['screenshot-light.webp', 'screenshot-dark.webp']) cpSync(join(SITE, shot), join(OUT, shot))
   // The byline's avatars, from avatars.githubusercontent.com.
   for (const avatar of ['mikker.png', 'githubnext.png']) cpSync(join(SITE, avatar), join(OUT, avatar))
+  // The link preview: docs/header.webp (the README's), cropped to 1200×630.
+  cpSync(join(SITE, 'og.png'), join(OUT, 'og.png'))
   cpSync(join(ROOT, 'app/resources/icon.png'), join(OUT, 'icon.png'))
   write('', home())
   for (const page of docs) write(urlOf(page).slice(BASE.length), docPage(page, render(page)))
