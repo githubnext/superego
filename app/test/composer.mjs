@@ -61,7 +61,7 @@ await openApp({ name: 'composer', timeout: 180_000 }, async (t) => {
   // A busy transcript first, to run behind the suggestions when scrolled.
   await submit(idle, Array.from({ length: 12 }, (_, i) => `Line ${i + 1}: the importer reads each row's date as UTC midnight, then formats it in local time, so every date lands a day early.`).join('\n\n'))
   await until(`${state(idle)}.then((s) => s === 'done')`, 'busy transcript answered')
-  await submit(idle, 'What next? ["Run the tests", "Commit this", "Check the Nordea export too"]')
+  await submit(idle, 'What next? ["Run the tests", "Commit this", "Write a test for a row dated on the first of a month in summer time, and check the Nordea export too"]')
   await until(`${state(idle)}.then((s) => s === 'done')`, 'idle thread answered')
   await open('Dates land a day early')
   await until(`document.querySelectorAll('.suggestions__item').length === 3`, 'suggestions')

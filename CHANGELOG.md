@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Suggestions over the composer stay on one row: more than fit scroll sideways (with a trackpad, the mouse wheel, or ←/→ picking one), fading at the edge where there's more.
 - A folder opened from a link in a thread shows what's really in it on the thread's machine, git-ignored and
   untracked files too, read a folder at a time as you open them. One that can't be read says why, instead of "No files
   here.". The file tree beside the editor and ⌘P still leave out what git ignores.

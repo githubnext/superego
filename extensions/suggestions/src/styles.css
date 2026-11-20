@@ -1,6 +1,11 @@
-/* What you might send next: quiet pills over the composer, wrapping when they don't fit. */
-.suggestions { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 2px; }
-.suggestions__item { font: inherit; font-size: var(--superego-text-sm); height: 26px; color: var(--superego-muted); background: var(--superego-bg); border: 0; box-shadow: inset 0 0 0 1px light-dark(rgb(0 0 0 / .12), rgb(255 255 255 / .12)); border-radius: 999px; padding: 0 10px; cursor: default; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* What you might send next: quiet pills over the composer, in one row that scrolls sideways when they don't fit, its
+   ends fading where there's more. Room above and below for the picked pill's ring, which the scroll would clip. */
+.suggestions { display: flex; gap: 6px; padding: 2px; margin: -2px 0; overflow-x: auto; scrollbar-width: none; overscroll-behavior-x: contain; }
+.suggestions::-webkit-scrollbar { display: none; }
+.suggestions.is-clipped-start { mask-image: linear-gradient(to right, transparent, #000 24px); }
+.suggestions.is-clipped-end { mask-image: linear-gradient(to right, #000 calc(100% - 24px), transparent); }
+.suggestions.is-clipped-start.is-clipped-end { mask-image: linear-gradient(to right, transparent, #000 24px, #000 calc(100% - 24px), transparent); }
+.suggestions__item { font: inherit; font-size: var(--superego-text-sm); height: 26px; color: var(--superego-muted); background: var(--superego-bg); border: 0; box-shadow: inset 0 0 0 1px light-dark(rgb(0 0 0 / .12), rgb(255 255 255 / .12)); border-radius: 999px; padding: 0 10px; cursor: default; flex: none; max-width: 42ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* The hover tint laid over the pill's own ground: --superego-hover alone is see-through, and the transcript scrolls under. */
 .suggestions__item:hover { color: var(--superego-text); background: linear-gradient(var(--superego-hover), var(--superego-hover)) var(--superego-bg); }
 .suggestions__item:first-child { color: var(--superego-text); }
