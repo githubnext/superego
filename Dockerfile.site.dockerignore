@@ -1,0 +1,12 @@
+# Keep the repository's docs, assets, workspace manifests, vendor tarballs and patches in the build context.
+.git
+**/node_modules
+**/dist
+**/out
+**/out-profile
+**/.types
+**/*.tsbuildinfo
+**/.DS_Store
+**/.env
+**/.env.*
+evals/results
