@@ -1,5 +1,5 @@
 // Screenshots of the composer and what's around it (run by `test/look.sh <dir> composer`): idle with suggestions, a
-// file waiting, the agent working with messages queued and one typed to steer, a question waiting, archived, @ mentions
+// file waiting, the agent working with messages queued and one typed to steer, questions waiting (two options and five), archived, @ mentions
 // offered and sent, and the narrow layout; light and dark. Into $SUPEREGO_SHOWCASE_OUT.
 import { openApp } from './harness.mjs'
 import { writeFileSync } from 'node:fs'
@@ -11,8 +11,15 @@ const turns = [
   // Working: a few steps, then one that runs long.
   turn([{ type: 'text', text: 'Searching for where the focus is set.' }, call('w1', 'bash', { command: 'grep -rn Date src | head -5' }), call('w2', 'read', { path: 'package.json' })]),
   turn([{ type: 'text', text: 'Running the whole suite now.' }, call('w3', 'bash', { command: 'sleep 600' })]),
-  // A question.
+  // A question with two options, then one with five, their descriptions long enough to wrap.
   turn([call('q1', 'ask_user', { question: 'Which export should the importer read first?', options: ['Danske', 'Nordea'] })]),
+  turn([call('q2', 'ask_user', { question: 'Local `main` is 29 commits ahead of `origin/main`, and only 7 are mine. What should I push?', options: [
+    { label: 'All of local main', description: 'Merge the last tweak, run the full test suite (and smoke) on main, then push main to origin' },
+    { label: 'Only mine', description: 'Put my commits onto origin/main in a branch of their own, test, and push just those, leaving the other threads\' merges for their batch' },
+    { label: "Don't push yet", description: 'Merge to local main only' },
+    { label: 'Ask the chief of staff' },
+    { label: 'Something else', description: 'Say what in your own words' },
+  ] })]),
 ]
 // The echo model by default (suggestions come from it: it echoes them back), the recording offered beside it.
 process.env.SUPEREGO_REPLAY = process.env.SUPEREGO_MODEL.slice('replay:'.length)
@@ -117,11 +124,18 @@ await openApp({ name: 'composer', timeout: 180_000 }, async (t) => {
   await until(`Boolean(document.querySelector('.agent-ui-waiting'))`, 'question')
   await both('question')
   await phone('question-narrow')
+  const asking5 = await create('Push what')
+  await submit(asking5, 'Push it')
+  await open('Push what')
+  await until(`document.querySelectorAll('.agent-ui-question__option').length === 5`, 'five options')
+  await both('question-five')
+  await phone('question-five-narrow')
 
   // Archived: read only, with the way back.
   await run(`window.superego.call('local', 'thread.archive', { thread: '${idle}' })`)
   await run(`window.superego.call('local', 'thread.stop', { thread: '${working}' })`)
   await run(`window.superego.call('local', 'thread.stop', { thread: '${asking}' })`)
+  await run(`window.superego.call('local', 'thread.stop', { thread: '${asking5}' })`)
   await run(`document.querySelector('.threads-archived button, .threads-archived summary')?.click()`)
   await until(`(() => { const li = [...document.querySelectorAll('.superego-list-item')].find((li) => li.textContent.includes('Dates land a day early')); li?.click(); return Boolean(li) && Boolean(document.querySelector('.titlebar__archived')) })()`, 'archived thread shown')
   await both('archived')

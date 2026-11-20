@@ -51,6 +51,7 @@
 - A notification stays in Notification Center until you clear it, and clicking it there later still opens its thread.
 - The Browser pane shows a page loading: a thin line under its address bar that fills as it loads, a spinner on its
   tab and in the address, and Stop in place of Reload (Esc in the address bar stops it too). Quick loads show nothing.
+- An agent's question and the box to answer it in are one card again, with no gap between its choices and the box.
 
 ## 0.1.8
 
