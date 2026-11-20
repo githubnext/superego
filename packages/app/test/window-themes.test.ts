@@ -4,7 +4,7 @@
 // from a file is listed, chosen and removed, and one an extension brings is offered under its name.
 import { afterEach, expect, it } from 'vitest'
 import { defineUiExtension } from '../src/renderer/sdk-ui.ts'
-import { mountUi, testDaemon, type TestDaemon, type TestWindow } from '../../sdk/src/testing.ts'
+import { mountUi, testDaemon, type MountOptions, type TestDaemon, type TestWindow } from '../../sdk/src/testing.ts'
 
 const $ = (selector: string) => document.querySelector<HTMLElement>(selector)
 const $$ = (selector: string) => [...document.querySelectorAll<HTMLElement>(selector)]
@@ -19,7 +19,7 @@ const offered = (appearance: 'light' | 'dark') => [...picker(appearance)?.option
 
 let daemon: TestDaemon
 let ui: TestWindow
-const open = async (extensions: Parameters<typeof mountUi>[0]['extensions'] = []) => {
+const open = async (extensions: MountOptions['extensions'] = []) => {
   daemon = await testDaemon({ model: 'echo' })
   ui = await mountUi({ window: true, machines: [daemon], extensions })
   $('.app__settings')!.click()
