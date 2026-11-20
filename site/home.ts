@@ -8,19 +8,19 @@ type Callout = { ring: [cx: number, cy: number, rx: number, ry: number]; asked: 
 const callouts: Callout[] = [
   {
     ring: [190, 195, 125, 62],
-    asked: "Don't do the work yourself: start a thread for each part, four at most at a time, and tell me as each one finishes.",
+    asked: '…hands each part of the work to a thread of its own, four at most at a time, and tells me as each one finishes.',
   },
   {
     ring: [1145, 282, 300, 62],
-    asked: 'Put decisions on a board for me to answer when I get to them, instead of stopping to ask.',
+    asked: '…puts decisions on a board for me to answer when I get to them, instead of stopping to ask.',
   },
   {
     ring: [569, 720, 285, 105],
-    asked: "Ask me in the thread only when you can't go on without an answer.",
+    asked: "…asks me in the thread only when it can't go on without an answer.",
   },
   {
     ring: [1145, 600, 300, 150],
-    asked: "Give me a board beside the thread: the plan in waves, how each thread is doing, and what's waiting on me.",
+    asked: "…shows a board beside the thread: the plan in waves, how each thread is doing, and what's waiting on me.",
   },
 ]
 
@@ -124,9 +124,9 @@ export function homeBody(o: { base: string; download: string }) {
 <svg viewBox="0 0 ${W} ${H}" aria-hidden="true">${rings}</svg>
 ${numbers}
 </figure>
-<p class="asked-intro">My Chief of Staff, and what I asked for to get it:</p>
+<p class="asked-intro">I wanted something like a <em>chief of staff</em>, so I asked it “Make a new extension that…”</p>
 <ol class="asked">
-${callouts.map((c) => `<li>“${c.asked}”</li>`).join('\n')}
+${callouts.map((c) => `<li>${c.asked}</li>`).join('\n')}
 </ol>
 <p class="take">Take it with <code>superego profile install git:github.com/mikker/superego-profiles</code>, or ask for your own.</p>
 
