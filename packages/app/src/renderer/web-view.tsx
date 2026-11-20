@@ -47,6 +47,11 @@ export type WebViewProps = {
   onEvent?(event: WebViewEvent): void
   /** Whether the pane has the keyboard and its page doesn't, as that changes: Return passes it in (a hint can say so). */
   onWaiting?(waiting: boolean): void
+  /**
+   * The page is laid out at its box's own size (a Browser pane's page at a set width), in the window's CSS pixels,
+   * whatever the window's zoom; a CSS transform on the box (scaled to fit) draws it smaller, as it does the box.
+   */
+  sized?: boolean
   ref?: Ref<WebViewHandle>
 }
 
@@ -125,7 +130,7 @@ function FramedWebView({ src, partition, title, sandbox, revision, onEvent, onWa
 
 type Still = { url: string; width: number }
 
-function NativeWebView({ src, partition, revision, onEvent, onWaiting, ref }: WebViewProps) {
+function NativeWebView({ src, partition, revision, onEvent, onWaiting, sized = false, ref }: WebViewProps) {
   const host = useRef<HTMLDivElement>(null)
   const held = useRef<HeldWebView>(undefined)
   const view = () => held.current?.view
@@ -145,6 +150,8 @@ function NativeWebView({ src, partition, revision, onEvent, onWaiting, ref }: We
   const ask: WebViewAsk = { src, partition, revision }
   const asked = useRef(ask)
   asked.current = ask
+  const sizedRef = useRef(sized)
+  sizedRef.current = sized
 
   useEffect(() => {
     const el = host.current!
@@ -172,7 +179,7 @@ function NativeWebView({ src, partition, revision, onEvent, onWaiting, ref }: We
     // The window's page has the keyboard again (a click on it, a shortcut from the page): the page hasn't.
     const regained = (event: Event) => { if (event.target === window) setInPage(false) }
     window.addEventListener('focus', regained, true)
-    const placing = placeView(el, holding.view, setStill)
+    const placing = placeView(el, holding.view, setStill, () => sizedRef.current)
     placing.block(failed)
     placer.current = placing
     return () => {
@@ -223,7 +230,7 @@ type Mode = 'none' | 'live' | 'still'
  * (`setStill`) in its place. Checked each frame while anything moves (a resize, a scroll, the window's page changing,
  * an animation), until it's been still a while.
  */
-function placeView(host: HTMLElement, view: BridgeWebView, setStill: (still: Still | undefined) => void): Placer {
+function placeView(host: HTMLElement, view: BridgeWebView, setStill: (still: Still | undefined) => void, sized: () => boolean): Placer {
   let mode: Mode = 'none'
   let placed = ''
   let blocked = false
@@ -249,7 +256,7 @@ function placeView(host: HTMLElement, view: BridgeWebView, setStill: (still: Sti
         const image = new Image()
         image.src = url
         await image.decode()
-        next = { url, width: image.naturalWidth / devicePixelRatio }
+        next = { url, width: image.naturalWidth / devicePixelRatio * (rect.layout ? rect.layout.width / rect.width : 1) }
       }
     } catch (error) { console.error('A still of the page:', error) }
     if (stopped || asked !== capture || mode !== 'still') { if (next) URL.revokeObjectURL(next.url); return }
@@ -262,7 +269,7 @@ function placeView(host: HTMLElement, view: BridgeWebView, setStill: (still: Sti
 
   let lastRect: WebViewRect | null = null
   function check(): boolean {
-    const at = blocked ? null : placeOf(host)
+    const at = blocked ? null : placeOf(host, sized())
     const rect = at?.rect ?? null
     const next: Mode = !at ? 'none' : at.whole && !covered(host, at.rect) && !document.documentElement.classList.contains('is-resizing-columns') ? 'live' : 'still'
     const key = `${JSON.stringify(rect)} ${devicePixelRatio}`
@@ -330,7 +337,7 @@ function placeView(host: HTMLElement, view: BridgeWebView, setStill: (still: Sti
  * Where `host` is in the window, and whether all of it is in view; null when it's not shown at all: hidden (behind a
  * stack, under a maximized pane, closed), or scrolled out of view.
  */
-export function placeOf(host: HTMLElement): { rect: WebViewRect; whole: boolean } | null {
+export function placeOf(host: HTMLElement, sized = false): { rect: WebViewRect; whole: boolean } | null {
   if (host.closest('[inert]') || !host.checkVisibility({ visibilityProperty: true, opacityProperty: true })) return null
   const box = host.getBoundingClientRect()
   if (box.width < 1 || box.height < 1) return null
@@ -343,7 +350,7 @@ export function placeOf(host: HTMLElement): { rect: WebViewRect; whole: boolean 
   }
   if (clip.right - Math.max(clip.left, box.left) < 1 || clip.bottom - Math.max(clip.top, box.top) < 1 || Math.min(clip.right, box.right) <= clip.left || Math.min(clip.bottom, box.bottom) <= clip.top) return null
   const whole = box.left >= clip.left - 0.5 && box.top >= clip.top - 0.5 && box.right <= clip.right + 0.5 && box.bottom <= clip.bottom + 0.5
-  return { rect: { x: box.left, y: box.top, width: box.width, height: box.height }, whole }
+  return { rect: { x: box.left, y: box.top, width: box.width, height: box.height, ...(sized ? { layout: { width: host.offsetWidth, height: host.offsetHeight } } : {}) }, whole }
 }
 
 /** Whether anything the window draws over its panes is over `rect` (one the pane itself is in, a dialog's, isn't). */

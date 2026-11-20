@@ -52,3 +52,17 @@ a.superego-icon-button { text-decoration: none; }
   .browser-load, .browser-load__now { transition: none; }
   .browser-load__wait { animation: none; transform: scaleX(.3); }
 }
+/* The page's size (ui.tsx's SizeMenu): an icon, and its width when it has one, as quiet as the buttons beside it. */
+.browser-size {
+  flex: none; display: flex; align-items: center; gap: 4px; height: 24px; padding: 0 6px; border: 0; border-radius: var(--superego-radius);
+  background: none; color: var(--superego-muted); font: var(--superego-text-xs) var(--superego-mono); cursor: default;
+}
+.browser-size:hover, .browser-size[data-popup-open] { background: var(--superego-hover); color: var(--superego-text); }
+.browser-size__scale { color: var(--superego-faint); }
+.browser-size-field { flex: none; width: 96px; font-family: var(--superego-mono); font-size: var(--superego-text-xs); }
+.browser-size-field[aria-invalid="true"] { box-shadow: 0 0 0 1px var(--superego-status-error); }
+/* Where the page goes: all of it, or (at a size) a box of that size centred on a quiet backdrop, scaled down to fit. */
+.browser-stage { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+.browser-page { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.browser-stage.is-sized { background: var(--superego-chrome); }
+.browser-stage.is-sized > .browser-page { position: absolute; transform-origin: 0 0; box-shadow: 0 0 0 1px var(--superego-line); }

@@ -77,8 +77,12 @@ export type BridgeChannel = {
  */
 export type WebViewPartition = 'browser' | 'artifact'
 
-/** A box in the window's page, in its CSS pixels. */
-export type WebViewRect = { x: number; y: number; width: number; height: number }
+/**
+ * A box in the window's page, in its CSS pixels. With a `layout` (a page at a set size), the page in it is laid out at
+ * that size whatever the window's zoom (what its media queries see), and drawn to fill the box (smaller, when the box is
+ * shrunk by a CSS transform).
+ */
+export type WebViewRect = { x: number; y: number; width: number; height: number; layout?: { width: number; height: number } }
 
 /** Where a web view's page is, as its window's main process tells it. */
 export type WebViewState = {

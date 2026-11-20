@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- The Browser pane can show its page at a phone's, tablet's or laptop's width, or one you type in (`1024` or
+  `1024×768`), from a size menu in its toolbar: the page sees that width, scaled down when the pane is narrower. Each
+  pane keeps its own size.
 - Superego no longer uses a Claude subscription token as an Anthropic key: one entered in Settings or with
   `superego providers key` is refused with what to use instead (an API key; Max, Team and Ultra plans include API
   credits), one already stored stops the provider until it's replaced, and `ANTHROPIC_OAUTH_TOKEN` is ignored.

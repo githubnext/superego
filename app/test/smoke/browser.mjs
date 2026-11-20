@@ -69,6 +69,33 @@ export default async function browser(t) {
   await t.click('.panes__column:has(.web-view) button[aria-label="Back"]')
   await t.until(`document.querySelector('.panes__column:has(.web-view) .browser-address__text')?.textContent === ${JSON.stringify(`${appUrl}/`)}`, 'back again')
 
+  // At a size: picked from the toolbar, the page laid out that wide (its media queries see it), kept in the pane's params;
+  // wider than the pane, drawn smaller to fit, still that wide; a reload keeps it; Full is the pane's width again.
+  const sizeOf = async () => (await t.call('thread.list')).find((x) => x.id === thread).panes.find((p) => p.kind === 'browser').params?.viewport
+  const innerWidth = () => page()?.executeJavaScript('innerWidth')
+  const pickSize = async (label) => {
+    await t.click('.panes__column:has(.web-view) button[aria-label="Page size"]')
+    await t.until(`[...document.querySelectorAll('[role^="menuitem"]')].some((el) => el.textContent.startsWith(${JSON.stringify(label)}))`, `the size menu, with ${label}`)
+    await t.run(`[...document.querySelectorAll('[role^="menuitem"]')].find((el) => el.textContent.startsWith(${JSON.stringify(label)})).click()`)
+  }
+  await pickSize('Small')
+  await t.until(async () => (await sizeOf())?.width === 390, 'Small kept in the pane')
+  await t.until(async () => await innerWidth() === 390, 'the page 390 wide')
+  await t.until(`document.querySelector('.panes__column:has(.web-view) .browser-page')?.offsetWidth === 390`, 'its frame 390 wide')
+  await pickSize('Large')
+  await t.until(async () => (await sizeOf())?.width === 1280, 'Large kept in the pane')
+  await t.until(async () => await innerWidth() === 1280, 'the page 1280 wide, scaled to fit')
+  const scaled = await t.run(`document.querySelector('.panes__column:has(.web-view) .web-view').getBoundingClientRect().width`)
+  if (scaled >= 1280) t.fail(`the page not scaled to fit its pane (${scaled} wide)`)
+  await t.until(`/\\d+%/.test(document.querySelector('.panes__column:has(.web-view) .browser-size__scale')?.textContent ?? '')`, 'its scale shown')
+  await t.until(() => Math.abs(t.win().contentView.children.find((v) => v.webContents === page()).getBounds().width - scaled * t.contents().getZoomFactor()) <= 2, 'the view as wide as its scaled frame')
+  await t.click('.panes__column:has(.web-view) button[aria-label="Reload"]')
+  await t.until(async () => page()?.isLoading() === false && await title() === 'signed in as mikker' && await innerWidth() === 1280, 'still 1280 wide after a reload')
+  await pickSize('Full')
+  await t.until(async () => await sizeOf() === undefined, 'Full: no size kept')
+  const paneWidth = await t.run(`document.querySelector('.panes__column:has(.web-view) .browser-stage').clientWidth`)
+  await t.until(async () => Math.abs(await innerWidth() - paneWidth * t.contents().getZoomFactor()) <= 1, "the page the pane's width again")
+
   // A page that takes its time: a line along the toolbar's foot, a spinner on its tab and in the address, and Stop; stopped,
   // it's all gone, and the page is where it was.
   await page().executeJavaScript(`location.href = '/slow'`, true)

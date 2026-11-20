@@ -58,6 +58,8 @@ type Held = AskingView & {
   window: AppWindow; id: string; partition: WebViewPartition; view: WebContentsView; error?: WebViewState['error']; ask?: PermissionAsk; stillFailed?: boolean
   /** How far the load under way has come (`WebViewState.progress`). */
   progress?: number
+  /** The device emulation it's under (a page at a set size, `WebViewRect.layout`); none when it isn't. */
+  emulated?: Electron.Parameters
 }
 
 /** A load's milestones, as its progress: started, its response in (the page committed), its document parsed. */
@@ -237,7 +239,11 @@ export function serveWebViews({ windowOf, linkOf, sites }: WebViewsOptions) {
       changed()
     })
     contents.on('did-start-loading', () => reached(PROGRESS.started))
-    contents.on('did-navigate', () => reached(PROGRESS.committed))
+    contents.on('did-navigate', () => {
+      reached(PROGRESS.committed)
+      // A new document isn't under the last one's emulation: it's put under it again.
+      if (entry.emulated) contents.enableDeviceEmulation(entry.emulated)
+    })
     contents.on('dom-ready', () => reached(PROGRESS.parsed))
     contents.on('did-stop-loading', () => {
       entry.progress = undefined
@@ -300,6 +306,7 @@ export function serveWebViews({ windowOf, linkOf, sites }: WebViewsOptions) {
           const zoom = window.contents.getZoomFactor()
           const width = Math.round(rect.width * zoom), height = Math.round(rect.height * zoom)
           native.setBounds(shown ? { x: Math.round(rect.x * zoom), y: Math.round(rect.y * zoom), width, height } : { x: 1 - width, y: 1 - height, width, height })
+          emulate(view, rect)
           native.setVisible(true)
           break
         }
@@ -319,6 +326,21 @@ export function serveWebViews({ windowOf, linkOf, sites }: WebViewsOptions) {
       }
     } catch (error) { console.error(`Web view ${op}:`, error) }
   })
+  /**
+   * A page at a set size (`rect.layout`): laid out at that size, so it sees the width it was given, and drawn to fill its
+   * bounds (smaller, scaled to fit its pane). Emulated by Chromium as DevTools' device mode does, for this view alone
+   * (a zoom factor would be its origin's, in every view of it).
+   */
+  function emulate(view: Held, rect: WebViewRect) {
+    const contents = view.view.webContents
+    const bounds = view.view.getBounds()
+    const size = rect.layout && { width: Math.round(rect.layout.width), height: Math.round(rect.layout.height) }
+    const next = size && { screenPosition: 'desktop' as const, screenSize: size, viewPosition: { x: 0, y: 0 }, deviceScaleFactor: 0, viewSize: size, scale: bounds.width / size.width }
+    if (JSON.stringify(next) === JSON.stringify(view.emulated)) return
+    view.emulated = next
+    if (next) contents.enableDeviceEmulation(next)
+    else contents.disableDeviceEmulation()
+  }
   ipcMain.handle(CHANNEL.viewSnapshot, async (event, id: string) => {
     const view = viewOf(event, id)
     if (!view || view.view.webContents.isDestroyed()) return null

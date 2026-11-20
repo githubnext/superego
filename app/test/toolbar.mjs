@@ -1,6 +1,7 @@
 // The Browser pane's toolbar, a web page's and an HTML file's (run by `test/look.sh <dir> toolbar`): a page with no history yet, one
 // with history to go back, its address bar being typed in, the pane holding the keyboard (its "↩ to use the page"
-// hint), a page loading (its line under the toolbar, its spinners, Stop), an HTML file, and a blank page. Light and dark,
+// hint), a page loading (its line under the toolbar, its spinners, Stop), a page at Small and at Large (scaled to fit)
+// with its size menu, an HTML file, and a blank page. Light and dark,
 // each cropped to the pane's top, into $SUPEREGO_SHOWCASE_OUT.
 import { webContents } from 'electron'
 import { writeFileSync } from 'node:fs'
@@ -11,7 +12,9 @@ import { openApp } from './harness.mjs'
 const page = (title) => `<body style="margin:0;font:15px system-ui;padding:24px"><h1>${title}</h1><a href="/invoices/2024?draft=1">Next</a></body>`
 // `/slow` never answers until the server closes: a page loading.
 const held = []
-const server = createServer((q, r) => { if (q.url === '/slow') return held.push(r); r.setHeader('content-type', 'text/html'); r.end(page(q.url)) }).listen(0)
+// `/sized`: a page that says how wide it is, its layout one column when narrow.
+const sized = `<body style="margin:0;font:15px system-ui"><style>main{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;padding:24px}div{height:80px;border-radius:8px;background:#e8e6f4}@media (max-width:600px){main{grid-template-columns:1fr}}</style><main><h1 style="grid-column:1/-1" id="w"></h1><div></div><div></div><div></div><div></div><div></div><div></div></main><script>const w=()=>document.getElementById('w').textContent=innerWidth+' px';w();addEventListener('resize',w)</script></body>`
+const server = createServer((q, r) => { if (q.url === '/slow') return held.push(r); r.setHeader('content-type', 'text/html'); r.end(q.url === '/sized' ? sized : page(q.url)) }).listen(0)
 
 await openApp({ name: 'toolbar', timeout: 180_000 }, async (t) => {
   const { run, until } = t
@@ -68,6 +71,42 @@ await openApp({ name: 'toolbar', timeout: 180_000 }, async (t) => {
   for (const r of held.splice(0)) r.destroy()
   await run(`document.querySelector('button[aria-label="Stop"]')?.click()`)
   await until(`!document.querySelector('.browser-load')`, 'the page stopped')
+
+  // At a size: Small, centred on its backdrop; Large, scaled down to fit; the size menu. The whole pane.
+  const pane = `document.querySelector('.panes__column:has(.browser-frame)')`
+  const browserPane = await run(`window.superego.call('local', 'thread.list', {}).then((l) => l.find((t) => t.id === '${id}').panes.at(-1).id)`)
+  const resize = (viewport) => run(`window.superego.call('local', 'pane.update', { thread: '${id}', pane: '${browserPane}', params: { url: ${JSON.stringify(`${url}sized`)}, viewport: ${JSON.stringify(viewport)} } })`)
+  const sizedView = () => webContents.getAllWebContents().find((w) => w.getURL() === `${url}sized`)
+  await resize({ width: 390 })
+  await until(async () => await sizedView()?.executeJavaScript('innerWidth') === 390, 'the page at Small')
+  // The page is a view of its own over the window, not in its screenshots: drawn into its box for them, as its still is.
+  const drawPage = async () => {
+    // By DevTools' screenshot: a hidden window's views have no surface for capturePage.
+    const debug = sizedView().debugger
+    if (!debug.isAttached()) debug.attach()
+    const { data } = await debug.sendCommand('Page.captureScreenshot', { format: 'png' })
+    await run(`document.querySelector('.browser-frame .web-view').style.background = 'url(data:image/png;base64,${data}) 0 0 / 100% 100%'`)
+  }
+  for (const theme of ['light', 'dark']) {
+    await t.theme(theme)
+    await drawPage()
+    await t.shot(`toolbar-small-${theme}`, pane)
+  }
+  await resize({ width: 1280 })
+  await until(async () => await sizedView()?.executeJavaScript('innerWidth') === 1280 && await run(`Boolean(document.querySelector('.browser-size__scale'))`), 'the page at Large, scaled')
+  for (const theme of ['light', 'dark']) {
+    await t.theme(theme)
+    await drawPage()
+    await t.shot(`toolbar-large-${theme}`, pane)
+  }
+  await t.click('button[aria-label="Page size"]')
+  await until(`Boolean(document.querySelector('.superego-menu [role^="menuitem"]'))`, 'the size menu')
+  const menuShot = `(() => { const r = document.querySelector('.panes__column:has(.browser-frame)').getBoundingClientRect(); return { getBoundingClientRect: () => ({ x: r.x, y: r.y, width: r.width, height: 280 }) } })()`
+  for (const theme of ['light', 'dark']) {
+    await t.theme(theme)
+    await t.shot(`toolbar-size-menu-${theme}`, menuShot)
+  }
+  await run(`document.activeElement?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`)
 
   const preview = await run(`window.superego.call('local', 'thread.list', {}).then((l) => l.find((t) => t.id === '${id}').panes.at(-1).id)`)
   await run(`window.superego.call('local', 'pane.close', { thread: '${id}', pane: '${preview}' })`)

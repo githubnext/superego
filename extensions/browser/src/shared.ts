@@ -10,11 +10,14 @@ import type { ExtensionAbout } from '@superego/protocol'
  */
 export const BROWSER = 'browser'
 
-export type BrowserParams = { url?: string; path?: string }
+/** The page's viewport, set from its toolbar: laid out at that width (and height), centred in the pane. None: the pane's. */
+export type Viewport = { width: number; height?: number }
+
+export type BrowserParams = { url?: string; path?: string; viewport?: Viewport }
 
 export const about = {
-  name: 'browser', version: '1.1.0', api: '^5.1', title: 'Browser', description: 'Web pages and HTML files the agent wrote, shown beside a thread.',
+  name: 'browser', version: '1.2.0', api: '^5.1', title: 'Browser', description: 'Web pages and HTML files the agent wrote, shown beside a thread.',
   panes: {
-    [BROWSER]: '{ url } (a web page: a dev server running here at its localhost address, or any site) or { path } (an HTML file in the working folder; write it first)',
+    [BROWSER]: '{ url } (a web page: a dev server running here at its localhost address, or any site) or { path } (an HTML file in the working folder; write it first); optional viewport: { width, height? } in px, to show it at that size',
   },
 } satisfies ExtensionAbout

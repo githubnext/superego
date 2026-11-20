@@ -14,12 +14,13 @@
 // ahead of that as the page's milestones come, full as it's done, then fading; a spinner in place of the globe on the
 // pane's tab and in the address; Reload is Stop. None of it for a load done within SHOW_AFTER, so a quick one doesn't
 // flash. A page that doesn't load says why, in its place (the app's WebView).
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
 import { askText, call, defineAction, defineUiExtension, hasWebViews, PaneMessage, useApp, useAppSetting, useDispatch, useTabGlyph, thisComputer, WebView, type PaneProps, type PermissionAsk, type WebViewEvent, type WebViewHandle } from '@superego/app/ui'
 import type { Pane } from '@superego/protocol'
-import { autoFocusOnOpen, ArrowClockwiseIcon, ArrowLeftIcon, ArrowRightIcon, ArrowSquareOutIcon, Button, Glyph, GlobeIcon, IconButton, XIcon } from '@superego/ui'
+import { autoFocusOnOpen, ArrowClockwiseIcon, ArrowLeftIcon, ArrowRightIcon, ArrowsOutLineHorizontalIcon, ArrowSquareOutIcon, Button, DeviceMobileIcon, DeviceTabletIcon, Glyph, GlobeIcon, IconButton, LaptopIcon, Menu, ResizeIcon, XIcon } from '@superego/ui'
 import './styles.css'
-import { about, BROWSER, type BrowserParams } from './shared.ts'
+import { about, BROWSER, type BrowserParams, type Viewport } from './shared.ts'
+import { fit, isViewport, parseViewport, PRESETS, presetOf, viewportText, type Fit } from './viewport.ts'
 import { DEFAULT_SEARCH_ENGINE, destination, SEARCH_ENGINE, SEARCH_ENGINES, webAddress, type Destination, type SearchEngine } from './address.ts'
 
 const params = (pane: Pane) => (pane.params ?? {}) as BrowserParams
@@ -59,7 +60,8 @@ type Target = { src: string; partition: 'browser' | 'artifact'; revision?: strin
 type Notice = { text: string; path?: string }
 
 function BrowserPane({ machine, thread, pane }: PaneProps) {
-  const { url: given, path } = params(pane)
+  const { url: given, path, viewport: asked } = params(pane)
+  const viewport = isViewport(asked) ? asked : undefined
   const url = given === undefined ? undefined : webAddress(given)
   const forwarded = useForwarded(machine, url)
   const { revision, error: revisionError } = useRevision(machine.id, thread, path)
@@ -132,13 +134,24 @@ function BrowserPane({ machine, thread, pane }: PaneProps) {
       return
     }
     begin()
-    dispatch('pane.update', { thread: thread.id, pane: pane.id, params: to }, { machine: machine.id, source: 'browser' }).catch((error: Error) => {
+    dispatch('pane.update', { thread: thread.id, pane: pane.id, params: { ...to, ...(viewport ? { viewport } : {}) } }, { machine: machine.id, source: 'browser' }).catch((error: Error) => {
       console.error(`Going to ${JSON.stringify(to)}:`, error)
       focusPage.current = false
       setStarting(0)
       setNotice({ text: error.message })
     })
   }
+  // The page's size, kept in the pane's params: it's the pane's, for the agent and the next launch alike.
+  const resize = (next: Viewport | undefined) => {
+    const { viewport: _was, ...rest } = params(pane)
+    dispatch('pane.update', { thread: thread.id, pane: pane.id, params: { ...rest, ...(next ? { viewport: next } : {}) } }, { machine: machine.id, source: 'browser' }).catch((error: Error) => {
+      console.error(`Showing the page at ${next ? viewportText(next) : 'full width'}:`, error)
+      setNotice({ text: error.message })
+    })
+  }
+  const stage = useRef<HTMLDivElement>(null)
+  const fitted = fit(viewport, ...useSize(stage))
+  const [sizing, setSizing] = useState(false)
   const stop = () => {
     setStarting(0)
     view.current?.stop()
@@ -172,6 +185,9 @@ function BrowserPane({ machine, thread, pane }: PaneProps) {
             </Address>}
         {revisionError && <span className="browser-hint" role="alert" title={revisionError}>Won't reload as it changes: {revisionError}</span>}
         {waiting && !editing && <ReturnHint />}
+        {sizing
+          ? <SizeField viewport={viewport} onDone={(next) => { setSizing(false); if (next) resize(next) }} />
+          : <SizeMenu viewport={viewport} scale={fitted?.scale ?? 1} onPick={resize} onCustom={() => setSizing(true)} />}
         {isWeb && <a className="superego-button superego-button--ghost superego-icon-button" href={current} target="_blank" rel="noreferrer" aria-label="Open in browser" title="Open in browser"><ArrowSquareOutIcon size={14} aria-hidden /></a>}
         {shown !== undefined && <LoadBar key={shown} loading={loading} progress={state?.loading ? state.progress : undefined} />}
       </div>
@@ -183,12 +199,106 @@ function BrowserPane({ machine, thread, pane }: PaneProps) {
           <button type="button" aria-label="Dismiss" onClick={() => setNotice(undefined)}><XIcon size={11} aria-hidden /></button>
         </div>
       )}
-      {target && 'src' in target
-        ? <WebView ref={view} src={target.src} partition={target.partition} revision={target.revision} title={url ?? path ?? 'Browser'}
-            sandbox={target.partition === 'browser' ? 'allow-scripts allow-same-origin allow-forms allow-popups' : 'allow-scripts allow-forms allow-popups'}
-            onEvent={onEvent} onWaiting={setWaiting} />
-        : !blank && <PaneMessage>{target?.message ?? 'Loading…'}</PaneMessage>}
+      <div ref={stage} className={`browser-stage ${fitted ? 'is-sized' : ''}`}>
+        {target && 'src' in target
+          ? <div className="browser-page" style={fitted && pageStyle(fitted, viewport!)}>
+              <WebView ref={view} src={target.src} partition={target.partition} revision={target.revision} title={url ?? path ?? 'Browser'}
+                sandbox={target.partition === 'browser' ? 'allow-scripts allow-same-origin allow-forms allow-popups' : 'allow-scripts allow-forms allow-popups'}
+                onEvent={onEvent} onWaiting={setWaiting} sized={Boolean(fitted)} />
+            </div>
+          : !blank && <PaneMessage>{target?.message ?? 'Loading…'}</PaneMessage>}
+      </div>
     </div>
+  )
+}
+
+/** A page at a size, in its stage: its box there, scaled to fit; without a height of its own, as tall as the stage. */
+const pageStyle = (fitted: Fit, viewport: Viewport) => ({
+  width: fitted.width, height: viewport.height ?? `${100 / fitted.scale}%`, left: fitted.left, top: fitted.top,
+  ...(fitted.scale < 1 ? { transform: `scale(${fitted.scale})` } : {}),
+})
+
+/** A box's inner size, as it changes. */
+function useSize(ref: RefObject<HTMLElement | null>): [number, number] {
+  const [size, setSize] = useState<[number, number]>([0, 0])
+  useLayoutEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const measure = () => setSize((was) => was[0] === el.clientWidth && was[1] === el.clientHeight ? was : [el.clientWidth, el.clientHeight])
+    measure()
+    const observer = new ResizeObserver(measure)
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [ref])
+  return size
+}
+
+const PRESET_ICONS = { small: DeviceMobileIcon, medium: DeviceTabletIcon, large: LaptopIcon }
+
+/** The page's size: an icon and its width (and, scaled to fit, by how much); a menu of the sizes to pick from. */
+function SizeMenu({ viewport, scale, onPick, onCustom }: { viewport: Viewport | undefined; scale: number; onPick(viewport: Viewport | undefined): void; onCustom(): void }) {
+  const preset = presetOf(viewport)
+  const Icon = !viewport ? ArrowsOutLineHorizontalIcon : preset ? PRESET_ICONS[preset.id] : ResizeIcon
+  const value = !viewport ? 'full' : preset?.id ?? 'custom'
+  const percent = `${Math.round(scale * 100)}%`
+  // Custom…: the field to type in takes the menu's place once it's closed, and the focus back.
+  const custom = useRef(false)
+  return (
+    <Menu.Root onOpenChangeComplete={(open) => { if (!open && custom.current) { custom.current = false; onCustom() } }}>
+      <Menu.Trigger className="browser-size" aria-label="Page size" title={viewport ? `${viewportText(viewport)}${scale < 1 ? `, at ${percent}` : ''}` : 'Full width'}>
+        <Icon size={14} aria-hidden />
+        {viewport && <span>{viewportText(viewport)}</span>}
+        {viewport && scale < 1 && <span className="browser-size__scale">{percent}</span>}
+      </Menu.Trigger>
+      <Menu.Popup align="end">
+        <Menu.RadioGroup value={value} onValueChange={(next: string) => {
+          if (next === 'custom') return
+          onPick(next === 'full' ? undefined : { width: PRESETS.find((p) => p.id === next)!.width })
+        }}>
+          {PRESETS.map((p) => <Menu.RadioItem key={p.id} value={p.id} hint={p.width} closeOnClick>{p.label}</Menu.RadioItem>)}
+          <Menu.RadioItem value="full" closeOnClick>Full</Menu.RadioItem>
+          {value === 'custom' && <Menu.RadioItem value="custom" hint={viewportText(viewport!)}>Custom</Menu.RadioItem>}
+        </Menu.RadioGroup>
+        <Menu.Separator />
+        <Menu.Item onClick={() => { custom.current = true }}>Custom…</Menu.Item>
+      </Menu.Popup>
+    </Menu.Root>
+  )
+}
+
+/** A size typed in, in the menu's place: Return sets it (if it is one), Esc or leaving it leaves the size as it was. */
+function SizeField({ viewport, onDone }: { viewport: Viewport | undefined; onDone(viewport: Viewport | undefined): void }) {
+  const [text, setText] = useState(viewport ? viewportText(viewport) : '')
+  const [invalid, setInvalid] = useState(false)
+  // Focused once the menu it came from has let go of the focus (it gives it back as it closes, to the trigger it was).
+  const input = useRef<HTMLInputElement>(null)
+  const focused = useRef(false)
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => {
+      input.current?.focus()
+      focused.current = true
+    })
+    return () => cancelAnimationFrame(frame)
+  }, [])
+  return (
+    <input ref={input} className="browser-address browser-address--editing browser-size-field" aria-label="Page size" placeholder="1024×768"
+      spellCheck={false} autoCapitalize="off" autoCorrect="off" value={text} aria-invalid={invalid}
+      onChange={(event) => { setText(event.target.value); setInvalid(false) }}
+      onFocus={(event) => event.target.select()}
+      onBlur={() => { if (focused.current) onDone(undefined) }}
+      onKeyDown={(event) => {
+        if (event.nativeEvent.isComposing) return
+        if (event.key === 'Enter') {
+          event.preventDefault()
+          const next = parseViewport(text)
+          if (next) onDone(next)
+          else setInvalid(true)
+        } else if (event.key === 'Escape') {
+          event.preventDefault()
+          event.stopPropagation()
+          onDone(undefined)
+        }
+      }} />
   )
 }
 

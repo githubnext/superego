@@ -59,6 +59,11 @@ declare module '@phosphor-icons/react/dist/csr/FileText' { export const FileText
 declare module '@phosphor-icons/react/dist/csr/FolderSimple' { export const FolderSimpleIcon: import('@phosphor-icons/react').Icon }
 declare module '@phosphor-icons/react/dist/csr/GearSix' { export const GearSixIcon: import('@phosphor-icons/react').Icon }
 declare module '@phosphor-icons/react/dist/csr/GitBranch' { export const GitBranchIcon: import('@phosphor-icons/react').Icon }
+declare module '@phosphor-icons/react/dist/csr/ArrowsOutLineHorizontal' { export const ArrowsOutLineHorizontalIcon: import('@phosphor-icons/react').Icon }
+declare module '@phosphor-icons/react/dist/csr/DeviceMobile' { export const DeviceMobileIcon: import('@phosphor-icons/react').Icon }
+declare module '@phosphor-icons/react/dist/csr/DeviceTablet' { export const DeviceTabletIcon: import('@phosphor-icons/react').Icon }
+declare module '@phosphor-icons/react/dist/csr/Laptop' { export const LaptopIcon: import('@phosphor-icons/react').Icon }
+declare module '@phosphor-icons/react/dist/csr/Resize' { export const ResizeIcon: import('@phosphor-icons/react').Icon }
 declare module '@phosphor-icons/react/dist/csr/Globe' { export const GlobeIcon: import('@phosphor-icons/react').Icon }
 declare module '@phosphor-icons/react/dist/csr/IdentificationBadge' { export const IdentificationBadgeIcon: import('@phosphor-icons/react').Icon }
 declare module '@phosphor-icons/react/dist/csr/ImageBroken' { export const ImageBrokenIcon: import('@phosphor-icons/react').Icon }
