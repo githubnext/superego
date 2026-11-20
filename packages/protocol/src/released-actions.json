@@ -528,6 +528,18 @@
     ],
     "additionalProperties": false
   },
+  "web.approve": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "id"
+    ],
+    "additionalProperties": false
+  },
   "web.devices": {
     "type": "object",
     "properties": {},

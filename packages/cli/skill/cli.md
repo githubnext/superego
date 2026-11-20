@@ -202,14 +202,16 @@ superego mcp-servers sign-out <name>
 ```sh
 superego settings set web.access local       # off | local (this computer) | tailscale (https://<machine>.<tailnet>.ts.net)
 superego web pair                            # a link, its QR code, and a code to type: one device, once, for 5 minutes
-superego web devices                         # paired devices: name, last seen, address
+superego web devices                         # paired devices, and your own on the tailnet (approved or waiting)
+superego web approve <device>                # let in a device of yours on the tailnet that's waiting
 superego web revoke <device>                 # unpaired; its connections close at once
 superego web rename <device> <name>
 ```
 
 A browser gets in as a paired device (an HttpOnly cookie; nothing secret in an address). With `tailscale`, the daemon
 runs `tailscale serve` itself (Tailscale 1.94 or later), proxying to a socket in the data folder that only you and
-tailscaled can open; your own Tailscale login gets in without pairing unless `web.tailscale.pairing` is on.
+tailscaled can open. A device logged in to Tailscale as you may skip pairing: it waits, listed, until you approve it
+(`web approve`, or Settings → Web access); your login alone lets nothing in.
 A device unused for 90 days is forgotten.
 
 ## The daemon

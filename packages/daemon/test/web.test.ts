@@ -1,7 +1,7 @@
 // Web access: paired devices, their cookie on /rpc and /artifact/, Origin and Host checks, rate limits, revocation and
 // expiry; artifact grants, held to whom and where they were given; malformed requests, answered and survived; and
-// Tailscale serve's identity, trusted only on the socket serve proxies to (a stub `tailscale` on PATH stands in for the
-// real one).
+// Tailscale serve, trusted only on the socket serve proxies to, where the owner's devices get in each once approved,
+// never by their login alone (a stub `tailscale` on PATH stands in for the real one).
 import { chmod, mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises'
 import { request as httpRequest } from 'node:http'
 import { connect, createServer as createNetServer } from 'node:net'
@@ -12,8 +12,8 @@ import { defineApp, PROTOCOL_VERSION, RpcError, type Hello, type SettingsSnapsho
 import { MemorySettingsStore } from '@superego/settings'
 import { connectSocket, listen, openDaemon } from '../src/index.ts'
 import { GRANT_IDLE, serveWeb, webOrigin, type ServedByTailscale, type WebServer } from '../src/web.ts'
-import { otherInstances } from '../src/tailscale.ts'
-import { DEVICE_TTL, FAILURES, TICKET_TTL, WebDevices, deviceName } from '../src/web-devices.ts'
+import { otherInstances, type TailnetNode } from '../src/tailscale.ts'
+import { DEVICE_TTL, FAILURES, TICKET_TTL, WAITING_TTL, WebDevices, deviceName } from '../src/web-devices.ts'
 import { until } from './until.ts'
 
 type Client = { on(event: string, listener: (...args: unknown[]) => void): void; send(data: string): void; close(): void; readyState: number }
@@ -107,6 +107,47 @@ describe('devices', () => {
     expect(gone).toEqual([device.id])
     // Forgotten on disk too, before the folder goes.
     await devices.saved()
+  })
+
+  it('keeps an owner’s tailnet device waiting until approved, by its node, and forgets it unused', async () => {
+    let now = 1_000_000
+    const devices = new WebDevices(dir, { now: () => now })
+    const gone: string[] = []
+    devices.onRevoke((id) => gone.push(id))
+    const phone = { id: 'nPHONE', name: 'phone', os: 'iOS', login: 'me@example.com' }
+    expect(devices.knock(phone, '100.64.0.7')).toBe(false)
+    expect(devices.knock(phone, '100.64.0.7')).toBe(false)
+    expect(devices.has('tailscale:nPHONE')).toBe(false)
+    expect(devices.list()).toEqual([{ id: 'tailscale:nPHONE', name: 'phone', os: 'iOS', created: now, lastSeen: now, address: '100.64.0.7', tailscale: true, waiting: true }])
+    expect(await devices.approve('tailscale:nPHONE')).toMatchObject({ id: 'tailscale:nPHONE', tailscale: true })
+    expect(devices.list()[0]!.waiting).toBeUndefined()
+    // By its node, whatever Tailscale calls it now or wherever it is.
+    expect(devices.knock({ ...phone, name: 'my-phone' }, '100.64.0.70')).toBe(true)
+    expect(devices.list()).toMatchObject([{ name: 'my-phone', address: '100.64.0.70' }])
+    expect(devices.has('tailscale:nPHONE')).toBe(true)
+    // Approving is for one that asked: nothing is let in ahead.
+    expect(await devices.approve('tailscale:nOTHER')).toBeUndefined()
+    // Kept across a restart.
+    await devices.saved()
+    const again = new WebDevices(dir, { now: () => now })
+    expect(again.has('tailscale:nPHONE')).toBe(true)
+    // One waiting is let go a day after it last asked; one approved, unused for 90 days.
+    devices.knock({ id: 'nBOX', name: 'workbox', login: 'me@example.com' }, '100.64.0.8')
+    now += WAITING_TTL + 1
+    expect(devices.list().map((d) => d.id)).toEqual(['tailscale:nPHONE'])
+    now += DEVICE_TTL
+    expect(devices.has('tailscale:nPHONE')).toBe(false)
+    expect(gone).toEqual(['tailscale:nBOX', 'tailscale:nPHONE'])
+    await devices.saved()
+  })
+
+  it('lets in none of the devices an earlier version admitted by the owner’s login alone', async () => {
+    await writeFile(join(dir, 'web.json'), JSON.stringify({ devices: [], tailscale: [{ node: 'workbox', lastSeen: Date.now(), address: '100.64.0.8' }] }))
+    const devices = new WebDevices(dir)
+    expect(devices.list()).toEqual([])
+    expect(devices.knock({ id: 'nBOX', name: 'workbox', login: 'me@example.com' }, '100.64.0.8')).toBe(false)
+    await devices.saved()
+    expect(JSON.parse(await readFile(join(dir, 'web.json'), 'utf8'))).not.toHaveProperty('tailscale')
   })
 
   it('names a device from its browser', () => {
@@ -259,8 +300,8 @@ describe('the web server', () => {
 
   it('answers 500 for a request that fails inside, and says why in the log', async () => {
     const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
-    ts = { name: 'box.tail1234.ts.net', owner: 'me@example.com', pairOwner: false, nodeAt: async () => { throw new Error('tailscale went away') } }
-    const headers = { 'x-forwarded-host': 'box.tail1234.ts.net', 'x-forwarded-for': '100.64.0.7', 'tailscale-user-login': 'me@example.com' }
+    ts = { name: 'box.tail1234.ts.net', owner: 'me@example.com', whois: async () => { throw new Error('tailscale went away') } }
+    const headers = { 'x-forwarded-host': 'box.tail1234.ts.net', 'x-forwarded-for': '100.64.0.7' }
     expect((await http(viaServe(), '/rpc', { headers })).status).toBe(500)
     expect((await socket(viaServe(), { ...headers, host: 'localhost', 'x-forwarded-host': 'box.tail1234.ts.net', origin: 'https://box.tail1234.ts.net' })).result).toBe('500')
     expect(errors.mock.calls.map((call) => call.map(String).join(' ')).join('\n')).toContain('tailscale went away')
@@ -325,15 +366,56 @@ describe('the web server', () => {
 
   describe('through Tailscale serve', () => {
     const name = 'box.tail1234.ts.net'
-    const through = (headers: Record<string, string> = {}) => ({ host: 'localhost', 'x-forwarded-host': name, 'x-forwarded-for': '100.64.0.7', 'x-forwarded-proto': 'https', 'tailscale-user-login': 'me@example.com', 'tailscale-user-name': 'Me', ...headers })
-    beforeEach(() => { ts = { name, owner: 'me@example.com', pairOwner: false, nodeAt: async () => 'phone' } })
+    /** The tailnet, as `tailscale whois` tells it: the owner's phone and the box they run agents on, a friend's laptop, a tagged CI box. */
+    const tailnet: Record<string, TailnetNode> = {
+      '100.64.0.7': { id: 'nPHONE', name: 'phone', os: 'iOS', login: 'me@example.com' },
+      '100.64.0.8': { id: 'nBOX', name: 'workbox', os: 'linux', login: 'me@example.com' },
+      '100.64.0.9': { id: 'nFRIEND', name: 'friends-laptop', os: 'macOS', login: 'friend@example.com' },
+      '100.64.0.10': { id: 'nCI', name: 'ci', os: 'linux' },
+    }
+    /** A request through serve, from the device at `from`: serve's headers, the login it says among them. */
+    const through = (from = '100.64.0.7', headers: Record<string, string> = {}) => ({
+      host: 'localhost', 'x-forwarded-host': name, 'x-forwarded-for': from, 'x-forwarded-proto': 'https',
+      'tailscale-user-login': tailnet[from]?.login ?? '', ...headers,
+    })
+    const ws = (from = '100.64.0.7', options: { keep?: boolean } = {}) => socket(viaServe(), { ...through(from), origin: `https://${name}` }, options)
+    beforeEach(() => { ts = { name, owner: 'me@example.com', whois: async (address) => tailnet[address] } })
 
-    it('lets the owner in without pairing, as one of their devices', async () => {
-      expect((await http(viaServe(), '/rpc', { headers: through() })).status).toBe(204)
-      expect((await socket(viaServe(), { ...through(), origin: `https://${name}` })).result).toBe('open')
-      expect(devices.list()).toMatchObject([{ id: 'tailscale:phone', name: 'phone', address: '100.64.0.7', tailscale: true }])
-      // The page itself, and the Host serve passes on.
+    it('lets in none of the owner’s devices by their login alone: each waits until approved', async () => {
+      // The box the user runs agents on is logged in as them too: it gets nothing by that.
+      const waiting = await http(viaServe(), '/rpc', { headers: through('100.64.0.8') })
+      expect(waiting.status).toBe(401)
+      expect(JSON.parse(waiting.body)).toEqual({ waiting: 'workbox' })
+      expect((await ws('100.64.0.8')).result).toBe('401')
+      expect((await http(viaServe(), '/artifact/t1/page.html', { headers: through('100.64.0.8') })).status).toBe(401)
+      expect((await http(viaServe(), '/rpc', { headers: through('100.64.0.7') })).status).toBe(401)
+      expect(devices.list()).toMatchObject([{ id: 'tailscale:nPHONE', name: 'phone', waiting: true }, { id: 'tailscale:nBOX', name: 'workbox', waiting: true }])
+      // Approved (from somewhere already in), the phone is in, by its node; the box still waits.
+      await devices.approve('tailscale:nPHONE')
+      expect((await http(viaServe(), '/rpc', { headers: through('100.64.0.7') })).status).toBe(204)
+      expect((await ws('100.64.0.7')).result).toBe('open')
       expect((await http(viaServe(), '/', { headers: through() })).body).toBe('<h1>app</h1>')
+      expect((await http(viaServe(), '/rpc', { headers: through('100.64.0.8') })).status).toBe(401)
+      // What a request says of its login counts for nothing: Tailscale says whose the device is.
+      expect((await http(viaServe(), '/rpc', { headers: through('100.64.0.9', { 'tailscale-user-login': 'me@example.com' }) })).status).toBe(401)
+      // The owner logged in as someone else: their approved device is no longer theirs.
+      ts!.owner = 'other@example.com'
+      expect((await http(viaServe(), '/rpc', { headers: through('100.64.0.7') })).status).toBe(401)
+    })
+
+    it('closes an approved device’s connections, and its grants, when it’s revoked', async () => {
+      await http(viaServe(), '/rpc', { headers: through() })
+      await devices.approve('tailscale:nPHONE')
+      const live = await ws('100.64.0.7', { keep: true })
+      expect(live.result).toBe('open')
+      const at = String((await http(viaServe(), '/artifact/t1/page.html', { headers: through() })).headers.location)
+      expect((await http(viaServe(), at, { headers: through() })).status).toBe(200)
+      await devices.revoke('tailscale:nPHONE')
+      await live.closed
+      expect((await http(viaServe(), at, { headers: through() })).status).toBe(401)
+      // It asks again, and waits again.
+      const again = await http(viaServe(), '/rpc', { headers: through() })
+      expect([again.status, JSON.parse(again.body)]).toEqual([401, { waiting: 'phone' }])
     })
 
     it('listens where only this user (and tailscaled, as root) can connect', async () => {
@@ -342,52 +424,60 @@ describe('the web server', () => {
     })
 
     it('trusts the headers only on serve’s socket: on loopback’s port, anyone on the computer could send them', async () => {
+      await http(viaServe(), '/rpc', { headers: through() })
+      await devices.approve('tailscale:nPHONE')
+      expect((await http(viaServe(), '/rpc', { headers: through() })).status).toBe(204)
       // A loopback client forging serve's headers is "this computer": it must pair, whatever path or host it names.
-      expect((await http(web.port, '/rpc', { headers: through({ host: name }) })).status).toBe(403)
+      expect((await http(web.port, '/rpc', { headers: through('100.64.0.7', { host: name }) })).status).toBe(403)
       expect((await http(web.port, '/rpc', { headers: through() })).status).toBe(401)
-      expect((await http(web.port, '/rpc', { headers: through({ host: `127.0.0.1:${web.port}` }) })).status).toBe(401)
-      expect((await socket(web.port, { ...through({ host: name }), origin: `https://${name}` })).result).toBe('403')
+      expect((await http(web.port, '/rpc', { headers: through('100.64.0.7', { host: `127.0.0.1:${web.port}` }) })).status).toBe(401)
+      expect((await socket(web.port, { ...through('100.64.0.7', { host: name }), origin: `https://${name}` })).result).toBe('403')
       expect((await socket(web.port, { ...through(), origin: `https://${name}` })).result).toBe('403')
-      expect((await socket(web.port, { ...through({ host: `127.0.0.1:${web.port}` }) })).result).toBe('401')
+      expect((await socket(web.port, { ...through('100.64.0.7', { host: `127.0.0.1:${web.port}` }) })).result).toBe('401')
       // On serve's socket, the host is the one serve says the browser asked for.
-      expect((await http(viaServe(), '/rpc', { headers: through({ 'x-forwarded-host': 'evil.example' }) })).status).toBe(403)
+      expect((await http(viaServe(), '/rpc', { headers: through('100.64.0.7', { 'x-forwarded-host': 'evil.example' }) })).status).toBe(403)
       // What was serve's secret path is just a path now, the app's page's.
-      expect((await http(web.port, '/.tailscale-secret/rpc', { headers: through({ host: `127.0.0.1:${web.port}` }) })).body).toBe('<h1>app</h1>')
+      expect((await http(web.port, '/.tailscale-secret/rpc', { headers: through('100.64.0.7', { host: `127.0.0.1:${web.port}` }) })).body).toBe('<h1>app</h1>')
       // Serve's socket, while Tailscale doesn't serve: nothing to believe.
       ts = undefined
       expect((await http(viaServe(), '/rpc', { headers: through() })).status).toBe(403)
     })
 
-    it('asks other tailnet users, and the owner when told to, to pair; with a Secure cookie', async () => {
-      expect((await http(viaServe(), '/rpc', { headers: through({ 'tailscale-user-login': 'friend@example.com' }) })).status).toBe(401)
-      expect((await http(viaServe(), '/rpc', { headers: through({ 'tailscale-user-login': '' }) })).status).toBe(401)
-      ts!.pairOwner = true
-      expect((await http(viaServe(), '/rpc', { headers: through() })).status).toBe(401)
-      const response = await http(viaServe(), '/pair', { method: 'POST', body: JSON.stringify({ ticket: devices.pair().ticket }), headers: { ...through(), origin: `https://${name}` } })
+    it('asks other tailnet users and tagged devices to pair, without listing them; with a Secure cookie', async () => {
+      for (const from of ['100.64.0.9', '100.64.0.10', '100.64.0.99']) {
+        const refused = await http(viaServe(), '/rpc', { headers: through(from) })
+        expect([refused.status, refused.body]).toEqual([401, ''])
+      }
+      expect(devices.list()).toEqual([])
+      const response = await http(viaServe(), '/pair', { method: 'POST', body: JSON.stringify({ ticket: devices.pair().ticket }), headers: { ...through('100.64.0.9'), origin: `https://${name}` } })
       expect(response.status).toBe(200)
       expect(String(response.headers['set-cookie'])).toContain('; Secure')
-      expect((await http(viaServe(), '/rpc', { headers: { ...through(), cookie: cookieFrom(response) } })).status).toBe(204)
-      expect(devices.list()).toMatchObject([{ address: '100.64.0.7' }])
+      expect((await http(viaServe(), '/rpc', { headers: { ...through('100.64.0.9'), cookie: cookieFrom(response) } })).status).toBe(204)
+      expect(devices.list()).toMatchObject([{ address: '100.64.0.9' }])
+      // An owner's device waiting may pair with a code just the same.
+      const own = await http(viaServe(), '/pair', { method: 'POST', body: JSON.stringify({ code: devices.pair().code }), headers: { ...through('100.64.0.8'), origin: `https://${name}` } })
+      expect((await http(viaServe(), '/rpc', { headers: { ...through('100.64.0.8'), cookie: cookieFrom(own) } })).status).toBe(204)
     })
 
     it('holds an artifact grant to the tailnet device it was given to', async () => {
       // A paired device's: its page's files from that device alone, not another of the tailnet's, nor loopback.
-      const friend = through({ 'tailscale-user-login': 'friend@example.com' })
+      const friend = through('100.64.0.9')
       const cookie = cookieFrom(await http(viaServe(), '/pair', { method: 'POST', body: JSON.stringify({ ticket: devices.pair().ticket }), headers: { ...friend, origin: `https://${name}` } }))
       const at = String((await http(viaServe(), '/artifact/t1/page.html', { headers: { ...friend, cookie } })).headers.location)
       expect(await http(viaServe(), at, { headers: friend })).toMatchObject({ status: 200, body: 't1/page.html' })
-      expect((await http(viaServe(), at, { headers: { ...friend, 'x-forwarded-for': '100.64.0.9' } })).status).toBe(401)
-      expect((await http(viaServe(), at, { headers: { ...friend, 'x-forwarded-for': '100.64.0.9', 'tailscale-user-login': 'me@example.com' } })).status).toBe(401)
+      expect((await http(viaServe(), at, { headers: through('100.64.0.8') })).status).toBe(401)
       expect((await http(web.port, at)).status).toBe(401)
       // Through serve it doesn't lapse: it's held to the device instead.
       vi.useFakeTimers({ toFake: ['Date'], now: Date.now() + 10 * GRANT_IDLE })
       try { expect((await http(viaServe(), at, { headers: friend })).status).toBe(200) } finally { vi.useRealTimers() }
-      // The owner's: from their device, with their login, while they get in without pairing.
+      // An approved device's: from it alone, while it's approved.
+      for (const from of ['100.64.0.7', '100.64.0.8']) await http(viaServe(), '/rpc', { headers: through(from) })
+      await devices.approve('tailscale:nPHONE')
+      await devices.approve('tailscale:nBOX')
       const own = String((await http(viaServe(), '/artifact/t1/page.html', { headers: through() })).headers.location)
       expect((await http(viaServe(), own, { headers: through() })).status).toBe(200)
-      expect((await http(viaServe(), own, { headers: through({ 'x-forwarded-for': '100.64.0.9' }) })).status).toBe(401)
-      expect((await http(viaServe(), own, { headers: through({ 'tailscale-user-login': 'friend@example.com' }) })).status).toBe(401)
-      ts!.pairOwner = true
+      expect((await http(viaServe(), own, { headers: through('100.64.0.8') })).status).toBe(401)
+      await devices.revoke('tailscale:nPHONE')
       expect((await http(viaServe(), own, { headers: through() })).status).toBe(401)
     })
   })
@@ -510,7 +600,8 @@ describe('the daemon’s web access', () => {
       log = join(dir, 'tailscale.log')
       await writeFile(join(dir, 'status.json'), JSON.stringify(status))
       await writeFile(join(dir, 'serve.json'), '{}')
-      // `status --json`, `serve status --json`, `serve --bg … <target>` (kept in serve.json), `serve --https=443 off`;
+      await writeFile(join(dir, 'whois.json'), JSON.stringify({ Node: { StableID: 'nPHONE', Name: 'phone.tail1234.ts.net.', Hostinfo: { OS: 'iOS' } }, UserProfile: { LoginName: 'me@example.com' } }))
+      // `status --json`, `serve status --json`, `whois --json <address>`, `serve --bg … <target>` (kept in serve.json), `serve --https=443 off`;
       // any of them for another tailscaled, after --socket=<its socket>.
       await writeFile(join(bin, 'tailscale'), `#!/bin/sh
 echo "$@" >> ${JSON.stringify(log)}
@@ -518,6 +609,7 @@ case "$1" in --socket=*) shift ;; esac
 case "$1 $2" in
   "status --json") cat ${JSON.stringify(join(dir, 'status.json'))} ;;
   "serve status") cat ${JSON.stringify(join(dir, 'serve.json'))} ;;
+  "whois --json") cat ${JSON.stringify(join(dir, 'whois.json'))} ;;
   *) for last; do :; done
      if [ "$last" = off ]; then echo '{}' > ${JSON.stringify(join(dir, 'serve.json'))}
      else printf '{"Web":{"box.tail1234.ts.net:443":{"Handlers":{"/":{"Proxy":"%s"}}}}}' "$last" > ${JSON.stringify(join(dir, 'serve.json'))}; fi ;;
@@ -531,11 +623,10 @@ esac
     const running = {
       Version: '1.94.0-t1234-g5678', BackendState: 'Running', CertDomains: ['box.tail1234.ts.net'],
       Self: { DNSName: 'box.tail1234.ts.net.', HostName: 'box', UserID: 1, TailscaleIPs: ['100.64.0.1'] },
-      Peer: { k: { HostName: 'phone', TailscaleIPs: ['100.64.0.7'] } },
       User: { 1: { LoginName: 'me@example.com' } },
     }
 
-    it('sets serve up, admits the owner through it, and takes it down when switched off', async () => {
+    it('sets serve up, admits the owner’s devices through it once approved, and takes it down when switched off', async () => {
       await stub(running)
       const port = 20000 + Math.floor(Math.random() * 20000)
       const { peer, section, close } = await open({ 'web.access': 'tailscale' as never, 'web.port': port as never })
@@ -546,19 +637,27 @@ esac
       expect(proxy).toBe(`unix:${join(dir, 'web', 'tailscale.sock')}`)
       const through = join(dir, 'web', 'tailscale.sock')
       const headers = { host: 'localhost', 'x-forwarded-host': 'box.tail1234.ts.net', 'x-forwarded-for': '100.64.0.7', 'tailscale-user-login': 'me@example.com' }
+      // The owner's phone, as `tailscale whois` says: it waits, listed, until approved here.
+      expect((await http(through, '/rpc', { headers })).status).toBe(401)
+      expect((await section()).data).toMatchObject({ devices: [{ id: 'tailscale:nPHONE', name: 'phone', os: 'iOS', tailscale: true, waiting: true }] })
+      expect(await readFile(log, 'utf8')).toContain('whois --json 100.64.0.7')
+      // Not by an agent: approving is the user's consent.
+      const agent = await connectSocket(join(dir, 'superego.sock'))
+      await agent.peer.call('hello', { client: 'cli', version: PROTOCOL_VERSION, from: 't1' })
+      await expect(agent.peer.call('web.approve', { id: 'tailscale:nPHONE' })).rejects.toMatchObject({ kind: 'consent' })
+      agent.socket.destroy()
+      await peer.call('web.approve', { id: 'tailscale:nPHONE' })
       expect((await http(through, '/rpc', { headers })).status).toBe(204)
       expect((await http(port, '/rpc', { headers })).status).toBe(401)
       expect((await http(port, '/rpc', { headers: { ...headers, host: 'box.tail1234.ts.net' } })).status).toBe(403)
       const owner = await socket(through, { ...headers, origin: 'https://box.tail1234.ts.net' }, { keep: true })
       expect(owner.result).toBe('open')
-      expect(await peer.call('web.devices', {})).toMatchObject([{ id: 'tailscale:phone', tailscale: true }])
-      await expect(peer.call('web.revoke', { id: 'tailscale:phone' })).rejects.toMatchObject({ kind: 'invalid' })
+      expect(await peer.call('web.devices', {})).toMatchObject([{ id: 'tailscale:nPHONE', tailscale: true }])
       expect((await peer.call<{ link: string }>('web.pair', {})).link).toMatch(/^https:\/\/box\.tail1234\.ts\.net\/#pair=/)
-      // Require pairing for the owner too: their live connections close.
-      await peer.call('settings.set', { key: 'web.tailscale.pairing', value: true })
+      // Revoked: its live connections close.
+      await peer.call('web.revoke', { id: 'tailscale:nPHONE' })
       await owner.closed
       expect((await http(through, '/rpc', { headers })).status).toBe(401)
-      expect(await peer.call('web.devices', {})).toEqual([])
       await peer.call('settings.set', { key: 'web.access', value: 'off' })
       // Taken down: the stub logs the command before it has done it.
       await until(async () => (await readFile(join(dir, 'serve.json'), 'utf8')).trim() === '{}')

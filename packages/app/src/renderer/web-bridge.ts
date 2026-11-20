@@ -37,11 +37,17 @@ async function pair(given: { ticket: string } | { code: string }): Promise<Pairi
   return response.ok ? 'ok' : response.status === 429 ? 'limited' : 'wrong'
 }
 
-/** Whether the daemon lets this browser in (its cookie): the WebSocket only says so by closing. */
-async function admitted(): Promise<Pairing> {
+/**
+ * Whether the daemon lets this browser in (its cookie, or the tailnet device it's on): the WebSocket only says so by
+ * closing. One of the user's own tailnet devices may be `waiting` to be approved, under the name Settings lists it by.
+ */
+async function admitted(): Promise<Pairing | { waiting: string }> {
   const response = await fetch('/rpc', { cache: 'no-store', credentials: 'same-origin' })
   if (response.status === 429) return 'limited'
-  if (response.status === 401) return 'wrong'
+  if (response.status === 401) {
+    const body = response.headers.get('content-type')?.includes('json') ? await response.json() as { waiting?: unknown } : {}
+    return typeof body.waiting === 'string' ? { waiting: body.waiting } : 'wrong'
+  }
   if (!response.ok) throw new Error(`HTTP ${response.status}`)
   return 'ok'
 }
@@ -70,13 +76,16 @@ export function webBridge(): SuperegoBridge {
   let ready: Promise<RpcPeer> = Promise.reject(new RpcError('disconnected', 'Not connected'))
   ready.catch(() => {})
   let retry = 500
-  // Not paired, or not any more: the page asks for a code (see pair-gate.ts).
+  // Not paired, or not any more: the page asks for a code, or to be approved (see pair-gate.ts).
   let asking = false
-  const ask = (why?: string) => {
+  const ask = (why?: string, waiting?: string) => {
     if (asking) return
     asking = true
     away('disconnected')
-    void askPairing((code) => pair({ code }), why).then(() => {
+    void askPairing((code) => pair({ code }), {
+      ...(why ? { why } : {}),
+      ...(waiting ? { waiting: { name: waiting, admitted: async () => (await admitted()) === 'ok' } } : {}),
+    }).then(() => {
       asking = false
       retry = 500
       connect()
@@ -158,7 +167,9 @@ export function webBridge(): SuperegoBridge {
         const again = () => { setTimeout(connect, retry); retry = Math.min(retry * 2, 10_000) }
         // Refused at the door, or only the network? The socket doesn't say; the daemon does.
         if (opened) return again()
-        void admitted().then((ok) => ok === 'ok' ? again() : ask(ok === 'limited' ? LIMITED : `This browser isn’t paired with ${location.hostname}.`), again)
+        void admitted().then((state) => state === 'ok' ? again()
+          : typeof state === 'object' ? ask(undefined, state.waiting)
+          : ask(state === 'limited' ? LIMITED : `This browser isn’t paired with ${location.hostname}.`), again)
       }
     })
     ready.catch(() => {})

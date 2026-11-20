@@ -351,9 +351,12 @@ runs no other machine's profile UI.
 Settings → a machine → Web access: serve the app to this computer, or over Tailscale (the daemon sets up
 `tailscale serve`, so it's at `https://<machine>.<tailnet>.ts.net` to your tailnet). Then **Pair a device**: scan the QR
 code or open its link on the device, once, within 5 minutes. A page added to a phone's home screen keeps cookies of its
-own, so it asks for the code shown beside the link. Your own Tailscale login gets in without pairing (unless you
-require it). Paired devices are listed there, to rename or revoke; one unused for 90 days is forgotten. From a
-terminal: `superego web pair`, `superego web devices`.
+own, so it asks for the code shown beside the link. Over Tailscale, a device of your own (logged in as you) can skip
+the code: the first time it opens the page, it's listed there as waiting, by Tailscale's name for it, and gets in once
+you approve it from somewhere already in (the app, or a browser paired or approved). Your login alone lets nothing in:
+the machines you run agents on are usually logged in as you too. Devices are listed there, to rename, approve or
+revoke (which closes their connections at once); one unused for 90 days is forgotten. From a terminal:
+`superego web pair`, `superego web devices`, `superego web approve <device>`.
 
 On a phone, the bar at the top opens the drawer (☰: the threads, any other space to switch to at its foot, Ego,
 Unread and Settings) and, from the thread's title, its sheet: what the title bar holds on the desktop (where it runs,

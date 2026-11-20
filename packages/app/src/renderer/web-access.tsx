@@ -1,12 +1,13 @@
 // Settings → a machine → Web access, below its settings: where it's served (and how Tailscale is doing), pairing a
-// device (a link, its QR code, and a code to type), and the devices paired.
+// device (a link, its QR code, and a code to type), and the devices paired: the user's own on the tailnet among them,
+// approved, or waiting to be, first.
 import { useEffect, useState } from 'react'
 import type { SectionInfo } from '@superego/protocol'
 import { Button, TextField } from '@superego/ui'
 import { renderSVG } from 'uqr'
 import { useRegistry } from './registry.tsx'
 
-type Device = { id: string; name: string; created?: number; lastSeen: number; address: string; tailscale?: true }
+type Device = { id: string; name: string; created?: number; lastSeen: number; address: string; tailscale?: true; os?: string; waiting?: true }
 type Tailscale =
   | { state: 'starting' | 'missing' | 'logged-out' }
   | { state: 'no-https' | 'busy' | 'error'; message?: string }
@@ -42,17 +43,18 @@ export function WebAccess({ target, section }: { target: string; section: Sectio
   const [problem, setProblem] = useState<string>()
   const [copied, setCopied] = useState(false)
   const [now, setNow] = useState(Date.now())
-  const [paired, setPaired] = useState(devices.length)
-  // The ticket counts down, and goes once it's spent (a device more) or expired.
+  const paired = devices.filter((d) => !d.tailscale).length
+  const [pairedBefore, setPairedBefore] = useState(paired)
+  // The ticket counts down, and goes once it's spent (a device paired) or expired.
   useEffect(() => {
     if (!ticket) return
     const tick = setInterval(() => setNow(Date.now()), 1000)
     return () => clearInterval(tick)
   }, [ticket])
   useEffect(() => {
-    if (ticket && (devices.length > paired || now >= ticket.expires)) setTicket(undefined)
-    setPaired(devices.length)
-  }, [devices.length, now])
+    if (ticket && (paired > pairedBefore || now >= ticket.expires)) setTicket(undefined)
+    setPairedBefore(paired)
+  }, [paired, now])
   const pair = async () => {
     setProblem(undefined)
     try { setTicket(await run('web.pair') as Ticket); setNow(Date.now()) } catch (e) { setProblem((e as Error).message) }
@@ -98,20 +100,29 @@ export function WebAccess({ target, section }: { target: string; section: Sectio
 
 function DeviceRow({ device, run }: { device: Device; run(id: string, params?: Record<string, unknown>): Promise<unknown> }) {
   const [editing, setEditing] = useState(false)
-  const rename = (name: string) => { setEditing(false); if (name.trim() && name.trim() !== device.name) void run('web.rename', { id: device.id, name: name.trim() }) }
+  const [problem, setProblem] = useState<string>()
+  const act = (id: string, params: Record<string, unknown>) => {
+    setProblem(undefined)
+    run(id, params).catch((error: Error) => { console.error(`${id} ${device.id}:`, error); setProblem(error.message) })
+  }
+  const rename = (name: string) => { setEditing(false); if (name.trim() && name.trim() !== device.name) act('web.rename', { id: device.id, name: name.trim() }) }
+  // A device of yours on the tailnet is Tailscale's name for it (unique there), with its OS.
+  const where = device.tailscale ? ['Tailscale', device.os].filter(Boolean).join(' · ') : undefined
   return (
     <div className="web-device">
       <div className="setting__label">
         {editing
           ? <TextField aria-label="Device name" defaultValue={device.name} autoFocus onBlur={(e) => rename(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') rename(e.currentTarget.value); if (e.key === 'Escape') setEditing(false) }} />
-          : <div>{device.tailscale ? `You via Tailscale (${device.name})` : device.name}</div>}
-        <div className="settings__note">{ago(device.lastSeen)} · {device.address}</div>
+          : <div>{device.waiting ? <><strong>{device.name}</strong> wants in</> : device.name}</div>}
+        <div className="settings__note">{[where, `${device.waiting ? 'asked' : 'seen'} ${ago(device.lastSeen)}`, device.address].filter(Boolean).join(' · ')}</div>
+        {problem && <div className="setting__error">{problem}</div>}
       </div>
-      {!device.tailscale && !editing && (
+      {!editing && (
         <div className="web-device__actions">
-          <Button onClick={() => setEditing(true)}>Rename</Button>
-          <Button onClick={() => void run('web.revoke', { id: device.id })}>Revoke</Button>
+          {device.waiting && <Button variant="primary" onClick={() => act('web.approve', { id: device.id })}>Approve</Button>}
+          {!device.tailscale && <Button onClick={() => setEditing(true)}>Rename</Button>}
+          <Button onClick={() => act('web.revoke', { id: device.id })}>{device.waiting ? 'Dismiss' : 'Revoke'}</Button>
         </div>
       )}
     </div>

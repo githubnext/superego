@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **Upgrade:** Web access over Tailscale no longer lets in every device logged in to Tailscale as you, such as the
+  machines your agents run on. Each of your devices gets in once you approve it: the first time it opens the page, it
+  waits in Settings → Web access (or `superego web devices`) for you to approve from the app or a device that's already
+  in. Pairing with a code still works. The "Require pairing for my Tailscale login too" setting is gone.
 - **Upgrade:** a profile's modules can import only `'superego'`, Node's built-ins and files by their paths. One that
   imports a package by name (from a `node_modules`) or a `#` alias from a `package.json` no longer loads, and says why:
   import the file by its path instead.

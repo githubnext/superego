@@ -1,9 +1,16 @@
 // Who may use this machine from a browser: devices paired with a one-time ticket (a link, or a short code typed in),
-// each holding a random secret in an HttpOnly cookie. The data dir keeps only the secrets' hashes (`web.json`), with each
-// device's name, when it was paired and last seen, and from where. A device unused for 90 days stops working.
+// each holding a random secret in an HttpOnly cookie; and, through Tailscale serve, the owner's own tailnet devices the
+// user approved, each by its stable node ID. The data dir (`web.json`) keeps only the secrets' hashes, with each
+// device's name, when it was paired (or approved) and last seen, and from where. A device unused for 90 days stops
+// working.
+//
+// The owner's Tailscale login alone admits nothing: the machines the user runs agents on are usually logged in as them
+// too, and an agent there mustn't reach back. A device of theirs that asks is kept as waiting (`knock`) until the user
+// approves it from somewhere already in (Settings → Web access), or it pairs with a code like any other.
 import { createHash, randomBytes, randomInt, timingSafeEqual } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
+import type { TailnetNode } from './tailscale.ts'
 import { writeQueue } from './write-atomic.ts'
 
 export const DEVICE_COOKIE = 'superego-device'
@@ -11,6 +18,10 @@ export const DEVICE_COOKIE = 'superego-device'
 export const TICKET_TTL = 5 * 60_000
 /** How long a device lasts unused. */
 export const DEVICE_TTL = 90 * 24 * 60 * 60_000
+/** How long an owner's tailnet device waits for approval after it last asked. */
+export const WAITING_TTL = 24 * 60 * 60_000
+/** The id of an owner's tailnet device, by its node ID. */
+export const nodeDevice = (node: string) => `tailscale:${node}`
 /** Failed pairings and wrong cookies an address may try in WINDOW before it's refused for the rest of it. */
 export const FAILURES = 10
 export const WINDOW = 10 * 60_000
@@ -18,12 +29,15 @@ export const WINDOW = 10 * 60_000
 const ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
 
 type Stored = { id: string; name: string; hash: string; created: number; lastSeen: number; address: string }
-/** The owner's own Tailscale login, seen from one of their tailnet devices: admitted without pairing (see web.ts). */
-type Seen = { node: string; lastSeen: number; address: string }
-type State = { devices: Stored[]; tailscale: Seen[] }
+/** One of the owner's tailnet devices, by its stable node ID: waiting until `approved` (when the user approved it). */
+type Node = { node: string; name: string; os?: string; created: number; lastSeen: number; address: string; approved?: number }
+type State = { devices: Stored[]; nodes: Node[] }
 
-/** A device as Settings and the CLI show it: never its secret. */
-export type DeviceInfo = { id: string; name: string; created?: number; lastSeen: number; address: string; tailscale?: true }
+/**
+ * A device as Settings and the CLI show it: never its secret. An owner's tailnet device is `tailscale`, with its OS, and
+ * `waiting` until approved.
+ */
+export type DeviceInfo = { id: string; name: string; created?: number; lastSeen: number; address: string; tailscale?: true; os?: string; waiting?: true }
 export type Ticket = { ticket: string; code: string; expires: number }
 
 const hash = (secret: string) => createHash('sha256').update(secret).digest()
@@ -57,9 +71,11 @@ export class WebDevices {
     this.#now = now
     this.#state = (() => {
       try {
+        // What an earlier version kept of the owner's login (`tailscale`: every device it came from) is let go: those
+        // devices got in by the login alone, so none of them was ever approved.
         const read = JSON.parse(readFileSync(path, 'utf8')) as Partial<State>
-        return { devices: read.devices ?? [], tailscale: read.tailscale ?? [] }
-      } catch { return { devices: [], tailscale: [] } }
+        return { devices: read.devices ?? [], nodes: read.nodes ?? [] }
+      } catch { return { devices: [], nodes: [] } }
     })()
   }
 
@@ -111,30 +127,61 @@ export class WebDevices {
     return info(device)
   }
 
-  /** Whether a device is still paired. */
-  has(id: string): boolean { return this.#live().some((d) => d.id === id) }
-
-  /** The owner's Tailscale login, from one of their tailnet devices: seen now. */
-  seenOnTailscale(node: string, address: string): void {
-    const entry = this.#state.tailscale.find((s) => s.node === node)
-    if (entry) this.#seen(entry, address)
-    else { this.#state.tailscale.push({ node, lastSeen: this.#now(), address }); void this.#save() }
+  /** Whether a device is still in: paired, or an owner's tailnet device approved. */
+  has(id: string): boolean {
+    this.#live()
+    return this.#state.devices.some((d) => d.id === id) || this.#state.nodes.some((n) => n.approved && nodeDevice(n.node) === id)
   }
 
-  /** Paired devices, most recently seen first; then the owner's Tailscale devices. */
+  /**
+   * One of the owner's tailnet devices asks to come in, from `address`: whether it's approved. One not yet is kept as
+   * waiting (and listed so), for the user to approve. Either way it's seen now, under the name Tailscale has for it.
+   */
+  knock(node: TailnetNode, address: string): boolean {
+    this.#live()
+    const entry = this.#state.nodes.find((n) => n.node === node.id)
+    if (!entry) {
+      const now = this.#now()
+      this.#state.nodes.push({ node: node.id, name: node.name, ...(node.os ? { os: node.os } : {}), created: now, lastSeen: now, address })
+      void this.#save()
+      return false
+    }
+    if (entry.name !== node.name || entry.os !== node.os) {
+      entry.name = node.name
+      if (node.os) entry.os = node.os
+      else delete entry.os
+      entry.address = address
+      entry.lastSeen = this.#now()
+      void this.#save()
+    } else this.#seen(entry, address)
+    return Boolean(entry.approved)
+  }
+
+  /** Let a waiting tailnet device in: it is, from its next request on. */
+  async approve(id: string): Promise<DeviceInfo | undefined> {
+    this.#live()
+    const entry = this.#state.nodes.find((n) => nodeDevice(n.node) === id)
+    if (!entry) return undefined
+    entry.approved ??= this.#now()
+    await this.#save()
+    return nodeInfo(entry)
+  }
+
+  /** Devices waiting first, then the rest, most recently seen first. */
   list(): DeviceInfo[] {
-    const cutoff = this.#now() - DEVICE_TTL
-    return [
-      ...this.#live().map(info),
-      ...this.#state.tailscale.filter((s) => s.lastSeen > cutoff).map((s): DeviceInfo => ({ id: `tailscale:${s.node}`, name: s.node, lastSeen: s.lastSeen, address: s.address, tailscale: true })),
-    ].sort((a, b) => b.lastSeen - a.lastSeen)
+    return [...this.#live().map(info), ...this.#state.nodes.map(nodeInfo)]
+      .sort((a, b) => Number(Boolean(b.waiting)) - Number(Boolean(a.waiting)) || b.lastSeen - a.lastSeen)
   }
 
-  /** Unpair a device: its cookie stops working, and its open connections close (see onRevoke). */
+  /**
+   * Unpair a device, or let go of an owner's tailnet device (approved or waiting): its cookie or its approval stops
+   * working, and its open connections close (see onRevoke).
+   */
   async revoke(id: string): Promise<boolean> {
-    const before = this.#state.devices.length
+    const before = this.#state.devices.length + this.#state.nodes.length
     this.#state.devices = this.#state.devices.filter((d) => d.id !== id)
-    if (this.#state.devices.length === before) return false
+    this.#state.nodes = this.#state.nodes.filter((n) => nodeDevice(n.node) !== id)
+    if (this.#state.devices.length + this.#state.nodes.length === before) return false
     await this.#save()
     for (const listener of this.#revoked) listener(id)
     return true
@@ -149,7 +196,7 @@ export class WebDevices {
   }
 
   onRevoke(listener: (id: string) => void): () => void { this.#revoked.add(listener); return () => { this.#revoked.delete(listener) } }
-  /** Devices changed: one paired, renamed, revoked, or first seen again after a while. */
+  /** Devices changed: one paired, approved, waiting, renamed, revoked, or first seen again after a while. */
   onChange(listener: () => void): () => void { this.#changed.add(listener); return () => { this.#changed.delete(listener) } }
   /** Once what's changed is written: seeing a device saves it in the background. */
   saved(): Promise<void> { return this.#saving }
@@ -172,19 +219,21 @@ export class WebDevices {
 
   // ────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
-  /** Devices not yet expired; expired ones are forgotten. */
+  /** Paired devices not yet expired; expired ones, and tailnet devices unused (or waiting) too long, are forgotten. */
   #live(): Stored[] {
-    const cutoff = this.#now() - DEVICE_TTL
-    const live = this.#state.devices.filter((d) => d.lastSeen > cutoff)
-    if (live.length !== this.#state.devices.length) {
-      const gone = this.#state.devices.filter((d) => d.lastSeen <= cutoff)
-      this.#state.devices = live
+    const now = this.#now()
+    const expired = (d: { lastSeen: number }) => d.lastSeen <= now - DEVICE_TTL
+    const gone = [
+      ...this.#state.devices.filter(expired).map((d) => d.id),
+      ...this.#state.nodes.filter((n) => n.approved ? expired(n) : n.lastSeen <= now - WAITING_TTL).map((n) => nodeDevice(n.node)),
+    ]
+    if (gone.length) {
+      this.#state.devices = this.#state.devices.filter((d) => !gone.includes(d.id))
+      this.#state.nodes = this.#state.nodes.filter((n) => !gone.includes(nodeDevice(n.node)))
       void this.#save()
-      for (const device of gone) for (const listener of this.#revoked) listener(device.id)
+      for (const id of gone) for (const listener of this.#revoked) listener(id)
     }
-    const tailscale = this.#state.tailscale.filter((s) => s.lastSeen > cutoff)
-    if (tailscale.length !== this.#state.tailscale.length) { this.#state.tailscale = tailscale; void this.#save() }
-    return live
+    return this.#state.devices
   }
 
   /** Seen now: kept at most once a minute (and at once when it's from somewhere new). */
@@ -212,3 +261,7 @@ export class WebDevices {
 }
 
 const info = (device: Stored): DeviceInfo => ({ id: device.id, name: device.name, created: device.created, lastSeen: device.lastSeen, address: device.address })
+const nodeInfo = (node: Node): DeviceInfo => ({
+  id: nodeDevice(node.node), name: node.name, created: node.approved ?? node.created, lastSeen: node.lastSeen, address: node.address, tailscale: true,
+  ...(node.os ? { os: node.os } : {}), ...(node.approved ? {} : { waiting: true as const }),
+})

@@ -1,5 +1,6 @@
 // Web access: this machine serving the app and its threads to browsers (web.ts), on this computer or over Tailscale,
-// to the devices paired with it (web-devices.ts), as the `web` settings say; and the `web.*` actions that pair them.
+// to the devices paired with it, or approved (web-devices.ts), as the `web` settings say; and the `web.*` actions that
+// pair, approve and revoke them.
 // Where it's reached is worked out (Tailscale's name for the machine, or loopback's) unless `web.host` names it; on a
 // machine with more than one tailscaled, `web.tailscale.socket` says which one serves it.
 import { join } from 'node:path'
@@ -10,7 +11,7 @@ import type { Daemon, DaemonContext, DaemonOptions } from './daemon.ts'
 import { readArtifact } from './artifacts.ts'
 import { defineAction } from './extension.ts'
 import type { Relay } from './relay.ts'
-import { describeInstance, otherInstances, startServe, stopServe, tailnetNames, type TailscaleState } from './tailscale.ts'
+import { describeInstance, otherInstances, startServe, stopServe, whois, type TailnetNode, type TailscaleState } from './tailscale.ts'
 import { serveWeb, webOrigin, type ServedByTailscale, type WebServer } from './web.ts'
 import { WebDevices } from './web-devices.ts'
 
@@ -39,11 +40,17 @@ export async function openWebAccess({ options, settings, router, clients, relay,
   let webError: string | undefined
   /** Tailscale serve: how setting it up went, and while it serves, what requests through it look like. */
   let tailscale: TailscaleState | undefined
-  let served: Omit<ServedByTailscale, 'pairOwner' | 'nodeAt'> & { port: number; target: string; socket?: string } | undefined
-  let names: { at: number; map: Map<string, string> } = { at: 0, map: new Map() }
-  const nodeAt = async (address: string) => {
-    if (!names.map.has(address) && Date.now() - names.at > 30_000) names = { at: Date.now(), map: await tailnetNames(served?.socket) }
-    return names.map.get(address)
+  let served: Omit<ServedByTailscale, 'whois'> & { port: number; target: string; socket?: string } | undefined
+  /** The tailnet devices requests came from lately, by address: asked of tailscaled once in a while, not each request. */
+  let nodes = new Map<string, { at: number; node: Promise<TailnetNode | undefined> }>()
+  const nodeAt = (address: string) => {
+    const now = Date.now()
+    for (const [at, known] of nodes) if (now - known.at > 10_000) nodes.delete(at)
+    const known = nodes.get(address) ?? { at: now, node: whois(address, served?.socket) }
+    nodes.set(address, known)
+    // One that failed is asked again next time.
+    known.node.catch(() => { if (nodes.get(address) === known) nodes.delete(address) })
+    return known.node
   }
   /** The tailscaled to serve through: its socket, or undefined for the default one. */
   const socketOf = () => settings.get<string>('web.tailscale.socket') || undefined
@@ -67,7 +74,6 @@ export async function openWebAccess({ options, settings, router, clients, relay,
       if (JSON.stringify([...next]) !== JSON.stringify([...tailnets])) { tailnets = next; settings.invalidate() }
     })
   }
-  const pairOwner = () => settings.get<boolean>('web.tailscale.pairing') === true
   /** Serve (or stop serving) browsers as the Web access settings say, whenever they change; one change at a time. */
   let webQueue = Promise.resolve()
   const applyWeb = () => (webQueue = webQueue.then(applyWebNow, applyWebNow))
@@ -80,7 +86,7 @@ export async function openWebAccess({ options, settings, router, clients, relay,
     webKey = key
     if (served) await stopServe(served, served.socket)
     served = undefined
-    names = { at: 0, map: new Map() }
+    nodes = new Map()
     tailscale = undefined
     await web?.close()
     web = undefined
@@ -92,7 +98,7 @@ export async function openWebAccess({ options, settings, router, clients, relay,
       try {
         web = await serveWeb({ root: options.webRoot!, port, devices: webDevices, serve,
           ...(target ? { serveSocket: target } : {}),
-          tailscale: () => served && { ...served, pairOwner: pairOwner(), nodeAt },
+          tailscale: () => served && { ...served, whois: nodeAt },
           origin: () => chosen().origin,
           artifact: async (thread, path, elsewhere) => elsewhere
             ? Buffer.from((await relay.call(elsewhere, 'artifact.read', { thread, path }) as { content: string }).content, 'base64')
@@ -114,8 +120,6 @@ export async function openWebAccess({ options, settings, router, clients, relay,
     settings.invalidate()
   }
   const webAddress = () => web && (chosen().origin ?? (tailscale?.state === 'serving' ? tailscale.url : web.url))
-  /** The devices list: paired devices, and the owner's own through Tailscale while those get in without pairing. */
-  const webDeviceList = () => webDevices.list().filter((d) => !d.tailscale || (served && !pairOwner()))
   settings.register({
     id: 'web', title: 'Web access', order: 80, ui: 'web',
     description: 'Use this machine from a browser or a phone: it serves the app and its threads to the devices you pair.',
@@ -138,23 +142,16 @@ export async function openWebAccess({ options, settings, router, clients, relay,
       { key: 'web.host', title: 'Host', default: '', consent: true, type: { type: 'string', placeholder: 'Automatic' },
         description: 'The name browsers reach it at, if not the one it works out: a hostname, or an origin like http://box.lan:7777.',
         validate: (value) => { try { webOrigin(String(value)); return undefined } catch (error) { return (error as Error).message } } },
-      { key: 'web.tailscale.pairing', title: 'Require pairing for my Tailscale login too', default: false, type: { type: 'boolean' }, consent: true,
-        description: 'Otherwise your own devices on the tailnet get in without pairing.', hidden: () => settings.get('web.access') !== 'tailscale' },
     ],
     data: () => {
       if (settings.get('web.access') === 'tailscale') lookAround()
       return {
-        url: webAddress() ?? null, tailscale: tailscale ?? null, devices: webDeviceList(),
+        url: webAddress() ?? null, tailscale: tailscale ?? null, devices: webDevices.list(),
         error: webError ?? chosen().error ?? null,
       }
     },
   })
   life.add(webDevices.onChange(() => settings.invalidate()))
-  // Pairing switched on for the owner's login: their devices through Tailscale get in no more, as of now.
-  let pairingOwner = pairOwner()
-  life.add(settings.onChange(() => {
-    if (pairOwner() !== pairingOwner && (pairingOwner = pairOwner())) web?.disconnect((id) => id.startsWith('tailscale:'))
-  }))
   const webOn = () => { if (!web) throw new RpcError('web_off', 'Web access is off: turn it on in Settings → Web access.') }
   router.register(defineAction({
     id: 'web.pair', title: 'Pair a device for web access', expose: ['ui', 'cli'], consent: true, params: obj({}),
@@ -165,13 +162,22 @@ export async function openWebAccess({ options, settings, router, clients, relay,
     },
   }))
   router.register(defineAction({
-    id: 'web.devices', title: 'List the devices paired for web access', expose: ['ui', 'cli'], params: obj({}),
-    run: async () => webDeviceList(),
+    id: 'web.devices', title: 'List the devices paired for web access, and those waiting', expose: ['ui', 'cli'], params: obj({}),
+    run: async () => webDevices.list(),
+  }))
+  // From any client already in (this computer's app or command line, a device paired or approved): never the device
+  // asking, which isn't connected, nor an agent.
+  router.register(defineAction({
+    id: 'web.approve', title: 'Approve a device of yours on the tailnet', expose: ['ui', 'cli'], consent: true, params: obj({ id: str() }),
+    async run({ id }) {
+      const device = await webDevices.approve(id)
+      if (!device) throw new RpcError('not_found', `No device ${id} waiting`)
+      return device
+    },
   }))
   router.register(defineAction({
     id: 'web.revoke', title: 'Unpair a device', expose: ['ui', 'cli'], params: obj({ id: str() }),
     async run({ id }) {
-      if (id.startsWith('tailscale:')) throw new RpcError('invalid', 'Your own Tailscale login is let in as a whole: require pairing for it instead.')
       if (!(await webDevices.revoke(id))) throw new RpcError('not_found', `No device ${id}`)
       return null
     },

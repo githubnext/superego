@@ -916,11 +916,16 @@ async function webCommand(sub: string | undefined, rest: string[], values: { mac
     })
   }
   if (sub === 'devices') {
-    const devices = await run('web.devices') as { id: string; name: string; lastSeen: number; address: string; tailscale?: true }[]
+    const devices = await run('web.devices') as { id: string; name: string; lastSeen: number; address: string; tailscale?: true; waiting?: true }[]
     return print(devices, () => {
       if (!devices.length) return console.log(`No devices paired. Pair one: ${app.id} web pair`)
-      table(devices.map((d) => [d.tailscale ? '' : d.id, d.tailscale ? `you via Tailscale (${d.name})` : d.name, ago(d.lastSeen), d.address]))
+      table(devices.map((d) => [d.id, d.waiting ? `${d.name} (Tailscale, waiting: ${app.id} web approve ${d.id})` : d.tailscale ? `${d.name} (Tailscale)` : d.name, ago(d.lastSeen), d.address]))
     })
+  }
+  if (sub === 'approve') {
+    if (!rest[0]) throw new RpcError('usage', `${app.id} web approve <device>`)
+    const device = await run('web.approve', { id: rest[0] }) as { name: string }
+    return print(device, () => console.log(`Approved ${device.name}`))
   }
   if (sub === 'revoke') {
     if (!rest[0]) throw new RpcError('usage', `${app.id} web revoke <device>`)
@@ -932,7 +937,7 @@ async function webCommand(sub: string | undefined, rest: string[], values: { mac
     const device = await run('web.rename', { id: rest[0], name: rest.slice(1).join(' ') })
     return print(device, () => console.log(`Renamed ${rest[0]}`))
   }
-  throw new RpcError('usage', sub ? `Unknown: ${app.id} web ${sub}` : `${app.id} web pair|devices|revoke|rename`)
+  throw new RpcError('usage', sub ? `Unknown: ${app.id} web ${sub}` : `${app.id} web pair|devices|approve|revoke|rename`)
 }
 
 // ── Actions ─────────────────────────────────────────────────────────────────────────────────────────────────────────

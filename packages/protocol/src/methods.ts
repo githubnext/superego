@@ -241,13 +241,13 @@ export type Hello = {
 
 /**
  * A connection to a daemon, as its client list shows it. `kind` is what the client said it is in `hello` (`superego-app`,
- * `web`, `superego-cli`, `superego-outside`); `label` names it for people: the computer it runs on, a browser's device name, a Tailscale login.
+ * `web`, `superego-cli`, `superego-outside`); `label` names it for people: the computer it runs on, a browser's device name, a tailnet device's.
  */
 export type ClientInfo = {
   id: string; kind: string; label: string; connectedAt: number; activeAt: number
   /** How it came in: the unix socket (or ssh to it), a paired browser, or Tailscale. */
   via: 'socket' | 'web' | 'tailscale'
-  /** The paired browser it is, for `web`. */
+  /** The device it is: a paired browser's id, for `web`; `tailscale:<node>`, for `tailscale`. */
   device?: string
   /** The thread whose agent's shell it runs in, as it said in `hello`: an agent's command line, not the user's. */
   from?: ThreadId

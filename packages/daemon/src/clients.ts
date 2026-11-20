@@ -6,7 +6,7 @@ import { randomBytes } from 'node:crypto'
 import { PERFORMABLE, RpcError, type ClientInfo, type Json, type RpcPeer } from '@superego/protocol'
 
 /**
- * What the transport knows about a connection before it says hello: a browser's device, a Tailscale login, and whether
+ * What the transport knows about a connection before it says hello: a browser's device (or tailnet device), and whether
  * it's on another computer (`elsewhere`: a browser through Tailscale; the socket's clients are told by their hello).
  */
 export type Via = { via: ClientInfo['via']; label?: string; device?: string; elsewhere?: boolean }

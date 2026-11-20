@@ -123,7 +123,8 @@ function groups(id: string, name: string, added: CliCommand[]): Entry[][] {
     ],
     [
       { use: 'web pair', does: 'Pair a browser or phone with this machine: a link, its QR code, and a code to type' },
-      { use: 'web devices', does: 'The devices paired (and your own through Tailscale)' },
+      { use: 'web devices', does: 'The devices paired, and your own on the tailnet: approved, or waiting to be' },
+      { use: 'web approve <device>', does: "Let in a device of yours on the tailnet that's waiting" },
       { use: 'web revoke|rename <device> [name]', does: 'Unpair a device, or rename it' },
     ],
     [

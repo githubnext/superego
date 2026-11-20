@@ -3,18 +3,18 @@
 // the protocol over a WebSocket at /rpc. Off unless the machine's "Web access" setting turns it on: for this computer,
 // or for the tailnet through `tailscale serve` (see tailscale.ts).
 //
-// Who may: a paired device (web-devices.ts), by its HttpOnly cookie; and through serve, the machine's owner by their
-// Tailscale login. Nothing secret is ever in an address. Every request must name a host the daemon is served at (so a
-// DNS-rebound page can't reach it), and a WebSocket must come from the page's own origin (so another site can't ride the
-// cookie). The hosts are loopback's, the one the `web.host` setting names (a name it's reached at some other way: a
+// Who may: a paired device (web-devices.ts), by its HttpOnly cookie; and through serve, a device of the machine's owner
+// the user approved, by its Tailscale node (never their login alone: the machines they run agents on share it). Nothing
+// secret is ever in an address. Every request must name a host the daemon is served at (so a DNS-rebound page can't
+// reach it), and a WebSocket must come from the page's own origin (so another site can't ride the cookie). The hosts are loopback's, the one the `web.host` setting names (a name it's reached at some other way: a
 // proxy of the user's own, whose requests are plain loopback ones, so pairing still decides who gets in through it), and
 // through serve, Tailscale's.
 //
 // Two listeners. 127.0.0.1:<port>, which anyone on this computer reaches (every local user, and pages in a browser
 // here), so what a request there says of itself counts for nothing: it's a device by its cookie or no one. And while
 // Tailscale serves, a Unix socket in a folder only the daemon's user (and root, as tailscaled runs) can open: serve
-// proxies there, and only there are its headers (Tailscale-User-Login, X-Forwarded-For, X-Forwarded-Host, each set
-// by serve over whatever the browser sent) believed.
+// proxies there, and only there are its headers (X-Forwarded-For, X-Forwarded-Host, each set by serve over whatever the
+// browser sent) believed: the device a request came from is the one `tailscale whois` finds at its X-Forwarded-For.
 //
 // Nothing a request is or says (a path that isn't one, a broken cookie, a body that's no object) takes the daemon
 // down: each listener answers what's malformed with 400 and anything that throws with 500, and says what threw.
@@ -22,13 +22,14 @@ import { randomBytes } from 'node:crypto'
 import { existsSync } from 'node:fs'
 import { chmod, lstat, mkdir, readFile, rm, stat } from 'node:fs/promises'
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http'
-import type { AddressInfo } from 'node:net'
+import { isIP, type AddressInfo } from 'node:net'
 import { dirname, extname, join, normalize, sep } from 'node:path'
 import type { Duplex } from 'node:stream'
 import { WebSocketServer, type WebSocket } from 'ws'
 import { RpcPeer } from '@superego/protocol'
-import { DEVICE_COOKIE, type WebDevices } from './web-devices.ts'
 import type { Via } from './clients.ts'
+import type { TailnetNode } from './tailscale.ts'
+import { DEVICE_COOKIE, nodeDevice, type WebDevices } from './web-devices.ts'
 
 const TYPES: Record<string, string> = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json',
@@ -46,19 +47,16 @@ export const GRANT_IDLE = 15 * 60 * 1000
 export type ServedByTailscale = {
   /** This machine's name on the tailnet. */
   name: string
-  /** The machine's owner's Tailscale login: admitted without pairing, unless `pairOwner`. */
+  /** The machine's owner's Tailscale login: their devices may be approved without pairing (see web-devices.ts). */
   owner?: string
-  pairOwner: boolean
-  /** The tailnet device at an address, for the devices list. */
-  nodeAt(address: string): Promise<string | undefined>
+  /** The tailnet device at an address. */
+  whois(address: string): Promise<TailnetNode | undefined>
 }
 
 export type WebServer = {
   /** Where this computer reaches it. */
   url: string
   port: number
-  /** Close the live connections of the devices `match` picks (by device id, `tailscale:<node>` for the owner's). */
-  disconnect(match: (id: string) => boolean): void
   close(): Promise<void>
 }
 
@@ -71,10 +69,12 @@ type Caller = {
   address: string
   /** The page's own origin, as the browser sees it. */
   origin: string
-  /** Came through Tailscale serve: over HTTPS, with serve's identity headers. */
+  /** Came through Tailscale serve: over HTTPS, from the tailnet address serve says. */
   serve?: ServedByTailscale
-  login?: string
 }
+
+/** Who a caller is (a device's id), or why not: too many misses lately, or unknown (an owner's device `waiting` to be approved). */
+type Admission = { who: string } | { refused: 'limited' } | { refused: 'unknown'; waiting?: string }
 
 /** A request that isn't one the server can make sense of: answered 400, before anything else looks at it. */
 class Malformed extends Error {}
@@ -163,59 +163,64 @@ export async function serveWeb({ root, port, devices, tailscale, serveSocket, or
       const ts = tailscale?.()
       if (!ts || (!isChosen && name !== ts.name.toLowerCase())) return undefined
       const address = header(request, 'x-forwarded-for')?.split(',')[0]?.trim() || 'tailnet'
-      const login = header(request, 'tailscale-user-login')
-      return { path, search, address, origin: isChosen ? chosen! : `https://${ts.name}`, serve: ts, ...(login ? { login } : {}) }
+      return { path, search, address, origin: isChosen ? chosen! : `https://${ts.name}`, serve: ts }
     }
     if (!isChosen && !LOOPBACK_NAMES.has(name)) return undefined
     return { path, search, address: request.socket.remoteAddress ?? 'unknown', origin: isChosen ? chosen! : `http://${host}` }
   }
-  /** Whether the owner's Tailscale login is let in as it is: through serve, theirs, and pairing not required of it. */
-  const isOwner = (caller: Caller) => Boolean(caller.serve && caller.login && caller.serve.owner && caller.login === caller.serve.owner && !caller.serve.pairOwner)
-  /** Who a caller is: a paired device's id, or `tailscale:<node>` for the owner through serve; 'limited' after too many misses. */
-  const identify = async (caller: Caller, cookie: string | undefined): Promise<string | 'limited' | undefined> => {
-    if (devices.limited(caller.address)) return 'limited'
+  /** Through serve, the owner's tailnet device a caller is on, if it's theirs (an untagged device of their login). */
+  const ownersNode = async (caller: Caller) => {
+    const owner = caller.serve?.owner
+    if (!owner || !isIP(caller.address)) return undefined
+    const node = await caller.serve!.whois(caller.address)
+    return node?.login === owner ? node : undefined
+  }
+  /** Who a caller is: a paired device by its cookie, or through serve, an owner's tailnet device the user approved. */
+  const identify = async (caller: Caller, cookie: string | undefined): Promise<Admission> => {
+    if (devices.limited(caller.address)) return { refused: 'limited' }
     const device = devices.check(cookie, caller.address)
-    if (device) return device.id
-    if (isOwner(caller)) {
-      const node = (await caller.serve!.nodeAt(caller.address)) ?? caller.address
-      devices.seenOnTailscale(node, caller.address)
-      return `tailscale:${node}`
-    }
+    if (device) return { who: device.id }
+    const node = await ownersNode(caller)
+    if (node && devices.knock(node, caller.address)) return { who: nodeDevice(node.id) }
     if (cookie) devices.failed(caller.address)
-    return undefined
+    return { refused: 'unknown', ...(node ? { waiting: node.name } : {}) }
   }
 
   // Artifacts are shown from an opaque origin (their CSP sandboxes them), which no cookie goes with: what a page links
   // to comes without one. So the page's own request, which has it, is sent on to an address under a grant: a random
   // name for "this device's view of this thread's files", which the rest of the page's requests carry. The page can
   // read its own address, and a script in it (the agent's, from whatever it read) can send it anywhere, so a grant is
-  // held to whom and where it was given: the device (or the owner's login) as long as it may in, and through serve, the
-  // same tailnet device (its address, which serve vouches for), so it's worth nothing from any other. On loopback every
+  // held to whom and where it was given: the device as long as it may in, and through serve, the same tailnet device
+  // (its address, which serve vouches for), so it's worth nothing from any other. On loopback every
   // caller looks alike (anyone on this computer, or behind a proxy of the user's), so there it can't be held to one:
   // it lapses instead, GRANT_IDLE after the page last used it. Grants are the server's: a restart ends them all.
-  type Grant = { who: string; thread: string; address: string; serve: boolean; login: string | undefined; used: number }
+  type Grant = { who: string; thread: string; address: string; serve: boolean; used: number }
   const grants = new Map<string, Grant>()
   const fresh = (grant: Grant, now = Date.now()) => grant.serve || now - grant.used < GRANT_IDLE
   /** Whether a grant still stands for a request: from where it was given, by whom it was given to. */
   const stands = (grant: Grant, caller: Caller) =>
-    fresh(grant) && grant.serve === Boolean(caller.serve) && grant.address === caller.address && grant.login === caller.login &&
-    (grant.who.startsWith('tailscale:') ? isOwner(caller) : devices.has(grant.who))
+    fresh(grant) && grant.serve === Boolean(caller.serve) && grant.address === caller.address && devices.has(grant.who)
   const grant = (who: string, thread: string, caller: Caller) => {
     for (const [name, old] of grants) {
-      if (!fresh(old) || (!old.who.startsWith('tailscale:') && !devices.has(old.who))) grants.delete(name)
+      if (!fresh(old) || !devices.has(old.who)) grants.delete(name)
       else if (old.who === who && old.thread === thread && stands(old, caller)) { old.used = Date.now(); return name }
     }
     const name = randomBytes(18).toString('base64url')
-    grants.set(name, { who, thread, address: caller.address, serve: Boolean(caller.serve), login: caller.login, used: Date.now() })
+    grants.set(name, { who, thread, address: caller.address, serve: Boolean(caller.serve), used: Date.now() })
     return name
   }
 
   const cookie = (caller: Caller, value: string, age = COOKIE_AGE) =>
     `${DEVICE_COOKIE}=${encodeURIComponent(value)}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${age}${caller.origin.startsWith('https:') ? '; Secure' : ''}`
-  /** Refused: a cookie that isn't a device's any more is cleared, so it stops counting against the address. */
-  const refuse = (response: ServerResponse, caller: Caller, who: string | undefined, hadCookie: boolean) => {
-    if (who === 'limited') return void response.writeHead(429, { 'content-type': 'text/plain' }).end('Too many tries. Wait a few minutes.')
-    response.writeHead(401, hadCookie ? { 'set-cookie': cookie(caller, '', 0) } : {}).end()
+  /**
+   * Refused: a cookie that isn't a device's any more is cleared, so it stops counting against the address. An owner's
+   * device waiting to be approved is told so, with the name it's listed under, for the page to say where to approve it.
+   */
+  const refuse = (response: ServerResponse, caller: Caller, refused: Exclude<Admission, { who: string }>, hadCookie: boolean) => {
+    if (refused.refused === 'limited') return void response.writeHead(429, { 'content-type': 'text/plain' }).end('Too many tries. Wait a few minutes.')
+    response.writeHead(401, { 'cache-control': 'no-store', ...(hadCookie ? { 'set-cookie': cookie(caller, '', 0) } : {}),
+      ...('waiting' in refused ? { 'content-type': 'application/json' } : {}) })
+    response.end('waiting' in refused ? JSON.stringify({ waiting: refused.waiting }) : undefined)
   }
 
   const handle = async (request: IncomingMessage, response: ServerResponse, viaServe: boolean) => {
@@ -225,7 +230,7 @@ export async function serveWeb({ root, port, devices, tailscale, serveSocket, or
     // Pairing: a ticket (from the link) or its code (typed in) makes this browser a device.
     if (path === '/pair') {
       if (request.method !== 'POST' || header(request, 'origin') !== caller.origin) { response.writeHead(403).end(); return }
-      if (devices.limited(caller.address)) return refuse(response, caller, 'limited', false)
+      if (devices.limited(caller.address)) return refuse(response, caller, { refused: 'limited' }, false)
       const body = await readBody(request).catch(() => undefined)
       const parsed = (() => { try { return JSON.parse(body ?? '') as unknown } catch { return undefined } })()
       const given = (parsed && typeof parsed === 'object' ? parsed : {}) as { ticket?: unknown; code?: unknown }
@@ -240,8 +245,8 @@ export async function serveWeb({ root, port, devices, tailscale, serveSocket, or
     // Whether this browser may in, for a page deciding whether to ask: the protocol itself only says so by closing.
     if (path === '/rpc') {
       const given = cookieOf(request)
-      const who = await identify(caller, given)
-      if (!who || who === 'limited') return refuse(response, caller, who, Boolean(given))
+      const admission = await identify(caller, given)
+      if (!('who' in admission)) return refuse(response, caller, admission, Boolean(given))
       response.writeHead(204, { 'cache-control': 'no-store' }).end()
       return
     }
@@ -250,9 +255,9 @@ export async function serveWeb({ root, port, devices, tailscale, serveSocket, or
       const [first = '', ...after] = caller.path.slice('/artifact/'.length).split('/')
       if (!first.startsWith('~')) {
         const given = cookieOf(request)
-        const who = await identify(caller, given)
-        if (!who || who === 'limited') return refuse(response, caller, who, Boolean(given))
-        const name = grant(who, decode(first), caller)
+        const admission = await identify(caller, given)
+        if (!('who' in admission)) return refuse(response, caller, admission, Boolean(given))
+        const name = grant(admission.who, decode(first), caller)
         response.writeHead(302, { location: `/artifact/~${name}/${[first, ...after].join('/')}${caller.search}`, 'cache-control': 'no-store' }).end()
         return
       }
@@ -297,16 +302,14 @@ export async function serveWeb({ root, port, devices, tailscale, serveSocket, or
     if (!caller) return deny('403 Forbidden')
     if (caller.path !== '/rpc') return deny('404 Not Found')
     if (header(request, 'origin') !== caller.origin) return deny('403 Forbidden')
-    const who = await identify(caller, cookieOf(request))
-    if (who === 'limited') return deny('429 Too Many Requests')
-    if (!who) return deny('401 Unauthorized')
+    const admission = await identify(caller, cookieOf(request))
+    if (!('who' in admission)) return deny(admission.refused === 'limited' ? '429 Too Many Requests' : '401 Unauthorized')
     if (socket.destroyed) return
-    // For the client list: a paired device by its name, the owner by their login. Through serve, it's on another
+    const { who } = admission
+    // For the client list: a device by its name (a tailnet device's, Tailscale's). Through serve, it's on another
     // computer of the tailnet; otherwise on this one (Web access listens on loopback).
-    const elsewhere = Boolean(caller.serve)
-    const via: Via = who.startsWith('tailscale:')
-      ? { via: 'tailscale', label: caller.login ?? who.slice('tailscale:'.length), elsewhere }
-      : { via: 'web', device: who, label: devices.list().find((d) => d.id === who)?.name ?? 'A browser', elsewhere }
+    const device = devices.list().find((d) => d.id === who)
+    const via: Via = { via: device?.tailscale ? 'tailscale' : 'web', device: who, label: device?.name ?? 'A browser', elsewhere: Boolean(caller.serve) }
     sockets.handleUpgrade(request, socket, head, (ws) => {
       live.set(ws, who)
       // Full past 1 MiB unsent, as a socket's write says; each sent message checks whether there's room again.
@@ -350,8 +353,7 @@ export async function serveWeb({ root, port, devices, tailscale, serveSocket, or
     })
     return server
   }
-  const disconnect = (match: (id: string) => boolean) => { for (const [ws, who] of live) if (match(who)) ws.terminate() }
-  const unrevoke = devices.onRevoke((id) => disconnect((who) => who === id))
+  const unrevoke = devices.onRevoke((id) => { for (const [ws, who] of live) if (who === id) ws.terminate() })
 
   const servers: Server[] = []
   /** Listen at a port of loopback's, or a socket's path. */
@@ -383,7 +385,7 @@ export async function serveWeb({ root, port, devices, tailscale, serveSocket, or
     throw error
   }
   const bound = (server.address() as AddressInfo).port
-  return { url: `http://127.0.0.1:${bound}`, port: bound, disconnect, close }
+  return { url: `http://127.0.0.1:${bound}`, port: bound, close }
 }
 
 /**

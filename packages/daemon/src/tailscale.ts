@@ -1,5 +1,6 @@
 // Web access over Tailscale: `tailscale serve` fronts the daemon with HTTPS at this machine's `<machine>.<tailnet>.ts.net`
-// name, and tells it who's asking (Tailscale-User-Login, X-Forwarded-For). The daemon sets serve up and takes it down
+// name, and tells it where a request came from (X-Forwarded-For): `tailscale whois` says which device of the tailnet
+// that is, and whose. The daemon sets serve up and takes it down
 // itself, through the `tailscale` command, and only ever touches the handler it set up.
 //
 // Serve proxies to a Unix socket of the daemon's (`unix:<path>`), in a folder only its user opens: tailscaled runs as
@@ -29,7 +30,6 @@ type Status = {
   CertDomains?: string[] | null
   Self?: { DNSName?: string; HostName?: string; UserID?: number; TailscaleIPs?: string[]; Tags?: string[] | null }
   CurrentTailnet?: { Name?: string } | null
-  Peer?: Record<string, { HostName?: string; DNSName?: string; TailscaleIPs?: string[] }>
   User?: Record<string, { LoginName?: string }>
 }
 type ServeStatus = { Web?: Record<string, { Handlers?: Record<string, { Proxy?: string }> }> }
@@ -111,17 +111,29 @@ export async function stopServe(daemon: Ours, socket?: string): Promise<void> {
   } catch { /* not installed or not running: nothing to take down */ }
 }
 
-/** The tailnet's devices by address: what a request through serve came from (X-Forwarded-For). */
-export async function tailnetNames(socket?: string): Promise<Map<string, string>> {
-  const names = new Map<string, string>()
-  try {
-    const s = await status(socket)
-    for (const peer of [...Object.values(s.Peer ?? {}), ...(s.Self ? [s.Self] : [])]) {
-      const name = peer.HostName || peer.DNSName?.split('.')[0]
-      if (name) for (const ip of peer.TailscaleIPs ?? []) names.set(ip, name)
-    }
-  } catch { /* no names, then */ }
-  return names
+/**
+ * A device of the tailnet, as tailscaled knows it: its stable node ID (which outlives its addresses and keys), its
+ * MagicDNS name (unique in the tailnet), and whose it is; a tagged one is no one's.
+ */
+export type TailnetNode = { id: string; name: string; os?: string; login?: string }
+
+type WhoIs = {
+  Node?: { StableID?: string; Name?: string; Tags?: string[] | null; Hostinfo?: { OS?: string; Hostname?: string } }
+  UserProfile?: { LoginName?: string }
+}
+
+/** The tailnet device at `address` (what a request through serve came from, X-Forwarded-For); undefined if none is. */
+export async function whois(address: string, socket?: string): Promise<TailnetNode | undefined> {
+  let found: WhoIs
+  try { found = JSON.parse(await tailscale(['whois', '--json', address], socket)) as WhoIs } catch (error) {
+    if (/peer not found|no match/i.test((error as Error).message)) return undefined
+    throw error
+  }
+  const node = found.Node
+  if (!node?.StableID) return undefined
+  const name = node.Name?.split('.')[0] || node.Hostinfo?.Hostname || node.StableID
+  const login = node.Tags?.length ? undefined : found.UserProfile?.LoginName
+  return { id: node.StableID, name, ...(node.Hostinfo?.OS ? { os: node.Hostinfo.OS } : {}), ...(login ? { login } : {}) }
 }
 
 /** The sockets of the tailscaleds besides the default one this machine runs (Linux: /run/tailscale-<name>/tailscaled.sock). */
