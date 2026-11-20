@@ -44,17 +44,47 @@ const extensionsAdd = [
   'Commands, shortcuts and settings',
 ]
 
-/** An ellipse drawn by hand: a little tilted, a little uneven, overshooting where it closes. Deterministic. */
+/**
+ * A ring drawn with a marker: one confident stroke going round once and a bit more, the second pass drifting off the
+ * first, thin where the pen lands and lifts and full in between. Drawn as a filled outline so the width can vary.
+ * Seeded, so every build draws the same rings.
+ */
 function ring([cx, cy, rx, ry]: Callout['ring'], seed: number): string {
-  const wobble = (n: number) => ((Math.sin(n * 12.9898) * 43758.5453) % 1) * 2 - 1
-  const tilt = -0.06 + wobble(seed) * 0.04
-  const points: string[] = []
-  for (let i = 0; i <= 44; i++) {
-    const t = Math.PI * 0.85 + (i / 40) * Math.PI * 2
-    const k = 1 + wobble(seed + i) * 0.025 + i * 0.0012
-    points.push(`${(cx + rx * k * Math.cos(t + tilt)).toFixed(1)} ${(cy + ry * k * Math.sin(t)).toFixed(1)}`)
+  let state = seed * 9301 + 49297
+  const random = () => ((state = (state * 16807) % 2147483647) / 2147483647)
+  const turns = 1.25 + random() * 0.35
+  const start = Math.PI * (0.7 + random() * 0.5)
+  const tilt = (random() - 0.5) * 0.08
+  const drift = 0.04 + random() * 0.04 // how far the second pass wanders from the first
+  const shift = [(random() - 0.5) * 0.06 * rx, (random() - 0.5) * 0.12 * ry]
+  const phase = random() * Math.PI * 2
+  const steps = 180
+  const centre: [number, number][] = []
+  for (let i = 0; i <= steps; i++) {
+    const p = i / steps
+    const t = start + p * turns * Math.PI * 2
+    const k = 1 + 0.03 * Math.sin(2 * t + phase) + drift * p
+    const x = rx * k * Math.cos(t)
+    const y = ry * k * Math.sin(t)
+    centre.push([
+      cx + shift[0]! * p + x * Math.cos(tilt) - y * Math.sin(tilt),
+      cy + shift[1]! * p + x * Math.sin(tilt) + y * Math.cos(tilt),
+    ])
   }
-  return `M${points.join(' L')}`
+  // Each point pushed out to either side by half the pen's width there, along the curve's normal.
+  const width = (p: number) => 1 + 3.6 * Math.pow(Math.sin(Math.PI * p), 0.5)
+  const left: string[] = []
+  const right: string[] = []
+  centre.forEach(([x, y], i) => {
+    const [ax, ay] = centre[Math.max(0, i - 1)]!
+    const [bx, by] = centre[Math.min(steps, i + 1)]!
+    const length = Math.hypot(bx - ax, by - ay) || 1
+    const [nx, ny] = [-(by - ay) / length, (bx - ax) / length]
+    const half = width(i / steps) / 2
+    left.push(`${(x + nx * half).toFixed(1)} ${(y + ny * half).toFixed(1)}`)
+    right.push(`${(x - nx * half).toFixed(1)} ${(y - ny * half).toFixed(1)}`)
+  })
+  return `M${left.join(' L')} L${right.reverse().join(' L')}Z`
 }
 
 export function homeBody(o: { base: string; download: string }) {
@@ -76,7 +106,7 @@ export function homeBody(o: { base: string; download: string }) {
 
 <figure class="shot">
 <picture><source media="(prefers-color-scheme: dark)" srcset="${o.base}screenshot-dark.webp"><img src="${o.base}screenshot-light.webp" alt="The Superego window: a lead thread with its child threads in the sidebar, a question over the composer, and a board of the work beside it" width="2880" height="1800"></picture>
-<svg viewBox="0 0 ${W} ${H}" aria-hidden="true"><filter id="rough"><feTurbulence type="fractalNoise" baseFrequency="0.035" numOctaves="2" seed="4"/><feDisplacementMap in="SourceGraphic" scale="3.2"/></filter>${rings}</svg>
+<svg viewBox="0 0 ${W} ${H}" aria-hidden="true">${rings}</svg>
 ${numbers}
 </figure>
 <p class="asked-intro">My Chief of Staff, and what I asked for to get it:</p>
