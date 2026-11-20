@@ -13,10 +13,13 @@ const listen = (handler) => new Promise((resolve) => { const server = createServ
 
 export default async function browser(t) {
   // The app (as a dev server is): signed in by its session cookie, which only the sign-in server sets.
+  const held = []
   const app = await listen((req, res) => {
     const signedIn = /(^|;\s*)session=mikker/.test(req.headers.cookie ?? '')
     res.writeHead(200, { 'content-type': 'text/html' })
     if (req.url === '/popup') return res.end('<a id="out" href="https://example.com/elsewhere" target="_blank">out</a>')
+    // Never answered until it's let go (`slow`): a page that takes its time.
+    if (req.url === '/slow') return held.push(res)
     res.end(signedIn ? `<title>signed in as mikker</title><a id="next" href="/next">next</a>` : '<title>visit /as/&lt;login&gt; first</title>')
   })
   const appUrl = `http://127.0.0.1:${app.address().port}`
@@ -65,6 +68,24 @@ export default async function browser(t) {
   await t.until(`!document.querySelector('.panes__column:has(.web-view) button[aria-label="Back"]').disabled`, 'back offered')
   await t.click('.panes__column:has(.web-view) button[aria-label="Back"]')
   await t.until(`document.querySelector('.panes__column:has(.web-view) .browser-address__text')?.textContent === ${JSON.stringify(`${appUrl}/`)}`, 'back again')
+
+  // A page that takes its time: a line along the toolbar's foot, a spinner on its tab and in the address, and Stop; stopped,
+  // it's all gone, and the page is where it was.
+  await page().executeJavaScript(`location.href = '/slow'`, true)
+  const loading = `Boolean(document.querySelector('.panes__column:has(.web-view) .browser-load:not(.is-done)')) && Boolean(document.querySelector('.panes__column:has(.web-view) .browser-address .browser-spinner')) && [...document.querySelectorAll('.strip__tab')].some((tab) => tab.querySelector('.browser-spinner'))`
+  await t.until(loading, 'the page shown loading')
+  await t.click('.panes__column:has(.web-view) button[aria-label="Stop"]')
+  await t.until(`!document.querySelector('.panes__column:has(.web-view) .browser-load') && !document.querySelector('.browser-spinner') && Boolean(document.querySelector('.panes__column:has(.web-view) button[aria-label="Reload"]'))`, 'stopped: the line, spinners and Stop gone')
+  if (!page() || page().isLoading()) t.fail('the page still loading after Stop')
+  for (const res of held.splice(0)) res.destroy()
+  // A page that doesn't load says why, in the pane.
+  const gone = await listen(() => {})
+  const goneUrl = `http://127.0.0.1:${gone.address().port}/`
+  await new Promise((resolve) => gone.close(resolve))
+  await page().executeJavaScript(`location.href = ${JSON.stringify(goneUrl)}`, true)
+  await t.until(`document.querySelector('.panes__column:has(.web-view) .web-view__error')?.textContent.includes('ERR_CONNECTION_REFUSED') && !document.querySelector('.panes__column:has(.web-view) .browser-load:not(.is-done)')`, "the page that didn't load says why")
+  await t.click('.panes__column:has(.web-view) button[aria-label="Back"]')
+  await t.until(`!document.querySelector('.web-view__error') && document.querySelector('.panes__column:has(.web-view) .browser-address__text')?.textContent === ${JSON.stringify(`${appUrl}/`)}`, 'back from the page that failed')
 
   // ⌘L from inside the page is the window's navigator, as anywhere.
   for (const type of ['keyDown', 'keyUp']) page().sendInputEvent({ type, keyCode: 'l', modifiers: ['meta'] })

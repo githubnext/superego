@@ -4,7 +4,8 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import { defineUiExtension, fileKind, type SitePermission, type WebViewEvent } from '@superego/app/ui'
 import { fakeMachine, mountUi, testThread, type TestWindow } from '@superego/sdk/testing'
-import browser from '../src/ui.tsx'
+import { act } from 'react'
+import browser, { FINISH, SHOW_AFTER } from '../src/ui.tsx'
 import { BROWSER } from '../src/shared.ts'
 
 const profile = { scope: 'user' as const, name: 'default', dir: '/home/me/.superego/profiles/default' }
@@ -84,7 +85,7 @@ it('shows a page in a view of its own on the desktop: placed over the pane, its 
     views.push(view)
     const op = (name: string) => (...args: unknown[]) => { view.ops.push([name, ...args]) }
     return {
-      place: op('place'), load: op('load'), go: op('go'), reload: op('reload'), focus: op('focus'), reveal: op('reveal'), answer: op('answer'),
+      place: op('place'), load: op('load'), go: op('go'), reload: op('reload'), stop: op('stop'), focus: op('focus'), reveal: op('reveal'), answer: op('answer'),
       snapshot: async () => null, onEvent: (listener) => { view.listener = listener }, close: () => { view.closed = true },
     }
   }
@@ -101,6 +102,11 @@ it('shows a page in a view of its own on the desktop: placed over the pane, its 
   expect(button('Forward').disabled).toBe(true)
   await pane.click('Back')
   expect(view!.ops).toContainEqual(['go', -1])
+  // Gone back, it's loading: Reload is Stop until it's there.
+  expect(button('Stop')).toBeTruthy()
+  view!.listener!({ type: 'state', state: { ...state, url: 'http://localhost:5173/', loading: true } })
+  view!.listener!({ type: 'state', state: { ...state, url: 'http://localhost:5173/' } })
+  await vi.waitFor(() => expect(button('Reload')).toBeTruthy())
   await pane.click('Reload')
   expect(view!.ops).toContainEqual(['reload'])
   // Focused, the pane keeps the keyboard, and says so; Return gives it to the page.
@@ -143,7 +149,7 @@ it("asks for what the page asks for, under its toolbar, until the user answers; 
   window.superego.webView = () => {
     const op = (name: string) => (...args: unknown[]) => { ops.push([name, ...args]) }
     return {
-      place: op('place'), load: op('load'), go: op('go'), reload: op('reload'), focus: op('focus'), reveal: op('reveal'), answer: op('answer'),
+      place: op('place'), load: op('load'), go: op('go'), reload: op('reload'), stop: op('stop'), focus: op('focus'), reveal: op('reveal'), answer: op('answer'),
       snapshot: async () => null, onEvent: (next) => { listener = next }, close: () => {},
     }
   }
@@ -189,4 +195,107 @@ it('frames a page in a browser: a web page as the web, saying sites may refuse; 
   expect(file.find('iframe')?.getAttribute('sandbox')).not.toContain('allow-same-origin')
   expect(file.text()).not.toContain('many sites refuse to show')
   expect(file.find('.browser-address__text')?.textContent).toBe('page.html')
+})
+
+it('shows a page loading: a line under the toolbar, from a moment in, at its progress; full, then gone, once it loads', async () => {
+  ui = await mountUi({ extensions: [browser] })
+  globalThis.ResizeObserver ??= class { observe() {} unobserve() {} disconnect() {} } as never
+  const ops: unknown[][] = []
+  let listener: ((event: WebViewEvent) => void) | undefined
+  window.superego.forward = undefined
+  window.superego.webView = () => {
+    const op = (name: string) => (...args: unknown[]) => { ops.push([name, ...args]) }
+    return {
+      place: op('place'), load: op('load'), go: op('go'), reload: op('reload'), stop: op('stop'), focus: op('focus'), reveal: op('reveal'), answer: op('answer'),
+      snapshot: async () => null, onEvent: (next) => { listener = next }, close: () => {},
+    }
+  }
+  const pane = await ui.render({ pane: { kind: BROWSER, params: { url: 'https://example.com/' } } })
+  await vi.waitFor(() => expect(listener).toBeDefined())
+  const state = { url: 'https://example.com/', title: '', canGoBack: false, canGoForward: false }
+  const tell = (loading: boolean, more: object = {}) => act(() => listener!({ type: 'state', state: { ...state, loading, ...more } }))
+  const bar = () => pane.find('.browser-load')
+  const now = () => (pane.find('.browser-load__now') as HTMLElement | null)?.style.transform
+  const spinning = () => Boolean(pane.find('.browser-address .browser-spinner'))
+  const button = (label: string) => pane.find(`button[aria-label="${label}"]`)
+  vi.useFakeTimers()
+  try {
+    // A load done within SHOW_AFTER shows nothing at all; Reload is Stop meanwhile.
+    tell(true, { progress: 0.1 })
+    expect(button('Stop')).toBeTruthy()
+    act(() => vi.advanceTimersByTime(SHOW_AFTER - 20))
+    tell(false)
+    act(() => vi.advanceTimersByTime(FINISH * 2))
+    expect(bar()).toBeFalsy()
+    expect(spinning()).toBe(false)
+    expect(button('Reload')).toBeTruthy()
+
+    // A slower one: shown a moment in, the spinner in place of the globe, its progress as it comes.
+    tell(true, { progress: 0.1 })
+    expect(bar()).toBeFalsy()
+    act(() => vi.advanceTimersByTime(SHOW_AFTER))
+    expect(bar()).toBeTruthy()
+    expect(spinning()).toBe(true)
+    expect(pane.find('.browser-address .browser-address__icon')).toBeFalsy()
+    expect(pane.find('.browser-frame')?.getAttribute('aria-busy')).toBe('true')
+    expect(now()).toBe('scaleX(0.1)')
+    tell(true, { progress: 0.7 })
+    expect(now()).toBe('scaleX(0.7)')
+    // Loaded: full, then gone.
+    tell(false)
+    expect(bar()?.classList.contains('is-done')).toBe(true)
+    expect(now()).toBe('scaleX(1)')
+    expect(spinning()).toBe(false)
+    act(() => vi.advanceTimersByTime(FINISH))
+    expect(bar()).toBeFalsy()
+    expect(pane.find('.browser-address .browser-address__icon')).toBeTruthy()
+
+    // Stopped: Stop, or Esc in the address bar.
+    tell(true)
+    act(() => vi.advanceTimersByTime(SHOW_AFTER))
+    act(() => (button('Stop') as HTMLButtonElement).click())
+    expect(ops).toContainEqual(['stop'])
+    ops.length = 0
+    act(() => (pane.find('button.browser-address') as HTMLButtonElement).click())
+    const field = pane.find('input.browser-address') as HTMLInputElement
+    act(() => { field.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })) })
+    expect(ops).toContainEqual(['stop'])
+    // A load that fails: the line goes, and the pane says why.
+    tell(false, { error: { code: -105, description: 'ERR_NAME_NOT_RESOLVED', url: 'https://example.com/' } })
+    act(() => vi.advanceTimersByTime(FINISH))
+    expect(bar()).toBeFalsy()
+    expect(pane.text()).toContain("didn't load: ERR_NAME_NOT_RESOLVED")
+  } finally {
+    vi.useRealTimers()
+  }
+})
+
+it('starts the line at once when sent somewhere from the pane, before the page says it loads', async () => {
+  ui = await mountUi({ extensions: [browser] })
+  globalThis.ResizeObserver ??= class { observe() {} unobserve() {} disconnect() {} } as never
+  let listener: ((event: WebViewEvent) => void) | undefined
+  window.superego.forward = undefined
+  window.superego.webView = () => {
+    const op = () => () => {}
+    return {
+      place: op(), load: op(), go: op(), reload: op(), stop: op(), focus: op(), reveal: op(), answer: op(),
+      snapshot: async () => null, onEvent: (next) => { listener = next }, close: () => {},
+    }
+  }
+  const pane = await ui.render({ pane: { kind: BROWSER, params: { url: 'https://example.com/' } } })
+  await vi.waitFor(() => expect(listener).toBeDefined())
+  act(() => listener!({ type: 'state', state: { url: 'https://example.com/', title: '', loading: false, canGoBack: false, canGoForward: false } }))
+  vi.useFakeTimers()
+  try {
+    act(() => (pane.find('button[aria-label="Reload"]') as HTMLButtonElement).click())
+    act(() => vi.advanceTimersByTime(SHOW_AFTER))
+    expect(pane.find('.browser-load')).toBeTruthy()
+    // The page never says it's loading: the pane stops saying so for it.
+    act(() => vi.advanceTimersByTime(3000))
+    act(() => vi.advanceTimersByTime(FINISH))
+    expect(pane.find('.browser-load')).toBeFalsy()
+    expect(pane.find('button[aria-label="Reload"]')).toBeTruthy()
+  } finally {
+    vi.useRealTimers()
+  }
 })

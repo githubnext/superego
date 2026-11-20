@@ -24,10 +24,10 @@ import { holdWebView, type HeldWebView, type PaneRef, type WebViewAsk } from './
 export const OVERLAYS = '.superego-layer, .superego-dialog__backdrop, .superego-dialog, .lightbox, .app__scrim, .thread-sheet, .pair-gate, [data-superego-overlay]'
 
 /**
- * What a pane does to its page: take it somewhere (where it is already: again), go back and forward, reload it, give it
- * the keyboard, show a file it saved, answer what it asks (its state's `ask`).
+ * What a pane does to its page: take it somewhere (where it is already: again), go back and forward, reload it, stop
+ * its loading, give it the keyboard, show a file it saved, answer what it asks (its state's `ask`).
  */
-export type WebViewHandle = { load(url: string): void; go(by: -1 | 1): void; reload(): void; focus(): void; reveal(path: string): void; answer(allow: boolean): void }
+export type WebViewHandle = { load(url: string): void; go(by: -1 | 1): void; reload(): void; stop(): void; focus(): void; reveal(path: string): void; answer(allow: boolean): void }
 
 /** A page to show: its address, and whose cookies it keeps (`partition`). */
 export type WebViewProps = {
@@ -40,7 +40,10 @@ export type WebViewProps = {
   title: string
   /** Framed (in a browser): what the frame may do, as its `sandbox`. */
   sandbox: string
-  /** Where the page is now, and what it did (the desktop's alone). */
+  /**
+   * Where the page is now, and what it did. Framed, only whether it's loading (its `state`, at `src`): a frame's page
+   * doesn't say where it went, nor anything else.
+   */
   onEvent?(event: WebViewEvent): void
   /** Whether the pane has the keyboard and its page doesn't, as that changes: Return passes it in (a hint can say so). */
   onWaiting?(waiting: boolean): void
@@ -84,7 +87,7 @@ function useWaiting(waiting: boolean, onWaiting: WebViewProps['onWaiting']) {
   useEffect(() => () => listener.current?.(false), [])
 }
 
-function FramedWebView({ src, partition, title, sandbox, revision, onWaiting, ref }: WebViewProps) {
+function FramedWebView({ src, partition, title, sandbox, revision, onEvent, onWaiting, ref }: WebViewProps) {
   const [key, setKey] = useState(0)
   // What it shows changed: loaded again.
   const shown = useRef(revision)
@@ -97,14 +100,20 @@ function FramedWebView({ src, partition, title, sandbox, revision, onWaiting, re
   // The box itself has the focus (the page has it once the frame does).
   const [held, setHeld] = useState(false)
   useWaiting(held, onWaiting)
-  // A framed page's own moves aren't seen: going somewhere is going to `src`, as the pane points it there.
+  // Loading from when it's put there until its frame says it loaded.
+  const listener = useRef(onEvent)
+  listener.current = onEvent
+  const loading = (loading: boolean) => listener.current?.({ type: 'state', state: { url: src, title: '', loading, canGoBack: false, canGoForward: false } })
+  useEffect(() => { loading(true) }, [src, key])
+  // A framed page's own moves aren't seen: going somewhere is going to `src`, as the pane points it there. Nor can its
+  // loading be stopped, its document being another origin's: the pane stops waiting for it.
   useImperativeHandle(ref, () => ({
-    load: () => setKey((k) => k + 1), go: () => {}, reload: () => setKey((k) => k + 1), focus: () => frame.current?.focus(), reveal: () => {}, answer: () => {},
-  }), [])
+    load: () => setKey((k) => k + 1), go: () => {}, reload: () => setKey((k) => k + 1), stop: () => loading(false), focus: () => frame.current?.focus(), reveal: () => {}, answer: () => {},
+  }), [src])
   return (
     <div className="web-view web-view--framed" tabIndex={-1} data-focus onKeyDown={onReturn(() => frame.current?.focus())}
       onFocus={(event) => setHeld(event.target === event.currentTarget)} onBlur={(event) => { if (event.target === event.currentTarget) setHeld(false) }}>
-      <iframe ref={frame} key={key} src={src} title={title} sandbox={sandbox} />
+      <iframe ref={frame} key={key} src={src} title={title} sandbox={sandbox} onLoad={() => loading(false)} />
       {partition === 'browser' && (
         <p className="web-view__framed">
           Framed here, where many sites refuse to show or to sign in. <a href={src} target="_blank" rel="noreferrer">Open in a new tab</a>
@@ -177,7 +186,7 @@ function NativeWebView({ src, partition, revision, onEvent, onWaiting, ref }: We
   }, [paneKey, partition])
   useEffect(() => { held.current?.ask(asked.current) }, [src, revision])
   useImperativeHandle(ref, () => ({
-    load: (url) => view()?.load(url), go: (by) => view()?.go(by), reload: () => view()?.reload(), focus: () => enterRef.current(),
+    load: (url) => view()?.load(url), go: (by) => view()?.go(by), reload: () => view()?.reload(), stop: () => view()?.stop(), focus: () => enterRef.current(),
     reveal: (path) => view()?.reveal(path), answer: (allow) => view()?.answer(allow),
   }), [])
 

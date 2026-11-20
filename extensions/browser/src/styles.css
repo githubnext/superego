@@ -5,7 +5,7 @@
    page starts, the page being anyone's colours and its scrolling out of the pane's sight. One fixed height, so the
    page under it never moves as what's in it changes. */
 .browser-toolbar {
-  flex: none; display: flex; align-items: center; gap: 2px; height: 36px; box-sizing: border-box; padding: 0 var(--superego-space-2);
+  position: relative; flex: none; display: flex; align-items: center; gap: 2px; height: 36px; box-sizing: border-box; padding: 0 var(--superego-space-2);
   background: var(--superego-pane-tab);
   border-bottom: 1px solid var(--superego-line); font-size: var(--superego-text-sm); color: var(--superego-text);
 }
@@ -21,6 +21,10 @@
 }
 .browser-address--editing { outline: none; box-shadow: 0 0 0 1px var(--superego-accent); }
 .browser-address--editing::placeholder { color: var(--superego-faint); }
+.browser-address:not(.browser-address--editing) { padding-left: 7px; gap: 6px; }
+/* Where a favicon goes: the globe, or the spinner while the page loads (the pane's tab has the same). */
+.browser-address__icon { flex: none; color: var(--superego-faint); }
+.browser-spinner { font-size: 14px; }
 .browser-address__text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .browser-address__quiet { color: var(--superego-faint); }
 .browser-where { flex: none; font-size: var(--superego-text-xs); color: var(--superego-muted); }
@@ -34,3 +38,17 @@ a.superego-icon-button { text-decoration: none; }
 .browser-ask > span { flex: 1; min-width: 0; padding: 6px 0; overflow-wrap: anywhere; }
 .browser-ask .superego-button { flex: none; }
 .browser-hint { flex: none; padding: 0 var(--superego-space-1); font-size: var(--superego-text-xs); color: var(--superego-muted); opacity: 0.7; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; max-width: 40%; }
+/* A page loading (ui.tsx's LoadBar): a line in the accent over the toolbar's foot, never under the page (which is drawn
+   over everything below the toolbar). Two parts over each other: one easing toward 80% while it waits, the other at the
+   page's progress; done, it fills, then fades. Only transforms and opacity move: the compositor's work alone. */
+.browser-load { position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; pointer-events: none; transition: opacity .3s ease-out .2s; }
+.browser-load > i { position: absolute; inset: 0; background: var(--superego-accent); transform-origin: left; }
+.browser-load__wait { animation: browser-load-wait 12s ease-out both; }
+.browser-load__now { transition: transform .2s ease-out; }
+.browser-load.is-done { opacity: 0; }
+/* Quick at first, then ever slower: a third in half a second, half by two, nearly 80% by twelve. */
+@keyframes browser-load-wait { 0% { transform: scaleX(0); } 4% { transform: scaleX(.3); } 16% { transform: scaleX(.5); } 40% { transform: scaleX(.68); } 100% { transform: scaleX(.8); } }
+@media (prefers-reduced-motion: reduce) {
+  .browser-load, .browser-load__now { transition: none; }
+  .browser-load__wait { animation: none; transform: scaleX(.3); }
+}

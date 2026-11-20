@@ -127,11 +127,12 @@ Spaces (the sidebar), the rail, work dividers, window actions, app settings and 
 Inside a pane: `<PaneHeader>` puts small things in the pane's header beside its title: a `<PaneNote>` (a count, a path;
 `code`, `href`) and `<PaneButton>`s (Refresh). `<PaneMessage>` stands in for what the pane shows while there's nothing
 (Loading…, an error). `useTabNote(note, key)` shows a note on its tab in the strip (Changes shows
-`<DiffStat added removed />`, +3 −1).
+`<DiffStat added removed />`, +3 −1); `useTabGlyph(glyph, key)` shows a glyph there in place of its kind's (Browser's
+spinner while a page loads: `<Glyph shape="working" quiet />`), null for its kind's own.
 
 A web page in a pane: `<WebView src partition="browser" title sandbox onEvent ref>` shows it as Browser does, as a browser
-tab on the desktop (its own cookies, back and forward through `ref`'s `go(-1)`, `reload()`, `load(url)`, `focus()`; `onEvent` hears where it is
-now, a file it saved, what it was refused), framed in a browser (`sandbox` is the frame's). `hasWebViews()` says which.
+tab on the desktop (its own cookies, back and forward through `ref`'s `go(-1)`, `reload()`, `stop()`, `load(url)`, `focus()`; `onEvent` hears where it is
+now, whether it's loading and how far (`state.loading`, `state.progress`), a file it saved, what it was refused), framed in a browser (`sandbox` is the frame's). `hasWebViews()` says which.
 Focused, the pane keeps the keyboard until Return (or a click) passes it into the page; `onWaiting(waiting)` says when
 it's waiting for that, for a hint.
 

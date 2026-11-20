@@ -214,18 +214,18 @@ export function ThreadPanes({ machine, thread, main }: { machine: PaneProps['mac
     focus(pane?.id)
     if (column) focusRegion(column, { visible: false })
   }
-  const [notes, setNotes] = useState<Record<string, ReactNode>>({})
-  const noteFor = useRef(new Map<string, (note: ReactNode) => void>())
-  const setNoteFor = (id: string) => {
-    let set = noteFor.current.get(id)
-    if (!set) noteFor.current.set(id, set = (note) => setNotes((all) => ({ ...all, [id]: note })))
+  const [marks, setMarks] = useState<Record<string, TabMarks>>({})
+  const marksFor = useRef(new Map<string, SetTabMark>())
+  const setMarkFor = (id: string) => {
+    let set = marksFor.current.get(id)
+    if (!set) marksFor.current.set(id, set = (mark, value) => setMarks((all) => ({ ...all, [id]: { ...all[id], [mark]: value } })))
     return set
   }
   // The thread's own tab, then each pane's, drawn as its kind says (its glyph, and whether its title is a file's name).
   const tabs: StripTab[] = [
     { id: undefined, label: 'Thread', kind: { icon: ChatTextIcon }, pane: undefined, width: widths[0]!, shown: shown[0]!, away: side(0) },
     ...panes.map((pane, i) => ({
-      id: pane.id, label: title(pane), kind: paneKind(registry, pane.kind, where), pane, note: notes[pane.id], width: widths[i + 1]!, shown: shown[i + 1]!, away: side(i + 1),
+      id: pane.id, label: title(pane), kind: paneKind(registry, pane.kind, where), pane, note: marks[pane.id]?.note, glyph: marks[pane.id]?.glyph, width: widths[i + 1]!, shown: shown[i + 1]!, away: side(i + 1),
       ...(moveFailed?.pane === pane.id ? { failed: moveFailed.message } : {}),
     })),
   ]
@@ -256,7 +256,7 @@ export function ThreadPanes({ machine, thread, main }: { machine: PaneProps['mac
             behind={stacked && pane.id !== front && pane.id !== maximized} maximized={maximized === undefined ? undefined : pane.id === maximized}
             onFocus={() => focus(pane.id)} onClick={takeFocus} onClose={() => close(pane)} {...(narrow ? {} : { onMaximize: () => maximize(pane) })}
             view={isView(pane) ? { view: pane.kind, machine: machine.id, thread } : undefined}>
-            <TabNote.Provider value={setNoteFor(pane.id)}><PaneBody machine={machine} thread={thread} pane={pane} /></TabNote.Provider>
+            <TabMark.Provider value={setMarkFor(pane.id)}><PaneBody machine={machine} thread={thread} pane={pane} /></TabMark.Provider>
           </PaneColumn>
           {/* Scrolled, its place in the row is kept while it's over the rest, so they stay where they were. */}
           {!stacked && pane.id === maximized && <div className="panes__kept" style={{ width: widthOf(pane), order: orderOf(index + 1, 1) }} aria-hidden />}
@@ -339,6 +339,8 @@ type StripTab = {
   id: string | undefined; label: string; kind: Pick<PaneKind, 'icon' | 'file'> | undefined; pane: Pane | undefined
   /** What the pane says on its tab (see useTabNote). */
   note?: ReactNode
+  /** What it shows in place of its kind's glyph (see useTabGlyph). */
+  glyph?: ReactNode
   /** Its column's width, and how much of it is in view (0–1). */
   width: number; shown: number
   /** Where its column is, when it's mostly out of view. */
@@ -408,7 +410,7 @@ function StripTabButton({ tab, focused, inBar, onShow, onDrag }: {
       className={`strip__tab ${focused ? 'is-focused' : tab.away ? 'is-away' : 'is-shown'} ${tab.failed ? 'is-failed' : ''}`}
       title={tab.failed ? `Couldn't move ${tab.label}: ${tab.failed}` : full}
       onPointerDown={onDrag} onClick={() => onShow(tab.pane)}>
-      {Icon && <Icon size={14} aria-hidden />}
+      {tab.glyph ?? (Icon && <Icon size={14} aria-hidden />)}
       <span className={`strip__label overflow-part ${isFile(tab.kind, tab.pane) ? 'strip__label--file' : ''}`}>{tab.label}</span>
       {tab.id && tab.note && <span className="strip__note overflow-part">{tab.note}</span>}
       {tab.away === 'right' && <ArrowRightIcon className="strip__away" size={11} aria-hidden />}
@@ -508,13 +510,24 @@ function dragTab(event: React.PointerEvent<HTMLButtonElement>, drop: (to: number
   window.addEventListener('blur', cancel)
 }
 
-/** What a pane says on its tab in the strip (Changes: +3 −1), by pane. */
-const TabNote = createContext<((note: ReactNode) => void) | null>(null)
+/** What a pane shows on its tab in the strip: a note after its title (Changes: +3 −1), a glyph in place of its kind's (a spinner). */
+type TabMarks = { note?: ReactNode; glyph?: ReactNode }
+type SetTabMark = (mark: keyof TabMarks, value: ReactNode) => void
+const TabMark = createContext<SetTabMark | null>(null)
 
-/** Shown on the pane's tab in the strip, after its title. */
+/** Shown on the pane's tab in the strip, after its title, until `key` changes or the pane goes. */
 export function useTabNote(note: ReactNode, key: string) {
-  const set = useContext(TabNote)
-  useEffect(() => { set?.(note); return () => set?.(undefined) }, [key])
+  const set = useContext(TabMark)
+  useEffect(() => { set?.('note', note); return () => set?.('note', undefined) }, [key])
+}
+
+/**
+ * Shown on the pane's tab in the strip in place of its kind's glyph (14px: a `Glyph`, a spinner while it loads), until
+ * `key` changes or the pane goes; none (null) for its kind's own.
+ */
+export function useTabGlyph(glyph: ReactNode, key: string) {
+  const set = useContext(TabMark)
+  useEffect(() => { set?.('glyph', glyph ?? undefined); return () => set?.('glyph', undefined) }, [key])
 }
 
 /** Where a pane's own header things go (a count, Refresh): beside its title, at the top of its column. */

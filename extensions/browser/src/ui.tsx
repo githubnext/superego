@@ -8,11 +8,16 @@
 //
 // Its address bar: a quiet pill until it's clicked, then a field with the address selected. Return goes where it says (address.ts: a web address, a bare host, an HTML file's
 // path, else a search), by pointing the pane there (`pane.update`), so the pane is where it was sent, for the agent and
-// the next launch alike; Esc leaves it as it was.
+// the next launch alike; Esc leaves it as it was, and stops a page loading.
+//
+// While a page loads (LoadBar): a thin line in the accent along the toolbar's foot, easing toward 80% as it waits and
+// ahead of that as the page's milestones come, full as it's done, then fading; a spinner in place of the globe on the
+// pane's tab and in the address; Reload is Stop. None of it for a load done within SHOW_AFTER, so a quick one doesn't
+// flash. A page that doesn't load says why, in its place (the app's WebView).
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { askText, call, defineAction, defineUiExtension, hasWebViews, PaneMessage, useApp, useAppSetting, useDispatch, thisComputer, WebView, type PaneProps, type PermissionAsk, type WebViewEvent, type WebViewHandle } from '@superego/app/ui'
+import { askText, call, defineAction, defineUiExtension, hasWebViews, PaneMessage, useApp, useAppSetting, useDispatch, useTabGlyph, thisComputer, WebView, type PaneProps, type PermissionAsk, type WebViewEvent, type WebViewHandle } from '@superego/app/ui'
 import type { Pane } from '@superego/protocol'
-import { autoFocusOnOpen, ArrowClockwiseIcon, ArrowLeftIcon, ArrowRightIcon, ArrowSquareOutIcon, Button, GlobeIcon, IconButton, XIcon } from '@superego/ui'
+import { autoFocusOnOpen, ArrowClockwiseIcon, ArrowLeftIcon, ArrowRightIcon, ArrowSquareOutIcon, Button, Glyph, GlobeIcon, IconButton, XIcon } from '@superego/ui'
 import './styles.css'
 import { about, BROWSER, type BrowserParams } from './shared.ts'
 import { DEFAULT_SEARCH_ENGINE, destination, SEARCH_ENGINE, SEARCH_ENGINES, webAddress, type Destination, type SearchEngine } from './address.ts'
@@ -66,7 +71,20 @@ function BrowserPane({ machine, thread, pane }: PaneProps) {
 
   const view = useRef<WebViewHandle>(null)
   const frame = useRef<HTMLDivElement>(null)
-  const [state, setState] = useState<{ url: string; canGoBack: boolean; canGoForward: boolean; ask?: PermissionAsk }>()
+  const [state, setState] = useState<{ url: string; loading: boolean; progress?: number; canGoBack: boolean; canGoForward: boolean; ask?: PermissionAsk }>()
+  // Sent somewhere from here (Return, Back, Reload): loading from then, until the page says it is, or for STARTING if it
+  // never does (where it went was refused, or the pane's still finding it).
+  const [starting, setStarting] = useState(0)
+  useEffect(() => {
+    if (!starting) return
+    const timer = setTimeout(() => setStarting(0), STARTING)
+    return () => clearTimeout(timer)
+  }, [starting])
+  const begin = () => setStarting(Date.now())
+  const loading = Boolean(starting) || Boolean(state?.loading)
+  const shown = useShownLoad(loading)
+  const busy = shown !== undefined && loading
+  useTabGlyph(busy ? <Spinner /> : null, String(busy))
   const [notice, setNotice] = useState<Notice>()
   const [waiting, setWaiting] = useState(false)
   const [editing, setEditing] = useState(false)
@@ -84,7 +102,10 @@ function BrowserPane({ machine, thread, pane }: PaneProps) {
   }, [src])
 
   const onEvent = (event: WebViewEvent) => {
-    if (event.type === 'state') setState(event.state)
+    if (event.type === 'state') {
+      setState(event.state)
+      if (event.state.loading) setStarting(0)
+    }
     if (event.type === 'download' && event.state !== 'progressing') {
       setNotice(event.state === 'completed' ? { text: `Saved ${event.name} to Downloads`, path: event.path } : { text: `${event.name} wasn't saved (${event.state})` })
     }
@@ -103,27 +124,39 @@ function BrowserPane({ machine, thread, pane }: PaneProps) {
     // Where the pane points already (the page has moved on since, or the user wants it again): loaded there.
     if (('url' in to && to.url === url) || ('path' in to && to.path === path)) {
       focusPage.current = false
-      if (src) view.current?.load(src)
+      if (src) {
+        begin()
+        view.current?.load(src)
+      }
       view.current?.focus()
       return
     }
+    begin()
     dispatch('pane.update', { thread: thread.id, pane: pane.id, params: to }, { machine: machine.id, source: 'browser' }).catch((error: Error) => {
       console.error(`Going to ${JSON.stringify(to)}:`, error)
       focusPage.current = false
+      setStarting(0)
       setNotice({ text: error.message })
     })
+  }
+  const stop = () => {
+    setStarting(0)
+    view.current?.stop()
   }
   const native = hasWebViews()
   const isWeb = Boolean(current && /^https?:/i.test(current))
   return (
-    <div ref={frame} className="browser-frame">
+    <div ref={frame} className="browser-frame" aria-busy={busy}>
       <div className="browser-toolbar">
-        {native && <IconButton label="Back" variant="ghost" disabled={!state?.canGoBack} onClick={() => view.current?.go(-1)}><ArrowLeftIcon size={14} aria-hidden /></IconButton>}
-        {native && <IconButton label="Forward" variant="ghost" disabled={!state?.canGoForward} onClick={() => view.current?.go(1)}><ArrowRightIcon size={14} aria-hidden /></IconButton>}
-        <IconButton label="Reload" variant="ghost" disabled={!src} onClick={() => view.current?.reload()}><ArrowClockwiseIcon size={14} aria-hidden /></IconButton>
+        {native && <IconButton label="Back" variant="ghost" disabled={!state?.canGoBack} onClick={() => { begin(); view.current?.go(-1) }}><ArrowLeftIcon size={14} aria-hidden /></IconButton>}
+        {native && <IconButton label="Forward" variant="ghost" disabled={!state?.canGoForward} onClick={() => { begin(); view.current?.go(1) }}><ArrowRightIcon size={14} aria-hidden /></IconButton>}
+        {native && loading
+          ? <IconButton label="Stop" variant="ghost" onClick={stop}><XIcon size={14} aria-hidden /></IconButton>
+          : <IconButton label="Reload" variant="ghost" disabled={!src} onClick={() => { begin(); view.current?.reload() }}><ArrowClockwiseIcon size={14} aria-hidden /></IconButton>}
         {editing || blank
           ? <AddressField address={address} blank={blank} onLeave={() => setEditing(false)}
               onCancel={() => {
+                if (loading) stop()
                 setEditing(false)
                 // The pane keeps the keyboard, as it was before: Return passes it to the page.
                 frame.current?.querySelector<HTMLElement>('.web-view')?.focus({ preventScroll: true })
@@ -134,12 +167,13 @@ function BrowserPane({ machine, thread, pane }: PaneProps) {
                 setEditing(false)
                 go(to)
               }} />
-          : <Address title={where ? `${address} (${where})` : address} parts={url ? urlParts(address) : pathParts(address)} onEdit={() => setEditing(true)}>
+          : <Address title={where ? `${address} (${where})` : address} parts={url ? urlParts(address) : pathParts(address)} busy={busy} onEdit={() => setEditing(true)}>
               {where && <span className="browser-where">{where}</span>}
             </Address>}
         {revisionError && <span className="browser-hint" role="alert" title={revisionError}>Won't reload as it changes: {revisionError}</span>}
         {waiting && !editing && <ReturnHint />}
         {isWeb && <a className="superego-button superego-button--ghost superego-icon-button" href={current} target="_blank" rel="noreferrer" aria-label="Open in browser" title="Open in browser"><ArrowSquareOutIcon size={14} aria-hidden /></a>}
+        {shown !== undefined && <LoadBar key={shown} loading={loading} progress={state?.loading ? state.progress : undefined} />}
       </div>
       {state?.ask && <Ask ask={state.ask} answer={(allow) => view.current?.answer(allow)} />}
       {notice && (
@@ -204,9 +238,10 @@ function fileAt(machine: string, thread: string, current: string) {
  * Where the page is, in a quiet pill: what says little (the scheme, `localhost`, a file's folder) faint, the rest as
  * text. A click makes it a field to type in; `children` follow it, inside (where a forwarded page is from).
  */
-function Address({ title, parts: [quiet, rest], onEdit, children }: { title: string; parts: [string, string]; onEdit(): void; children?: ReactNode }) {
+function Address({ title, parts: [quiet, rest], busy, onEdit, children }: { title: string; parts: [string, string]; busy: boolean; onEdit(): void; children?: ReactNode }) {
   return (
     <button type="button" className="browser-address" title={title} aria-label="Address" onClick={onEdit}>
+      {busy ? <Spinner /> : <GlobeIcon className="browser-address__icon" size={14} aria-hidden />}
       <span className="browser-address__text"><span className="browser-address__quiet">{quiet}</span>{rest}</span>
       {children}
     </button>
@@ -261,6 +296,54 @@ const pathParts = (path: string): [string, string] => {
   const at = path.lastIndexOf('/') + 1
   return [path.slice(0, at), path.slice(at)]
 }
+
+/** How long a load goes unshown: one done sooner shows nothing, so it doesn't flash. */
+export const SHOW_AFTER = 100
+/** How long a load done shows full before it goes: its line filling, then fading (styles.css). */
+export const FINISH = 500
+/** How long a page sent somewhere has to say it's loading before the pane stops saying so for it. */
+const STARTING = 3000
+
+/**
+ * The load shown, by its count, while `loading` (from SHOW_AFTER in), and for FINISH once it's done; none otherwise.
+ * Loading again as one finishes, the next is shown at once.
+ */
+function useShownLoad(loading: boolean) {
+  const [shown, setShown] = useState<number>()
+  const count = useRef(0)
+  const showing = useRef(shown)
+  showing.current = shown
+  useEffect(() => {
+    if (!loading) {
+      if (showing.current === undefined) return
+      const timer = setTimeout(() => setShown(undefined), FINISH)
+      return () => clearTimeout(timer)
+    }
+    const load = ++count.current
+    if (showing.current !== undefined) return setShown(load)
+    const timer = setTimeout(() => setShown(load), SHOW_AFTER)
+    return () => clearTimeout(timer)
+  }, [loading])
+  return shown
+}
+
+/**
+ * A load as a line along the toolbar's foot, in two parts laid over each other: one easing toward 80% from the load's
+ * start (an animation of its own, the compositor's), the other at the page's `progress` as it comes. Done, it fills,
+ * and fades. Under reduced motion it neither eases nor fades: a short line, the progress over it in steps.
+ */
+function LoadBar({ loading, progress }: { loading: boolean; progress: number | undefined }) {
+  const now = loading ? progress ?? 0 : 1
+  return (
+    <div className={`browser-load ${loading ? '' : 'is-done'}`} role="progressbar" aria-label="Loading" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(now * 100)}>
+      <i className="browser-load__wait" style={{ animationDelay: `-${SHOW_AFTER}ms` }} />
+      <i className="browser-load__now" style={{ transform: `scaleX(${now})` }} />
+    </div>
+  )
+}
+
+/** In place of the globe while a page loads: the app's spinner. */
+const Spinner = () => <Glyph shape="working" className="browser-spinner" />
 
 /** What the page asks for, until the user answers: only they can, here. */
 function Ask({ ask, answer }: { ask: PermissionAsk; answer(allow: boolean): void }) {

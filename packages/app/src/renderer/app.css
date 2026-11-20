@@ -919,6 +919,8 @@ a.pane-header__url:hover { color: var(--superego-accent); }
 .strip__tabs { flex: 1; min-width: 0; display: flex; align-items: center; gap: 2px; overflow: hidden; }
 .strip__tab { display: inline-flex; align-items: center; gap: 6px; flex: 0 1 auto; min-width: 0; height: 24px; padding: 0 8px; border: 0; border-radius: 6px; background: none; font: inherit; font-size: var(--superego-text-sm); color: var(--superego-text); white-space: nowrap; cursor: default; }
 .strip__tab svg { flex: none; color: var(--superego-faint); }
+/* A pane's own glyph in place of its kind's (useTabGlyph): a mark, at the icons' size. */
+.strip__tab > .superego-status { font-size: 14px; }
 .strip__tab:hover { background: var(--superego-hover); }
 .strip__tab.is-focused { background: color-mix(in srgb, var(--superego-accent) 11%, transparent); color: var(--superego-accent); }
 .strip__tab.is-focused svg { color: var(--superego-accent); }

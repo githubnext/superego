@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- The Browser pane shows a page loading: a thin line under its address bar that fills as it loads, a spinner on its
+  tab and in the address, and Stop in place of Reload (Esc in the address bar stops it too). Quick loads show nothing.
+
 ## 0.1.8
 
 - **Upgrade:** the extension API is now 5.0. A profile's extension that asks for `api: '^4'` (or `^4.x`) is refused

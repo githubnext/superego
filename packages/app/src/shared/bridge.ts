@@ -85,6 +85,11 @@ export type WebViewState = {
   url: string
   title: string
   loading: boolean
+  /**
+   * How far its load has come while `loading`, 0–1, from the milestones Chromium tells of (the navigation started, its
+   * response came, the document parsed); none when it's not loading. A page doesn't say more than that.
+   */
+  progress?: number
   canGoBack: boolean
   canGoForward: boolean
   /** Why the page last asked for didn't load (it isn't there, a certificate refused), or that it crashed. */
@@ -127,6 +132,8 @@ export type BridgeWebView = {
   load(url: string): void
   go(by: -1 | 1): void
   reload(): void
+  /** Stop loading what it's loading. */
+  stop(): void
   /** Give it the keyboard (`true`), or, if it has it, give it back to the window. */
   focus(on: boolean): void
   /** A still of the page as it is now, as an image's bytes (PNG); none while it has nothing drawn. */

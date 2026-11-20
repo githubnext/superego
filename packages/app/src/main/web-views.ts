@@ -56,7 +56,12 @@ export type AskingView = { asking(ask: PermissionAsk | undefined): void }
 
 type Held = AskingView & {
   window: AppWindow; id: string; partition: WebViewPartition; view: WebContentsView; error?: WebViewState['error']; ask?: PermissionAsk; stillFailed?: boolean
+  /** How far the load under way has come (`WebViewState.progress`). */
+  progress?: number
 }
+
+/** A load's milestones, as its progress: started, its response in (the page committed), its document parsed. */
+export const PROGRESS = { started: 0.1, committed: 0.4, parsed: 0.7 } as const
 
 export type WebViewsOptions = {
   /** The open window whose page this is. */
@@ -80,6 +85,7 @@ export function serveWebViews({ windowOf, linkOf, sites }: WebViewsOptions) {
     const contents = view.view.webContents
     return {
       url: contents.getURL(), title: contents.getTitle(), loading: contents.isLoading(),
+      ...(contents.isLoading() && view.progress !== undefined ? { progress: view.progress } : {}),
       canGoBack: contents.navigationHistory.canGoBack(), canGoForward: contents.navigationHistory.canGoForward(),
       ...(view.error ? { error: view.error } : {}),
       ...(view.ask ? { ask: view.ask } : {}),
@@ -216,14 +222,28 @@ export function serveWebViews({ windowOf, linkOf, sites }: WebViewsOptions) {
       else go(entry, key === 'back' ? -1 : 1)
     })
     function changed() { tell(entry, { type: 'state', state: stateOf(entry) }) }
+    /** The load under way reached `progress` (a milestone of it: PROGRESS). */
+    const reached = (progress: number) => {
+      if (contents.isLoading()) entry.progress = Math.max(entry.progress ?? 0, progress)
+      changed()
+    }
     contents.on('did-start-navigation', (details) => {
       if (!details.isMainFrame || details.isSameDocument) return
       entry.error = undefined
+      // A new load, in place of any under way.
+      entry.progress = PROGRESS.started
       // What the page leaving asked for goes with it, unanswered.
       sites.drop(entry, false)
       changed()
     })
-    for (const name of ['did-start-loading', 'did-stop-loading', 'did-navigate', 'did-navigate-in-page', 'page-title-updated'] as const) contents.on(name as 'did-start-loading', changed)
+    contents.on('did-start-loading', () => reached(PROGRESS.started))
+    contents.on('did-navigate', () => reached(PROGRESS.committed))
+    contents.on('dom-ready', () => reached(PROGRESS.parsed))
+    contents.on('did-stop-loading', () => {
+      entry.progress = undefined
+      changed()
+    })
+    for (const name of ['did-navigate-in-page', 'page-title-updated'] as const) contents.on(name as 'did-navigate-in-page', changed)
     contents.on('did-fail-load', (_event, code, description, failed, isMainFrame) => {
       // -3: aborted, by another load taking its place (a click before the last one finished), not failed.
       if (!isMainFrame || code === -3) return
@@ -286,6 +306,7 @@ export function serveWebViews({ windowOf, linkOf, sites }: WebViewsOptions) {
         case 'load': load(view, args[0] as string); break
         case 'go': go(view, args[0] === -1 ? -1 : 1); break
         case 'reload': reload(view); break
+        case 'stop': contents.stop(); break
         case 'focus':
           if (args[0]) contents.focus()
           else if (contents.isFocused()) window.contents.focus()

@@ -81,6 +81,7 @@ function webView(url: string, partition: WebViewPartition): BridgeWebView {
     load: (to) => op('load', to),
     go: (by) => op('go', by),
     reload: () => op('reload'),
+    stop: () => op('stop'),
     focus: (on) => op('focus', on),
     reveal: (path) => op('reveal', path),
     answer: (allow) => op('answer', allow === true),
