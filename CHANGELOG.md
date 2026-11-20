@@ -39,6 +39,7 @@
 - On a phone, the thread's sheet (tap its title) is a plain menu: a row each for its model and other details, Rename
   (the title at its top becomes a field), Pin, Archive or Unarchive, and the panes to open beside it, each with its
   icon, sized for a finger.
+- An image file opens as the picture in the editor pane (from a link in a message, the file tree or `pane_open`), fitted to the pane with its size in pixels, instead of "is a binary file". SVG still opens as its source.
 - A new built-in theme: Zenbones, light and dark (Settings → Appearance).
 - Importing a Ghostty theme reads its quoted colours (`foreground = "#2c363c"`), where its foreground, background, cursor and selection were left out.
 - Claude Agent finds your `claude` when your shell has it as an alias (such as `claude --dangerously-skip-permissions`): it runs the `claude` on your shell's PATH, without the alias's flags.

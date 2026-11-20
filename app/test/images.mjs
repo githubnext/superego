@@ -1,6 +1,6 @@
 // Screenshots of images in a thread (run by `test/look.sh <dir> images`): an agent's shown images (one alone, a grid
 // with one gone, a carousel), the lightbox (zoomed, a very tall image and a very wide one), its answer's own images
-// inline and in the lightbox; then a phone's width. Light and dark, into $SUPEREGO_SHOWCASE_OUT.
+// inline and in the lightbox; an image file open in the editor pane; then a phone's width. Light and dark, into $SUPEREGO_SHOWCASE_OUT.
 import { nativeImage } from 'electron'
 import { mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
 import { openApp } from './harness.mjs'
@@ -69,6 +69,12 @@ await openApp({ name: 'images', timeout: 180_000, size: [1100, 760] }, async (t)
   await t.both('message-images-lightbox')
   await press('Escape')
   await until(`!document.querySelector('.lightbox')`, 'the lightbox closed')
+  // An image file in the editor pane: the picture, fitted, its size in the bar.
+  await t.call('pane.open', { thread: id, kind: 'editor', params: { path: `${S}/wide.png` } })
+  await until(`(() => { const img = document.querySelector('.image-file__img'); return Boolean(img?.complete && img.naturalWidth) && document.querySelector('.image-file .pane-bar__note')?.textContent === '1280 × 720' })()`, 'the image file in the editor pane')
+  await t.both('image-file')
+  await run(`window.superego.call('local', 'thread.list', {}).then((list) => list.find((s) => s.id === '${id}').panes.find((p) => p.kind === 'editor')).then((pane) => window.superego.call('local', 'pane.close', { thread: '${id}', pane: pane.id }))`)
+  await until(`!document.querySelector('.image-file')`, 'the editor pane closed')
   // A phone's width (the window goes no narrower than 600: zoomed, its page is a phone's 375).
   await t.resize(600, 760)
   await t.zoom(1.6)

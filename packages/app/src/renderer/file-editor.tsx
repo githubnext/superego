@@ -1,4 +1,4 @@
-// A file in a thread's folder, open to edit. Markdown opens rendered (to read, as a message reads: its links open
+// A file in a thread's folder, open to edit; an image shows as itself (image-file.tsx). Markdown opens rendered (to read, as a message reads: its links open
 // files and threads the same way), in live preview (as Obsidian does: rendered, its syntax back where the cursor is),
 // or as source; anything else as source. It saves as you type, and follows the file when the agent changes it: your
 // view updates, or, with edits of yours not yet saved, it asks which to keep.
@@ -29,6 +29,7 @@ import { folderOf } from './markdown-html.ts'
 import { linkAt, livePreview } from './live-markdown.ts'
 import { arrivals } from './arrivals.ts'
 import { filePath } from './short-path.ts'
+import { ImageFile, isImageFile } from './image-file.tsx'
 
 /** The file a `FileEditor` shows, and what goes around it. */
 export type FileEditorProps = {
@@ -108,7 +109,12 @@ function goToLine(view: EditorView, line: number, scroller: HTMLElement | null) 
 }
 
 /** A file of the thread's folder, to read and edit, as the core's editor pane shows it. */
-export function FileEditor({ machine, thread, path, line, actions, children, onOpenFile }: FileEditorProps) {
+export function FileEditor(props: FileEditorProps) {
+  const { machine, thread, path, actions } = props
+  return isImageFile(path) ? <ImageFile machine={machine} thread={thread} path={path} actions={actions} /> : <TextEditor {...props} />
+}
+
+function TextEditor({ machine, thread, path, line, actions, children, onOpenFile }: FileEditorProps) {
   const isMarkdown = /\.(md|markdown|mdx)$/i.test(path)
   // As last chosen, in any window; live preview if never (or something this doesn't know).
   const [stored, setMode] = useLocalState<Mode>('editor.mode', 'live', { shared: true })

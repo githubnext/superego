@@ -852,6 +852,10 @@ a.pane-header__url:hover { color: var(--superego-accent); }
 
 /* The file editor: source (monospace, line numbers) or, for Markdown, live preview (as it reads, Obsidian-like). */
 .file-editor { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+/* An image file: fitted to the pane, centred, on the pane's ground. */
+.image-file { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+.image-file__stage { flex: 1; min-height: 0; position: relative; overflow: hidden; }
+.image-file__img { position: absolute; inset: var(--superego-space-4); margin: auto; max-width: calc(100% - 2 * var(--superego-space-4)); max-height: calc(100% - 2 * var(--superego-space-4)); border-radius: 4px; box-shadow: 0 0 0 .5px var(--superego-line); }
 .file-editor__main { flex: 1; min-height: 0; display: flex; }
 .file-editor__scroll { flex: 1; min-width: 0; min-height: 0; overflow: auto; }
 .file-editor__host .cm-editor { font-size: calc(13px * var(--superego-text-scale)); }
