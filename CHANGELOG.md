@@ -6,6 +6,7 @@
   untracked files too, read a folder at a time as you open them. One that can't be read says why, instead of "No files
   here.". The file tree beside the editor and ⌘P still leave out what git ignores.
 - A middle click on a pane's tab in the title bar closes the pane.
+- A notification stays in Notification Center until you clear it, and clicking it there later still opens its thread.
 - The Browser pane shows a page loading: a thin line under its address bar that fills as it loads, a spinner on its
   tab and in the address, and Stop in place of Reload (Esc in the address bar stops it too). Quick loads show nothing.
 

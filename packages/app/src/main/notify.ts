@@ -26,6 +26,11 @@ export type Notifier = ReturnType<typeof createNotifier>
 
 export function createNotifier({ headless, settings, machines, windowFocused, lookedAt, open }: NotifierOptions) {
   const notices = createNotices()
+  /**
+   * The notifications shown, kept until clicked or closed: one Electron lets go of (garbage collected) is taken out of
+   * Notification Center, its click with it.
+   */
+  const shown = new Set<Notification>()
 
   /** A machine's threads as now heard. */
   function track(machine: string, threads: ThreadInfo[]) {
@@ -61,7 +66,12 @@ export function createNotifier({ headless, settings, machines, windowFocused, lo
     if (!Notification.isSupported()) return
     const several = machines.allLinks().filter((link) => link.state === 'connected').length > 1
     const notification = new Notification(desktopNotification(notice, { label: machines.linkOf(notice.machine)?.label ?? notice.machine, several }))
-    notification.on('click', () => open({ machine: notice.machine, thread: notice.thread }))
+    notification.on('click', () => {
+      shown.delete(notification)
+      open({ machine: notice.machine, thread: notice.thread })
+    })
+    notification.on('close', () => shown.delete(notification))
+    shown.add(notification)
     notification.show()
   }
 

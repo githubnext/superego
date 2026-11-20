@@ -15,7 +15,7 @@ export type AppConfig = {
   agent?: string
   /** Where the app lives; sent to model providers as attribution. */
   url?: string
-  /** macOS bundle identifier, reverse-DNS (`com.githubnext.superego`). Running from source it gets `.dev` added. */
+  /** macOS bundle identifier, reverse-DNS (`com.githubnext.superego`). Running from source it gets `.dev.<checkout hash>` added. */
   bundleId?: string
   /**
    * The loopback port sign-in pages send the browser back to, `http://127.0.0.1:<port>/…`: MCP servers' OAuth
