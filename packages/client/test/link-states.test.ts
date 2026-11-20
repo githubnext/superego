@@ -1,7 +1,7 @@
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { RpcError, RpcPeer } from '@superego/protocol'
 import type { Transport } from '@superego/client'
 import { Link } from '@superego/client'
@@ -43,9 +43,8 @@ describe('a link whose ssh needs a login', () => {
     let opens = 0
     const { link } = states(async () => { opens++; throw new RpcError('unreachable', 'no route') })
     link.start()
-    await new Promise((resolve) => setTimeout(resolve, 1800))
+    await vi.waitFor(() => expect(opens).toBeGreaterThan(1), { timeout: 5_000 })
     link.stop()
-    expect(opens).toBeGreaterThan(1)
   })
 
   it('carries what hello says about the daemon surviving a logout', async () => {
@@ -54,7 +53,7 @@ describe('a link whose ssh needs a login', () => {
     peer.call = (async () => ({ version: 2, features: [], methods: [], extensions: [], api: '2.1.0', client: 'c1', machine: { id: 'm', hostname: 'h', platform: 'linux', pid: 1, dataDir: '/', build: 'b', keepsRunning: { service: null, afterLogout: false } } })) as typeof peer.call
     const { link } = states(async () => transport)
     link.start()
-    await new Promise((resolve) => setTimeout(resolve, 100))
+    await vi.waitFor(() => expect(link.state).toBe('connected'))
     link.stop()
     expect(link.entry()).toMatchObject({ state: 'connected', keepsRunning: { service: null, afterLogout: false } })
   })
@@ -71,9 +70,8 @@ describe('a link whose transport opens but never answers', () => {
       onEvent: (method, params) => { if (method === '$connection') seen.push(params as { state: string; errorKind?: string }) },
     })
     link.start()
-    await new Promise((resolve) => setTimeout(resolve, 900))
+    await vi.waitFor(() => expect(opens).toBeGreaterThan(1), { timeout: 5_000 })
     link.stop()
-    expect(opens).toBeGreaterThan(1)
     expect(closes).toBeGreaterThanOrEqual(opens - 1)
     expect(seen[1]).toMatchObject({ state: 'disconnected', errorKind: 'timeout' })
   })
@@ -91,13 +89,14 @@ describe('a link to a command that takes the connection and never answers', () =
       onEvent: (method, params) => { if (method === '$connection') seen.push(params as { state: string; errorKind?: string }) },
     })
     link.start()
-    await new Promise((resolve) => setTimeout(resolve, 1200))
+    // Tried again, and that second shell and its child started too.
+    // No file yet until the first shell has written to it.
+    const started = () => { try { return readFileSync(pids, 'utf8').trim().split('\n').map(Number) } catch { return [] } }
+    await vi.waitFor(() => { expect(seen.length).toBeGreaterThanOrEqual(3); expect(started().length).toBeGreaterThanOrEqual(4) }, { timeout: 5_000 })
     link.stop()
-    await new Promise((resolve) => setTimeout(resolve, 200))
     expect(seen.slice(0, 3)).toMatchObject([{ state: 'connecting' }, { state: 'disconnected', errorKind: 'timeout' }, { state: 'connecting' }])
-    const started = readFileSync(pids, 'utf8').trim().split('\n').map(Number)
-    expect(started.length).toBeGreaterThanOrEqual(4)
-    expect(started.filter((pid) => { try { process.kill(pid, 0); return true } catch { return false } })).toEqual([])
+    const alive = () => started().filter((pid) => { try { process.kill(pid, 0); return true } catch { return false } })
+    await vi.waitFor(() => expect(alive()).toEqual([]), { timeout: 5_000 })
     rmSync(dir, { recursive: true, force: true })
   })
 })

@@ -3,11 +3,18 @@
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { MemorySettingsStore, SettingsRegistry } from '@superego/settings'
 import { bodyOf, LayoutFile, layoutHead, withComments } from '../src/main/layout-file.ts'
 import { LAYOUT_SETTING } from '../src/shared/app-settings.ts'
 import { parseLayout, type LayoutView } from '../src/shared/layout.ts'
+
+// Each time the file is put in place (written to a file beside it, then renamed over it).
+const renames = vi.hoisted(() => ({ count: 0 }))
+vi.mock('node:fs/promises', async (original) => {
+  const fs = await original<typeof import('node:fs/promises')>()
+  return { ...fs, rename: (...args: Parameters<typeof fs.rename>) => { renames.count++; return fs.rename(...args) } }
+})
 
 const views: LayoutView[] = [
   { id: 'threads.details', title: 'Thread details', fits: ['beside', 'pane'] },
@@ -99,6 +106,18 @@ describe('the layout file', () => {
     await settings.set('app.layout', { place: { 'threads.details': 'pane' } })
     await wait(() => readFileSync(file.path, 'utf8').includes('"threads.details": "pane"'))
     expect(readFileSync(file.path, 'utf8')).toContain('// Views')
+  })
+
+  it('writes a change once, though it hears of it more than once before writing', async () => {
+    // Any setting's change is heard: two before the first write runs, and the second mustn't write over a save made
+    // since.
+    const before = renames.count
+    await settings.set('app.layout', { place: { 'threads.details': 'pane' } })
+    settings.invalidate()
+    await new Promise((resolve) => setImmediate(resolve))
+    await file.read()
+    expect(readFileSync(file.path, 'utf8')).toContain('"threads.details": "pane"')
+    expect(renames.count - before).toBe(1)
   })
 
   it("keeps the window's change when the file is read as it's written", async () => {

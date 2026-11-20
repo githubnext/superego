@@ -55,8 +55,8 @@ export default async function layout(t) {
   const layoutNow = `window.superego.call('app', 'settings.watch', {}).then((r) => JSON.stringify(r.value.values['app.layout'] ?? {}))`
   await t.call('app.settings.set', { key: 'app.layout', value: { place: { 'threads.details': 'beside' } } }, 'app')
   const layoutFile = `${home}/layout.json`
-  const written = await t.until(() => { try { const text = readFileSync(layoutFile, 'utf8'); return text.includes('//   threads.details') && text } catch { return undefined } }, 'layout.json written')
-  if (!written.includes('"threads.details": "beside"')) t.fail(`layout.json as written: ${written}`)
+  // Written out, the change in it: what's typed into it below mustn't race the window's write.
+  await t.until(() => { try { const text = readFileSync(layoutFile, 'utf8'); return text.includes('//   threads.details') && text.includes('"threads.details": "beside"') } catch { return false } }, 'layout.json written')
   await t.click('.placed-view[data-view="threads.details"] .view-menu__button')
   await t.until(`[...document.querySelectorAll('.view-menu .superego-menu__item')].some((i) => i.textContent === 'Edit layout…')`, 'the view menu')
   await t.click('.view-menu .superego-menu__item', 'Edit layout…')

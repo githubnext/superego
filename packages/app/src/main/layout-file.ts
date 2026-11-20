@@ -199,6 +199,9 @@ export class LayoutFile {
     // Saved since it was last read (and not yet heard of): what's saved is the newer change.
     if (current !== undefined && current !== this.#text) return this.#read()
     const layout = this.#settings.get(LAYOUT)
+    // The file has it already: a change heard more than once before its write ran. Written again, it could undo a save
+    // made since the file was read just now.
+    if (current !== undefined && text(layout) === this.#applied) return
     this.#applied = text(layout)
     await this.#save(layoutHead(this.#views) + '\n' + withComments(current === undefined ? '' : bodyOf(current), layout))
     const parsed = parseLayout(this.#text!, this.#views)

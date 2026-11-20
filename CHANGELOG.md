@@ -60,6 +60,7 @@
 - The Browser pane shows a page loading: a thin line under its address bar that fills as it loads, a spinner on its
   tab and in the address, and Stop in place of Reload (Esc in the address bar stops it too). Quick loads show nothing.
 - An agent's question and the box to answer it in are one card again, with no gap between its choices and the box.
+- A save to `layout.json` made just after you changed the layout in the window is no longer sometimes undone.
 
 ## 0.1.8
 

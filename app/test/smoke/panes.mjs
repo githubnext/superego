@@ -92,6 +92,9 @@ export default async function panes(t, s) {
   await t.hover('.superego-menu__item', 'Changes')
   await t.until(`${highlighted} === 'Changes'`, 'the pane menu highlights the item under the mouse')
   if (await t.run(`document.querySelectorAll('.superego-menu__item').length`) > 1) {
+    // The keys go where the focus is: into the menu a frame or so after it opens, which a busy window can be slower to
+    // draw than the mouse is to highlight an item.
+    await t.until(`Boolean(document.activeElement?.closest('.superego-menu'))`, 'the pane menu has the focus')
     t.key('Down', [])
     await t.until(`${highlighted} && ${highlighted} !== 'Changes'`, 'the pane menu highlights the next item from the keyboard')
   }
@@ -127,7 +130,8 @@ export default async function panes(t, s) {
   await t.until(`${maximized} === 'thread'`, 'the thread maximized from its prompt')
   await t.check(`document.querySelector('.composer textarea').value === 'a draft'`, 'the prompt sent or changed its text on ⌘⇧↩')
   await t.check(`document.querySelector('[data-column]:not([data-column="thread"])').inert && !document.querySelector('[data-column="thread"]').inert`, 'the panes under the maximized thread still in reach')
-  await t.check(`document.querySelector('.strip__tab.is-focused')?.textContent === 'Thread' && [...document.querySelectorAll('.strip__tab:not(.is-focused)')].every((tab) => tab.matches('.is-away'))`, 'the strip shows the thread maximized')
+  // The strip marks the thread focused once the thread has heard so (the prompt took the focus from the editor just now).
+  await t.until(`document.querySelector('.strip__tab.is-focused')?.textContent === 'Thread' && [...document.querySelectorAll('.strip__tab:not(.is-focused)')].every((tab) => tab.matches('.is-away'))`, 'the strip shows the thread maximized')
   t.key('Enter', ['meta', 'shift'])
   await t.until(restored, 'the thread restored by ⌘⇧↩ again')
   await t.run(`document.querySelector('.thread__scroll').focus()`)
@@ -206,9 +210,10 @@ async function reorder(t, paned, panesOf) {
   if (start.length !== 3) t.fail(`three panes to move, not ${start.length}`)
   const [a, b, c] = start
   await t.until(`document.querySelectorAll('.strip__tab[data-pane]:not([data-out])').length === 3`, 'three pane tabs in the strip')
-  // In the page's order, the tabs; the columns as they're laid out.
+  // In the page's order, the tabs; the columns as they're laid out: the thread first, then the panes left to right (the
+  // thread kept in view stays put as the row scrolls to the moved pane, and the one before slides under it).
   const tabs = `[...document.querySelectorAll('.strip__tab')].map((el) => el.dataset.pane ?? 'thread').join()`
-  const columns = `[...document.querySelectorAll('.panes > [data-column]')].sort((x, y) => x.getBoundingClientRect().left - y.getBoundingClientRect().left).map((el) => el.dataset.column).join()`
+  const columns = `['thread', ...[...document.querySelectorAll('.panes > [data-column]:not([data-column="thread"])')].sort((x, y) => x.getBoundingClientRect().left - y.getBoundingClientRect().left).map((el) => el.dataset.column)].join()`
   const at = (id) => t.run(`(() => { const r = document.querySelector('.strip__tab[data-pane="${id}"]').getBoundingClientRect(); return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2), width: r.width } })()`)
   const send = (type, x, y) => t.contents().sendInputEvent({ type, x, y, button: 'left', clickCount: 1, ...(type === 'mouseMove' ? { modifiers: ['leftButtonDown'] } : {}) })
   const drag = async (id, by, { release = true } = {}) => {
