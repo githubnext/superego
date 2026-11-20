@@ -31,6 +31,7 @@ const PARAMS: Record<string, JsonSchema> = {
   'relay.call': params({ machine: str(), method: str(), params: opt(unknown()) }),
   'thread.list': params({ archived: opt(bool()), hidden: opt(bool()) }),
   'file.read': params({ thread, path: str(), base64: opt(bool()) }),
+  'artifact.read': params({ thread, path: str() }),
   'file.stat': params({ thread, paths: arr(str()) }),
   'image.read': params({ thread, image: union([obj({ path: str() }), obj({ entry: num(), message: num(), block: num() })]), thumbnail: opt(bool()) }),
   'file.find': params({ thread, name: str() }),
@@ -114,6 +115,7 @@ export function serveClient(peer: RpcPeer, { via, hangUp }: { via?: Via; hangUp?
     'thread.list': ({ archived, hidden }: Methods['thread.list']['params']) => threads.list({ archived: Boolean(archived), hidden: Boolean(hidden) }),
     'agent.models': async () => host.agent.catalog(),
     'file.read': ({ thread: id, path, base64 }: Methods['file.read']['params']) => files.read(id, path, base64),
+    'artifact.read': async ({ thread: id, path }: Methods['artifact.read']['params']) => ({ content: (await files.artifact(id, path)).toString('base64') }),
     // Which version of each file there is, without its bytes: what the window checks its images against.
     'image.read': ({ thread: id, image, thumbnail }: Methods['image.read']['params']) => images.read(id, image, Boolean(thumbnail)),
     'file.stat': async ({ thread: id, paths }: Methods['file.stat']['params']) => ({ files: await files.stat(id, paths) }),

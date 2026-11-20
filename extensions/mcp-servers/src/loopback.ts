@@ -4,7 +4,7 @@
 // app; or the browser is on another computer) is left alone: the flow's `manual_code` prompt is how then, pasted or
 // answered by the desktop app (sign-in-callback.ts) or the command line, which listen on their own computer.
 // Plain `node:http`, so the command line can use it too.
-import { createServer, type Server } from 'node:http'
+import { createServer, type IncomingMessage, type Server } from 'node:http'
 
 export const CALLBACK_PATH = '/mcp/callback'
 export const DEFAULT_CALLBACK_PORT = 1456
@@ -18,6 +18,16 @@ const html = (text: string) => `<!doctype html><meta charset="utf-8"><title>${te
 
 /** The browser's connection isn't kept: the listener stops once it's back, and a kept one would outlive it. */
 const HTML = { 'content-type': 'text/html; charset=utf-8', connection: 'close' }
+
+/**
+ * Where a request to a listener at `base` went: undefined for a target that's no path there (`//…`, `*`, an absolute
+ * URL, one that isn't a URL at all), which is turned away rather than thrown: a throw in a listener ends the process.
+ */
+function addressOf(request: IncomingMessage, base: string | URL): URL | undefined {
+  const target = request.url ?? '/'
+  if (!target.startsWith('/') || target.startsWith('//')) return undefined
+  try { return new URL(target, base) } catch { return undefined }
+}
 
 /** What the browser sees once it's back. */
 function answer(url: URL): { status: number; text: string } {
@@ -63,7 +73,8 @@ export class Callbacks {
   #listen() {
     if (this.#server) return
     const server = this.#server = createServer((request, response) => {
-      const url = new URL(request.url ?? '/', `http://127.0.0.1:${this.port}`)
+      const url = addressOf(request, `http://127.0.0.1:${this.port}`)
+      if (!url) return void response.writeHead(400).end()
       if (url.pathname !== CALLBACK_PATH) return void response.writeHead(404).end()
       const done = this.#waiting.get(url.searchParams.get('state') ?? '')
       if (!done) {
@@ -101,7 +112,8 @@ export function catchRedirect(callback: string, signal: AbortSignal, page?: stri
   return new Promise<string>((resolve, reject) => {
     const where = new URL(callback)
     const server = createServer((request, response) => {
-      const url = new URL(request.url ?? '/', where)
+      const url = addressOf(request, where)
+      if (!url) return void response.writeHead(400).end()
       if (url.pathname !== where.pathname) return void response.writeHead(404).end()
       if (state !== undefined && url.searchParams.get('state') !== state) {
         return void response.writeHead(400, HTML).end(html('This isn\'t the sign-in the command line is waiting for.'))

@@ -2,18 +2,23 @@
 // to the devices paired with it (web-devices.ts), as the `web` settings say; and the `web.*` actions that pair them.
 // Where it's reached is worked out (Tailscale's name for the machine, or loopback's) unless `web.host` names it; on a
 // machine with more than one tailscaled, `web.tailscale.socket` says which one serves it.
-import { randomUUID } from 'node:crypto'
-import { readFile } from 'node:fs/promises'
-import { artifactFile, Lifetime, obj, RpcError, str, type Router } from '@superego/protocol'
+import { join } from 'node:path'
+import { Lifetime, obj, RpcError, str, type Router } from '@superego/protocol'
 import type { SettingsRegistry } from '@superego/settings'
 import type { Clients } from './clients.ts'
 import type { Daemon, DaemonContext, DaemonOptions } from './daemon.ts'
+import { readArtifact } from './artifacts.ts'
 import { defineAction } from './extension.ts'
-import { fileIn } from './files.ts'
 import type { Relay } from './relay.ts'
 import { describeInstance, otherInstances, startServe, stopServe, tailnetNames, type TailscaleState } from './tailscale.ts'
 import { serveWeb, webOrigin, type ServedByTailscale, type WebServer } from './web.ts'
 import { WebDevices } from './web-devices.ts'
+
+/** The socket Tailscale serve proxies to, in a folder of its own in the data folder; undefined when the path is too long for one. */
+function serveSocketOf(dataDir: string): string | undefined {
+  const path = join(dataDir, 'web', 'tailscale.sock')
+  return Buffer.byteLength(path) < 100 ? path : undefined
+}
 
 export async function openWebAccess({ options, settings, router, clients, relay, serve, cwdOf }: {
   options: Pick<DaemonOptions, 'dataDir' | 'webRoot'>
@@ -34,7 +39,7 @@ export async function openWebAccess({ options, settings, router, clients, relay,
   let webError: string | undefined
   /** Tailscale serve: how setting it up went, and while it serves, what requests through it look like. */
   let tailscale: TailscaleState | undefined
-  let served: Omit<ServedByTailscale, 'pairOwner' | 'nodeAt'> & { port: number; socket?: string } | undefined
+  let served: Omit<ServedByTailscale, 'pairOwner' | 'nodeAt'> & { port: number; target: string; socket?: string } | undefined
   let names: { at: number; map: Map<string, string> } = { at: 0, map: new Map() }
   const nodeAt = async (address: string) => {
     if (!names.map.has(address) && Date.now() - names.at > 30_000) names = { at: Date.now(), map: await tailnetNames(served?.socket) }
@@ -73,7 +78,7 @@ export async function openWebAccess({ options, settings, router, clients, relay,
     const key = access === 'off' || !options.webRoot ? '' : `${access}:${port}:${socket ?? ''}`
     if (key === webKey) return
     webKey = key
-    if (served) await stopServe(served.port, served.socket)
+    if (served) await stopServe(served, served.socket)
     served = undefined
     names = { at: 0, map: new Map() }
     tailscale = undefined
@@ -81,27 +86,29 @@ export async function openWebAccess({ options, settings, router, clients, relay,
     web = undefined
     webError = undefined
     if (key) {
+      // Where serve proxies to (see tailscale.ts): too long a path for a socket (a data folder deep down) is said, and
+      // not served through, rather than put somewhere others could open it.
+      const target = access === 'tailscale' ? serveSocketOf(options.dataDir) : undefined
       try {
         web = await serveWeb({ root: options.webRoot!, port, devices: webDevices, serve,
+          ...(target ? { serveSocket: target } : {}),
           tailscale: () => served && { ...served, pairOwner: pairOwner(), nodeAt },
           origin: () => chosen().origin,
-          artifact: async (thread, asked, elsewhere) => {
-            const path = artifactFile(asked)
-            if (!path) throw new RpcError('invalid', `${asked} is outside the thread's folder`)
-            return elsewhere
-              ? Buffer.from((await relay.call(elsewhere, 'file.read', { thread, path, base64: true }) as { content: string }).content, 'base64')
-              : readFile(fileIn(await cwdOf(thread), path))
-          } })
+          artifact: async (thread, path, elsewhere) => elsewhere
+            ? Buffer.from((await relay.call(elsewhere, 'artifact.read', { thread, path }) as { content: string }).content, 'base64')
+            : readArtifact(await cwdOf(thread), path) })
       } catch (error) {
         webError = (error as Error).message
       }
       if (web && access === 'tailscale') {
-        tailscale = { state: 'starting' }
-        settings.invalidate()
-        const prefix = `.tailscale-${randomUUID()}`
-        const port = web.port
-        tailscale = await startServe(port, prefix, socket)
-        if (tailscale.state === 'serving') served = { prefix, name: tailscale.name, ...(tailscale.owner ? { owner: tailscale.owner } : {}), port, ...(socket ? { socket } : {}) }
+        if (!target) tailscale = { state: 'error', message: `The data folder's path (${options.dataDir}) is too long for the socket Tailscale serve proxies to: use a shorter one.` }
+        else {
+          tailscale = { state: 'starting' }
+          settings.invalidate()
+          const ends = { port: web.port, target }
+          tailscale = await startServe(ends, socket)
+          if (tailscale.state === 'serving') served = { name: tailscale.name, ...(tailscale.owner ? { owner: tailscale.owner } : {}), ...ends, ...(socket ? { socket } : {}) }
+        }
       }
     }
     settings.invalidate()

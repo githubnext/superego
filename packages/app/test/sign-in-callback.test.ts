@@ -1,6 +1,6 @@
 // Another computer's sign-in, caught here: the app listens at the flow's loopback callback while it's open, and answers
 // its "paste the URL" prompt with the URL the browser came back to.
-import { createServer } from 'node:net'
+import { connect, createServer } from 'node:net'
 import { afterEach, expect, it } from 'vitest'
 import { createSignInCatcher } from '../src/main/sign-in-callback.ts'
 
@@ -99,4 +99,19 @@ it("turns away a request without the page's state, and goes on listening for the
   await fetch(`${callback}?code=abc&state=the-state`)
   await until(() => answers.length === 1)
   expect(answers[0]).toMatchObject({ prompt: 'p1', value: `${callback}?code=abc&state=the-state` })
+})
+
+it('turns away a request that names no path, rather than throwing', async () => {
+  const { catching } = catcher()
+  const port = await freePort()
+  catching.heard('box', 'f1', { type: 'auth_url', url: 'https://auth.example/a', callback: `http://127.0.0.1:${port}/cb` })
+  await until(() => listening(port))
+  const raw = (path: string) => new Promise<string>((resolve, reject) => {
+    const sock = connect(port, '127.0.0.1', () => sock.write(`GET ${path} HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n`))
+    let answer = ''
+    sock.on('data', (chunk) => { answer += chunk; if (answer.includes('\r\n')) { resolve(answer.split('\r\n')[0]!); sock.destroy() } })
+    sock.on('error', reject)
+  })
+  for (const path of ['//', '//evil.example/cb']) expect(await raw(path), path).toBe('HTTP/1.1 400 Bad Request')
+  expect(await listening(port)).toBe(true)
 })

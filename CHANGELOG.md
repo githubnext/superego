@@ -5,6 +5,8 @@
 - **Upgrade:** a profile's modules can import only `'superego'`, Node's built-ins and files by their paths. One that
   imports a package by name (from a `node_modules`) or a `#` alias from a `package.json` no longer loads, and says why:
   import the file by its path instead.
+- **Upgrade:** Web access over Tailscale needs Tailscale 1.94 or later on the machine that serves it: `tailscale serve`
+  now hands requests to the daemon through a private socket, and Settings → Web access says so when Tailscale is older.
 - A page an agent draws (an `html` block) no longer answers or messages for you by itself: what it would say shows
   under it, and goes only when you press Send there.
 - Allowing a project's profile now covers everything it can load: a change to any file it runs asks to allow it again.
@@ -12,6 +14,13 @@
   them: their hooks, MCP servers and permissions can run commands. The thread asks over its composer, listing the files
   to read first, and asks again after they change. Until then Claude Code runs with your own settings only, without the
   folder's `CLAUDE.md`.
+- Web access over Tailscale no longer lets another user account on the same computer pass as you: your Tailscale login
+  is trusted only for requests that really came through Tailscale.
+- A malformed request to Web access, or to a sign-in page's callback, no longer stops the daemon and every agent with it.
+- An HTML artifact is served only files that are really in its thread's folder: a symlink there that leads outside it
+  is refused, on the desktop and in a browser.
+- In a browser, an artifact's address only works for the device that opened it (over Tailscale), or for a short while
+  after its page last used it (on this computer), so a page that sends its address elsewhere doesn't give its folder away.
 
 ## 0.1.9
 

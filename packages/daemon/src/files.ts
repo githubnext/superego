@@ -1,11 +1,12 @@
 // The files of a thread clients may read, find, watch and save: any on its machine, by a path relative to its folder,
 // absolute or from home (`~/…`). No fence: the thread's agent reads and writes whatever the daemon's user can, and so
 // does anyone who can drive it (a window, a paired browser, the command line), so one here would keep out only them.
-// What an artifact's page asks for is another matter (artifactFile, in @superego/protocol).
+// What an artifact's page asks for is another matter (artifacts.ts).
 import { readdir, readFile, stat, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename, dirname, isAbsolute, join, relative, resolve as resolvePath } from 'node:path'
 import { RpcError } from '@superego/protocol'
+import { readArtifact } from './artifacts.ts'
 import { watchFiles } from './watch-files.ts'
 
 /** Where `path` is for a thread in `folder`: relative to the folder, absolute, or from home (`~`, `~/…`). */
@@ -103,6 +104,8 @@ export function threadFiles({ cwdOf }: { cwdOf(thread: string): Promise<string> 
       if (!base64 && bytes.subarray(0, 8192).includes(0)) throw new RpcError('invalid', `${path} is a binary file, not text`)
       return { path: file, content: bytes.toString(base64 ? 'base64' : 'utf8'), mtimeMs: info.mtimeMs, size: info.size }
     },
+    /** A file an artifact asks for: only one really in the thread's folder (see artifacts.ts). */
+    artifact: async (thread: string, path: string) => readArtifact(await cwdOf(thread), path),
     /** Which version of each file there is, without its bytes: no file (or one that can't be looked at) is null. */
     async stat(thread: string, paths: string[]) {
       const cwd = await cwdOf(thread)

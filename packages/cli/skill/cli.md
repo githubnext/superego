@@ -208,7 +208,8 @@ superego web rename <device> <name>
 ```
 
 A browser gets in as a paired device (an HttpOnly cookie; nothing secret in an address). With `tailscale`, the daemon
-runs `tailscale serve` itself; your own Tailscale login gets in without pairing unless `web.tailscale.pairing` is on.
+runs `tailscale serve` itself (Tailscale 1.94 or later), proxying to a socket in the data folder that only you and
+tailscaled can open; your own Tailscale login gets in without pairing unless `web.tailscale.pairing` is on.
 A device unused for 90 days is forgotten.
 
 ## The daemon

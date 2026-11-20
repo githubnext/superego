@@ -1,10 +1,11 @@
-// Web access over Tailscale: `tailscale serve` fronts the daemon's loopback port with HTTPS at this machine's
-// `<machine>.<tailnet>.ts.net` name, and tells it who's asking (Tailscale-User-Login). The daemon sets serve up and takes
-// it down itself, through the `tailscale` command, and only ever touches the handler it set up.
+// Web access over Tailscale: `tailscale serve` fronts the daemon with HTTPS at this machine's `<machine>.<tailnet>.ts.net`
+// name, and tells it who's asking (Tailscale-User-Login, X-Forwarded-For). The daemon sets serve up and takes it down
+// itself, through the `tailscale` command, and only ever touches the handler it set up.
 //
-// Serve proxies to `http://127.0.0.1:<port>/<prefix>`: a random path the daemon makes up each time. A request that comes
-// in under it came through serve (no one else knows it), so its identity headers are serve's; one that doesn't is a
-// plain loopback client, whose headers could say anything, and they are ignored.
+// Serve proxies to a Unix socket of the daemon's (`unix:<path>`), in a folder only its user opens: tailscaled runs as
+// root, so it gets in, and no one else on the computer does. That's what makes its identity headers believable there.
+// The serve config itself is no secret (any local user may read it, `tailscale serve status`), and the daemon's TCP port
+// on loopback is anyone's on the computer, so headers that come in there are ignored (see web.ts).
 //
 // A machine can run more than one tailscaled, each on a tailnet of its own with a socket of its own (Linux:
 // /run/tailscale-<name>/tailscaled.sock): every command here takes the socket of the one to use, none for the default.
@@ -22,6 +23,8 @@ export type TailscaleState =
   | { state: 'serving'; url: string; name: string; owner?: string }
 
 type Status = {
+  /** The tailscaled's version: `1.104.5-t788384763-gd9218e278`. */
+  Version?: string
   BackendState?: string
   CertDomains?: string[] | null
   Self?: { DNSName?: string; HostName?: string; UserID?: number; TailscaleIPs?: string[]; Tags?: string[] | null }
@@ -55,22 +58,37 @@ async function served(name: string, socket?: string): Promise<string | undefined
 }
 
 /**
- * Whether a handler proxies to the daemon's own port: one it set up, or one set up by hand before, which reaches nothing
- * but the daemon either way (and without the prefix, only as a plain loopback client: see web.ts).
+ * Whether a handler is the daemon's to replace or take down: one to its socket, or one to its port on loopback (set up
+ * by an earlier version, or by hand), which reaches nothing but the daemon either way, as a plain loopback client.
  */
-const ours = (proxy: string | undefined, port: number) => Boolean(proxy && /^http:\/\/(127\.0\.0\.1|localhost):(\d+)(\/|$)/.exec(proxy)?.[2] === String(port))
+const ours = (proxy: string | undefined, { port, target }: Ours) =>
+  Boolean(proxy && (proxy === `unix:${target}` || /^http:\/\/(127\.0\.0\.1|localhost):(\d+)(\/|$)/.exec(proxy)?.[2] === String(port)))
 
-/** Serve the daemon's port at https://<name>/ through `prefix`; what came of it. */
-export async function startServe(port: number, prefix: string, socket?: string): Promise<TailscaleState> {
+/** The daemon's ends of serve: its Unix socket serve proxies to, and its port on loopback. */
+type Ours = { target: string; port: number }
+
+/** The first tailscaled that serves to a Unix socket (`unix:` targets, identity headers and all). */
+export const SERVES_SOCKETS = [1, 94] as const
+
+/** Whether a tailscaled of `version` serves to a Unix socket; one that doesn't say is let try (and says so if not). */
+const servesSockets = (version: string | undefined) => {
+  const [major, minor] = (version ?? '').split(/[.-]/).map(Number)
+  if (major === undefined || minor === undefined || Number.isNaN(major) || Number.isNaN(minor)) return true
+  return major > SERVES_SOCKETS[0] || (major === SERVES_SOCKETS[0] && minor >= SERVES_SOCKETS[1])
+}
+
+/** Serve the daemon's socket `target` at https://<name>/, through the tailscaled at `socket`; what came of it. */
+export async function startServe(daemon: Ours, socket?: string): Promise<TailscaleState> {
   try {
     const s = await status(socket)
     if (s.BackendState !== 'Running') return { state: 'logged-out' }
     const name = nameOf(s)
     if (!name || !s.CertDomains?.length) return { state: 'no-https' }
+    if (!servesSockets(s.Version)) return { state: 'error', message: `Tailscale ${s.Version?.split('-')[0]} can't serve Web access: update it to ${SERVES_SOCKETS.join('.')} or later.` }
     const proxy = await served(name, socket)
-    if (proxy && !ours(proxy, port)) return { state: 'busy', message: `https://${name}/ already serves ${proxy}` }
+    if (proxy && !ours(proxy, daemon)) return { state: 'busy', message: `https://${name}/ already serves ${proxy}` }
     try {
-      await tailscale(['serve', '--bg', '--yes', '--https=443', `http://127.0.0.1:${port}/${prefix}`], socket, 30_000)
+      await tailscale(['serve', '--bg', '--yes', '--https=443', `unix:${daemon.target}`], socket, 30_000)
     } catch (error) {
       const message = (error as Error).message
       // Serve not enabled for the tailnet: the command says where to turn it on.
@@ -85,11 +103,11 @@ export async function startServe(port: number, prefix: string, socket?: string):
   }
 }
 
-/** Take down the handler at https://<name>/ if it's the one serving `port`: someone else's stays. */
-export async function stopServe(port: number, socket?: string): Promise<void> {
+/** Take down the handler at https://<name>/ if it's the daemon's: someone else's stays. */
+export async function stopServe(daemon: Ours, socket?: string): Promise<void> {
   try {
     const name = nameOf(await status(socket))
-    if (name && ours(await served(name, socket), port)) await tailscale(['serve', '--https=443', 'off'], socket)
+    if (name && ours(await served(name, socket), daemon)) await tailscale(['serve', '--https=443', 'off'], socket)
   } catch { /* not installed or not running: nothing to take down */ }
 }
 

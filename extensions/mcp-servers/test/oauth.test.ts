@@ -6,6 +6,7 @@
 // failing cleanly once the sign-in is refused, and logout.
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { createServer, type Server } from 'node:http'
+import { connect } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
@@ -386,4 +387,30 @@ it("catches the command line's redirect only with the page's state", async () =>
   expect(got).toBeUndefined()
   await fetch(`${redirectOf(port)}?code=abc&state=the-state`)
   expect(await caught).toBe(`${redirectOf(port)}?code=abc&state=the-state`)
+})
+
+/** A request as written (`GET //`, which no client library sends): the answer's status line. */
+const raw = (port: number, path: string) => new Promise<string>((resolve, reject) => {
+  const sock = connect(port, '127.0.0.1', () => sock.write(`GET ${path} HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n`))
+  let answer = ''
+  sock.on('data', (chunk) => { answer += chunk; if (answer.includes('\r\n')) { resolve(answer.split('\r\n')[0]!); sock.destroy() } })
+  sock.on('error', reject)
+})
+
+it('turns away a request that names no path, rather than going down with it', async () => {
+  const port = await freePort()
+  const stop = new AbortController()
+  closing.push(() => stop.abort())
+  const callbacks = new Callbacks(port)
+  closing.push(() => callbacks.close())
+  void callbacks.wait('the-state', stop.signal).catch(() => {})
+  await until(() => fetch(`http://127.0.0.1:${port}/`).then(() => true, () => false), 'the listener')
+  for (const path of ['//', '//evil.example/mcp/callback', '*']) expect(await raw(port, path), path).toBe('HTTP/1.1 400 Bad Request')
+  expect((await fetch(`http://127.0.0.1:${port}/elsewhere`)).status).toBe(404)
+  // The command line's listener too.
+  const other = await freePort()
+  void catchRedirect(redirectOf(other), stop.signal).catch(() => {})
+  await until(() => fetch(`http://127.0.0.1:${other}/`).then(() => true, () => false), 'the listener')
+  expect(await raw(other, '//')).toBe('HTTP/1.1 400 Bad Request')
+  expect((await fetch(`http://127.0.0.1:${other}/`)).status).toBe(404)
 })

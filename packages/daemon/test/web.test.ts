@@ -1,16 +1,17 @@
 // Web access: paired devices, their cookie on /rpc and /artifact/, Origin and Host checks, rate limits, revocation and
-// expiry; the migration from the single token and from the local network; and Tailscale serve's identity, trusted only
-// through serve (a stub `tailscale` on PATH stands in for the real one).
-import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+// expiry; artifact grants, held to whom and where they were given; malformed requests, answered and survived; and
+// Tailscale serve's identity, trusted only on the socket serve proxies to (a stub `tailscale` on PATH stands in for the
+// real one).
+import { chmod, mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises'
 import { request as httpRequest } from 'node:http'
-import { createServer as createNetServer } from 'node:net'
+import { connect, createServer as createNetServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { defineApp, PROTOCOL_VERSION, type Hello, type SettingsSnapshot } from '@superego/protocol'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { defineApp, PROTOCOL_VERSION, RpcError, type Hello, type SettingsSnapshot } from '@superego/protocol'
 import { MemorySettingsStore } from '@superego/settings'
 import { connectSocket, listen, openDaemon } from '../src/index.ts'
-import { serveWeb, webOrigin, type ServedByTailscale, type WebServer } from '../src/web.ts'
+import { GRANT_IDLE, serveWeb, webOrigin, type ServedByTailscale, type WebServer } from '../src/web.ts'
 import { otherInstances } from '../src/tailscale.ts'
 import { DEVICE_TTL, FAILURES, TICKET_TTL, WebDevices, deviceName } from '../src/web-devices.ts'
 import { until } from './until.ts'
@@ -23,10 +24,15 @@ beforeEach(async () => { dir = await mkdtemp(join(tmpdir(), 'superego-web-')) })
 afterEach(async () => { await rm(dir, { recursive: true, force: true }) })
 
 type Response = { status: number; headers: Record<string, string | string[] | undefined>; body: string }
-/** A raw HTTP request: the Host, Origin and Cookie headers as given (fetch won't let a test set Host). */
-function http(port: number, path: string, { method = 'GET', headers = {}, body }: { method?: string; headers?: Record<string, string>; body?: string } = {}): Promise<Response> {
+/**
+ * A raw HTTP request: the Host, Origin and Cookie headers as given (fetch won't let a test set Host). To loopback's
+ * port, or (a path) to a Unix socket, as Tailscale serve sends one there: to `localhost`, the host asked for in
+ * X-Forwarded-Host.
+ */
+function http(at: number | string, path: string, { method = 'GET', headers = {}, body }: { method?: string; headers?: Record<string, string>; body?: string } = {}): Promise<Response> {
   return new Promise((resolve, reject) => {
-    const req = httpRequest({ host: '127.0.0.1', port, path, method, headers: { host: `127.0.0.1:${port}`, ...headers } }, (res) => {
+    const where = typeof at === 'number' ? { host: '127.0.0.1', port: at } : { socketPath: at }
+    const req = httpRequest({ ...where, path, method, headers: { host: typeof at === 'number' ? `127.0.0.1:${at}` : 'localhost', ...headers } }, (res) => {
       let text = ''
       res.on('data', (chunk) => { text += chunk })
       res.on('end', () => resolve({ status: res.statusCode!, headers: res.headers, body: text }))
@@ -35,14 +41,25 @@ function http(port: number, path: string, { method = 'GET', headers = {}, body }
     req.end(body)
   })
 }
+/** A request as written, byte for byte (what a client library won't send: `GET //`), and the answer's status line. */
+function raw(port: number, text: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const sock = connect(port, '127.0.0.1', () => sock.write(text))
+    let answer = ''
+    sock.on('data', (chunk) => { answer += chunk; if (answer.includes('\r\n')) { resolve(answer.split('\r\n')[0]!); sock.destroy() } })
+    sock.on('end', () => resolve(answer.split('\r\n')[0]!))
+    sock.on('error', reject)
+  })
+}
 const cookieFrom = (response: Response) => String(response.headers['set-cookie'] ?? '').split(';')[0]!
 const pairWith = (port: number, given: object, headers: Record<string, string> = {}) =>
   http(port, '/pair', { method: 'POST', body: JSON.stringify(given), headers: { origin: `http://127.0.0.1:${port}`, 'content-type': 'application/json', 'user-agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1', ...headers } })
 
 /** A WebSocket to /rpc: 'open' (then closed by the test or the server), or the status it was refused with. */
-function socket(port: number, headers: Record<string, string>, { path = '/rpc', keep = false } = {}): Promise<{ result: string; ws: Client; closed: Promise<void> }> {
+function socket(at: number | string, headers: Record<string, string>, { path = '/rpc', keep = false } = {}): Promise<{ result: string; ws: Client; closed: Promise<void> }> {
   return new Promise((resolve) => {
-    const ws = new WsClient(`ws://127.0.0.1:${port}${path}`, { headers: { origin: `http://127.0.0.1:${port}`, ...headers } })
+    const url = typeof at === 'number' ? `ws://127.0.0.1:${at}${path}` : `ws+unix://${at}:${path}`
+    const ws = new WsClient(url, { headers: { origin: `http://127.0.0.1:${at}`, ...headers } })
     const closed = new Promise<void>((done) => ws.on('close', () => done()))
     ws.on('open', () => { if (!keep) ws.close(); resolve({ result: 'open', ws, closed }) })
     ws.on('unexpected-response', (_req, res) => resolve({ result: String((res as { statusCode: number }).statusCode), ws, closed }))
@@ -98,6 +115,9 @@ describe('devices', () => {
   })
 })
 
+/** The socket Tailscale serve proxies to, in the test's folder. */
+const viaServe = () => join(dir, 'web', 'tailscale.sock')
+
 describe('the web server', () => {
   let web: WebServer
   let devices: WebDevices
@@ -115,7 +135,11 @@ describe('the web server', () => {
     web = await serveWeb({
       root, port: 0, devices, tailscale: () => ts, origin: () => chosen,
       serve: () => { served++; return () => {} },
-      artifact: async (thread, path) => Buffer.from(`${thread}/${path}`),
+      serveSocket: viaServe(),
+      artifact: async (thread, path) => {
+        if (path === 'escape.html') throw new RpcError('forbidden', "escape.html leads outside the thread's folder")
+        return Buffer.from(`${thread}/${path}`)
+      },
     })
   })
   afterEach(async () => { await web.close(); await devices.saved() })
@@ -135,14 +159,16 @@ describe('the web server', () => {
     const sent = await http(web.port, '/artifact/t1/page.html', { headers: { cookie } })
     expect(sent.status).toBe(302)
     const at = String(sent.headers.location)
-    expect(at).toMatch(/^\/artifact\/~[\w-]+\.[\w-]+\/t1\/page\.html$/)
+    expect(at).toMatch(/^\/artifact\/~[\w-]+\/t1\/page\.html$/)
     const artifact = await http(web.port, at)
     expect(artifact).toMatchObject({ status: 200, body: 't1/page.html' })
     expect(String(artifact.headers['content-security-policy'])).toContain('sandbox')
     expect(await http(web.port, at.replace('page.html', 'img/dot.svg'))).toMatchObject({ status: 200, body: 't1/img/dot.svg' })
     // Not another thread's, and not forged.
     expect((await http(web.port, at.replace('/t1/', '/t2/'))).status).toBe(401)
-    expect((await http(web.port, at.replace(/\.[\w-]+\//, '.AAAAAAAAAAAAAAAAAAAAAAAA/'))).status).toBe(401)
+    expect((await http(web.port, at.replace(/~[\w-]+\//, '~AAAAAAAAAAAAAAAAAAAAAAAA/'))).status).toBe(401)
+    // The page's own request again: the same grant.
+    expect((await http(web.port, '/artifact/t1/other.html', { headers: { cookie } })).headers.location).toBe(at.replace('page.html', 'other.html'))
     expect((await socket(web.port, {})).result).toBe('401')
     expect((await socket(web.port, { cookie })).result).toBe('open')
     // The old token in the address is nothing now.
@@ -200,6 +226,70 @@ describe('the web server', () => {
     stays.ws.close()
   })
 
+  it('answers malformed requests, and survives whatever a request throws', async () => {
+    const unhandled: unknown[] = []
+    const note = (reason: unknown) => unhandled.push(reason)
+    process.on('unhandledRejection', note)
+    try {
+      const cookie = await paired()
+      for (const path of ['//', '/%', '/%E0%A4%A', '/artifact/%/x.html', '/rpc/%']) {
+        expect(await raw(web.port, `GET ${path} HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n`), path).toMatch(/^HTTP\/1\.1 (400|200|401)/)
+      }
+      expect(await raw(web.port, 'GET / HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n')).toBe('HTTP/1.1 200 OK')
+      expect(await raw(web.port, 'GET /% HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n')).toBe('HTTP/1.1 400 Bad Request')
+      expect(await raw(web.port, 'OPTIONS * HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n')).toBe('HTTP/1.1 400 Bad Request')
+      expect(await raw(web.port, 'GET http://127.0.0.1/rpc HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n')).toBe('HTTP/1.1 400 Bad Request')
+      // Upgrades too, by the same rules.
+      for (const path of ['//', '/%', '/%/rpc']) {
+        expect(await raw(web.port, `GET ${path} HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: Upgrade\r\nUpgrade: websocket\r\nSec-WebSocket-Version: 13\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n\r\n`), path).toMatch(/^HTTP\/1\.1 40\d/)
+      }
+      // A cookie that doesn't decode is a wrong one; a pairing whose body is no object, a failed one.
+      expect((await http(web.port, '/rpc', { headers: { cookie: 'superego-device=%' } })).status).toBe(401)
+      for (const body of ['null', '1', '"x"', '[]', '{']) expect((await http(web.port, '/pair', { method: 'POST', body, headers: { origin: `http://127.0.0.1:${web.port}` } })).status, body).toBe(401)
+      // A thread's address that doesn't decode.
+      expect((await http(web.port, '/artifact/%zz/page.html', { headers: { cookie } })).status).toBe(400)
+      // Still serving.
+      expect((await http(web.port, '/rpc', { headers: { cookie } })).status).toBe(204)
+      await new Promise((resolve) => setTimeout(resolve, 50))
+      expect(unhandled).toEqual([])
+    } finally {
+      process.off('unhandledRejection', note)
+    }
+  })
+
+  it('answers 500 for a request that fails inside, and says why in the log', async () => {
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+    ts = { name: 'box.tail1234.ts.net', owner: 'me@example.com', pairOwner: false, nodeAt: async () => { throw new Error('tailscale went away') } }
+    const headers = { 'x-forwarded-host': 'box.tail1234.ts.net', 'x-forwarded-for': '100.64.0.7', 'tailscale-user-login': 'me@example.com' }
+    expect((await http(viaServe(), '/rpc', { headers })).status).toBe(500)
+    expect((await socket(viaServe(), { ...headers, host: 'localhost', 'x-forwarded-host': 'box.tail1234.ts.net', origin: 'https://box.tail1234.ts.net' })).result).toBe('500')
+    expect(errors.mock.calls.map((call) => call.map(String).join(' ')).join('\n')).toContain('tailscale went away')
+    errors.mockRestore()
+    // Still serving.
+    expect((await http(web.port, '/')).status).toBe(200)
+  })
+
+  it('refuses what an artifact may not have, and lets a grant on loopback lapse once its page stops using it', async () => {
+    const cookie = await paired()
+    const at = String((await http(web.port, '/artifact/t1/page.html', { headers: { cookie } })).headers.location)
+    expect((await http(web.port, at.replace('page.html', 'escape.html'))).status).toBe(403)
+    vi.useFakeTimers({ toFake: ['Date'], now: Date.now() })
+    try {
+      vi.advanceTimersByTime(GRANT_IDLE - 1000)
+      expect((await http(web.port, at)).status).toBe(200)
+      vi.advanceTimersByTime(GRANT_IDLE - 1000)
+      expect((await http(web.port, at)).status).toBe(200)
+      vi.advanceTimersByTime(GRANT_IDLE + 1)
+      expect((await http(web.port, at)).status).toBe(401)
+      // The page's own request, with the cookie, grants again.
+      const again = String((await http(web.port, '/artifact/t1/page.html', { headers: { cookie } })).headers.location)
+      expect(again).not.toBe(at)
+      expect((await http(web.port, again)).status).toBe(200)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('is served at the host chosen for it too, from that origin, and still only to paired devices', async () => {
     const host = 'workbox.tail1ffbc8.ts.net'
     expect((await http(web.port, '/', { headers: { host } })).status).toBe(403)
@@ -235,40 +325,70 @@ describe('the web server', () => {
 
   describe('through Tailscale serve', () => {
     const name = 'box.tail1234.ts.net'
-    const through = (headers: Record<string, string> = {}) => ({ host: name, 'x-forwarded-for': '100.64.0.7', 'x-forwarded-proto': 'https', 'tailscale-user-login': 'me@example.com', 'tailscale-user-name': 'Me', ...headers })
-    beforeEach(() => { ts = { prefix: '.tailscale-secret', name, owner: 'me@example.com', pairOwner: false, nodeAt: async () => 'phone' } })
+    const through = (headers: Record<string, string> = {}) => ({ host: 'localhost', 'x-forwarded-host': name, 'x-forwarded-for': '100.64.0.7', 'x-forwarded-proto': 'https', 'tailscale-user-login': 'me@example.com', 'tailscale-user-name': 'Me', ...headers })
+    beforeEach(() => { ts = { name, owner: 'me@example.com', pairOwner: false, nodeAt: async () => 'phone' } })
 
     it('lets the owner in without pairing, as one of their devices', async () => {
-      expect((await http(web.port, '/.tailscale-secret/rpc', { headers: through() })).status).toBe(204)
-      expect((await socket(web.port, { ...through(), origin: `https://${name}` }, { path: '/.tailscale-secret/rpc' })).result).toBe('open')
+      expect((await http(viaServe(), '/rpc', { headers: through() })).status).toBe(204)
+      expect((await socket(viaServe(), { ...through(), origin: `https://${name}` })).result).toBe('open')
       expect(devices.list()).toMatchObject([{ id: 'tailscale:phone', name: 'phone', address: '100.64.0.7', tailscale: true }])
       // The page itself, and the Host serve passes on.
-      expect((await http(web.port, '/.tailscale-secret/', { headers: through() })).body).toBe('<h1>app</h1>')
+      expect((await http(viaServe(), '/', { headers: through() })).body).toBe('<h1>app</h1>')
     })
 
-    it('trusts the headers only under serve’s prefix', async () => {
-      // A plain loopback client forging serve's headers is "this computer": it must pair.
+    it('listens where only this user (and tailscaled, as root) can connect', async () => {
+      expect((await stat(viaServe())).mode & 0o777).toBe(0o600)
+      expect((await stat(join(dir, 'web'))).mode & 0o777).toBe(0o700)
+    })
+
+    it('trusts the headers only on serve’s socket: on loopback’s port, anyone on the computer could send them', async () => {
+      // A loopback client forging serve's headers is "this computer": it must pair, whatever path or host it names.
+      expect((await http(web.port, '/rpc', { headers: through({ host: name }) })).status).toBe(403)
       expect((await http(web.port, '/rpc', { headers: through() })).status).toBe(401)
-      expect((await socket(web.port, { ...through(), origin: `https://${name}` })).result).toBe('403')
-      expect((await socket(web.port, { ...through(), origin: `http://${name}` })).result).toBe('401')
-      // Tailscale mode off: the prefix is nothing.
-      ts = undefined
-      expect((await http(web.port, '/.tailscale-secret/rpc', { headers: through() })).status).toBe(403)
-      // …just a path, the app's page's.
-      expect((await http(web.port, '/.tailscale-secret/rpc', { headers: through({ host: `127.0.0.1:${web.port}` }) })).body).toBe('<h1>app</h1>')
       expect((await http(web.port, '/rpc', { headers: through({ host: `127.0.0.1:${web.port}` }) })).status).toBe(401)
+      expect((await socket(web.port, { ...through({ host: name }), origin: `https://${name}` })).result).toBe('403')
+      expect((await socket(web.port, { ...through(), origin: `https://${name}` })).result).toBe('403')
+      expect((await socket(web.port, { ...through({ host: `127.0.0.1:${web.port}` }) })).result).toBe('401')
+      // On serve's socket, the host is the one serve says the browser asked for.
+      expect((await http(viaServe(), '/rpc', { headers: through({ 'x-forwarded-host': 'evil.example' }) })).status).toBe(403)
+      // What was serve's secret path is just a path now, the app's page's.
+      expect((await http(web.port, '/.tailscale-secret/rpc', { headers: through({ host: `127.0.0.1:${web.port}` }) })).body).toBe('<h1>app</h1>')
+      // Serve's socket, while Tailscale doesn't serve: nothing to believe.
+      ts = undefined
+      expect((await http(viaServe(), '/rpc', { headers: through() })).status).toBe(403)
     })
 
     it('asks other tailnet users, and the owner when told to, to pair; with a Secure cookie', async () => {
-      expect((await http(web.port, '/.tailscale-secret/rpc', { headers: through({ 'tailscale-user-login': 'friend@example.com' }) })).status).toBe(401)
-      expect((await http(web.port, '/.tailscale-secret/rpc', { headers: through({ 'tailscale-user-login': '' }) })).status).toBe(401)
+      expect((await http(viaServe(), '/rpc', { headers: through({ 'tailscale-user-login': 'friend@example.com' }) })).status).toBe(401)
+      expect((await http(viaServe(), '/rpc', { headers: through({ 'tailscale-user-login': '' }) })).status).toBe(401)
       ts!.pairOwner = true
-      expect((await http(web.port, '/.tailscale-secret/rpc', { headers: through() })).status).toBe(401)
-      const response = await http(web.port, '/.tailscale-secret/pair', { method: 'POST', body: JSON.stringify({ ticket: devices.pair().ticket }), headers: { ...through(), origin: `https://${name}` } })
+      expect((await http(viaServe(), '/rpc', { headers: through() })).status).toBe(401)
+      const response = await http(viaServe(), '/pair', { method: 'POST', body: JSON.stringify({ ticket: devices.pair().ticket }), headers: { ...through(), origin: `https://${name}` } })
       expect(response.status).toBe(200)
       expect(String(response.headers['set-cookie'])).toContain('; Secure')
-      expect((await http(web.port, '/.tailscale-secret/rpc', { headers: { ...through(), cookie: cookieFrom(response) } })).status).toBe(204)
+      expect((await http(viaServe(), '/rpc', { headers: { ...through(), cookie: cookieFrom(response) } })).status).toBe(204)
       expect(devices.list()).toMatchObject([{ address: '100.64.0.7' }])
+    })
+
+    it('holds an artifact grant to the tailnet device it was given to', async () => {
+      // A paired device's: its page's files from that device alone, not another of the tailnet's, nor loopback.
+      const friend = through({ 'tailscale-user-login': 'friend@example.com' })
+      const cookie = cookieFrom(await http(viaServe(), '/pair', { method: 'POST', body: JSON.stringify({ ticket: devices.pair().ticket }), headers: { ...friend, origin: `https://${name}` } }))
+      const at = String((await http(viaServe(), '/artifact/t1/page.html', { headers: { ...friend, cookie } })).headers.location)
+      expect(await http(viaServe(), at, { headers: friend })).toMatchObject({ status: 200, body: 't1/page.html' })
+      expect((await http(viaServe(), at, { headers: { ...friend, 'x-forwarded-for': '100.64.0.9' } })).status).toBe(401)
+      expect((await http(viaServe(), at, { headers: { ...friend, 'x-forwarded-for': '100.64.0.9', 'tailscale-user-login': 'me@example.com' } })).status).toBe(401)
+      expect((await http(web.port, at)).status).toBe(401)
+      // Through serve it doesn't lapse: it's held to the device instead.
+      vi.useFakeTimers({ toFake: ['Date'], now: Date.now() + 10 * GRANT_IDLE })
+      try { expect((await http(viaServe(), at, { headers: friend })).status).toBe(200) } finally { vi.useRealTimers() }
+      // The owner's: from their device, with their login, while they get in without pairing.
+      const own = String((await http(viaServe(), '/artifact/t1/page.html', { headers: through() })).headers.location)
+      expect((await http(viaServe(), own, { headers: through() })).status).toBe(200)
+      expect((await http(viaServe(), own, { headers: through({ 'x-forwarded-for': '100.64.0.9' }) })).status).toBe(401)
+      expect((await http(viaServe(), own, { headers: through({ 'tailscale-user-login': 'friend@example.com' }) })).status).toBe(401)
+      ts!.pairOwner = true
+      expect((await http(viaServe(), own, { headers: through() })).status).toBe(401)
     })
   })
 })
@@ -357,6 +477,24 @@ describe('the daemon’s web access', () => {
     await close()
   })
 
+  it('serves a thread’s artifacts from its folder, and nothing a symlink there leads to outside it', async () => {
+    const port = 20000 + Math.floor(Math.random() * 20000)
+    const { peer, section, close } = await open({ 'web.access': 'local' as never, 'web.port': port as never })
+    await until(async () => Boolean((await section()).data))
+    await mkdir(join(dir, 'repo'))
+    await writeFile(join(dir, 'repo/page.html'), '<p>hi</p>')
+    await writeFile(join(dir, 'secret.txt'), 'secret')
+    await symlink(join(dir, 'secret.txt'), join(dir, 'repo/secret.txt'))
+    const thread = await peer.call<{ id: string }>('thread.start', { cwd: join(dir, 'repo') })
+    const { code } = await peer.call<{ code: string }>('web.pair', {})
+    const cookie = cookieFrom(await pairWith(port, { code }))
+    const at = String((await http(port, `/artifact/${thread.id}/page.html`, { headers: { cookie } })).headers.location)
+    expect(await http(port, at)).toMatchObject({ status: 200, body: '<p>hi</p>' })
+    expect((await http(port, at.replace('page.html', 'secret.txt'))).status).toBe(403)
+    expect((await http(port, at.replace('page.html', '..%2Fsecret.txt'))).status).toBe(403)
+    await close()
+  })
+
   it('refuses to pair while web access is off', async () => {
     const { peer, close } = await open()
     await expect(peer.call('web.pair', {})).rejects.toMatchObject({ kind: 'web_off' })
@@ -391,7 +529,7 @@ esac
     }
     afterEach(() => { if (path !== undefined) process.env.PATH = path; path = undefined })
     const running = {
-      BackendState: 'Running', CertDomains: ['box.tail1234.ts.net'],
+      Version: '1.94.0-t1234-g5678', BackendState: 'Running', CertDomains: ['box.tail1234.ts.net'],
       Self: { DNSName: 'box.tail1234.ts.net.', HostName: 'box', UserID: 1, TailscaleIPs: ['100.64.0.1'] },
       Peer: { k: { HostName: 'phone', TailscaleIPs: ['100.64.0.7'] } },
       User: { 1: { LoginName: 'me@example.com' } },
@@ -404,12 +542,14 @@ esac
       await until(async () => ((await section()).data as { tailscale?: { state: string } }).tailscale?.state === 'serving')
       expect((await section()).data).toMatchObject({ url: 'https://box.tail1234.ts.net', tailscale: { state: 'serving', owner: 'me@example.com' } })
       const proxy = (JSON.parse(await readFile(join(dir, 'serve.json'), 'utf8')) as { Web: Record<string, { Handlers: Record<string, { Proxy: string }> }> }).Web['box.tail1234.ts.net:443']!.Handlers['/']!.Proxy
-      expect(proxy).toMatch(new RegExp(`^http://127\\.0\\.0\\.1:${port}/\\.tailscale-[\\w-]+$`))
-      const prefix = new URL(proxy).pathname
-      const headers = { host: 'box.tail1234.ts.net', 'x-forwarded-for': '100.64.0.7', 'tailscale-user-login': 'me@example.com' }
-      expect((await http(port, `${prefix}/rpc`, { headers })).status).toBe(204)
+      // To a socket in the data folder: no path, nothing secret in it.
+      expect(proxy).toBe(`unix:${join(dir, 'web', 'tailscale.sock')}`)
+      const through = join(dir, 'web', 'tailscale.sock')
+      const headers = { host: 'localhost', 'x-forwarded-host': 'box.tail1234.ts.net', 'x-forwarded-for': '100.64.0.7', 'tailscale-user-login': 'me@example.com' }
+      expect((await http(through, '/rpc', { headers })).status).toBe(204)
       expect((await http(port, '/rpc', { headers })).status).toBe(401)
-      const owner = await socket(port, { ...headers, origin: 'https://box.tail1234.ts.net' }, { path: `${prefix}/rpc`, keep: true })
+      expect((await http(port, '/rpc', { headers: { ...headers, host: 'box.tail1234.ts.net' } })).status).toBe(403)
+      const owner = await socket(through, { ...headers, origin: 'https://box.tail1234.ts.net' }, { keep: true })
       expect(owner.result).toBe('open')
       expect(await peer.call('web.devices', {})).toMatchObject([{ id: 'tailscale:phone', tailscale: true }])
       await expect(peer.call('web.revoke', { id: 'tailscale:phone' })).rejects.toMatchObject({ kind: 'invalid' })
@@ -417,19 +557,22 @@ esac
       // Require pairing for the owner too: their live connections close.
       await peer.call('settings.set', { key: 'web.tailscale.pairing', value: true })
       await owner.closed
-      expect((await http(port, `${prefix}/rpc`, { headers })).status).toBe(401)
+      expect((await http(through, '/rpc', { headers })).status).toBe(401)
       expect(await peer.call('web.devices', {})).toEqual([])
       await peer.call('settings.set', { key: 'web.access', value: 'off' })
       // Taken down: the stub logs the command before it has done it.
       await until(async () => (await readFile(join(dir, 'serve.json'), 'utf8')).trim() === '{}')
       expect(await readFile(log, 'utf8')).toContain('serve --https=443 off')
       expect(await readFile(join(dir, 'serve.json'), 'utf8')).toContain('{}')
+      // And its socket with it.
+      await until(async () => !(await stat(through).then(() => true, () => false)))
       await close()
     })
 
     it('says what keeps Tailscale from serving', async () => {
       const port = 20000 + Math.floor(Math.random() * 20000)
-      for (const [status, state] of [[{ ...running, BackendState: 'NeedsLogin' }, 'logged-out'], [{ ...running, CertDomains: null }, 'no-https']] as const) {
+      // A tailscaled too old to proxy to a Unix socket is one that can't serve it (its message says to update it).
+      for (const [status, state] of [[{ ...running, BackendState: 'NeedsLogin' }, 'logged-out'], [{ ...running, CertDomains: null }, 'no-https'], [{ ...running, Version: '1.92.3-tabc-gdef' }, 'error']] as const) {
         await stub(status)
         const { section, close } = await open({ 'web.access': 'tailscale' as never, 'web.port': port as never })
         await until(async () => ((await section()).data as { tailscale?: { state: string } }).tailscale?.state === state)
@@ -455,7 +598,8 @@ esac
       await writeFile(join(dir, 'serve.json'), JSON.stringify({ Web: { 'box.tail1234.ts.net:443': { Handlers: { '/': { Proxy: `http://127.0.0.1:${port}` } } } } }))
       const { peer, section, close } = await open({ 'web.access': 'tailscale' as never, 'web.port': port as never, 'web.tailscale.socket': '/run/tailscale-personal/tailscaled.sock' as never })
       await until(async () => ((await section()).data as { tailscale?: { state: string } }).tailscale?.state === 'serving')
-      const lines = (await readFile(log, 'utf8')).trim().split('\n')
+      // What serves (this machine's other tailscaleds are looked at too, each by its own socket, the default by none).
+      const lines = (await readFile(log, 'utf8')).trim().split('\n').filter((line) => line.includes('serve'))
       expect(lines.length).toBeGreaterThan(0)
       for (const line of lines) expect(line).toMatch(/^--socket=\/run\/tailscale-personal\/tailscaled\.sock /)
       expect(lines.some((line) => line.includes(' serve --bg '))).toBe(true)

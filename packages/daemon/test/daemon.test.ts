@@ -433,6 +433,24 @@ describe('record and replay', () => {
     await close()
   })
 
+  it("serves an artifact only what's really in its thread's folder, unlike file.read", async () => {
+    const { symlink } = await import('node:fs/promises')
+    const { peer, close } = await open()
+    await mkdir(join(dir, 'repo'))
+    const thread = await peer.call<ThreadInfo>('thread.start', { cwd: join(dir, 'repo') })
+    await writeFile(join(dir, 'repo/page.html'), '<p>hi</p>')
+    await writeFile(join(dir, 'secret.txt'), 'secret')
+    await symlink(join(dir, 'secret.txt'), join(dir, 'repo/secret.txt'))
+    const read = (path: string) => peer.call<{ content: string }>('artifact.read', { thread: thread.id, path })
+    expect(Buffer.from((await read('page.html')).content, 'base64').toString()).toBe('<p>hi</p>')
+    await expect(read('secret.txt')).rejects.toMatchObject({ kind: 'forbidden' })
+    await expect(read('../secret.txt')).rejects.toMatchObject({ kind: 'forbidden' })
+    await expect(read(join(dir, 'secret.txt'))).rejects.toMatchObject({ kind: 'forbidden' })
+    // The editor's read still reads it: the fence is the artifact's.
+    expect((await peer.call<{ content: string }>('file.read', { thread: thread.id, path: 'secret.txt' })).content).toBe('secret')
+    await close()
+  })
+
   it("says which version of a thread's files there is, by the same rules as reading them", async () => {
     const { utimes } = await import('node:fs/promises')
     const { peer, close } = await open()

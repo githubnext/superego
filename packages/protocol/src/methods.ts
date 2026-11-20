@@ -43,8 +43,9 @@ export const linkTo = (thread: Pick<ThreadInfo, 'id' | 'title'>) => `[${thread.t
  * round) for whatever both know. `thread-read`: the `thread.read` method. `forward`: `forward` channels, a TCP
  * connection to a port on its loopback (forward.ts). `image-read`: the `image.read` method, and transcripts whose images
  * come without their pixels (`ImageStub`). `file-locate`: the `file.locate` method. `pane-move`: the `pane.move` action.
+ * `artifact-read`: the `artifact.read` method.
  */
-export const FEATURES = ['thread-read', 'forward', 'image-read', 'file-locate', 'pane-move'] as const
+export const FEATURES = ['thread-read', 'forward', 'image-read', 'file-locate', 'pane-move', 'artifact-read'] as const
 export type Feature = (typeof FEATURES)[number]
 
 export type ThreadId = string
@@ -320,6 +321,12 @@ export type Methods = {
    * file) or base64, with its version as `file.stat` says it.
    */
   'file.read': { params: { thread: ThreadId; path: string; base64?: boolean }; result: { path: string; content: string } & FileVersion }
+  /**
+   * A file an artifact (an HTML page of a thread's, shown sandboxed) asks for, as base64: only one really in the thread's
+   * folder (a relative path that doesn't leave it, nor a symlink on the way), unlike `file.read`. With the
+   * `artifact-read` feature.
+   */
+  'artifact.read': { params: { thread: ThreadId; path: string }; result: { content: string } }
   /**
    * An image of a thread's, as base64: whole, or as a `thumbnail` (at most 1600×4800, as small as a window shows it
    * in a transcript; the image itself when it's that small already), made on this machine and kept. A file's `version`

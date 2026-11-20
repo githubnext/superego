@@ -18,6 +18,9 @@ export async function serveDaemon({ app, dataDir = defaultDataDir(app), socket =
   /** The other machines this daemon reaches, from that same list (see relay.ts). */
   reach?: (dataDir: string, self: MachineInfo) => MachineReach
 }) {
+  // A promise something forgot to wait on, failing (a request a listener didn't answer, say): one mistake of the daemon's,
+  // said in its log, not a reason to drop every thread and client it serves, as Node would by default.
+  process.on('unhandledRejection', (reason) => console.error('Unhandled failure (the daemon carries on):', reason))
   const build = readBuild(import.meta.dirname)
   // What the restart that started this daemon brought, when a service started it (see restart below).
   const carried = takeRestartEnv(dataDir)

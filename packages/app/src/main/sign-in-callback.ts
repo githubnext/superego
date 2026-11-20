@@ -73,7 +73,10 @@ export function createSignInCatcher(respond: Respond, { timeout = 10 * 60_000 } 
     const before = open.get(port)
     if (before) stop(before)
     const server = createServer((request, response) => {
-      const url = new URL(request.url ?? '/', callback)
+      // Only a path here: `//…` or no URL at all is turned away, not thrown (a throw here would be the app's).
+      const target = request.url ?? '/'
+      const url = target.startsWith('/') && !target.startsWith('//') && URL.canParse(target, callback) ? new URL(target, callback) : undefined
+      if (!url) return void response.writeHead(400).end()
       if (url.pathname !== callback.pathname) return void response.writeHead(404).end()
       if (state !== undefined && url.searchParams.get('state') !== state) return void response.writeHead(400, { 'content-type': 'text/html; charset=utf-8' }).end(ELSEWHERE)
       response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }).end(PAGE)
