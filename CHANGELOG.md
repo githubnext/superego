@@ -2,40 +2,34 @@
 
 ## Unreleased
 
-- **Upgrade:** Web access over Tailscale no longer lets in every device logged in to Tailscale as you, such as the
-  machines your agents run on. Each of your devices gets in once you approve it: the first time it opens the page, it
-  waits in Settings → Web access (or `superego web devices`) for you to approve from the app or a device that's already
-  in. Pairing with a code still works. The "Require pairing for my Tailscale login too" setting is gone.
+- **Upgrade:** Web access over Tailscale needs Tailscale 1.94 or later on the machine that serves it (Settings → Web
+  access says so when it's older), and no longer lets in every device logged in to Tailscale as you, such as the
+  machines your agents run on. The first time one of your devices opens the page, it waits in Settings → Web access
+  (or `superego web devices`) until you approve it from the app or a device that's already in; pairing with a code
+  still works. The "Require pairing for my Tailscale login too" setting is gone.
 - **Upgrade:** `AGENTS.md` files and a project's profiles (`.superego/profiles`) are read only from the thread's
-  project: its folder up to the repository's top, or the folder alone outside a repository. An `AGENTS.md` above that
-  (say `~/dev/AGENTS.md`) no longer applies: move it into `~/.agents/AGENTS.md` or the repository. Nor is one read
-  that another user on the computer could have written (in `/tmp`, or a folder writable by others).
+  project: its folder up to the repository's top, or the folder alone outside a repository. One above that (say
+  `~/dev/AGENTS.md`) no longer applies: move it into `~/.agents/AGENTS.md` or the repository. Nor is one read that
+  another user on the computer could have written (in `/tmp`, or a folder writable by others).
 - **Upgrade:** a profile's modules can import only `'superego'`, Node's built-ins and files by their paths. One that
-  imports a package by name (from a `node_modules`) or a `#` alias from a `package.json` no longer loads, and says why:
-  import the file by its path instead.
-- **Upgrade:** Web access over Tailscale needs Tailscale 1.94 or later on the machine that serves it: `tailscale serve`
-  now hands requests to the daemon through a private socket, and Settings → Web access says so when Tailscale is older.
-- A page an agent draws (an `html` block) no longer answers or messages for you by itself: what it would say shows
-  under it, and goes only when you press Send there.
-- A page an agent draws (an `html` block) can't reach the network: it can't fetch, load scripts, styles, fonts or
-  images from the web, or navigate away. Agents are told to put everything in the page.
+  imports a package by name or a `#` alias no longer loads, and says why: import the file by its path instead.
+- Allowing a project's profile now covers everything it can load: a change to any file it runs asks to allow it again.
+- A page an agent draws (an `html` block) can't reach the network (no fetching, nothing loaded from the web, no
+  navigating away), and no longer answers or messages for you by itself: what it would say shows under it, and goes
+  only when you press Send there.
 - Images on the web in a thread (in a message, a rendered file, an image an agent shows or a block it draws) load
   only when you click them: until then they say where they're from. One click loads the rest in the same message.
 - A web page an agent opens in a Browser pane waits for you to press Open page, showing its whole address, unless it's a
   dev server on this computer or its network.
-- Allowing a project's profile now covers everything it can load: a change to any file it runs asks to allow it again.
-- Claude Agent threads no longer run a folder's own Claude Code settings (`.claude/`, `.mcp.json`) until you allow
-  them: their hooks, MCP servers and permissions can run commands. The thread asks over its composer, listing the files
-  to read first, and asks again after they change. Until then Claude Code runs with your own settings only, without the
-  folder's `CLAUDE.md`. Where another user on the computer could change what Claude Code loads (it also reads
-  `.mcp.json` from every folder above, `/tmp` included), the thread says so and there's nothing to allow.
-- Web access over Tailscale no longer lets another user account on the same computer pass as you: your Tailscale login
-  is trusted only for requests that really came through Tailscale.
+- Claude Agent threads no longer load a folder's own Claude Code settings (`.claude/`, `.mcp.json`), whose hooks and
+  MCP servers can run commands, until you allow them: the thread asks over its composer, listing the files, and asks
+  again after they change. Until then Claude Code runs with your settings only, without the folder's `CLAUDE.md`.
+  Where another user on the computer could change those settings, there's nothing to allow.
+- Another user account on the same computer can no longer pass as you through Web access over Tailscale.
 - A malformed request to Web access, or to a sign-in page's callback, no longer stops the daemon and every agent with it.
-- An HTML artifact is served only files that are really in its thread's folder: a symlink there that leads outside it
-  is refused, on the desktop and in a browser.
-- In a browser, an artifact's address only works for the device that opened it (over Tailscale), or for a short while
-  after its page last used it (on this computer), so a page that sends its address elsewhere doesn't give its folder away.
+- An HTML artifact is served only files really in its thread's folder (a symlink leading outside is refused), and in a
+  browser its address works only for the device that opened it (over Tailscale) or briefly after its page last used it
+  (on this computer), so a page that sends its address elsewhere doesn't give the folder away.
 
 ## 0.1.9
 

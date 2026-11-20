@@ -37,9 +37,9 @@ Each set-up of an extension, in either half, has one lifetime: everything it reg
   local file it imports, so an edit to a helper alone loads the new code, and that of whatever imports it. A module none
   of whose files changed is the one loaded before, its module-level state with it (keep state in `setup`, which runs
   again); a helper two extensions import is one module, as ever. A file under `node_modules` imported by its path is a
-  file like any other; packages and aliases by name (other than `'superego'` and Node's built-ins) are refused. Imports are read as JavaScript is (comments and strings aren't
-  imports), static and `import('./literal.ts')` alike; an `import()` of a path worked out as it runs is refused, as
-  what it loads couldn't be versioned or vouched for. The window loads a profile's UI modules afresh, all of them,
+  file like any other; packages and aliases by name (other than `'superego'` and Node's built-ins) are refused. Imports
+  are read as JavaScript is (comments and strings aren't imports), static and `import('./literal.ts')` alike; an
+  `import()` of a path worked out as it runs is refused, as what it loads couldn't be versioned or vouched for. The window loads a profile's UI modules afresh, all of them,
   whenever any of the profile's files changed.
 - What allowing a project's profile vouches for is every file its code can run, read from the same imports a reload
   follows: each module in its folder and every local file they import, hidden or outside it, symlinks followed; a file
