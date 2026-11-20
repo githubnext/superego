@@ -66,6 +66,7 @@
 - Importing a Ghostty theme reads its quoted colours (`foreground = "#2c363c"`), where its foreground, background,
   cursor and selection were left out.
 - The public website now uses GitHub Next analytics to track visits.
+- Electron 45.3.2 (Chromium 156.0.8078.100), with its security fixes.
 
 ## 0.1.9
 
