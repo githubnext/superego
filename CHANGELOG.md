@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.1.9
+
 - Themes for code and the terminal, one for light and one for dark (Settings → Appearance): GitHub, One, Tokyo Night,
   Catppuccin, Solarized, Rosé Pine and Gruvbox, each with a preview. They colour code in the editor, messages and
   rendered files, diffs, the terminal, and the accent unless you chose your own. Import a VS Code theme, or a Ghostty
