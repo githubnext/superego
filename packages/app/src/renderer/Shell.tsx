@@ -8,7 +8,8 @@ import { createPortal } from 'react-dom'
 import type { SettingsSnapshot, ThreadInfo } from '@superego/protocol'
 import { ArrowLeftIcon, ArrowRightIcon, BaseUI, Button, CaretDownIcon, GearSixIcon, IconButton, ListIcon, NotePencilIcon, PlusIcon, popupFocus, Select, StatusGlyph } from '@superego/ui'
 import type { MachineEntry } from '../shared/bridge.ts'
-import { ACCENT, APP, INTERFACE_FONT, KEYMAP, MONO_FONT, TEXT_SIZE, textScale } from '../shared/app-settings.ts'
+import { APP, INTERFACE_FONT, KEYMAP, MONO_FONT, TEXT_SIZE, textScale } from '../shared/app-settings.ts'
+import { useThemeStyle } from './themes.tsx'
 import { useSettings, watched } from './client.ts'
 import type { SpaceRailProps, View, ViewProps } from './extension-api.ts'
 import { scopeOfEntry, useRegistry, whose } from './registry.tsx'
@@ -412,25 +413,23 @@ function ThreadMenu() {
   )
 }
 
-/** The app's look, from its settings: fonts, the accent colour and the text size, as CSS variables. */
+/** The app's look, from its settings: fonts, themes, the accent colour and the text size, as CSS variables. */
 function useAppearance() {
   const values = useSettings(APP, true)?.values
   const interfaceFont = values?.[INTERFACE_FONT]
   const monoFont = values?.[MONO_FONT]
-  const accent = values?.[ACCENT]
   const textSize = values?.[TEXT_SIZE]
   useEffect(() => {
     const style = document.documentElement.style
     const set = (variable: string, family: unknown) => typeof family === 'string' ? style.setProperty(variable, `"${family.replace(/"/g, '')}", var(${variable}-fallback)`) : style.removeProperty(variable)
     set('--superego-font', interfaceFont)
     set('--superego-mono', monoFont)
-    // The accent everything takes its colour from (see --superego-accent in @superego/ui's styles); one the browser can't read
-    // leaves the default.
-    if (typeof accent === 'string' && CSS.supports('color', accent)) style.setProperty('--superego-accent-base', accent)
-    else style.removeProperty('--superego-accent-base')
     // The setting's part of the scale: @superego/ui's styles multiply it by the device's (bigger on a phone).
     style.setProperty('--superego-text-size', String(textScale(textSize)))
-  }, [interfaceFont, monoFont, accent, textSize])
+  }, [interfaceFont, monoFont, textSize])
+  // The themes for code and the terminal, and the accent everything takes its colour from (--superego-accent in
+  // @superego/ui's styles): the user's, else the themes'.
+  useThemeStyle()
 }
 
 /**

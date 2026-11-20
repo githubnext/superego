@@ -75,6 +75,9 @@ function check(spec: SettingSpec, value: Json): void {
     case 'color':
       if (typeof value !== 'string' || !value.trim()) throw bad('expected a colour')
       return
+    case 'theme':
+      if (typeof value !== 'string' || !value.trim()) throw bad('expected a theme\'s id')
+      return
     case 'keymap':
       if (!value || typeof value !== 'object' || Array.isArray(value)) throw bad('expected shortcuts by action id')
       for (const [id, keys] of Object.entries(value)) {

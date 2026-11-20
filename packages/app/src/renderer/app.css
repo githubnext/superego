@@ -396,6 +396,19 @@ details[open] > .row > .row__chevron { transform: rotate(90deg); }
 .step-slider__stops { display: flex; justify-content: space-between; font-size: var(--superego-text-xs); color: var(--superego-faint); }
 .step-slider__stops .is-current { color: var(--superego-text); }
 .setting__error { color: var(--superego-status-error); font-size: calc(12px * var(--superego-text-scale)); }
+.theme-tools > .setting__error { margin: 8px 0 0; }
+/* Settings → Appearance's themes (themes.tsx): a picker with the chosen one's swatch, both themes as they look under
+   the pickers, and importing. Each sample is drawn in its own colour-scheme, whatever the window's. */
+.theme-picker { display: inline-flex; align-items: center; gap: 8px; }
+.theme-swatch { display: inline-flex; gap: 3px; padding: 5px 6px; border-radius: 6px; box-shadow: 0 0 0 .5px var(--superego-border); }
+.theme-swatch > span { width: 8px; height: 8px; border-radius: 50%; }
+.theme-samples { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--superego-border); }
+.theme-sample { min-width: 0; border-radius: var(--superego-radius); overflow: hidden; box-shadow: 0 0 0 .5px var(--superego-border); color: var(--superego-text); }
+.theme-sample pre { margin: 0; padding: 8px 10px; font-family: var(--superego-mono); font-size: var(--superego-text-xs); line-height: 1.55; white-space: pre; overflow: hidden; text-overflow: ellipsis; }
+.theme-sample__code { background: var(--superego-surface); }
+.theme-sample__code > :first-child { font-style: italic; }
+.theme-sample__terminal { background: var(--superego-terminal-bg); }
+.theme-tools__import { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--superego-border); }
 .keymap { padding: 4px 0 8px; }
 .keymap__head { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
 .keymap__group h3 { font-size: var(--superego-text-xs); font-weight: 500; color: var(--superego-muted); text-transform: uppercase; letter-spacing: .04em; margin: 16px 0 2px; }

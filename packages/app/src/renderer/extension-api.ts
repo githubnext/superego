@@ -15,6 +15,7 @@ import type { Store } from './local-state.ts'
 import type { Place, Placement } from '../shared/layout.ts'
 import type { CompletionProvider, CompletionWord, SentWith } from './composer.ts'
 import type { ImageItem } from './images.tsx'
+import type { Theme } from '@superego/ui/themes'
 
 /**
  * Where an extension can put UI by itself: places whose occupant behaviour decides, so the layout doesn't move them (a
@@ -393,6 +394,13 @@ export type UiApi = {
    * another machine. An app's extension's applies to the whole window.
    */
   style(css: string): () => void
+  /**
+   * A theme for code and the terminal (`Theme`: `{ id, name, appearance, syntax?, terminal?, accent? }`), offered in
+   * Settings → Appearance's picker for its appearance, under this extension's name. Its id starts with the extension's
+   * (`<extension>.<name>`). A theme that doesn't read throws, saying what's wrong. Chosen, it colours the whole window,
+   * a profile's too.
+   */
+  theme(theme: Theme): void
   /** Run any action (window, app or machine) through the window's router, outside React. In components: `useDispatch`. */
   dispatch: Dispatch
   /**

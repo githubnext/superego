@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Themes for code and the terminal, one for light and one for dark (Settings → Appearance): GitHub, One, Tokyo Night,
+  Catppuccin, Solarized, Rosé Pine and Gruvbox, each with a preview. They colour code in the editor, messages and
+  rendered files, diffs, the terminal, and the accent unless you chose your own. Import a VS Code theme, or a Ghostty
+  or iTerm2 colour file, with Import theme…; extensions and profiles can bring themes too.
 - The window uses far less CPU while an image loads in a thread (a shimmer that redrew the whole window every frame
   now costs next to nothing, and images far off the screen no longer shimmer while they wait), and while a Browser pane
   is open beside threads that are working.

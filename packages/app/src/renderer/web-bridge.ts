@@ -7,10 +7,13 @@ import type { SettingsStore } from '@superego/settings'
 import { carriesFiles, uploadAttachments } from '@superego/client/uploads'
 import type { BridgeChannel, MachineEntry, SuperegoBridge, SuperegoEvent } from '../shared/bridge.ts'
 import { APP } from '../shared/app-settings.ts'
+import { storedThemes } from '../shared/themes.ts'
 import { pageApp } from './page-app.ts'
 import { askPairing, LIMITED, type Pairing } from './pair-gate.ts'
 
 const SETTINGS = 'superego.appSettings'
+/** Imported themes, kept in this browser (a desktop keeps them in <dataDir>/themes). */
+const THEMES = 'superego.themes'
 /** Ping this often, and count the link dead after this long without a word, as the desktop's links do. */
 const PING_EVERY = 5_000
 const SILENCE = 15_000
@@ -168,7 +171,7 @@ export function webBridge(): SuperegoBridge {
     .then((paired) => paired === 'ok' ? connect() : ask(paired === 'limited' ? LIMITED : 'That link has expired or was used already.'), () => connect())
 
   // ── The app's own endpoint, here in the page ───────────────────────────────────────────────────────────────────
-  const app = pageApp(emit, { store, actions: {
+  const app = pageApp(emit, { store, themes: storedThemes({ get: () => localStorage.getItem(THEMES), set: (value) => localStorage.setItem(THEMES, value) }), actions: {
     /** This page's own connection, or the serving daemon's link to another machine. */
     'machine.reconnect': {
       info: { id: 'machine.reconnect', title: 'Reconnect a machine', runs: 'app', expose: ['ui'] },

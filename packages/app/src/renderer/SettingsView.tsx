@@ -1,9 +1,9 @@
 // Settings, drawn generically from what each endpoint registers: the app's own settings and every machine's. Sections
 // may name a custom component (`ui`) drawn below their settings; the Providers section is one.
-import { useEffect } from 'react'
+import { Fragment, useEffect } from 'react'
 import type { Json, SectionInfo, SettingsSnapshot } from '@superego/protocol'
 import { BaseUI, Dialog, Glyph } from '@superego/ui'
-import { APP } from '../shared/app-settings.ts'
+import { ACCENT, APP } from '../shared/app-settings.ts'
 import type { MachineEntry } from '../shared/bridge.ts'
 import { useSettings, useValue } from './client.ts'
 import { Contained } from './contained.tsx'
@@ -13,6 +13,7 @@ import { useLocalState } from './local-state.ts'
 import { COMPACT, useMedia } from './media.ts'
 import { Setting } from './settings/controls.tsx'
 import { AllMachines, machineGlyph, Machines } from './settings/machines.tsx'
+import { ThemeTools, useChosenThemes } from './themes.tsx'
 
 /** Settings → Machines (also opened by Update: see actions.tsx). */
 const MACHINES = '$machines'
@@ -70,13 +71,19 @@ function Section({ machine, target, section, values }: { machine: MachineEntry |
   const Custom = custom?.component
   // Drawn from a live value: that's its data, kept current.
   const live = useValue<Json>(section.value ? machine : undefined, section.value ?? '')
+  const shown = section.settings.filter((s) => !s.hidden)
+  const { accentThemed } = useChosenThemes()
   return (
     <section className="settings-section">
       <h2>{section.title}</h2>
       {section.description && <p className="settings__note">{section.description}</p>}
-      {section.settings.filter((s) => !s.hidden).map((setting) => (
-        <Setting key={setting.key} setting={setting} value={values[setting.key] ?? null}
-          apply={(value) => dispatch(target === APP ? 'app.settings.set' : 'settings.set', { key: setting.key, value }, { machine: target, source: 'settings' })} />
+      {shown.map((setting, index) => (
+        <Fragment key={setting.key}>
+          <Setting setting={setting} value={values[setting.key] ?? null} note={target === APP && setting.key === ACCENT && accentThemed ? 'The theme’s, until you choose one.' : undefined}
+            apply={(value) => dispatch(target === APP ? 'app.settings.set' : 'settings.set', { key: setting.key, value }, { machine: target, source: 'settings' })} />
+          {/* Under the theme pickers: both themes as they look, and importing. */}
+          {setting.type === 'theme' && shown[index + 1]?.type !== 'theme' && <ThemeTools />}
+        </Fragment>
       ))}
       {Custom && <Contained name={section.ui!} scope={custom!.owner.profile}><Custom target={target} section={section.value ? { ...section, ...(live != null ? { data: live } : {}) } : section} /></Contained>}
     </section>

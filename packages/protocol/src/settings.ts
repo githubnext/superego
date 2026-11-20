@@ -28,6 +28,8 @@ export type SettingType =
   | { type: 'pins' }
   /** Models, in their order, each as `provider/model` (`["anthropic/claude-opus-5-5"]`). */
   | { type: 'models' }
+  /** A theme for code and the terminal, by id, for light or for dark: the client lists the themes it has. */
+  | { type: 'theme'; appearance: 'light' | 'dark' }
 
 /** A setting as clients see it: its type, with options resolved for the current state. */
 export type SettingInfo = SettingType & {

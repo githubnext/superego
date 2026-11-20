@@ -24,6 +24,7 @@ import { createNotifier } from './notify.ts'
 import { createService } from './service.ts'
 import { serveAppSocket, type AppSocket } from './app-socket.ts'
 import { createAppUpdates } from './app-updates.ts'
+import { themeFiles } from './theme-files.ts'
 
 /**
  * Run an app's main process: its windows, the links to every machine (starting this computer's daemon, which outlives
@@ -43,9 +44,11 @@ export function startApp(appConfig: AppConfig) {
   const devRestart = Number(appEnv(appConfig)('DEV_RESTART')) || undefined
   delete process.env[envName(appConfig, 'DEV_RESTART')]
 
-  // The app's own settings, kept in its data dir; the windows' extensions declare theirs beside them.
+  // The app's own settings, kept in its data dir; the windows' extensions declare theirs beside them. Imported themes
+  // are files beside them (<dataDir>/themes), listed with Appearance.
+  const themes = themeFiles(dataDir, () => settings.invalidate())
   const settings = new SettingsRegistry(new FileSettingsStore(join(dataDir, 'app-settings.json')))
-  registerAppSettings(settings, { app: appConfig, mac: process.platform === 'darwin' })
+  registerAppSettings(settings, { desktop: { app: appConfig, mac: process.platform === 'darwin' }, themes })
   // The layout as text: layout.json, read in as it's saved, and what's wrong with it told to the windows.
   const layoutFile = new LayoutFile(dataDir, settings, () => settings.invalidate())
   settings.register({
@@ -129,7 +132,7 @@ export function startApp(appConfig: AppConfig) {
 
   const router = createRouter<AppActionContext>()
   machines.registerActions(router)
-  registerAppActions(router, { app: appConfig, dataDir, packaged: app.isPackaged, windows: () => windows, settings, cli, service, updates, layoutFile, sites, quit: () => app.quit(), restart: () => restartApp(devRestart) })
+  registerAppActions(router, { app: appConfig, dataDir, packaged: app.isPackaged, windows: () => windows, settings, cli, service, updates, layoutFile, sites, themes, quit: () => app.quit(), restart: () => restartApp(devRestart) })
   const windows = createWindows({
     app: appConfig, dataDir, headless,
     methods: (window) => appMethods(window, { settings, router, service, updates, notifier, machines, windows, desktop, build }),

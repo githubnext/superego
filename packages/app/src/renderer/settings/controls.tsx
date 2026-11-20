@@ -7,6 +7,7 @@ import { fonts } from '../fonts.ts'
 import { Keymap } from '../Keymap.tsx'
 import { useRegistry } from '../registry.tsx'
 import { useSettingsDialog } from '../state.tsx'
+import { ThemePicker } from '../themes.tsx'
 
 /** The layout's row: to its text, and back to the defaults. Always here, whatever the layout hides. */
 function LayoutControl() {
@@ -45,6 +46,7 @@ export function Setting({ setting, value, apply, mixed, note }: {
     case 'font': control = <FontPicker label={setting.title} value={typeof value === 'string' ? value : null} monospace={setting.monospace}
       nullLabel={setting.nullLabel} fonts={knownFonts} loadFonts={fonts.load} onChange={set} />; break
     case 'color': control = <ColorField label={setting.title} value={typeof value === 'string' ? value : String(setting.default ?? '')} fallback={String(setting.default ?? '')} disabled={disabled} onChange={set} onInvalid={setError} />; break
+    case 'theme': control = <ThemePicker label={setting.title} appearance={setting.appearance} value={value} disabled={disabled} onChange={set} />; break
     case 'keymap': return <Keymap setting={setting} value={value} apply={apply} />
     case 'layout': control = <LayoutControl />; break
     // Pinned and unpinned from the threads themselves, never in Settings.

@@ -8,7 +8,8 @@
     "./styles.css": "./src/styles.css",
     "./icons": "./src/icons.tsx",
     "./touch": "./src/touch.ts",
-    "./tokens": "./src/tokens.ts"
+    "./tokens": "./src/tokens.ts",
+    "./themes": "./src/themes/index.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",

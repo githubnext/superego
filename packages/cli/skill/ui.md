@@ -77,6 +77,7 @@ which doesn't type-check them: `superego extension test` does.
 | `superego.signal` | an `AbortSignal`, aborted when this UI is torn down (its profile's files changed, it was revoked): for timers, listeners and fetches of its own. `setup` may also return a cleanup, run then. Registering after that throws. Each component it draws is drawn apart: one that throws shows "<name> failed to draw" with Retry, in its place |
 | `superego.on(event, listener)` | hear what happens in the window, in the desktop app and a browser alike; returns a function that stops it (teardown does too). `'thread.status'`: `{ machine, thread, before }`, a thread's status changed (`before` undefined the first time the window sees it; only your profile's threads). `'select'`: `{ selection, before }`, the thread shown changed. `'focus'`: `{ focused }`. `'visibility'`: `{ visible }`. `superego.window` is how things are now: `{ focused, visible, selection, thread, machines, threads }` (`threads`: each machine's threads in use, by machine id) |
 | `superego.style(css)` | bring CSS, scoped to what this profile draws ([Styling](#styling)). Gone at teardown; also returns a function that takes it out sooner |
+| `superego.theme({ id, name, appearance, syntax?, terminal?, accent? })` | a theme for code and the terminal, offered in Settings → Appearance's picker for its `appearance` (`'light'` or `'dark'`), under your extension's name ([Themes](#themes)). `id` starts with your extension's name. One that doesn't read throws, saying what's wrong. Needs extension API `^5.5` |
 | `superego.appSetting(key)` | one of the app's settings as it is now, outside React (`useAppSetting` in components) |
 | `superego.entry(kind, component)` | draw transcript entries of a kind an extension writes |
 | `superego.settings(ui, component)` | draw below the settings section (of its daemon half) that names `ui` |
@@ -286,6 +287,35 @@ its class names.
 
 A pane is a column that can be narrow (and a whole screen on a phone): lay it out to fill its parent with flex, and
 let it scroll.
+
+## Themes
+
+Bring a theme for code and the terminal with `superego.theme(theme)`. The user picks one theme for light and one for
+dark in Settings → Appearance; yours is listed in the picker for its `appearance`, under your extension's name. Chosen,
+it colours code in the editor, in messages and in rendered files, diffs, and the terminal, in the whole window (a
+profile's theme too, not only its threads). `accent` colours the window's accent too, unless the user chose their own.
+App surfaces (backgrounds, text) aren't a theme's yet.
+
+<!-- check: ui -->
+```ts
+superego.theme({
+  id: 'moonlit.night', name: 'Moonlit Night', appearance: 'dark',
+  syntax: { keyword: '#ff79c6', string: '#f1fa8c', comment: '#6272a4', function: '#50fa7b' },
+  terminal: { bg: '#21222c', fg: '#f8f8f2', red: '#ff5555', green: '#50fa7b' },
+  accent: '#6d5bd0',
+})
+```
+
+Every part but `id`, `name` and `appearance` is optional, and a role you leave out keeps Superego's own colour. Colours
+are hex (`#rrggbb`, with alpha too) or CSS colour functions (`rgb()`, `oklch()`, `color(display-p3 …)`). The roles:
+
+- `syntax`: `keyword`, `string`, `number`, `comment`, `function`, `type`, `tag`, `attribute`, `definition`, `meta`,
+  `inserted`, `deleted` (a diff's lines, in code and the Diff pane), `invalid`.
+- `terminal`: `fg`, `bg`, `cursor`, `selection`, and the 16 ANSI colours, `black` … `white` and `bright-black` …
+  `bright-white`.
+
+The `Theme` type is in `superego/ui`. The same format is what Settings → Appearance → Import theme… reads, besides VS
+Code themes and Ghostty and iTerm2 colour files.
 
 ## A complete example
 

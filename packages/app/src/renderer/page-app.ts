@@ -5,14 +5,19 @@ import { RpcError, type ActionInfo, type Json } from '@superego/protocol'
 import { declaredSpec, MemorySettingsStore, serveSettings, SettingsRegistry, type SettingsStore } from '@superego/settings'
 import type { BrowserAppHandlers, SuperegoEvent } from '../shared/bridge.ts'
 import { APP, registerAppSettings } from '../shared/app-settings.ts'
+import { storedThemes, themeActions, type ThemeStore } from '../shared/themes.ts'
 
 /** An action the page's app runs: its info for the router, and what it does. */
 export type PageAppAction = { info: ActionInfo; run(params: never): Promise<unknown> }
 
-/** `store`: where its settings are kept (in memory unless given); `actions`: the page's own, beside `app.settings.set`. */
-export function pageApp(emit: (event: SuperegoEvent) => void, { store = new MemorySettingsStore(), actions: more = {} }: { store?: SettingsStore; actions?: Record<string, PageAppAction> } = {}) {
+/**
+ * `store`: where its settings are kept, `themes` its imported themes (both in memory unless given); `actions`: the page's
+ * own, beside `app.settings.set` and the themes'.
+ */
+export function pageApp(emit: (event: SuperegoEvent) => void, { store = new MemorySettingsStore(), themes = storedThemes(), actions: more = {} }: { store?: SettingsStore; themes?: ThemeStore; actions?: Record<string, PageAppAction> } = {}) {
   const settings = new SettingsRegistry(store)
-  registerAppSettings(settings)
+  registerAppSettings(settings, { themes })
+  const theme = themeActions(themes, settings)
   const subs = new Map<string, () => unknown>()
   const served = serveSettings(settings, (params) => emit({ machine: APP, method: 'settings.changed', params }), subs)
   /** The app's actions a page can run: the desktop's main process has more (adding machines, updating them, …). */
@@ -20,6 +25,14 @@ export function pageApp(emit: (event: SuperegoEvent) => void, { store = new Memo
     'app.settings.set': {
       info: { id: 'app.settings.set', title: 'Change an app setting', runs: 'app', expose: ['ui'] },
       run: async ({ key, value }: { key: string; value: Json }) => { await settings.set(key, value); return null },
+    },
+    'app.themes.add': {
+      info: { id: 'app.themes.add', title: 'Add an imported theme', runs: 'app', expose: ['ui'] },
+      run: theme.add,
+    },
+    'app.themes.remove': {
+      info: { id: 'app.themes.remove', title: 'Remove an imported theme', runs: 'app', expose: ['ui'] },
+      run: theme.remove,
     },
     ...more,
   }

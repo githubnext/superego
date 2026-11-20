@@ -9,7 +9,7 @@ it('gives a browser the same Appearance and Keyboard as the desktop, and the des
   const web = new SettingsRegistry()
   registerAppSettings(web)
   const desktop = new SettingsRegistry()
-  registerAppSettings(desktop, { app: { id: 'superego', name: 'Superego' }, mac: true })
+  registerAppSettings(desktop, { desktop: { app: { id: 'superego', name: 'Superego' }, mac: true } })
   expect(await keys(web)).toContain(TEXT_SIZE)
   expect(await keys(web)).toContain(KEYMAP)
   expect(await keys(web)).not.toContain(MENU_BAR)
@@ -18,7 +18,7 @@ it('gives a browser the same Appearance and Keyboard as the desktop, and the des
 
 it('keeps the Dock icon until the menu bar has Superego', async () => {
   const desktop = new SettingsRegistry()
-  registerAppSettings(desktop, { app: { id: 'superego', name: 'Superego' }, mac: true })
+  registerAppSettings(desktop, { desktop: { app: { id: 'superego', name: 'Superego' }, mac: true } })
   await desktop.set(MENU_BAR, false)
   await expect(desktop.set(HIDE_DOCK, true)).rejects.toThrow(/Needs “Show in menu bar”/)
 })

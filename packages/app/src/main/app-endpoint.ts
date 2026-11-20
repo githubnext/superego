@@ -18,6 +18,7 @@ import type { Notifier } from './notify.ts'
 import { profileRenderers } from './profile-renderer.ts'
 import type { Service } from './service.ts'
 import type { SitePermissionsHandle } from './site-permissions.ts'
+import { themeActions, type ThemeStore } from '../shared/themes.ts'
 
 /** What the app's actions run for: a window (its own, from its endpoint), or none (the CLI's). */
 export type AppActionContext = { window?: AppWindow }
@@ -89,7 +90,7 @@ export function callApp(router: Router<AppActionContext>, window: AppWindow, met
 }
 
 /** The app's own actions, besides the machines' (machines.ts). */
-export function registerAppActions(router: Router<AppActionContext>, { app: appConfig, dataDir, packaged, windows, settings, cli, service, updates, layoutFile, sites, quit, restart }: {
+export function registerAppActions(router: Router<AppActionContext>, { app: appConfig, dataDir, packaged, windows, settings, cli, service, updates, layoutFile, sites, themes, quit, restart }: {
   app: AppConfig
   dataDir: string
   /** A packaged app: the developers' actions (profiling) are only for the command line there, not ⌘K. */
@@ -103,6 +104,8 @@ export function registerAppActions(router: Router<AppActionContext>, { app: appC
   service: Pick<Service, 'state' | 'act'>
   updates: Pick<AppUpdates, 'state' | 'check' | 'install'>
   layoutFile: LayoutFile
+  /** Imported themes (<dataDir>/themes). */
+  themes: ThemeStore
   quit(): void
   /** Quit and start again, onto the build on disk now. */
   restart(): void
@@ -111,6 +114,17 @@ export function registerAppActions(router: Router<AppActionContext>, { app: appC
     id: 'app.settings.set', title: 'Change an app setting', runs: 'app', expose: ['ui', 'cli'],
     params: obj({ key: str(), value: unknown() }),
     async run({ key, value }) { await settings.set(key, value as Json); return null },
+  }))
+  const theme = themeActions(themes, settings)
+  router.register(defineAction({
+    id: 'app.themes.add', title: 'Add an imported theme', runs: 'app', expose: ['ui'],
+    params: obj({ theme: unknown() }),
+    run: ({ theme: given }) => theme.add({ theme: given as Json }),
+  }))
+  router.register(defineAction({
+    id: 'app.themes.remove', title: 'Remove an imported theme', runs: 'app', expose: ['ui'],
+    params: obj({ id: str() }),
+    run: ({ id }) => theme.remove({ id }),
   }))
   router.register(defineAction({
     id: 'app.cli.install', title: `Install the ${appConfig.id} command`, runs: 'app', expose: ['ui'],

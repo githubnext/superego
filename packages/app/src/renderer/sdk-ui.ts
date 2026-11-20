@@ -20,6 +20,7 @@ export type { Place, Placement } from '../shared/layout.ts'
 export type { Store } from './local-state.ts'
 export type { Completion, CompletionProvider, CompletionWord, ComposerWhere, SentBlock, SentWith } from './composer.ts'
 export type { ImageItem } from './images.tsx'
+export type { Theme, SyntaxRole, TerminalRole, Appearance, Color } from '@superego/ui/themes'
 
 // Reaching machines and the window: calls, live values, threads, the selection, features and versions.
 export { useValue, useMethod, call, has, version, useAppSetting, type MethodState } from './client.ts'

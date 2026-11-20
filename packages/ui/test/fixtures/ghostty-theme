@@ -1,0 +1,9 @@
+# A Ghostty theme
+palette = 0=#1d1f21
+palette = 1=#cc6666
+palette = 15=ffffff
+background = 1d1f21
+foreground = #c5c8c6
+cursor-color = #c5c8c6
+selection-background = #373b41
+selection-foreground = #c5c8c6

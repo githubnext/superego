@@ -1,9 +1,10 @@
 // The app's own settings, the ones about this client rather than any machine: how it looks, its shortcuts and layout,
 // and on the desktop, how it sits there. Declared here once, for the desktop's main process (main/start.ts) and a
 // browser's page (renderer/web-bridge.ts) alike; the window's extensions declare theirs beside them. They are served under the reserved machine id `APP` with the same settings methods a daemon answers.
-import type { AppConfig } from '@superego/protocol'
+import type { AppConfig, Json } from '@superego/protocol'
 import type { SettingSpec, SettingsRegistry } from '@superego/settings'
 import { NOTIFICATION_SETTINGS } from './notifications.ts'
+import { THEME_SETTINGS, type ImportedThemes, type ThemeStore } from './themes.ts'
 
 /** The machine id the app's own endpoint answers under: its settings, its actions, the desktop's methods. */
 export const APP = 'app'
@@ -14,6 +15,8 @@ export const INTERFACE_FONT = 'app.font.interface'
 export const TEXT_SIZE = 'app.font.size'
 export const MONO_FONT = 'app.font.mono'
 export const ACCENT = 'app.accent'
+/** The accent as it comes: left at this, a theme's own accent shows instead, if it has one. */
+export const DEFAULT_ACCENT = 'color(display-p3 0.155 0.319 0.654)'
 /** Where the window's views go, as the user changed it; see shared/layout.ts. */
 export const LAYOUT = 'app.layout'
 /**
@@ -52,11 +55,12 @@ export const PANE_LAYOUT_SETTING: SettingSpec = {
 
 /**
  * Register the app's own sections in `settings`: Appearance, Keyboard and Notifications everywhere; on the desktop (`desktop`, with
- * whether it's macOS), Menu bar too.
+ * whether it's macOS), Menu bar too. `themes`: where imported themes are kept, listed as Appearance's data (none: no imports).
  */
-export function registerAppSettings(settings: SettingsRegistry, desktop?: { app: AppConfig; mac: boolean }) {
+export function registerAppSettings(settings: SettingsRegistry, { desktop, themes }: { desktop?: { app: AppConfig; mac: boolean }; themes?: ThemeStore } = {}) {
   settings.register({
     id: 'appearance', title: 'Appearance', order: 50,
+    data: async () => (themes ? await themes.list() : { themes: [], problems: [] }) satisfies ImportedThemes as unknown as Json,
     settings: [
       { key: INTERFACE_FONT, title: 'Interface font', default: null, type: { type: 'font', nullLabel: 'System' } },
       {
@@ -67,8 +71,9 @@ export function registerAppSettings(settings: SettingsRegistry, desktop?: { app:
         key: MONO_FONT, title: 'Monospace font', default: null, description: 'Code, tool output and paths.',
         type: { type: 'font', monospace: true, nullLabel: 'System monospace' },
       },
+      ...THEME_SETTINGS,
       {
-        key: ACCENT, title: 'Accent colour', default: 'color(display-p3 0.155 0.319 0.654)',
+        key: ACCENT, title: 'Accent colour', default: DEFAULT_ACCENT,
         description: 'Focus rings, primary buttons, links and selection. Any CSS colour.', type: { type: 'color' },
       },
       PANE_LAYOUT_SETTING,

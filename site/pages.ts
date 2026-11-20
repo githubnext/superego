@@ -21,6 +21,7 @@ export const sections: Section[] = [
       { slug: 'cli', title: 'The command', src: 'packages/cli/skill/cli.md' },
       { slug: 'profiles', title: 'Profiles', src: 'packages/cli/skill/profiles.md' },
       { slug: 'thread-tools', title: 'Thread tools', src: 'packages/cli/skill/thread-tools.md' },
+      { slug: 'themes', title: 'Themes', src: 'docs/themes.md' },
       { slug: 'mcp', title: 'MCP servers', src: 'docs/mcp.md', drop: ['Decisions', 'Decided questions', 'Future'] },
     ],
   },

@@ -15,6 +15,7 @@ import { PLACES, THREAD_PLACES } from '../shared/layout.ts'
 import type { CompletionProvider, SentWith } from './composer.ts'
 import { dataIcon, DataViewBody } from './data-views.tsx'
 import { addStyle } from './profile-style.ts'
+import { checkTheme, type Theme } from '@superego/ui/themes'
 import type {
   BehaviourSlot, EntryProps, LinkHandler, NewThreadField, PaneKind, PaneProps, SettingsComponentProps, SlotProps, ToolCallProps, ToolRow, UiApi,
   UiExtension, View, ViewProps, WindowEvent, WindowEvents, WindowState, WorkPart, WorkRun,
@@ -80,6 +81,8 @@ export type Registry = {
   newThreadFields: Owned<NewThreadField & { name: string }>[]
   router: WindowRouter
   appSettings: Owned<DeclaredSection>[]
+  /** Themes for code and the terminal (`superego.theme`), checked: the Appearance pickers list them by their owner. */
+  themes: Owned<Theme>[]
   completions: Owned<CompletionProvider<any>>[]
   sentWith: Owned<SentWith>[]
   listeners: Owned<{ event: WindowEvent; listener: (event: never) => void }>[]
@@ -113,7 +116,7 @@ export function createRegistry(app: AppConfig, extensions: UiExtension[], core: 
       ...(version ? { version } : {}), ...(api ? { api } : {}), ...(panes ? { panes } : {}),
     })),
     slots: { 'header.chips': [], 'thread.badge': [], 'composer.above': [], 'details.section': [], 'editor.side': [], 'editor.bar': [], 'overlay': [], 'onboarding': [] },
-    views: [], dataViews: {}, machineExtensions: {}, tools: [], entries: [], links: [], panes: [], work: [], settings: [], newThreadFields: [], router: createWindowRouter(), appSettings: [], completions: [], sentWith: [], listeners: [],
+    views: [], dataViews: {}, machineExtensions: {}, tools: [], entries: [], links: [], panes: [], work: [], settings: [], newThreadFields: [], router: createWindowRouter(), appSettings: [], themes: [], completions: [], sentWith: [], listeners: [],
     window: {
       focused: typeof document === 'undefined' || document.hasFocus(),
       visible: typeof document === 'undefined' || document.visibilityState !== 'hidden',
@@ -320,6 +323,11 @@ export function createRegistry(app: AppConfig, extensions: UiExtension[], core: 
         const remove = addStyle(css, { extension: extension.name, scope: profile })
         life.add(remove, 'a style')
         return remove
+      },
+      theme(theme) {
+        const checked = checkTheme(theme, `${profile ? 'Profile extension' : 'Extension'} ${extension.name}'s theme`)
+        own(checked.id, 'themes')
+        unique(registry.themes, 'id', { ...checked }, 'theme')
       },
       dispatch: (id, params, options) => registry.router.dispatch(id, params, { source: extension.name, ...options }),
       action(action) {

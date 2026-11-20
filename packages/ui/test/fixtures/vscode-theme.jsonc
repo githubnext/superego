@@ -1,0 +1,33 @@
+// A VS Code colour theme, as one is written: comments, trailing commas, scopes as strings, lists and comma lists.
+{
+  "name": "Fixture Night",
+  "type": "dark",
+  "colors": {
+    "editor.background": "#101018",
+    "editor.foreground": "#d0d0e0",
+    "editorCursor.foreground": "#ffcc00",
+    "editor.selectionBackground": "#33335580",
+    "terminal.ansiBlack": "#000000",
+    "terminal.ansiRed": "#ff0000",
+    "terminal.ansiBrightWhite": "#ffffff", // the rest left out
+  },
+  "tokenColors": [
+    { "settings": { "foreground": "#d0d0e0" } },
+    { "scope": "comment", "settings": { "foreground": "#606070", "fontStyle": "italic" } },
+    { "scope": ["keyword", "storage.type"], "settings": { "foreground": "#aa00ff" } },
+    { "scope": "keyword.operator", "settings": { "foreground": "#00ffff" } },
+    { "scope": "keyword.control", "settings": { "foreground": "#cc66ff" } },
+    { "scope": "string, string.quoted.double", "settings": { "foreground": "#00cc00" } },
+    { "scope": "source.js string", "settings": { "foreground": "#123456" } },
+    { "scope": "constant.numeric", "settings": { "foreground": "#ff8800" } },
+    { "scope": ["entity.name.function", "support.function"], "settings": { "foreground": "#4488ff" } },
+    { "scope": "support.type", "settings": { "foreground": "#eeee00" } },
+    { "scope": "entity.name.tag", "settings": { "foreground": "#ff4444" } },
+    { "scope": "entity.other.attribute-name", "settings": { "foreground": "#ffaa44" } },
+    { "scope": "variable", "settings": { "foreground": "#88ccff" } },
+    { "scope": "meta.decorator", "settings": { "foreground": "#999999" } },
+    { "scope": "markup.inserted", "settings": { "foreground": "#33dd33" } },
+    { "scope": "markup.deleted", "settings": { "foreground": "#dd3333" } },
+    { "scope": "invalid", "settings": { "foreground": "white", "background": "#ff0000" } },
+  ],
+}
