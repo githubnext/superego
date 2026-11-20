@@ -1,21 +1,22 @@
-// Code blocks, coloured at build time with the app's own parsers (Lezer) and the app's palette
-// (packages/app/src/renderer/code-highlight.ts): spans with classes, coloured by style.css. Shell gets a small
-// tokenizer of its own: comments, strings, and the command at a line's start.
+// Code blocks, coloured at build time with the app's own parsers (Lezer), tagged as the app tags them
+// (packages/app/src/renderer/code-highlight.ts): spans with a class per role (`syntax-keyword`), coloured by
+// @superego/ui's --superego-syntax-<role> tokens (style.css). Shell gets a small tokenizer of its own: comments,
+// strings, and the command at a line's start.
 import { parser as js } from '@lezer/javascript'
 import { parser as json } from '@lezer/json'
 import { highlightTree, tagHighlighter, tags as t } from '@lezer/highlight'
 import type { Parser } from '@lezer/common'
 
 const highlighter = tagHighlighter([
-  { tag: [t.keyword, t.operatorKeyword, t.modifier, t.controlKeyword, t.definitionKeyword, t.moduleKeyword], class: 'k' },
-  { tag: [t.string, t.special(t.string), t.regexp, t.character], class: 's' },
-  { tag: [t.number, t.bool, t.null, t.atom, t.unit], class: 'n' },
-  { tag: [t.comment, t.lineComment, t.blockComment, t.docComment], class: 'c' },
-  { tag: [t.function(t.variableName), t.function(t.propertyName), t.function(t.definition(t.variableName))], class: 'f' },
-  { tag: [t.typeName, t.className, t.namespace, t.standard(t.typeName)], class: 't' },
-  { tag: [t.tagName, t.angleBracket], class: 'g' },
-  { tag: [t.attributeName, t.propertyName, t.labelName], class: 'p' },
-  { tag: [t.definition(t.variableName), t.definition(t.propertyName)], class: 'd' },
+  { tag: [t.keyword, t.operatorKeyword, t.modifier, t.controlKeyword, t.definitionKeyword, t.moduleKeyword], class: 'syntax-keyword' },
+  { tag: [t.string, t.special(t.string), t.regexp, t.character], class: 'syntax-string' },
+  { tag: [t.number, t.bool, t.null, t.atom, t.unit], class: 'syntax-number' },
+  { tag: [t.comment, t.lineComment, t.blockComment, t.docComment], class: 'syntax-comment' },
+  { tag: [t.function(t.variableName), t.function(t.propertyName), t.function(t.definition(t.variableName))], class: 'syntax-function' },
+  { tag: [t.typeName, t.className, t.namespace, t.standard(t.typeName)], class: 'syntax-type' },
+  { tag: [t.tagName, t.angleBracket], class: 'syntax-tag' },
+  { tag: [t.attributeName, t.propertyName, t.labelName], class: 'syntax-attribute' },
+  { tag: [t.definition(t.variableName), t.definition(t.propertyName)], class: 'syntax-definition' },
 ])
 
 const parsers: Record<string, () => Parser> = {
@@ -54,13 +55,13 @@ function shell(code: string): string {
       // A word, a quoted string, a comment (# after a space or at the start), or anything else one character at a time.
       for (const { 0: token, groups } of line.matchAll(/(?<comment>(?<=^|\s)#.*)|"(?:\\.|[^"\\])*"|'[^']*'|[^\s"'#]+|\s+|./g)) {
         if (groups?.comment) {
-          html += span(token, 'c')
+          html += span(token, 'syntax-comment')
         } else if (token.startsWith('"') || token.startsWith("'")) {
-          html += span(token, 's')
+          html += span(token, 'syntax-string')
         } else if (/^\s+$/.test(token)) {
           html += token
         } else if (command) {
-          html += span(token, 'f')
+          html += span(token, 'syntax-function')
           command = false
         } else {
           html += escape(token)

@@ -264,10 +264,18 @@ function checkLinks() {
   return html.length
 }
 
+/** @superego/ui's :root block: the app's colours (syntax too), fonts and radius, as the window has them. */
+function appTokens() {
+  const css = readFileSync(join(ROOT, 'packages/ui/src/styles.css'), 'utf8')
+  const root = /^:root \{\n[\s\S]*?\n\}\n/m.exec(css)?.[0]
+  if (!root?.includes('--superego-syntax-keyword')) throw new Error("packages/ui/src/styles.css: no :root block with the --superego-syntax-* tokens")
+  return `/* From packages/ui/src/styles.css */\n${root}`
+}
+
 export function build() {
   rmSync(OUT, { recursive: true, force: true })
   mkdirSync(OUT, { recursive: true })
-  cpSync(join(SITE, 'style.css'), join(OUT, 'style.css'))
+  writeFileSync(join(OUT, 'style.css'), `${appTokens()}\n${readFileSync(join(SITE, 'style.css'), 'utf8')}`)
   // The window, from `app/test/look.sh <dir> staff`: staff-wide-light.png and -dark.png (cwebp -q 82).
   for (const shot of ['screenshot-light.webp', 'screenshot-dark.webp']) cpSync(join(SITE, shot), join(OUT, shot))
   cpSync(join(ROOT, 'app/resources/icon.png'), join(OUT, 'icon.png'))

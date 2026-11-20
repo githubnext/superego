@@ -11,7 +11,7 @@ const SITE = fileURLToPath(new URL('.', import.meta.url))
 const ROOT = join(SITE, '..')
 const OUT = join(SITE, 'dist')
 const PORT = Number(process.env.PORT ?? 4321)
-const WATCH = ['site', 'docs', 'packages/cli/skill', 'CHANGELOG.md', 'app/resources/icon.png']
+const WATCH = ['site', 'docs', 'packages/cli/skill', 'packages/ui/src/styles.css', 'CHANGELOG.md', 'app/resources/icon.png']
 
 const types: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',

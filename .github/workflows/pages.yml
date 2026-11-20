@@ -8,6 +8,7 @@ on:
       - site/**
       - docs/**
       - packages/cli/skill/**
+      - packages/ui/src/styles.css
       - CHANGELOG.md
       - app/resources/icon.png
       - .github/workflows/pages.yml
