@@ -3,6 +3,7 @@ packages:
   - app
   - extensions/*
   - evals
+  - site
 allowBuilds:
   electron: true
   esbuild: true

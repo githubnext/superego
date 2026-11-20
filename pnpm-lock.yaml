@@ -1074,6 +1074,30 @@ importers:
         specifier: ^19
         version: 19.3.1
 
+  site:
+    dependencies:
+      '@lezer/common':
+        specifier: 1.5.4
+        version: 1.5.4
+      '@lezer/highlight':
+        specifier: 1.2.5
+        version: 1.2.5
+      '@lezer/javascript':
+        specifier: 1.5.6
+        version: 1.5.6
+      '@lezer/json':
+        specifier: 1.0.3
+        version: 1.0.3
+      micromark:
+        specifier: 4.0.3
+        version: 4.0.3
+      micromark-extension-gfm:
+        specifier: 3.0.0
+        version: 3.0.0
+      parse5:
+        specifier: 7.3.0
+        version: 7.3.0
+
 packages:
 
   '@anthropic-ai/sdk@0.129.0':
