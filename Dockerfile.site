@@ -1,0 +1,37 @@
+# Coolify: Dockerfile build pack, Base Directory /, Dockerfile Location /Dockerfile.site, port 80.
+# Uses Coolify's configured domain automatically. SITE_URL is an optional override; SITE_BASE defaults to /.
+# Local build: docker build -f Dockerfile.site --build-arg SITE_URL=https://superego.example.com/ .
+# Uses the corporate registry mirror by default; override with --build-arg npm_config_registry=... if needed.
+FROM node:26-bookworm-slim AS build
+
+WORKDIR /workspace
+ARG npm_config_registry=https://packagefeedproxy.microsoft.io/npm/
+# pnpm 12 doesn't read npm_config_registry, so configure the build user's .npmrc for both installers.
+RUN npm config set registry "$npm_config_registry" --location=user \
+    && npm install --global pnpm@12.14.0
+
+COPY . .
+RUN pnpm install --frozen-lockfile --filter @superego/site
+
+ARG SITE_BASE=/
+ARG SITE_URL
+ARG COOLIFY_URL
+ARG COOLIFY_FQDN
+# Older Coolify resources swap URL/FQDN meanings. Use the first full HTTP(S) URL, not a bare hostname.
+RUN if [ -z "$SITE_URL" ]; then \
+        for candidate in "$COOLIFY_URL" "$COOLIFY_FQDN"; do \
+            candidate="${candidate%%,*}"; \
+            case "$candidate" in \
+                http://*|https://*) SITE_URL="$candidate"; break ;; \
+            esac; \
+        done; \
+    fi; \
+    SITE_BASE="$SITE_BASE" SITE_URL="${SITE_URL:?Configure a domain in Coolify or pass --build-arg SITE_URL=https://your-domain/}" \
+    pnpm --filter @superego/site build
+
+FROM nginx:stable-alpine
+
+COPY site/nginx.conf /etc/nginx/conf.d/default.conf
+COPY --from=build /workspace/site/dist /usr/share/nginx/html
+
+EXPOSE 80

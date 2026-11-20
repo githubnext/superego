@@ -30,6 +30,7 @@
 - An HTML artifact is served only files really in its thread's folder (a symlink leading outside is refused), and in a
   browser its address works only for the device that opened it (over Tailscale) or briefly after its page last used it
   (on this computer), so a page that sends its address elsewhere doesn't give the folder away.
+- The public website now uses GitHub Next analytics to track visits.
 
 ## 0.1.9
 

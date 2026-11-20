@@ -175,6 +175,7 @@ function layout(o: { title: string; description?: string; current?: 'docs' | 'ch
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="${BASE}icon.png">
 <link rel="stylesheet" href="${BASE}style.css">
+<script defer src="https://analytics.githubnext.com/script.js" data-website-id="1b2695d3-22d3-4de8-850f-843dcad1af08"></script>
 </head>
 <body>
 <header class="top${o.wide ? ' wide' : ''}">
