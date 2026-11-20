@@ -1,7 +1,7 @@
 // files, UI half: a file tree beside every file editor (its bar's button, or ⌘⇧T, shows and hides it), and quick open
 // (⌘P): any file in the selected thread's folder by a few letters of its name, opened beside the thread in the pane
 // kind that takes it. Clicking a file in the tree shows it in that editor; ⌘-click opens it beside. A folder a thread
-// names opens in a pane of its own (`folder`), as a tree to open files from. The thread's whole folder is a view too
+// names opens in a pane of its own (`folder`), as a tree to open files from, read from disk (ignored files too). The thread's whole folder is a view too
 // (`files.folder`), offered for a space, beside the thread or the pane menu: not placed until the user puts it somewhere.
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
 import {
@@ -11,7 +11,7 @@ import {
 import type { ThreadInfo } from '@superego/protocol'
 import { CaretRightIcon, FolderSimpleIcon, IconButton } from '@superego/ui'
 import './styles.css'
-import { about, FOLDER, LIST, type FileList } from './shared.ts'
+import { about, ENTRIES, FOLDER, LIST, type FileList, type FolderEntries } from './shared.ts'
 
 // The tree, its button and quick open share what's shown, kept in the window (set in setup).
 /** The tree beside the editor: closed until asked for, then as last left. */
@@ -106,7 +106,7 @@ function Tree({ machine, thread, path, open }: EditorSlotProps) {
 
 /** A folder's rows, folders first: each folder a row that opens and closes, then its files by name. */
 function FolderRows({ folder, depth, isOpen, toggle, pick, current }: {
-  folder: Folder; depth: number; isOpen(path: string): boolean; toggle(path: string): void; pick(file: string, event: MouseEvent): void; current?: string
+  folder: Folder; depth: number; isOpen(path: string): boolean; toggle(path: string): void; pick(file: string, event: MouseEvent): void; current: string
 }) {
   return (
     <>
@@ -115,7 +115,7 @@ function FolderRows({ folder, depth, isOpen, toggle, pick, current }: {
           <button className="files-tree__row files-tree__folder" style={{ paddingLeft: 8 + depth * 12 }} onClick={() => toggle(child.path)}>
             <CaretRightIcon size={10} weight="bold" className={`files-tree__caret ${isOpen(child.path) ? 'is-open' : ''}`} aria-hidden />{child.name}
           </button>
-          {isOpen(child.path) && <FolderRows folder={child} depth={depth + 1} isOpen={isOpen} toggle={toggle} pick={pick} {...(current ? { current } : {})} />}
+          {isOpen(child.path) && <FolderRows folder={child} depth={depth + 1} isOpen={isOpen} toggle={toggle} pick={pick} current={current} />}
         </div>
       ))}
       {folder.files.map((file) => (
@@ -133,14 +133,15 @@ function FolderRows({ folder, depth, isOpen, toggle, pick, current }: {
 /** A folder pane's tab: the folder's own name. */
 const folderTitle = (path: string | undefined) => path ? `${path.split('/').at(-1)}/` : undefined
 
-/** A folder a thread names (`''`: its whole folder), as a tree to browse; a file opens beside the thread (⌘-click too). */
+/**
+ * A folder a thread names (`''`: its whole folder), as a tree to browse; a file opens beside the thread (⌘-click too).
+ * Unlike the tree beside the editor and quick open, which follow git (ignored files left out), it shows what's on disk
+ * on the thread's machine: a folder asked for by its path is shown whole, ignored and untracked files too.
+ */
 function FolderPane({ machine, thread, pane }: PaneProps) {
   const registry = useRegistry()
   const dispatch = useDispatch()
   const path = ((pane.params as { path?: string } | undefined)?.path ?? '').replace(/\/+$/, '')
-  const list = useFiles(machine.id, thread)
-  // The thread's whole tree, shown from this folder down.
-  const folder = useMemo(() => path.split('/').filter(Boolean).reduce<Folder | undefined>((at, part) => at?.folders.get(part), treeOf(list?.files ?? [])), [list, path])
   const [open, setOpen] = useState<Set<string>>(() => new Set())
   const toggle = (child: string) => setOpen((was) => { const next = new Set(was); if (!next.delete(child)) next.add(child); return next })
   const show = (file: string) => {
@@ -149,11 +150,37 @@ function FolderPane({ machine, thread, pane }: PaneProps) {
   }
   return (
     <div className="files-folder" aria-label={path || 'Files'}>
-      {!list ? <div className="files-tree__note">Reading…</div>
-        : !folder ? <div className="files-tree__note">No files here.</div>
-        : <FolderRows folder={folder} depth={0} isOpen={(child) => open.has(child)} toggle={toggle} pick={show} />}
-      {list?.truncated && <div className="files-tree__note">Only the first {list.files.length} files.</div>}
+      <FolderLevel machine={machine.id} thread={thread} path={path} depth={0} isOpen={(child) => open.has(child)} toggle={toggle} pick={show} />
     </div>
+  )
+}
+
+/** One folder's rows in a folder pane, read from the thread's machine as it's shown: folders first, then files. */
+function FolderLevel({ machine, thread, path, depth, isOpen, toggle, pick }: {
+  machine: string; thread: ThreadInfo; path: string; depth: number; isOpen(path: string): boolean; toggle(path: string): void; pick(file: string): void
+}) {
+  const { data, error } = useMethod<FolderEntries>(machine, ENTRIES, { thread: thread.id, path }, { refresh: thread.activeAt })
+  useEffect(() => { if (error) console.error(`files: couldn't read ${path || thread.cwd}`, error) }, [error, path, thread.cwd])
+  const indent = { paddingLeft: 12 + depth * 12 }
+  if (error) return <div className="files-tree__note files-tree__note--error" style={indent} role="alert">Couldn't read this folder: {error.message}</div>
+  if (!data) return <div className="files-tree__note" style={indent}>Reading…</div>
+  if (!data.entries.length) return <div className="files-tree__note" style={indent}>{depth ? 'Empty' : 'No files here.'}</div>
+  return (
+    <>
+      {data.entries.map(({ name, folder }) => {
+        const child = path ? `${path}/${name}` : name
+        return folder ? (
+          <div key={name}>
+            <button className="files-tree__row files-tree__folder" style={{ paddingLeft: 8 + depth * 12 }} onClick={() => toggle(child)}>
+              <CaretRightIcon size={10} weight="bold" className={`files-tree__caret ${isOpen(child) ? 'is-open' : ''}`} aria-hidden />{name}
+            </button>
+            {isOpen(child) && <FolderLevel machine={machine} thread={thread} path={child} depth={depth + 1} isOpen={isOpen} toggle={toggle} pick={pick} />}
+          </div>
+        ) : (
+          <button key={name} className="files-tree__row" style={{ paddingLeft: 22 + depth * 12 }} title={child} onClick={() => pick(child)}>{name}</button>
+        )
+      })}
+    </>
   )
 }
 

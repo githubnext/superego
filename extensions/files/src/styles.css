@@ -8,3 +8,4 @@
 .files-tree__note { padding: 6px 12px; color: var(--superego-muted); font-size: var(--superego-text-sm); }
 .files-toggle.is-on { color: var(--superego-accent); }
 .files-folder { flex: 1; min-height: 0; overflow: auto; padding: 6px 0 24px; font-size: var(--superego-text-ui); }
+.files-tree__note--error { color: var(--superego-danger); }

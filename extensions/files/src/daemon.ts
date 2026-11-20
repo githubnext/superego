@@ -1,13 +1,15 @@
 // files, daemon half: the files in a thread's folder (or one a thread is about to start in), for the file tree, quick
 // open and mentions. In a git repository, git's own list (tracked, and new files not ignored), so .gitignore holds;
-// elsewhere a walk that skips what's never wanted.
+// elsewhere a walk that skips what's never wanted. And one folder of a thread's as it is on disk, ignored files too,
+// for a folder pane: one asked for by its path is shown whole.
 import { execFile } from 'node:child_process'
-import { readdir } from 'node:fs/promises'
+import { readdir, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { obj, opt, str } from '@earendil-works/pi-schema'
 import { defineDaemonExtension } from '@superego/daemon'
-import { about, LIST, type FileList } from './shared.ts'
+import { RpcError } from '@superego/protocol'
+import { about, ENTRIES, LIST, type FileList, type FolderEntries } from './shared.ts'
 
 /** Past this many, the list stops: a folder that big (a home directory) isn't browsed file by file. */
 export const LIMIT = 20_000
@@ -40,6 +42,35 @@ export async function listFiles(dir: string): Promise<FileList> {
   return { files: all.slice(0, LIMIT).sort((a, b) => a.localeCompare(b)), truncated }
 }
 
+/** What a folder pane leaves out: git's own folder, and the Finder's notes. */
+const UNLISTED = new Set(['.git', '.DS_Store'])
+
+/**
+ * What's in the folder `path` of `root` (`''`: root itself), as it is on disk: folders first, then files, each by name.
+ * A path out of `root`, or one that isn't a readable folder, throws, saying why.
+ */
+export async function folderEntries(root: string, path: string): Promise<FolderEntries> {
+  const dir = resolve(root, path)
+  if (dir !== root && !dir.startsWith(`${root.replace(/\/+$/, '')}/`)) throw new RpcError('invalid', `${path} is outside ${root}`)
+  const shown = path || root
+  let found
+  try {
+    found = await readdir(dir, { withFileTypes: true })
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code
+    if (code === 'ENOENT') throw new RpcError('not_found', `${shown} isn't there`)
+    if (code === 'ENOTDIR') throw new RpcError('invalid', `${shown} is a file, not a folder`)
+    if (code === 'EACCES' || code === 'EPERM') throw new RpcError('forbidden', `No permission to read ${shown}`)
+    throw error
+  }
+  const entries = await Promise.all(found.filter((entry) => !UNLISTED.has(entry.name)).map(async (entry) => ({
+    name: entry.name,
+    // A link is what it points at; one to nothing, a file.
+    folder: entry.isDirectory() || (entry.isSymbolicLink() && await stat(join(dir, entry.name)).then((s) => s.isDirectory(), () => false)),
+  })))
+  return { entries: entries.sort((a, b) => Number(b.folder) - Number(a.folder) || a.name.localeCompare(b.name)) }
+}
+
 /** A folder as typed for a thread yet to start (`~/dev/x`), as a path; asked for none, refused. */
 function folder(cwd: string | undefined): string {
   if (!cwd?.trim()) throw new Error('files.list needs a thread or a folder (cwd)')
@@ -59,5 +90,7 @@ export default defineDaemonExtension({
       cache.set(cwd, { at: Date.now(), list })
       return list
     }, { params: obj({ thread: opt(str()), cwd: opt(str()) }) })
+    superego.method(ENTRIES, async ({ thread, path }) => folderEntries((await superego.threads.get(thread)).cwd, path ?? ''),
+      { params: obj({ thread: str(), path: opt(str()) }) })
   },
 })
