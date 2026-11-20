@@ -81,7 +81,8 @@ export default async function images(t, s) {
   await t.until(`(() => { const f = ${inline}[3]; return f.classList.contains('is-broken') && f.textContent === 'Elsewhere' && f.title.includes("outside the thread's folder") })()`, 'an image outside the folder, refused')
   await t.check(`${inline}.every((f) => f.getBoundingClientRect().right <= f.closest('.msg').getBoundingClientRect().right + 0.5)`, 'inline images overflow the message')
   await t.run(`${inline}[0].click()`)
-  await t.until(`document.querySelector('.lightbox .lightbox__image.is-ready') && document.querySelector('.lightbox__count')?.textContent === '1 / 4'`, 'an inline image in the lightbox')
+  // Keys are the dialog's once the focus is in it, a frame after it opens (Base UI moves it on the next frame).
+  await t.until(`document.querySelector('.lightbox .lightbox__image.is-ready') && document.querySelector('.lightbox__count')?.textContent === '1 / 4' && document.activeElement === document.querySelector('.lightbox')`, 'an inline image in the lightbox, focused')
   await press('ArrowRight')
   await t.until(`document.querySelector('.lightbox__count')?.textContent === '2 / 4' && Boolean(document.querySelector('.lightbox .lightbox__image.is-ready'))`, 'lightbox → the message’s next image')
   await press('Escape')

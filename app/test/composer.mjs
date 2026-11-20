@@ -99,7 +99,8 @@ await openApp({ name: 'composer', timeout: 180_000 }, async (t) => {
   await submit(working, 'The focus ring disappears when a pane opens beside. Find out why and fix it')
   await until(`window.superego.call('local', 'thread.list', {}).then(async (list) => list.find((s) => s.id === '${working}')?.status.state === 'working')`, 'working')
   await open('Focus ring disappears')
-  await until(`document.querySelector('.transcript')?.textContent.includes('Running the whole suite')`, 'long step running')
+  // Its steps folded into one line, the long one among them: what it said along the way is under the fold, not drawn.
+  await until(`document.querySelector('.transcript .steps--run .row__summary')?.textContent === 'Ran 2 commands and read a file'`, 'long step running')
   await submit(working, 'Then run the smoke test on main', 'followUp')
   await submit(working, 'Leave the e2e suite out of it', 'steer')
   await until(`document.querySelectorAll('.queued-row').length === 2`, 'a follow-up and a steer waiting')
