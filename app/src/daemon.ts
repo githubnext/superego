@@ -11,6 +11,7 @@ import { machineHub } from '@superego/client'
 // (`threads`, required, whose name is the core's namespace: nothing to switch or do without). Whether each is required
 // or optional is its own declaration (`about`), not decided here.
 import agentUi from '@superego/agent-ui/daemon'
+import claudeAgent from '@superego/claude-agent/daemon'
 import ego from '@superego/ego/daemon'
 import files from '@superego/files/daemon'
 import git from '@superego/git/daemon'
@@ -40,7 +41,7 @@ const skills = skillsExtension({ own: [SKILL_DIR] })
 // them to browsers and agents (see the daemon's relay.ts).
 serveDaemon({
   app, defaultCwd: homedir(), extensions: [
-    worktrees, agentUi, ego, files, git, images, links, mcpServers, mentions, skills, suggestions, tasks, terminal, threadTools, threadReports, unread, browser,
+    worktrees, agentUi, claudeAgent, ego, files, git, images, links, mcpServers, mentions, skills, suggestions, tasks, terminal, threadTools, threadReports, unread, browser,
   ], ...(webRoot ? { webRoot } : {}),
   reach: (dataDir, self) => machineHub({ app, dataDir, self }),
 }).catch((error) => {

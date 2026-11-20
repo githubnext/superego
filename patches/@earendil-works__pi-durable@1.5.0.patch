@@ -1,0 +1,214 @@
+diff --git a/dist/harness/agent.js b/dist/harness/agent.js
+index de65a5ea78806332493c393e323a1dae5744aa55..27b6daa0c77f0ad61127cf01494bbcf8121c5fd3 100644
+--- a/dist/harness/agent.js
++++ b/dist/harness/agent.js
+@@ -137,6 +137,10 @@ function applyChange(state, change) {
+         throw new RangeError(`maxTurns must be an integer 1 or more, got ${String(maxTurns)}`);
+     }
+     set("maxTurns", maxTurns);
++    if (change.runner !== undefined && change.runner !== null && (typeof change.runner !== "string" || change.runner === "")) {
++        throw new TypeError(`runner must be a task name, got ${String(change.runner)}`);
++    }
++    set("runner", change.runner);
+ }
+ function isList(value) {
+     return Array.isArray(value);
+@@ -239,6 +243,7 @@ report) {
+         ...(instructions === undefined ? {} : { instructions }),
+         ...(state?.cwd === undefined ? {} : { cwd: state.cwd }),
+         ...(state?.maxTurns === undefined ? {} : { maxTurns: state.maxTurns }),
++        ...(state?.runner === undefined ? {} : { runner: state.runner }),
+     };
+     return agent;
+ }
+diff --git a/dist/harness/generation.d.ts b/dist/harness/generation.d.ts
+index 6b3121b5ace947b905cbe6e8cfa8d5e19c26ed62..7bd43f942a442c6f4cbc8df220ee33937ec2a559 100644
+--- a/dist/harness/generation.d.ts
++++ b/dist/harness/generation.d.ts
+@@ -65,6 +65,11 @@ export type GenerationCheckpoint = {
+      */
+     phase: "finish";
+     run: RunSummary;
++} | {
++    /** Waiting on the agent's runner (`AgentState.runner`), a child the generation owns, which runs the turn. */
++    phase: "delegate";
++    attempt: number;
++    runner: TaskId<GenerationResult>;
+ } | {
+     /** Waiting on the tasks `afterRun` hooks asked for, which the generation owns; then the run ends. */
+     phase: "drain";
+diff --git a/dist/harness/generation.js b/dist/harness/generation.js
+index ac42dfe741b20726ab8eb3d8139b1296d664210d..ae75217ed18dbd085cd3e0501ca9844a76fbc19c 100644
+--- a/dist/harness/generation.js
++++ b/dist/harness/generation.js
+@@ -18,11 +18,14 @@ import { optionalExtension } from "./util.js";
+ const DEFAULT_POLL_AFTER_MS = 5000;
+ /**
+  * Built-in generation task: prepares the positional system prompt and tool loadout, requests or polls the model,
+- * retries, and classifies the response. The run's inputs live in `pi.live.run`.
++ * retries, and classifies the response. The run's inputs live in `pi.live.run`. A conversation whose agent names a
++ * `runner` (`AgentState.runner`) has each turn run by that task instead (`delegate`).
+  */
+ export const GenerationTask = defineTask({
+     name: "pi.generation",
+-    version: 2,
++    // Version 3 adds the `delegate` phase, for an agent's `runner`. A version 2 Harness cannot run it, so a version 3
++    // record leaves it blocked; version 2 checkpoints have no such phase and are kept as they are.
++    version: 3,
+     initial: () => ({ phase: "prepare", attempt: 1 }),
+     // Version 2 leaves calls to tools not offered in a sequential round's `pending`, flagged `unoffered` in their slots.
+     // A version 1 Harness would start their tool tasks unflagged, resolving the name, so it leaves version 2 blocked
+@@ -44,6 +47,8 @@ export const GenerationTask = defineTask({
+             const { conversationId } = runtime;
+             const agent = await runtime.agent(context);
+             const settings = runtime.settings;
++            if (agent.runner !== undefined)
++                return delegate(runtime, agent.runner, task.state.checkpoint.attempt, context);
+             const { model, thinkingLevel } = agent;
+             const resolved = model === undefined ? undefined : runtime.models.getModel(model.provider, model.modelId);
+             if (model === undefined || resolved === undefined)
+@@ -252,6 +257,17 @@ export const GenerationTask = defineTask({
+                 return { status: "waiting", checkpoint, on: tasks, policy: "allSettled" };
+             }, context);
+         },
++        /** The agent's runner is terminal: its answer ends the run as a model's final answer does, else the run fails. */
++        delegate: async (task, runtime, context) => {
++            if (cutOffTooOften(task, runtime))
++                return endCutOff(runtime, task, context);
++            const { runner } = task.state.checkpoint;
++            const [outcome] = await runtime.outcomes([runner], context);
++            if (outcome?.status === "completed" && outcome.result?.entryId !== undefined) {
++                return answeredByRunner(runtime, outcome.result.entryId, context);
++            }
++            return failRunner(runtime, runnerFailure(outcome), context);
++        },
+         /** The after-run tasks are terminal, whatever their outcomes: end the run. */
+         drain: async (task, runtime, context) => {
+             const { answer } = task.state.checkpoint;
+@@ -442,6 +458,90 @@ async function failNoModel(runtime, ref, context) {
+         return { status: "terminal", outcome: { status: "failed", error: { message, detail: { reason: "no_model" } } } };
+     }, context);
+ }
++/**
++ * Run a turn with the agent's `runner`, the name of an installed task, instead of a model request. The
++ * generation keeps the run, so its inputs, boundaries, queued items, `afterRun` hooks, aborts and failures stay the
++ * Harness's, and waits for the runner, a child it owns, created with input `{}`. The runner reads the conversation,
++ * appends the turn's entries itself (assistant messages, tool results), may publish its in-flight answer as
++ * `pi.live.generation.message` (deferred, as `PROGRESS_COMMIT`), which becomes an aborted entry if the run is cut short,
++ * and completes with its answer's entry (`GenerationResult`). It owns no system prompt, tools, compaction or retries:
++ * none of the agent's sections, tools or `beforeRequest`/`afterResponse`/`onYield` hooks apply, and `maxTurns` does not
++ * count its rounds.
++ */
++async function delegate(runtime, name, attempt, context) {
++    const view = await runtime.context(runtime.conversationId, context);
++    const last = view.messages.findLast((message) => message.role !== "system");
++    if (last?.role !== "user" && last?.role !== "toolResult")
++        return failNothingToAnswer(runtime, context);
++    const runner = runtime.registry.task(name);
++    if (runner === undefined || name.startsWith("pi.")) {
++        const message = `Runner ${name} is not installed`;
++        await runtime.commit(async (tx) => {
++            const failure = await prepareFailure(tx, runtime);
++            const live = await tx.doc(LiveDoc, runtime.conversationId);
++            await endFailedRun(tx, runtime, live, failure, {
++                status: "unanswered",
++                reason: "no_model",
++                detail: message,
++                settlement: { status: "unanswered", reason: "no_model" },
++            });
++            return { status: "terminal", outcome: { status: "failed", error: { message, detail: { reason: "no_model" } } } };
++        }, context);
++        return;
++    }
++    await runtime.commit(async (tx) => {
++        const child = await tx.createTask(runner, {}, { ownership: { kind: "task", taskId: runtime.taskId } });
++        return { status: "waiting", checkpoint: { phase: "delegate", attempt, runner: child }, on: [child], policy: "allSettled" };
++    }, context);
++}
++/** The runner answered with entry `answer`: end the run as `answer()` ends one with a model's final answer. */
++async function answeredByRunner(runtime, answer, context) {
++    const afterRun = await asksAfterRun(runtime, context);
++    const conversationId = runtime.conversationId;
++    await runtime.commit(async (tx) => {
++        const boundary = await prepareBoundary(tx, conversationId, runtime.settings);
++        const live = await tx.doc(LiveDoc, conversationId);
++        // The runner clears its partial with its answer; one it left is superseded by that answer.
++        delete live.generation;
++        if (afterRun) {
++            const held = holdRun(tx, live, runtime, { reason: "answer", answer, last: answer });
++            if (held !== undefined)
++                return held;
++        }
++        const { users, first } = await applyBoundary(tx, boundary, "final", runtime.now());
++        endRun(tx, live, runtime.taskId, { status: "done", answer });
++        if (users.length > 0)
++            await startRun(tx, conversationId, live, { inputs: users, first });
++        return { status: "terminal", outcome: { status: "completed", result: { entryId: answer } } };
++    }, context);
++}
++/** What a runner that ended without an answer says: its error, else how it ended. */
++function runnerFailure(outcome) {
++    switch (outcome?.status) {
++        case "failed":
++        case "faulted":
++            return outcome.error.message;
++        case "orphaned":
++            return `The runner could not run: ${outcome.reason}`;
++        case "aborted":
++            return "The runner was aborted";
++        default:
++            return "The runner ended without an answer";
++    }
++}
++/** End the run `model_error` with `text`, keeping a partial the runner left as an aborted entry. */
++async function failRunner(runtime, text, context) {
++    await runtime.commit(async (tx) => {
++        const failure = await prepareFailure(tx, runtime);
++        const live = await tx.doc(LiveDoc, runtime.conversationId);
++        await convertPartial(tx, live, runtime.conversationId);
++        await endFailedRun(tx, runtime, live, failure, { status: "unanswered", reason: "model_error", detail: text });
++        return {
++            status: "terminal",
++            outcome: { status: "failed", error: { message: text, detail: { reason: "model_error" } } },
++        };
++    }, context);
++}
+ /** End the run without a request: its context has nothing the model would answer. */
+ async function failNothingToAnswer(runtime, context) {
+     const message = "The conversation has nothing to answer";
+diff --git a/dist/harness/types.d.ts b/dist/harness/types.d.ts
+index eb64e474162b158a43563e6c68d8ffea8c18b74a..01b4c19cfdda5e33fc17e4b73d87475797db2c07 100644
+--- a/dist/harness/types.d.ts
++++ b/dist/harness/types.d.ts
+@@ -423,6 +423,13 @@ export type AgentState = {
+      * `unanswered` with `turn_limit`. An integer, `1` or more; unset, no limit. Task-owned children and forks inherit it.
+      */
+     maxTurns?: number;
++    /**
++     * The name of an installed task that runs each of the conversation's turns instead of a model request: the run's
++     * generation creates it as a child and waits for it, and it appends the turn's entries and completes with its
++     * answer's entry (`GenerationResult`). Its agent's model, sections, tools and generation hooks other than `afterRun`
++     * don't apply. Unset: the model answers.
++     */
++    runner?: string;
+ };
+ /** A change to `pi.agent`: a given field replaces the stored one, `null` clears it, `undefined` changes nothing. */
+ export type AgentChange = {
+@@ -444,6 +451,8 @@ export type AgentChange = {
+     readonly cwd?: string | null;
+     /** `configure()` throws a `RangeError` unless it is an integer `1` or more (or `null`). */
+     readonly maxTurns?: number | null;
++    /** `configure()` throws a `TypeError` unless it is a non-empty task name (or `null`). */
++    readonly runner?: string | null;
+ };
+ /** A conversation's agent resolved against a registry snapshot and the settings. */
+ export type Agent<Tool extends ToolRegistration = ToolRegistration> = {
+@@ -465,6 +474,8 @@ export type Agent<Tool extends ToolRegistration = ToolRegistration> = {
+      * `unanswered` with `turn_limit`. An integer, `1` or more; unset, no limit. Task-owned children and forks inherit it.
+      */
+     readonly maxTurns?: number;
++    /** The task that runs each turn instead of the model (`AgentState.runner`). */
++    readonly runner?: string;
+ };
+ /**
+  * Runs inside the creating commit, after the creation hook and the `agent` change. The conversation creation is already

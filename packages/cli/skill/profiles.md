@@ -28,6 +28,7 @@ export default defineProfile({
   description: 'Answers customer mail',              // shown where a profile is picked
   model: 'anthropic/claude-sonnet-4-5',              // provider/model; else the machine's default
   thinking: 'medium',
+  // agent: 'claude-agent',                          // another kind of agent, for its threads' whole life (below)
   prompt: 'You answer customer email for Acme. Be brief.',
   extensions: ['./orders.ts'],                       // daemon side: see below
   ui: ['./ui/order.tsx'],                            // window side: defineUiExtension modules
@@ -176,6 +177,9 @@ superego profile revoke-ui default -m box    # Settings → Machines lists them 
 - The window loads a profile's UI as soon as it lists one of its threads (sidebar or navigator), and again when a
   shown thread of it moves on after a change ([ui.md](ui.md#when-the-ui-loads)).
 - `model`, `thinking` and `options` apply where a thread hasn't chosen its own.
+- `agent` picks another kind of agent for the threads that start with the profile, fixed for each thread's life: an
+  extension's (`superego.agentKind`). `'claude-agent'` (experimental) runs the user's own Claude Code, signed in with its
+  own `/login`; Superego's model, tools and prompt sections don't apply to those threads.
 
 ## An example
 

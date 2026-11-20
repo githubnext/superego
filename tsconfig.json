@@ -14,6 +14,7 @@
     { "path": "extensions/threads" },
     { "path": "extensions/thread-tools" },
     { "path": "extensions/thread-reports" },
+    { "path": "extensions/claude-agent" },
     { "path": "extensions/agent-ui" },
     { "path": "extensions/files" },
     { "path": "extensions/git" },

@@ -33,6 +33,8 @@ export type ThreadMeta = {
   title: string; cwd: string; createdAt: number; seen?: { entryId?: number; failureTaskId?: number }
   /** The thread's own model and thinking; unset follows its profile, else this machine's settings. */
   model?: string; thinking?: string
+  /** The kind of agent it runs on for its whole life (an extension's `agentKind`), as its profile picked it; unset, Superego's own. */
+  agent?: string
   /** The profile it started with (see profiles.ts); unset runs plain Superego. */
   profile?: ProfileRef
   /** Put away: left out of the thread list (and the sidebar) until unarchived. */

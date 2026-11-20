@@ -118,6 +118,8 @@ export function createExtensionHost(host: Host, later: { profiles(): ProfileHost
    * extension, by the name it gave them, to as installed now (replaced, it's the new one).
    */
   const chosenParts = new Map<string, Map<string, Extension>>()
+  /** The kinds of agent extensions run threads' turns with (`agentKind`): the runner task's name, and whose it is. */
+  const kinds = new Map<string, { runner: string; owner: string }>()
   /**
    * The kinds of pane the agent can open from extensions' data views (a thread view that fits a pane and says what it
    * shows). The others are in what each extension is (`about.panes`).
@@ -314,6 +316,15 @@ export function createExtensionHost(host: Host, later: { profiles(): ProfileHost
   }
 
   /**
+   * The runner task of agent kind `kind` (`agentKind`), for a thread going `without` these extensions: undefined when no
+   * extension here has it, its extension is off here, or the thread goes without it.
+   */
+  function runnerOf(kind: string, without: ReadonlySet<string>) {
+    const found = kinds.get(kind)
+    return found && !without.has(found.owner) && offered().some((e) => e.name === found.owner) ? found.runner : undefined
+  }
+
+  /**
    * Every thread's agent has this: it tells extensions' `toolCalls` of each call that ended, without waiting for them
    * or letting them change the result. Not an extension of its own, so nothing goes without it.
    */
@@ -474,6 +485,16 @@ export function createExtensionHost(host: Host, later: { profiles(): ProfileHost
           },
           remove,
         })
+      },
+      agentKind({ name, runner }) {
+        life.live(`the agent kind ${name}`)
+        if (name !== extension.name && !name.startsWith(`${extension.name}.`)) throw new Error(`Extension ${extension.name} must name its agent kinds "${extension.name}" or "${extension.name}.<kind>", not "${name}"`)
+        if (kinds.has(name)) throw new Error(`Agent kind ${name} is already there`)
+        // Installed as a part no thread is given: its task is in the registry, for the threads whose runner it is.
+        const part = agentExtension(defineExtension({ name: `${name}:runner`, tasks: [runner] }), false)
+        kinds.set(name, { runner: runner.definition.name, owner: extension.name })
+        undo(() => { kinds.delete(name); part.undo() }, 'an agent kind')
+        note('agent kinds', name)
       },
       agentParts(add) { own(adders, add as (typeof adders)[number]['value'], 'an agentParts'); note('agentParts', 'an agentParts') },
       auth: {
@@ -800,6 +821,7 @@ export function createExtensionHost(host: Host, later: { profiles(): ProfileHost
 
   return {
     setUp, setUpBuiltin, registerSwitches, declare, inspect, known, offer, offered: (name: string) => offered().some((e) => e.name === name),
+    runnerOf,
     publishViews, agentOf, modelFromOf, partsFor, switchedOff, withoutFor, panesOf, factsOf, quietOf, blockedOf, appliesTo,
     /** The daemon closing: switches turned meanwhile change nothing. */
     close: () => unlisten(),

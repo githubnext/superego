@@ -46,6 +46,11 @@ export type ProfileSpec = {
   model?: string
   /** Thinking level for its threads (`low`, `high`, …), unless a thread picks its own. */
   thinking?: string
+  /**
+   * The kind of agent its threads run on, for their whole life: an extension's (`agentKind`), such as `claude-agent`.
+   * Unset, Superego's own.
+   */
+  agent?: string
   /** Instructions for the agent, after the extensions' prompt sections. */
   prompt?: string
   /**
@@ -84,7 +89,7 @@ export type ProfileSpec = {
 export type LoadedSpec = ProfileSpec & { [key: string]: Json | undefined }
 
 /** The profile keys that are the core's own: an extension can't register them (`profileKey`). */
-export const CORE_KEYS = new Set(['description', 'model', 'thinking', 'prompt', 'extensions', 'ui', 'panes', 'options', 'without', 'extends'])
+export const CORE_KEYS = new Set(['description', 'model', 'thinking', 'agent', 'prompt', 'extensions', 'ui', 'panes', 'options', 'without', 'extends'])
 
 /**
  * A key of an extension's own in profiles (`superego.profileKey`): how a profile's value of it is checked, merged over

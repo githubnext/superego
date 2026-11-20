@@ -1,6 +1,6 @@
 # A thread that runs the user's Claude Code: proof and design
 
-2026-11-20. A proposal: nothing here is built in Superego yet. The terms behind it are in
+2026-11-20. A design; wave 1 (§4) is built. The terms behind it are in
 [claude-subscriptions.md](claude-subscriptions.md), whose §3(a) this builds on. **This is not legal advice.**
 
 The idea: an opt-in second agent kind for threads. The thread runs the user's own installed, unmodified `claude`
@@ -86,9 +86,27 @@ needs: a thread's `agent`, and a way for an extension to run a thread's turns. S
 - **A durable task per turn** (`defineTask`, `claude-agent.turn`) owns one `query()`. Running inside the thread's
   pi-durable conversation keeps the thread's model: `run` present means working; Stop aborts the task; a daemon
   restart restarts the task.
-  - **Spike first (wave 1):** pi-durable drives a run through its own `GenerationTask`. We need to find out whether an
-    extension's task can own a run (`pi.live.run`, `runFailure`) and append entries, or whether pi-durable needs a hook
-    for that. If it needs one, that's a change upstream, not a patch on our copy.
+  - **The seam (wave 1 spike, 2026-11-20).** pi-durable hard-wires runs to its `GenerationTask`: `startRun` creates
+    one for every input, and only `pi.generation` may own `pi.live.run`. An extension's task can't own a run without a
+    change to pi-durable, so it got one, in `patches/@earendil-works__pi-durable@1.5.0.patch` (upstream:
+    github.com/earendil-works/pi, `packages/durable`, to offer there):
+    - `AgentState.runner`: the name of an installed task that runs each turn instead of a model request
+      (`configure({ runner })`, or `createConversation({ agent: { runner } })`).
+    - The generation's `prepare` sees it and *delegates*: it creates the runner as a child it owns and waits
+      (a new `delegate` phase; `GenerationTask` version 3). When the runner completes with its answer's entry
+      (`{ entryId }`), the run ends as for a model's final answer (inputs settled, boundaries, queued messages,
+      `afterRun`); when it fails, the run fails `model_error` with its message.
+    - So pi-durable keeps everything about the run: `pi.live.run` means working, Stop (`Conversation.abort()`)
+      cascades to the runner and ends the run `aborted`, a partial the runner published as
+      `pi.live.generation.message` becomes an aborted entry, messages sent meanwhile queue and start the next run.
+    - The runner only appends the turn's entries (`AssistantEntry`, `ToolResultEntry`) and publishes its partial.
+    - Proven with a fake runner (`packages/daemon/test/runner-seam.test.ts`): a turn, streaming, a tool call and
+      result, the answer, and Stop.
+  - **In the daemon:** a profile's `agent` (`'claude-agent'`) is kept on the thread at its start (`ThreadMeta.agent`),
+    for its whole life. An extension offers a kind with `superego.agentKind({ name, runner })` (extension API 5.3);
+    the daemon sets the thread's runner at its start and each send, and needs no model of Superego's for it. A kind
+    that isn't on here refuses the thread's start, or a send.
+  - The lockfile (the patch, the SDK) was recorded on a machine that reaches registry.npmjs.org: this Mac couldn't.
 - **One process per turn at first**, then one per active thread. Wave 1 calls `query({ prompt, options: { resume } })`
   for each user message, which is simple and survives restarts, at ~250 ms per turn. Wave 4 keeps one `query()` per
   active thread, fed by an `AsyncIterable` of user messages (streaming input), so a message sent mid-turn reaches
@@ -228,7 +246,12 @@ saying, in plain text, that a product "runs Claude Code".
 0. **Done (2026-11-20).**
    - §4b closed: Superego refuses Claude subscription tokens in pi-ai's path, and ignores `ANTHROPIC_OAUTH_TOKEN`.
    - The proof of concept above.
-1. **The spike, behind a developer flag.**
+1. **Built (2026-11-20), behind a profile's `agent: 'claude-agent'`:** the seam above; `extensions/claude-agent`, one
+   `query()` per turn with `resume`, text and tool rows, working/done/error, Stop, the scrubbed environment, `claude`
+   found through the login shell. `permissionMode: 'dontAsk'` until wave 2's approvals: a tool the user's Claude Code
+   settings don't allow is refused, not asked. Tested in `extensions/claude-agent/test` against
+   `test/mock-anthropic.ts`, with the user's `claude` (skipped where it isn't installed). Not yet: real turns on a plan.
+   The plan was:
    - Find how a task outside `GenerationTask` owns a pi-durable run and appends entries (§3.2). Settle that first,
      upstream if needed.
    - Then: `extensions/claude-agent` with one `query()` per turn and `resume`; text and tool rows (§3.3); working,

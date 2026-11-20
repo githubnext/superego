@@ -26,6 +26,7 @@
     "@superego/suggestions": "workspace:*",
     "@superego/tasks": "workspace:*",
     "@superego/terminal": "workspace:*",
+    "@superego/claude-agent": "workspace:*",
     "@superego/thread-reports": "workspace:*",
     "@superego/thread-tools": "workspace:*",
     "@superego/threads": "workspace:*",

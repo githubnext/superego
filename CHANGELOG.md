@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Claude Agent (experimental): a profile with `agent: 'claude-agent'` runs its threads on your own Claude Code,
+  signed in with its own `/login`: answers stream in, its tool calls show as rows, Stop interrupts it. Superego never
+  sees your Claude sign-in, and keeps Anthropic API keys in its environment away from it.
 - Settings → Machines is calmer: each machine is one line with its name and host, Update shows only when a machine is
   behind (with how far), and Settings, Connect and Remove are in the row's ··· menu, with the machine's route. A daemon
   that stops at logout gets an Install service button that runs `superego daemon install` there for you, and a

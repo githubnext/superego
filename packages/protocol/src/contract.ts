@@ -48,11 +48,13 @@ import type { ExtensionAbout } from './app.ts'
  * 5.1: the UI half's `useTabGlyph` (a pane's own glyph on its tab, a spinner say); a `WebView`'s `stop()`, its state's
  * `progress` while it loads, and a framed one's `onEvent` telling whether it's loading.
  * 5.2: the daemon half's `call(id, params)`: another extension's read method on this machine.
+ * 5.3: the daemon half's `agentKind({ name, runner })`: a kind of agent whose threads (a profile's `agent`) have their
+ * turns run by a task of the extension's instead of a model.
  * Minor: something added (an extension that uses it asks for `^3.<minor>`); major: something an extension could rely
  * on changed or went, from 2.5 on without exception. An extension whose `api` range this doesn't satisfy is refused
  * when it's set up.
  */
-export const EXTENSION_API = '5.2.0'
+export const EXTENSION_API = '5.3.0'
 
 /** What a machine says of an extension set up there: `hello.extensions` and `features.changed` carry one each. */
 export type ExtensionManifest = Pick<ExtensionAbout, 'name' | 'version' | 'api'>

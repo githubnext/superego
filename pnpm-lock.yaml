@@ -192,10 +192,19 @@ overrides:
   node-releases: 2.0.61
   tinybench: 6.2.2
   ws: 8.22.0
+  '@anthropic-ai/claude-agent-sdk-darwin-arm64': '-'
+  '@anthropic-ai/claude-agent-sdk-darwin-x64': '-'
+  '@anthropic-ai/claude-agent-sdk-linux-arm64': '-'
+  '@anthropic-ai/claude-agent-sdk-linux-arm64-musl': '-'
+  '@anthropic-ai/claude-agent-sdk-linux-x64': '-'
+  '@anthropic-ai/claude-agent-sdk-linux-x64-musl': '-'
+  '@anthropic-ai/claude-agent-sdk-win32-arm64': '-'
+  '@anthropic-ai/claude-agent-sdk-win32-x64': '-'
 
 pnpmfileChecksum: sha256-8RoD5CkWTubjdo8qG3mRkX7fEgwSEWupGaaz+qEClz4=
 
 patchedDependencies:
+  '@earendil-works/pi-durable@1.5.0': d071c462b7d72b75fdec1cc6ad4c27a24848f99901fa613fdd1ac6c1240dd6af
   ghostty-web@0.4.0: fef2236870cb562d7c7419513ae06c0fc86a4b58069bd53043e3f9d9af56cb2e
 
 importers:
@@ -229,6 +238,9 @@ importers:
       '@superego/browser':
         specifier: workspace:*
         version: link:../extensions/browser
+      '@superego/claude-agent':
+        specifier: workspace:*
+        version: link:../extensions/claude-agent
       '@superego/cli':
         specifier: workspace:*
         version: link:../packages/cli
@@ -313,7 +325,7 @@ importers:
     dependencies:
       '@earendil-works/pi-durable':
         specifier: file:../../vendor/earendil-works-pi-durable-1.5.0.tgz
-        version: file:vendor/earendil-works-pi-durable-1.5.0.tgz(@aws-sdk/credential-provider-node@3.972.91)(@modelcontextprotocol/sdk@1.32.2(zod@4.6.7))(@smithy/signature-v4@5.7.5)(undici@7.30.1)(ws@8.22.0)(zod@4.6.7)
+        version: file:vendor/earendil-works-pi-durable-1.5.0.tgz(patch_hash=d071c462b7d72b75fdec1cc6ad4c27a24848f99901fa613fdd1ac6c1240dd6af)(@aws-sdk/credential-provider-node@3.972.91)(@modelcontextprotocol/sdk@1.32.2(zod@4.6.7))(@smithy/signature-v4@5.7.5)(undici@7.30.1)(ws@8.22.0)(zod@4.6.7)
       '@earendil-works/pi-schema':
         specifier: file:../../vendor/earendil-works-pi-schema-1.5.0.tgz
         version: file:vendor/earendil-works-pi-schema-1.5.0.tgz
@@ -359,11 +371,36 @@ importers:
         specifier: ^19
         version: 19.3.1
 
+  extensions/claude-agent:
+    dependencies:
+      '@anthropic-ai/claude-agent-sdk':
+        specifier: 0.3.323
+        version: 0.3.323(@anthropic-ai/sdk@0.129.0(zod@4.6.7))(@modelcontextprotocol/sdk@1.32.2(zod@4.6.7))(zod@4.6.7)
+      '@earendil-works/pi-ai':
+        specifier: file:../../vendor/earendil-works-pi-ai-1.5.0.tgz
+        version: file:vendor/earendil-works-pi-ai-1.5.0.tgz(@aws-sdk/credential-provider-node@3.972.91)(@modelcontextprotocol/sdk@1.32.2(zod@4.6.7))(@smithy/signature-v4@5.7.5)(undici@7.30.1)(ws@8.22.0)(zod@4.6.7)
+      '@earendil-works/pi-durable':
+        specifier: file:../../vendor/earendil-works-pi-durable-1.5.0.tgz
+        version: file:vendor/earendil-works-pi-durable-1.5.0.tgz(patch_hash=d071c462b7d72b75fdec1cc6ad4c27a24848f99901fa613fdd1ac6c1240dd6af)(@aws-sdk/credential-provider-node@3.972.91)(@modelcontextprotocol/sdk@1.32.2(zod@4.6.7))(@smithy/signature-v4@5.7.5)(undici@7.30.1)(ws@8.22.0)(zod@4.6.7)
+      '@superego/daemon':
+        specifier: workspace:*
+        version: link:../../packages/daemon
+      '@superego/protocol':
+        specifier: workspace:*
+        version: link:../../packages/protocol
+    devDependencies:
+      '@earendil-works/chord':
+        specifier: file:../../vendor/earendil-works-chord-1.5.0.tgz
+        version: file:vendor/earendil-works-chord-1.5.0.tgz(ws@8.22.0)
+      '@superego/sdk':
+        specifier: workspace:*
+        version: link:../../packages/sdk
+
   extensions/ego:
     dependencies:
       '@earendil-works/pi-durable':
         specifier: file:../../vendor/earendil-works-pi-durable-1.5.0.tgz
-        version: file:vendor/earendil-works-pi-durable-1.5.0.tgz(@aws-sdk/credential-provider-node@3.972.91)(@modelcontextprotocol/sdk@1.32.2(zod@4.6.7))(@smithy/signature-v4@5.7.5)(undici@7.30.1)(ws@8.22.0)(zod@4.6.7)
+        version: file:vendor/earendil-works-pi-durable-1.5.0.tgz(patch_hash=d071c462b7d72b75fdec1cc6ad4c27a24848f99901fa613fdd1ac6c1240dd6af)(@aws-sdk/credential-provider-node@3.972.91)(@modelcontextprotocol/sdk@1.32.2(zod@4.6.7))(@smithy/signature-v4@5.7.5)(undici@7.30.1)(ws@8.22.0)(zod@4.6.7)
       '@earendil-works/pi-schema':
         specifier: file:../../vendor/earendil-works-pi-schema-1.5.0.tgz
         version: file:vendor/earendil-works-pi-schema-1.5.0.tgz
@@ -456,7 +493,7 @@ importers:
     dependencies:
       '@earendil-works/pi-durable':
         specifier: file:../../vendor/earendil-works-pi-durable-1.5.0.tgz
-        version: file:vendor/earendil-works-pi-durable-1.5.0.tgz(@aws-sdk/credential-provider-node@3.972.91)(@modelcontextprotocol/sdk@1.32.2(zod@4.6.7))(@smithy/signature-v4@5.7.5)(undici@7.30.1)(ws@8.22.0)(zod@4.6.7)
+        version: file:vendor/earendil-works-pi-durable-1.5.0.tgz(patch_hash=d071c462b7d72b75fdec1cc6ad4c27a24848f99901fa613fdd1ac6c1240dd6af)(@aws-sdk/credential-provider-node@3.972.91)(@modelcontextprotocol/sdk@1.32.2(zod@4.6.7))(@smithy/signature-v4@5.7.5)(undici@7.30.1)(ws@8.22.0)(zod@4.6.7)
       '@earendil-works/pi-schema':
         specifier: file:../../vendor/earendil-works-pi-schema-1.5.0.tgz
         version: file:vendor/earendil-works-pi-schema-1.5.0.tgz
@@ -509,7 +546,7 @@ importers:
     dependencies:
       '@earendil-works/pi-durable':
         specifier: file:../../vendor/earendil-works-pi-durable-1.5.0.tgz
-        version: file:vendor/earendil-works-pi-durable-1.5.0.tgz(@aws-sdk/credential-provider-node@3.972.91)(@modelcontextprotocol/sdk@1.32.2(zod@4.6.7))(@smithy/signature-v4@5.7.5)(undici@7.30.1)(ws@8.22.0)(zod@4.6.7)
+        version: file:vendor/earendil-works-pi-durable-1.5.0.tgz(patch_hash=d071c462b7d72b75fdec1cc6ad4c27a24848f99901fa613fdd1ac6c1240dd6af)(@aws-sdk/credential-provider-node@3.972.91)(@modelcontextprotocol/sdk@1.32.2(zod@4.6.7))(@smithy/signature-v4@5.7.5)(undici@7.30.1)(ws@8.22.0)(zod@4.6.7)
       '@earendil-works/pi-schema':
         specifier: file:../../vendor/earendil-works-pi-schema-1.5.0.tgz
         version: file:vendor/earendil-works-pi-schema-1.5.0.tgz
@@ -595,7 +632,7 @@ importers:
     dependencies:
       '@earendil-works/pi-durable':
         specifier: file:../../vendor/earendil-works-pi-durable-1.5.0.tgz
-        version: file:vendor/earendil-works-pi-durable-1.5.0.tgz(@aws-sdk/credential-provider-node@3.972.91)(@modelcontextprotocol/sdk@1.32.2(zod@4.6.7))(@smithy/signature-v4@5.7.5)(undici@7.30.1)(ws@8.22.0)(zod@4.6.7)
+        version: file:vendor/earendil-works-pi-durable-1.5.0.tgz(patch_hash=d071c462b7d72b75fdec1cc6ad4c27a24848f99901fa613fdd1ac6c1240dd6af)(@aws-sdk/credential-provider-node@3.972.91)(@modelcontextprotocol/sdk@1.32.2(zod@4.6.7))(@smithy/signature-v4@5.7.5)(undici@7.30.1)(ws@8.22.0)(zod@4.6.7)
       '@superego/app':
         specifier: workspace:*
         version: link:../../packages/app
@@ -623,7 +660,7 @@ importers:
     dependencies:
       '@earendil-works/pi-durable':
         specifier: file:../../vendor/earendil-works-pi-durable-1.5.0.tgz
-        version: file:vendor/earendil-works-pi-durable-1.5.0.tgz(@aws-sdk/credential-provider-node@3.972.91)(@modelcontextprotocol/sdk@1.32.2(zod@4.6.7))(@smithy/signature-v4@5.7.5)(undici@7.30.1)(ws@8.22.0)(zod@4.6.7)
+        version: file:vendor/earendil-works-pi-durable-1.5.0.tgz(patch_hash=d071c462b7d72b75fdec1cc6ad4c27a24848f99901fa613fdd1ac6c1240dd6af)(@aws-sdk/credential-provider-node@3.972.91)(@modelcontextprotocol/sdk@1.32.2(zod@4.6.7))(@smithy/signature-v4@5.7.5)(undici@7.30.1)(ws@8.22.0)(zod@4.6.7)
       '@superego/app':
         specifier: workspace:*
         version: link:../../packages/app
@@ -654,7 +691,7 @@ importers:
     dependencies:
       '@earendil-works/pi-durable':
         specifier: file:../../vendor/earendil-works-pi-durable-1.5.0.tgz
-        version: file:vendor/earendil-works-pi-durable-1.5.0.tgz(@aws-sdk/credential-provider-node@3.972.91)(@modelcontextprotocol/sdk@1.32.2(zod@4.6.7))(@smithy/signature-v4@5.7.5)(undici@7.30.1)(ws@8.22.0)(zod@4.6.7)
+        version: file:vendor/earendil-works-pi-durable-1.5.0.tgz(patch_hash=d071c462b7d72b75fdec1cc6ad4c27a24848f99901fa613fdd1ac6c1240dd6af)(@aws-sdk/credential-provider-node@3.972.91)(@modelcontextprotocol/sdk@1.32.2(zod@4.6.7))(@smithy/signature-v4@5.7.5)(undici@7.30.1)(ws@8.22.0)(zod@4.6.7)
       '@earendil-works/pi-schema':
         specifier: file:../../vendor/earendil-works-pi-schema-1.5.0.tgz
         version: file:vendor/earendil-works-pi-schema-1.5.0.tgz
@@ -716,7 +753,7 @@ importers:
     dependencies:
       '@earendil-works/pi-durable':
         specifier: file:../../vendor/earendil-works-pi-durable-1.5.0.tgz
-        version: file:vendor/earendil-works-pi-durable-1.5.0.tgz(@aws-sdk/credential-provider-node@3.972.91)(@modelcontextprotocol/sdk@1.32.2(zod@4.6.7))(@smithy/signature-v4@5.7.5)(undici@7.30.1)(ws@8.22.0)(zod@4.6.7)
+        version: file:vendor/earendil-works-pi-durable-1.5.0.tgz(patch_hash=d071c462b7d72b75fdec1cc6ad4c27a24848f99901fa613fdd1ac6c1240dd6af)(@aws-sdk/credential-provider-node@3.972.91)(@modelcontextprotocol/sdk@1.32.2(zod@4.6.7))(@smithy/signature-v4@5.7.5)(undici@7.30.1)(ws@8.22.0)(zod@4.6.7)
       '@superego/daemon':
         specifier: workspace:*
         version: link:../../packages/daemon
@@ -735,7 +772,7 @@ importers:
     dependencies:
       '@earendil-works/pi-durable':
         specifier: file:../../vendor/earendil-works-pi-durable-1.5.0.tgz
-        version: file:vendor/earendil-works-pi-durable-1.5.0.tgz(@aws-sdk/credential-provider-node@3.972.91)(@modelcontextprotocol/sdk@1.32.2(zod@4.6.7))(@smithy/signature-v4@5.7.5)(undici@7.30.1)(ws@8.22.0)(zod@4.6.7)
+        version: file:vendor/earendil-works-pi-durable-1.5.0.tgz(patch_hash=d071c462b7d72b75fdec1cc6ad4c27a24848f99901fa613fdd1ac6c1240dd6af)(@aws-sdk/credential-provider-node@3.972.91)(@modelcontextprotocol/sdk@1.32.2(zod@4.6.7))(@smithy/signature-v4@5.7.5)(undici@7.30.1)(ws@8.22.0)(zod@4.6.7)
       '@earendil-works/pi-schema':
         specifier: file:../../vendor/earendil-works-pi-schema-1.5.0.tgz
         version: file:vendor/earendil-works-pi-schema-1.5.0.tgz
@@ -859,7 +896,7 @@ importers:
         version: file:vendor/earendil-works-pi-ai-1.5.0.tgz(@aws-sdk/credential-provider-node@3.972.91)(@modelcontextprotocol/sdk@1.32.2(zod@4.6.7))(@smithy/signature-v4@5.7.5)(undici@7.30.1)(ws@8.22.0)(zod@4.6.7)
       '@earendil-works/pi-durable':
         specifier: file:../../vendor/earendil-works-pi-durable-1.5.0.tgz
-        version: file:vendor/earendil-works-pi-durable-1.5.0.tgz(@aws-sdk/credential-provider-node@3.972.91)(@modelcontextprotocol/sdk@1.32.2(zod@4.6.7))(@smithy/signature-v4@5.7.5)(undici@7.30.1)(ws@8.22.0)(zod@4.6.7)
+        version: file:vendor/earendil-works-pi-durable-1.5.0.tgz(patch_hash=d071c462b7d72b75fdec1cc6ad4c27a24848f99901fa613fdd1ac6c1240dd6af)(@aws-sdk/credential-provider-node@3.972.91)(@modelcontextprotocol/sdk@1.32.2(zod@4.6.7))(@smithy/signature-v4@5.7.5)(undici@7.30.1)(ws@8.22.0)(zod@4.6.7)
       '@lezer/common':
         specifier: 1.5.4
         version: 1.5.4
@@ -971,7 +1008,7 @@ importers:
         version: file:vendor/earendil-works-pi-ai-1.5.0.tgz(@aws-sdk/credential-provider-node@3.972.91)(@modelcontextprotocol/sdk@1.32.2(zod@4.6.7))(@smithy/signature-v4@5.7.5)(undici@7.30.1)(ws@8.22.0)(zod@4.6.7)
       '@earendil-works/pi-durable':
         specifier: file:../../vendor/earendil-works-pi-durable-1.5.0.tgz
-        version: file:vendor/earendil-works-pi-durable-1.5.0.tgz(@aws-sdk/credential-provider-node@3.972.91)(@modelcontextprotocol/sdk@1.32.2(zod@4.6.7))(@smithy/signature-v4@5.7.5)(undici@7.30.1)(ws@8.22.0)(zod@4.6.7)
+        version: file:vendor/earendil-works-pi-durable-1.5.0.tgz(patch_hash=d071c462b7d72b75fdec1cc6ad4c27a24848f99901fa613fdd1ac6c1240dd6af)(@aws-sdk/credential-provider-node@3.972.91)(@modelcontextprotocol/sdk@1.32.2(zod@4.6.7))(@smithy/signature-v4@5.7.5)(undici@7.30.1)(ws@8.22.0)(zod@4.6.7)
       '@superego/protocol':
         specifier: workspace:*
         version: link:../protocol
@@ -989,7 +1026,7 @@ importers:
     dependencies:
       '@earendil-works/pi-durable':
         specifier: file:../../vendor/earendil-works-pi-durable-1.5.0.tgz
-        version: file:vendor/earendil-works-pi-durable-1.5.0.tgz(@aws-sdk/credential-provider-node@3.972.91)(@modelcontextprotocol/sdk@1.32.2(zod@4.6.7))(@smithy/signature-v4@5.7.5)(undici@7.30.1)(ws@8.22.0)(zod@4.6.7)
+        version: file:vendor/earendil-works-pi-durable-1.5.0.tgz(patch_hash=d071c462b7d72b75fdec1cc6ad4c27a24848f99901fa613fdd1ac6c1240dd6af)(@aws-sdk/credential-provider-node@3.972.91)(@modelcontextprotocol/sdk@1.32.2(zod@4.6.7))(@smithy/signature-v4@5.7.5)(undici@7.30.1)(ws@8.22.0)(zod@4.6.7)
       '@earendil-works/pi-schema':
         specifier: file:../../vendor/earendil-works-pi-schema-1.5.0.tgz
         version: file:vendor/earendil-works-pi-schema-1.5.0.tgz
@@ -1099,6 +1136,14 @@ importers:
         version: 7.3.0
 
 packages:
+
+  '@anthropic-ai/claude-agent-sdk@0.3.323':
+    resolution: {integrity: sha512-GXIczMzzceNWB+bIImK59hWOQoBWZtSw+AESPc/qbAWmmHM8Wrqb5KvTwWZ07CmjyC/KcPC47nOLxxyHlWqKPA==}
+    engines: {node: '>=18.14.0'}
+    peerDependencies:
+      '@anthropic-ai/sdk': '>=0.93.0'
+      '@modelcontextprotocol/sdk': ^1.29.0
+      zod: ^4.0.0
 
   '@anthropic-ai/sdk@0.129.0':
     resolution: {integrity: sha512-MH7LB20kNpGLUpPTe2OG5XvL/KhX8HUO9XyBaFjgFk6TLS4Xjt0VPIuMKywe7POKKPslX+QxSlVok9e+8kG5Nw==}
@@ -3307,6 +3352,12 @@ packages:
 
 snapshots:
 
+  '@anthropic-ai/claude-agent-sdk@0.3.323(@anthropic-ai/sdk@0.129.0(zod@4.6.7))(@modelcontextprotocol/sdk@1.32.2(zod@4.6.7))(zod@4.6.7)':
+    dependencies:
+      '@anthropic-ai/sdk': 0.129.0(zod@4.6.7)
+      '@modelcontextprotocol/sdk': 1.32.2(zod@4.6.7)
+      zod: 4.6.7
+
   '@anthropic-ai/sdk@0.129.0(zod@4.6.7)':
     dependencies:
       json-schema-to-ts: 3.1.1
@@ -3920,7 +3971,7 @@ snapshots:
     dependencies:
       quickjs-wasi: 3.6.2
 
-  '@earendil-works/pi-durable@file:vendor/earendil-works-pi-durable-1.5.0.tgz(@aws-sdk/credential-provider-node@3.972.91)(@modelcontextprotocol/sdk@1.32.2(zod@4.6.7))(@smithy/signature-v4@5.7.5)(undici@7.30.1)(ws@8.22.0)(zod@4.6.7)':
+  '@earendil-works/pi-durable@file:vendor/earendil-works-pi-durable-1.5.0.tgz(patch_hash=d071c462b7d72b75fdec1cc6ad4c27a24848f99901fa613fdd1ac6c1240dd6af)(@aws-sdk/credential-provider-node@3.972.91)(@modelcontextprotocol/sdk@1.32.2(zod@4.6.7))(@smithy/signature-v4@5.7.5)(undici@7.30.1)(ws@8.22.0)(zod@4.6.7)':
     dependencies:
       '@earendil-works/chord': file:vendor/earendil-works-chord-1.5.0.tgz(ws@8.22.0)
       '@earendil-works/pi-ai': file:vendor/earendil-works-pi-ai-1.5.0.tgz(@aws-sdk/credential-provider-node@3.972.91)(@modelcontextprotocol/sdk@1.32.2(zod@4.6.7))(@smithy/signature-v4@5.7.5)(undici@7.30.1)(ws@8.22.0)(zod@4.6.7)

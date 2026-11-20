@@ -9,7 +9,7 @@
 // Everything it registers is its own, named `<name>.<something>`, and undone when it's torn down: when the daemon
 // stops, or (a profile's) when the profile's files change. Torn down, its `signal` aborts, what it registers after is
 // refused, and its live values' `set` and `update` do nothing.
-import type { Conversation, EntryRecord, Extension } from '@earendil-works/pi-durable'
+import type { AnyTask, Conversation, EntryRecord, Extension } from '@earendil-works/pi-durable'
 import type { ActionDef, ActionInfo, AppConfig, Attachment, ChannelAcceptor, BlockedKind, DataView, Exposure, ExtensionAbout, Json, JsonSchema, MachineEntry, MessageOrigin, NewThread, Pane, SettingsSnapshot, Static, ThreadInfo } from '@superego/protocol'
 import type { SectionSpec } from '@superego/settings'
 import type { AuthFlow } from './auth-flows.ts'
@@ -288,6 +288,15 @@ export type DaemonApi = {
    * it away.
    */
   agent(extension: Extension, options?: { always?: boolean }): AgentPart
+  /**
+   * A kind of agent of this extension's: threads whose profile picks it (`agent: '<name>'`, this extension's name or
+   * `<name>.<kind>`) have every turn run by `runner` instead of a model. The runner is a pi-durable task (pi-durable's
+   * agent `runner`): it reads the thread's conversation, appends the turn's entries (assistant messages, tool results),
+   * may publish its answer as it streams (`pi.live.generation.message`), and completes with its answer's entry
+   * (`{ entryId }`), or fails with what went wrong. The thread's run, its status, Stop and messages sent meanwhile stay
+   * the daemon's. A thread of a kind that isn't here (its extension off, or done without) can't be sent to.
+   */
+  agentKind(kind: { name: string; runner: AnyTask }): void
   /**
    * Add to a thread's agent, whatever chose it: asked at every send (before the turn starts), and answering with parts
    * this extension gave with `agent(part, { always: false })` (others are left out, with a warning). They come after the

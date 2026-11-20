@@ -455,13 +455,23 @@ export function createThreads(host: Host, { harness, extensions, profiles }: { h
     // An extension's own thread runs as that extension makes it, or not at all: not while it's off here, or the thread
     // goes without it.
     if (m.meta.owner && (!extensions.offered(m.meta.owner) || without.has(m.meta.owner))) throw new RpcError('invalid', `This thread is the ${m.meta.owner} extension's, which is off here`)
-    if (!model) throw new RpcError('no_model', 'No model is available', { hint: 'Sign in to a provider in Settings.' })
-    await m.conversation.configure({ model, thinkingLevel: thinkingLevel ?? null, ...rest }, context)
+    // A thread of another kind of agent has its turns run by that kind's runner, not a model: one only while it's here.
+    const runner = runnerOf(m.meta, without)
+    if (!model && !runner) throw new RpcError('no_model', 'No model is available', { hint: 'Sign in to a provider in Settings.' })
+    await m.conversation.configure({ ...(runner ? { runner, model: null, thinkingLevel: null } : { model, thinkingLevel: thinkingLevel ?? null, runner: null }), ...rest }, context)
     if (!m.meta.title) await updateMeta(id, (meta) => { meta.title = titleOf(text.trim() || attachments.map((a) => a.name).join(', ')) })
     const said = originOf(origin)
     const content = await transformed(id, m, { text, attachments, ...said }, await contentOf(attachmentsDir(options.dataDir, id), text, attachments))
     const submission = await m.conversation.submit({ type: 'input', content, requestId, ...(whenBusy ? { whenBusy } : {}), entry: { kind: MESSAGE_ENTRY, data: said } }, context)
     return String(submission.id)
+  }
+
+  /** The runner of a thread's kind of agent (`ThreadMeta.agent`): none for Superego's own; refused when its kind isn't here. */
+  function runnerOf(meta: ThreadMeta, without: ReadonlySet<string>) {
+    if (!meta.agent) return undefined
+    const runner = extensions.runnerOf(meta.agent, without)
+    if (!runner) throw new RpcError('invalid', `This thread runs on ${meta.agent}, which isn't on here`, { hint: `Turn on the extension that has ${meta.agent} in Settings.` })
+    return runner
   }
 
   /** How the message tool call `callId` answers came (`answeredBy`), in a thread's newest entries. */
@@ -583,6 +593,9 @@ export function createThreads(host: Host, { harness, extensions, profiles }: { h
     // None for an extension's own thread: it runs as that extension makes it, whatever profiles say.
     const ref = hidden ? undefined : findProfile(dir, profileSources.roots(), profileName?.trim() || undefined)
     const loaded = ref ? await profiles.profileOf(ref) : undefined
+    // Its kind of agent, for its whole life: only one that's here.
+    const kind = typeof loaded?.spec.agent === 'string' && loaded.spec.agent ? loaded.spec.agent : undefined
+    if (kind && !extensions.runnerOf(kind, new Set())) throw new RpcError('invalid', `Profile ${ref!.name} runs on ${kind}, which isn't here`, { hint: `Turn on the extension that has ${kind} in Settings.` })
     // Its project is the checkout (or folder) it starts in; where in it it works is the folder given, unless a hook moves it.
     const checkout = await checkoutOf(dir)
     const draft: ThreadDraft = {
@@ -612,7 +625,7 @@ export function createThreads(host: Host, { harness, extensions, profiles }: { h
       }
       id = await createThread({
         title: draft.title, cwd: draft.cwd, createdAt: Date.now(), root: draft.root, ...(Object.keys(ext).length ? { ext } : {}),
-        ...(ownModel ? { model: ownModel } : {}), ...(thinking ? { thinking } : {}), ...(ref ? { profile: ref } : {}), ...(parent ? { parent } : {}),
+        ...(ownModel ? { model: ownModel } : {}), ...(thinking ? { thinking } : {}), ...(ref ? { profile: ref } : {}), ...(kind ? { agent: kind } : {}), ...(parent ? { parent } : {}),
         ...(hidden ? { hidden: true, owner: hidden } : {}),
       })
     } catch (error) {
@@ -634,9 +647,11 @@ export function createThreads(host: Host, { harness, extensions, profiles }: { h
   /** A new thread with `meta`: its id, once extensions were told it's there (`started`). */
   async function createThread(meta: ThreadMeta) {
     const { model, thinkingLevel } = await extensions.agentOf(undefined, meta)
+    // Another kind of agent's thread has no model of Superego's: its runner answers.
+    const runner = runnerOf(meta, new Set())
     const conversation = await harness.createConversation({
       ownership: { kind: 'ownerless' },
-      agent: { ...(model ? { model } : {}), ...(thinkingLevel ? { thinkingLevel } : {}), cwd: meta.cwd },
+      agent: { ...(runner ? { runner } : model ? { model } : {}), ...(thinkingLevel && !runner ? { thinkingLevel } : {}), cwd: meta.cwd },
       init: async (tx, created) => {
         Object.assign(await tx.doc(ThreadDoc, created), meta)
         ;(await tx.doc(Catalog)).ids.push(created)
