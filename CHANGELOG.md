@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- The public website now uses GitHub Next analytics to track visits.
+
 ## 0.1.9
 
 - Themes for code and the terminal, one for light and one for dark (Settings → Appearance): GitHub, One, Tokyo Night,
