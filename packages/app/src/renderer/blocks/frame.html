@@ -1,48 +1,69 @@
 <!doctype html>
 <meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; media-src data: blob:; frame-src 'none'; form-action 'none'">
 <title>html block</title>
+<style>:root{color-scheme:light dark}html,body{margin:0;height:100%;overflow:hidden}iframe{display:block;width:100%;height:100%;border:0}</style>
+<body>
 <script>
 // The host of an html block: a page of the window's own, loaded in a sandboxed frame (scripts only, an opaque origin).
 // It's a page of its own because the window's policy forbids inline scripts, and a frame made from a string (srcdoc,
-// a blob or data: URL) inherits that policy; this page has none. The window sends it the block's HTML and the theme;
-// it writes them in as the frame's document and gives its scripts `superego`, which talks back over postMessage. An
-// agent's page may reply and send; an extension's view's is display only, so it gets neither (`replies: false`).
-// Nothing here is trusted: the page's own scripts run in this realm and can post anything. A reply or a message only
-// proposes; the window shows it under the frame, and it goes only when the user confirms it there (blocks.tsx).
+// a blob or data: URL) inherits that policy; this page has its own. The window sends it the block's HTML and the
+// theme; it puts them in a frame of its own (srcdoc, sandboxed again: another opaque origin), with `superego` for its
+// scripts, which talks back over postMessage through this page. An agent's page may reply and send; an extension's
+// view's is display only, so it gets neither (`replies: false`).
+//
+// Nothing the page does reaches the network. Its frame inherits this page's policy: it loads nothing but what's in it
+// (data: and blob: images and fonts), connects nowhere, and can't go anywhere: a page goes elsewhere by navigating its
+// own frame (location, <meta http-equiv="refresh">, a link), and that navigation is this page's `frame-src 'none'` to
+// refuse. Written into this page itself (document.write), it could, so it isn't. Its own sandbox keeps it from
+// reaching into this page and navigating it instead.
+//
+// Nothing here is trusted: the page's own scripts can post anything, and this page passes on what they post. A reply
+// or a message only proposes; the window shows it under the frame, and it goes only when the user confirms it there
+// (blocks.tsx).
 (() => {
   const post = (message) => parent.postMessage({ superego: true, ...message }, '*')
-  const height = () => Math.ceil(document.documentElement.getBoundingClientRect().height)
-  // Kept on the window, so it outlives document.open() below and the agent's scripts find it as they run.
-  window.superego = {
-    reply: (value) => post({ kind: 'reply', value: JSON.parse(JSON.stringify(value ?? null)) }),
-    send: (text) => post({ kind: 'send', text: String(text) }),
-    resize: () => post({ kind: 'resize', height: height() }),
-  }
   const BASE = 'html,body{margin:0}body{font:var(--superego-text-body)/var(--superego-leading-body) var(--superego-font);color:var(--superego-text);background:transparent;padding:1px 0}'
   const theme = (css) => `:root{color-scheme:light dark;${css}}${BASE}`
-  const receive = (event) => {
+  // What the page's scripts get, ahead of them: `superego`, kept sized to the page, and the theme kept current.
+  const helpers = (replies) => `<script>(() => {
+  const post = (message) => parent.postMessage({ superego: true, ...message }, '*')
+  const height = () => Math.ceil(document.documentElement.getBoundingClientRect().height)
+  const resize = () => post({ kind: 'resize', height: height() })
+  window.superego = {${replies ? `
+    reply: (value) => post({ kind: 'reply', value: JSON.parse(JSON.stringify(value ?? null)) }),
+    send: (text) => post({ kind: 'send', text: String(text) }),` : ''}
+    resize,
+  }
+  addEventListener('message', (event) => {
     const data = event.data
-    if (event.source !== parent || !data || !data.superego) return
-    if (data.kind === 'theme') {
-      const style = document.getElementById('superego-theme')
-      if (style) style.textContent = theme(data.css)
-    }
-    if (data.kind === 'render') {
-      if (data.replies === false) { delete window.superego.reply; delete window.superego.send }
+    if (event.source !== parent || !data || !data.superego || data.kind !== 'theme') return
+    const style = document.getElementById('superego-theme')
+    if (style) style.textContent = data.css
+  })
+  const observer = new ResizeObserver(resize)
+  observer.observe(document.documentElement)
+  addEventListener('DOMContentLoaded', () => { if (document.body) observer.observe(document.body); resize() })
+  addEventListener('load', resize)
+})()<\/script>`
+  let page
+  addEventListener('message', (event) => {
+    const data = event.data
+    if (!data || !data.superego) return
+    // The page's: passed on, for the window to make what it will of.
+    if (page && event.source === page.contentWindow) return void post({ kind: data.kind, value: data.value, text: data.text, height: data.height })
+    if (event.source !== parent) return
+    if (data.kind === 'theme') page?.contentWindow?.postMessage({ superego: true, kind: 'theme', css: theme(data.css) }, '*')
+    if (data.kind === 'render' && !page) {
       // The theme first, so the agent's own styles win and its scripts can read the variables.
       const html = String(data.html).replace(/^\s*<!doctype[^>]*>/i, '')
-      document.open()
-      document.write(`<!doctype html><style id="superego-theme">${theme(data.css)}</style>${html}`)
-      document.close()
-      // document.open() took the listeners with it.
-      addEventListener('message', receive)
-      const observer = new ResizeObserver(() => window.superego.resize())
-      observer.observe(document.documentElement)
-      if (document.body) observer.observe(document.body)
-      window.superego.resize()
+      page = document.createElement('iframe')
+      page.setAttribute('sandbox', 'allow-scripts')
+      page.title = document.title
+      page.srcdoc = `<!doctype html><style id="superego-theme">${theme(data.css)}</style>${helpers(data.replies !== false)}${html}`
+      document.body.append(page)
     }
-  }
-  addEventListener('message', receive)
+  })
   post({ kind: 'ready' })
 })()
 </script>

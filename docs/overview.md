@@ -125,7 +125,7 @@ Focus is always visible: the region holding it (the sidebar, the thread, a pane)
 | `packages/client` | reaching daemons: local socket, ssh, any stdio command; the machine list |
 | `packages/cli` | the command line |
 | `packages/ui` | component kit and design tokens |
-| `packages/app` | main process, window, preload, build and packaging; panes, the editor, the navigator; notifications and the app icon's unread count (the desktop's main process decides for every window, with none open too; a browser's page by the same rule, once you allow it, offered over the composer while a thread works); the blocks renderer (an `html` block runs in a sandboxed frame, replying only as the user acts, and only an agent's); the UI half of the extension API |
+| `packages/app` | main process, window, preload, build and packaging; panes, the editor, the navigator; notifications and the app icon's unread count (the desktop's main process decides for every window, with none open too; a browser's page by the same rule, once you allow it, offered over the composer while a thread works); the blocks renderer (an `html` block runs in a sandboxed frame with no way to the network, replying only as the user acts, and only an agent's); the UI half of the extension API |
 | `packages/sdk` | what an extension's author imports: `superego`, `superego/ui`, `superego/testing` (a test daemon, a test window), `superego/unstable` |
 | `extensions/threads` | the sidebar: projects and their threads; the thread tools' rows and `thread:` links (UI; required) |
 | `extensions/thread-tools` | the agent's `thread_*` tools (daemon; optional) |

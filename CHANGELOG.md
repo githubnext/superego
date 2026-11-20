@@ -17,6 +17,8 @@
   now hands requests to the daemon through a private socket, and Settings → Web access says so when Tailscale is older.
 - A page an agent draws (an `html` block) no longer answers or messages for you by itself: what it would say shows
   under it, and goes only when you press Send there.
+- A page an agent draws (an `html` block) can't reach the network: it can't fetch, load scripts, styles, fonts or
+  images from the web, or navigate away. Agents are told to put everything in the page.
 - Allowing a project's profile now covers everything it can load: a change to any file it runs asks to allow it again.
 - Claude Agent threads no longer run a folder's own Claude Code settings (`.claude/`, `.mcp.json`) until you allow
   them: their hooks, MCP servers and permissions can run commands. The thread asks over its composer, listing the files

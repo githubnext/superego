@@ -180,7 +180,19 @@ to a machine value would add prompt cost and the framework rule 2 refuses.
 
 **The invariant both share:** nothing in the schema runs code in the window's JavaScript. Blocks are data drawn by the
 window's components. `html` runs in the sandboxed frame (`allow-scripts` only, an opaque origin, no reach into the window's own `superego`,
-messages only through `postMessage` to the host). This invariant is why one renderer is safe for both, and why a remote
+messages only through `postMessage` to the host).
+
+**Nothing an agent draws reaches the network on its own.** An agent's output is where prompt injection shows: a page
+that fetched `https://evil/?d=<what the agent read>` would leak it with no tool call to see, from a profile with no
+network tools at all. So:
+- `html`'s page loads nothing from outside itself. `frame.html` has a policy of its own (`default-src 'none'`, inline
+  scripts and styles, `data:`/`blob:` images and fonts, `frame-src 'none'`, `form-action 'none'`), and writes the page
+  into a frame of its own (`srcdoc`, sandboxed again), which inherits it. The page can't fetch, load a script, an image
+  or a font from anywhere, or submit a form; and it can't go anywhere: navigating its own frame (`location`, a meta
+  refresh) is `frame.html`'s `frame-src` to refuse, and its sandbox keeps it from navigating `frame.html` instead.
+  (Written into `frame.html` itself, a page could navigate away with what it knows in the address.)
+- An `image` (and any image in a message or a rendered file) on the web shows as a placeholder until the user clicks
+  to load it; a file of the thread's or a `data:` image shows at once. This invariant is why one renderer is safe for both, and why a remote
 machine's or a project profile's view needs no consent, as data views need none today.
 
 **An agent's blocks can:**
@@ -192,8 +204,8 @@ machine's or a project profile's view needs no consent, as data views need none 
   under the frame, with Send and Discard of its own, and Send takes a press only once the proposal has shown, unchanged,
   for half a second (so a page can't slip it under a click on its way).
 - open a pane of its own thread
-- show an image from its thread's folder (read through the machine, as the window reads any of a thread's images) or
-  from the web
+- show an image from its thread's folder (read through the machine, as the window reads any of a thread's images) or,
+  once the user clicks to load it, from the web
 
 **An agent's blocks can't** run any action, dispatch anything, reach another thread or machine, or touch the window's
 JS. The checker refuses `action`. The agent host has no `run`.
@@ -241,8 +253,7 @@ The action validates its own params. A thread view's button must say its thread 
 
 **What `html` adds for extension views, and why it's acceptable.** Today a remote machine's agent can already put an
 `html` block in your window. An extension's view can't do more with it than an agent can, and with replies off it can
-do less. The frame can reach the network, but what's in it is the machine's own data, which that machine's code could
-already send anywhere.
+do less. Its frame can't reach the network either: the frame is the same for both.
 
 ---
 

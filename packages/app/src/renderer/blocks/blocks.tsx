@@ -2,7 +2,7 @@
 // an agent (agent-ui), whose presses answer it or message its thread, or an extension's data view, whose buttons run
 // its own actions. `<Blocks>` checks them as they land, keeps the inputs' values (across new blocks too, by id), and
 // hands what the user does to its host; given an `answer`, it shows that, locked. An html block is a page of its own
-// in a sandboxed frame (see frame.html).
+// in a sandboxed frame, with no way to the network (see frame.html).
 import { createContext, useContext, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react'
 import {
   blockErrors, initialValues, keptValues, needsSubmit, optionValue, picksAnswer, showHtmlValue, showValue,
@@ -440,7 +440,7 @@ type Proposal = { reply: Partial<Reply>; text: string }
 const PROPOSAL_DELAY = 500
 
 /**
- * A page of its own: sandboxed (scripts, nothing else), sized to its content. An agent's talks back through
+ * A page of its own: sandboxed (scripts, nothing else), offline (frame.html), sized to its content. An agent's talks back through
  * `superego.reply`/`send`; an extension's is display only, and the frame is told so (it has neither).
  *
  * The frame's scripts are the agent's, or whatever it copied in, and run beside the helpers that post for them, so
