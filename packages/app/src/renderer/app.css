@@ -734,6 +734,11 @@ button.app__mobiletitle > svg { flex: none; color: var(--superego-faint); }
 .panes.has-maximized > :not(.is-maximized) { visibility: hidden; }
 .panes > .panes__column.is-maximized { position: absolute; inset: 0; z-index: 1; }
 .panes__kept { flex: none; }
+/* The thread kept in view (scrolled): it and its handle stand still at the start, over the panes passing under them
+   (the handle on the row's grey, so none shows through); a soft shadow falls on them once they've started to. */
+.panes--keep > :is(.panes__column--thread, .panes__gap--thread) { position: sticky; left: 0; z-index: 2; }
+.panes--keep > .panes__gap--thread { background: var(--superego-chrome); transition: box-shadow .15s; }
+.panes--keep.is-scrolled > .panes__gap--thread { box-shadow: inset 1px 0 0 var(--superego-line), inset -1px 0 0 var(--superego-line), 3px 0 6px light-dark(rgb(0 0 0 / .08), rgb(0 0 0 / .45)); }
 .pane-empty { margin: auto; color: var(--superego-muted); padding: var(--superego-space-5); text-align: center; }
 .pane-scroll { flex: 1; overflow: auto; }
 .pane-bar { display: flex; align-items: center; gap: var(--superego-space-3); padding: 6px var(--superego-space-3); border-bottom: 1px solid var(--superego-line); font-size: var(--superego-text-sm); color: var(--superego-muted); flex: none; min-height: 38px; }
@@ -971,6 +976,9 @@ a.pane-header__url:hover { color: var(--superego-accent); }
 .app__strip .strip__tab.is-away { color: var(--superego-faint); }
 .app__strip .strip__tab:not(.is-focused):hover { background: var(--superego-hover); color: var(--superego-text); }
 .strip__layout { margin-left: 2px; }
+.strip__keep { width: 26px; height: 26px; min-height: 26px; border-radius: 6px; box-shadow: none; background: none; color: var(--superego-faint); }
+.strip__keep:hover { background: var(--superego-hover); color: var(--superego-text); }
+.strip__keep.is-on { color: var(--superego-muted); }
 /* A pane's tab dragged along the strip (dragTab in panes.tsx): it follows the pointer, a little lifted, over the
    others (a flex item, so its z-index counts), which slide aside; let go, it settles into its place. */
 .strip[data-dragging] .strip__tab:not([data-dragged]), .strip__tab[data-settling] { transition: transform .16s cubic-bezier(.2, .8, .3, 1); }

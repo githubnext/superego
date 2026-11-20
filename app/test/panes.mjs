@@ -1,4 +1,5 @@
-// Screenshots of a thread with three panes in each layout (run by `test/look.sh <dir> panes`): scrolled, then stacked
+// Screenshots of a thread with three panes in each layout (run by `test/look.sh <dir> panes`): scrolled (the thread kept
+// in view, and not), then stacked
 // from the strip's switch, a pane brought to the front by ⌃Tab and one opened from outside the window, then scrolled again
 // by its shortcut; a pane's tab mid-drag; a pane maximized in each, and restored (Esc, a double click, another pane opening). Checks on the way that a stack never passes the window's edge, and that the last pane's handle is
 // clear of it and drags the pane wider. Light and dark, into
@@ -45,6 +46,7 @@ await openApp({ name: 'panes', timeout: 240_000 }, async (t) => {
   // Scrolled: the editor focused, the row past the window's edge.
   await run(`window.superego.call('local', 'pane.focus', { thread: '${id}', pane: '${editor}' })`)
   await until(`(() => { const p = document.querySelector('.panes'); return p.scrollWidth > p.clientWidth })()`, 'scrolled: the row past the window')
+  if (!await run(`!!document.querySelector('.panes--keep')`)) t.fail('scrolled: the thread kept in view by default')
   await t.settled()
   await both('scroll')
   // The last pane focused, its handle in view clear of the window's edge; dragged out, it grows and the row scrolls on.
@@ -58,11 +60,51 @@ await openApp({ name: 'panes', timeout: 240_000 }, async (t) => {
   const before = await lastWidth()
   await run(`(() => { const h = ${handle}; const r = h.getBoundingClientRect(); const x = r.left + r.width / 2, y = r.top + r.height / 2
     h.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0, clientX: x, clientY: y }))
-    window.dispatchEvent(new PointerEvent('pointermove', { clientX: x + 150, clientY: y }))
-    window.dispatchEvent(new PointerEvent('pointerup', { clientX: x + 150, clientY: y })) })()`)
-  await until(`document.querySelector('[data-column="${folder}"]').offsetWidth >= ${before} + 140`, 'the last pane dragged wider')
+    window.dispatchEvent(new PointerEvent('pointermove', { clientX: x + 100, clientY: y }))
+    window.dispatchEvent(new PointerEvent('pointerup', { clientX: x + 100, clientY: y })) })()`)
+  await until(`document.querySelector('[data-column="${folder}"]').offsetWidth >= ${before} + 90`, 'the last pane dragged wider')
   await run(`${handle}.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))`)
   await until(`document.querySelector('[data-column="${folder}"]').offsetWidth === ${before}`, 'the last pane put back')
+  // Kept in view: the thread still at the start with the last pane focused, the pane whole beside it, the first pane
+  // scrolled under it (away, on the strip), the thread's tab not.
+  const rect = (column) => `document.querySelector('[data-column="${column}"]').getBoundingClientRect()`
+  const beside = (pane) => `(() => { const row = document.querySelector('.panes').getBoundingClientRect(), t = ${rect('thread')}, p = ${rect(pane)}; return Math.abs(t.left - row.left) < 1 && p.left >= t.right - 1 && p.right <= row.right + 1 })()`
+  await until(beside(folder), 'kept: the thread in view, the last pane whole beside it')
+  if (!await run(`document.querySelector('.strip__tab:not([data-pane])').matches('.is-shown, .is-focused') && document.querySelector('.strip__tab[data-pane="${diff}"]').matches('.is-away')`)) t.fail('kept: the strip shows the thread in view, the first pane away')
+  // ⌘⌥← to the pane before, and ⌃Tab back: each whole beside the thread.
+  await run(`document.querySelector('.strip__tab[data-pane="${folder}"]').click()`)
+  await until(`document.activeElement?.closest('[data-column]')?.dataset.column === '${folder}'`, 'kept: the last pane focused from its tab')
+  await key({ key: 'ArrowLeft', code: 'ArrowLeft', metaKey: true, altKey: true })
+  await until(`document.activeElement?.closest('[data-column]')?.dataset.column === '${editor}'`, 'kept: ⌘⌥← focus')
+  await until(beside(editor), 'kept: ⌘⌥← shows the pane before beside the thread')
+  await key({ key: 'Tab', code: 'Tab', ctrlKey: true })
+  await until(beside(folder), 'kept: ⌃Tab shows the next beside the thread')
+  // Turned off from the strip's pin: the row scrolls as one again, the thread off to the left; back on, it's in view.
+  await run(`document.querySelector('.strip__keep').click()`)
+  await until(`!document.querySelector('.panes--keep')`, 'the thread let scroll')
+  await until(`${rect('thread')}.right <= document.querySelector('.panes').getBoundingClientRect().left + 1`, 'not kept: the thread scrolled off with the last pane focused')
+  await t.settled()
+  await both('scroll-end-unkept')
+  // Maximized and restored, not kept: the row scrolled as it was.
+  const unkeptScroll = await run(`document.querySelector('.panes').scrollLeft`)
+  await key({ key: 'Enter', code: 'Enter', metaKey: true, shiftKey: true })
+  await until(`document.querySelector('.panes > .is-maximized')?.dataset.column === '${folder}'`, 'not kept: maximized')
+  await key({ key: 'Enter', code: 'Enter', metaKey: true, shiftKey: true })
+  await until(`!document.querySelector('.panes.has-maximized')`, 'not kept: restored')
+  if (await run(`document.querySelector('.panes').scrollLeft`) !== unkeptScroll) t.fail('not kept, restored: the row scrolled as it was')
+  await run(`document.querySelector('.strip__keep').click()`)
+  await until(`!!document.querySelector('.panes--keep')`, 'the thread kept again')
+  await until(beside(folder), 'kept again: the thread in view')
+  await t.settled()
+  await both('scroll-end-kept')
+  // On a phone, each column the screen's width as ever: nothing kept.
+  // (The window goes no narrower than 600: zoomed, its page is a phone's 375.)
+  await t.resize(600, 820)
+  await t.zoom(1.6)
+  await until(`!!document.querySelector('.panes--narrow') && !document.querySelector('.panes--keep')`, 'narrow: nothing kept')
+  await t.zoom(1)
+  await t.resize(1300, 820)
+  await until(`!!document.querySelector('.panes--keep')`, 'wide again: the thread kept')
   await run(`window.superego.call('local', 'pane.focus', { thread: '${id}', pane: '${editor}' })`)
   await t.settled()
 

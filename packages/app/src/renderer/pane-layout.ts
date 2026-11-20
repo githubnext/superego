@@ -27,6 +27,23 @@ export function scrollWidths(room: number, shares: (number | undefined)[]): numb
 }
 
 /**
+ * Scrolled with the thread kept in view (the first column, standing still while the rest scroll beside it): the thread
+ * its share of the room, leaving its panes at least MIN_COLUMN (else half); each pane its share, no wider than what's in
+ * view beside the thread (the room it leaves, and the room after every pane but one), the last what the others leave.
+ */
+export function keptWidths(room: number, shares: (number | undefined)[]): number[] {
+  if (shares.length < 2) return scrollWidths(room, shares)
+  const least = Math.min(MIN_COLUMN, Math.floor(room / 2))
+  const thread = Math.min(room - least, Math.max(least, Math.round((shares[0] ?? DEFAULT_SHARE) * room)))
+  const beside = room - thread + GAP * (shares.length - 2)
+  const fit = (width: number) => Math.min(beside, Math.max(MIN_COLUMN, width))
+  const panes = shares.slice(1).map((share) => fit(Math.round((share ?? 0) * room)))
+  const last = panes.length - 1
+  if (shares.at(-1) === undefined) panes[last] = fit(room - thread - panes.slice(0, last).reduce((sum, w) => sum + w, 0))
+  return [thread, ...panes]
+}
+
+/**
  * The last column's share once its handle is dragged to `width`, the others `used` wide: none (it takes what they
  * leave) near that, else its own, wider (the row scrolls) or narrower.
  */

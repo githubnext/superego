@@ -5,7 +5,9 @@
 //   scrolling layout is. Each column has its own width, a share of the row: the thread's half to start, a pane's its
 //   kind's; the room after a column (the last one's too, at the row's end) is its handle, and the last column takes
 //   what's left over until it's dragged. Past the edge the row scrolls, and the focused column scrolls just far enough
-//   to show whole. The row runs a little past the last handle, so it's never at the window's edge.
+//   to show whole. The row runs a little past the last handle, so it's never at the window's edge. Unless it's turned
+//   off (`app.panes.keepThread`, the strip's pin), the thread is kept in view: its column and handle stand still at the
+//   row's start (sticky) while its panes scroll beside it, and a pane is brought into view beside it.
 // - Stack: the thread, and beside it one column its panes share, one in front at a time; the row never passes the
 //   window's edge. The strip's tabs bring one to the front; so does its getting the focus (a click, ⌃Tab, ⌘⌥←/→, the
 //   navigator, pane.focus from anywhere) and its opening. The thread's handle drags the line between the two.
@@ -17,8 +19,8 @@
 import { createContext, Fragment, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState, type ButtonHTMLAttributes, type ReactNode, type RefObject } from 'react'
 import { createPortal, flushSync } from 'react-dom'
 import type { Pane, ThreadInfo } from '@superego/protocol'
-import { ArrowRightIcon, CardsIcon, ChatTextIcon, ColumnsPlusRightIcon, CornersInIcon, CornersOutIcon, DotsThreeIcon, FileTextIcon, IconButton, Menu, SegmentedControl, usePortalAttributes, XIcon, type SegmentedOption } from '@superego/ui'
-import { PANE_LAYOUT, type PaneLayout } from '../shared/app-settings.ts'
+import { ArrowRightIcon, CardsIcon, ChatTextIcon, ColumnsPlusRightIcon, CornersInIcon, CornersOutIcon, DotsThreeIcon, FileTextIcon, IconButton, Menu, PushPinIcon, SegmentedControl, usePortalAttributes, XIcon, type SegmentedOption } from '@superego/ui'
+import { PANE_KEEP_THREAD, PANE_LAYOUT, type PaneLayout } from '../shared/app-settings.ts'
 import { has, useAppSetting } from './client.ts'
 import type { PaneKind, PaneProps, UiApi } from './extension-api.ts'
 import { useRegistry, whose } from './registry.tsx'
@@ -32,7 +34,7 @@ import { ThreadBody } from './thread-body.tsx'
 import { PaneMoveTo } from './view-menu.tsx'
 import { FileEditor } from './file-editor.tsx'
 import { BRING_FORWARD, focusRegion } from './focus.ts'
-import { arranged, DEFAULT_SHARE, dropIndex, END, endShare, frontOf, GAP, moved, placeAmong, roomFor, scrollWidths, slideOf, stackWidths } from './pane-layout.ts'
+import { arranged, DEFAULT_SHARE, dropIndex, END, endShare, frontOf, GAP, keptWidths, moved, placeAmong, roomFor, scrollWidths, slideOf, stackWidths } from './pane-layout.ts'
 import { maximizedColumn, maximizedStore, restoresOn, THREAD_COLUMN } from './maximized.ts'
 import { useShortcut } from './keys.ts'
 import { OverflowBox, OverflowRow, PRIORITY, useOverflowItem } from './overflow.tsx'
@@ -77,6 +79,9 @@ export function ThreadPanes({ machine, thread, main }: { machine: PaneProps['mac
   const [layout] = useAppSetting<PaneLayout>(PANE_LAYOUT)
   // On a phone each column is the screen's width either way.
   const stacked = layout === 'stack' && !narrow && panes.length > 0
+  // Scrolled and wide, the thread kept in view while its panes scroll beside it (unless that's turned off).
+  const [keepThread] = useAppSetting<boolean>(PANE_KEEP_THREAD)
+  const kept = keepThread !== false && !stacked && !narrow && panes.length > 0
   const row = useRef<HTMLDivElement>(null)
   const setRow = useCallback((element: HTMLDivElement | null) => { row.current = element; swipeEdgeRef?.(element) }, [swipeEdgeRef])
   const [scrolled, setScrolled] = useState(0)
@@ -84,7 +89,7 @@ export function ThreadPanes({ machine, thread, main }: { machine: PaneProps['mac
   // The columns, left to right: the thread, then its panes, each by the key its width is kept under.
   const keys = [THREAD_COLUMN, ...panes.map((pane) => pane.id)]
   const { rowWidth, widths, threadWidth, stackWidth, drag, reset } = useColumnWidths(row, {
-    keys, stacked, narrow,
+    keys, stacked, narrow, kept,
     kindShares: panes.map((pane) => paneKind(registry, pane.kind, where)?.width),
   })
   const widthOf = (pane: Pane) => widths[panes.indexOf(pane) + 1]!
@@ -143,10 +148,13 @@ export function ThreadPanes({ machine, thread, main }: { machine: PaneProps['mac
     return () => el?.removeEventListener(BRING_FORWARD, bring)
   }, [panes.length > 0])
   const columnOf = (id: string | undefined) => row.current?.querySelector<HTMLElement>(`[data-column="${id ?? 'thread'}"]`)
-  // Brought into view as it gets the focus, and as it moves: just far enough to show it whole.
-  useEffect(() => {
-    columnOf(focused)?.scrollIntoView({ inline: 'nearest', block: 'nearest', behavior: 'smooth' })
-  }, [focused, ids.join(), rowWidth])
+  // Brought into view as it gets the focus, and as it moves: just far enough to show it whole (beside the thread, kept
+  // in view: the row's scroll-padding; the thread itself is in view already, and the panes stay as they are).
+  const bringIntoView = (id: string | undefined) => {
+    if (kept && !id) return
+    columnOf(id)?.scrollIntoView({ inline: 'nearest', block: 'nearest', behavior: 'smooth' })
+  }
+  useEffect(() => bringIntoView(focused), [focused, ids.join(), rowWidth, kept])
 
   const settled = useRef<ReturnType<typeof setTimeout>>(undefined)
 
@@ -177,11 +185,13 @@ export function ThreadPanes({ machine, thread, main }: { machine: PaneProps['mac
   }
 
   // How much of each column is in view, and on which side the rest are: for the strip. Stacked, the thread and the
-  // pane in front are; the rest are behind. Maximized, only that column is: the rest are under it.
+  // pane in front are; the rest are behind. Maximized, only that column is: the rest are under it. Kept in view, the
+  // thread always is, and the panes are in view only beside it (one scrolled under it is to the left).
   const starts = widths.map((_, i) => widths.slice(0, i).reduce((sum, w) => sum + w + GAP, 0))
-  const shown = widths.map((w, i) => maximized ? Number(keys[i] === maximized) : stacked ? Number(i === 0 || keys[i] === front)
-    : w ? Math.max(0, Math.min(starts[i]! + w, scrolled + rowWidth) - Math.max(starts[i]!, scrolled)) / w : 0)
-  const side = (i: number) => shown[i]! >= 0.5 ? undefined : stacked || maximized ? 'behind' as const : starts[i]! < scrolled ? 'left' as const : 'right' as const
+  const from = scrolled + (kept ? widths[0]! + GAP : 0)
+  const shown = widths.map((w, i) => maximized ? Number(keys[i] === maximized) : stacked || (kept && i === 0) ? Number(i === 0 || keys[i] === front)
+    : w ? Math.max(0, Math.min(starts[i]! + w, scrolled + rowWidth) - Math.max(starts[i]!, from)) / w : 0)
+  const side = (i: number) => shown[i]! >= 0.5 ? undefined : stacked || maximized ? 'behind' as const : starts[i]! < from ? 'left' as const : 'right' as const
 
   // The columns stay in the page in the order they opened, and are laid out in the thread's (`order`): a pane moved
   // keeps what moving it in the page would lose (the focus, a framed page).
@@ -190,7 +200,7 @@ export function ThreadPanes({ machine, thread, main }: { machine: PaneProps['mac
   // The thread and its handle first; then each pane, its place kept while it's maximized, and its handle.
   const orderOf = (index: number, part: 0 | 1 | 2 = 0) => index === 0 ? part && 1 : 3 * index - 1 + part
   const gap = (index: number) => !narrow && (
-    <div className={`panes__gap ${index < panes.length && (index === 0 || !stacked) ? 'is-between' : ''}`} style={{ order: orderOf(index, 2) }}
+    <div className={`panes__gap ${index === 0 ? 'panes__gap--thread' : ''} ${index < panes.length && (index === 0 || !stacked) ? 'is-between' : ''}`} style={{ order: orderOf(index, 2), ...(kept && index === 0 ? { left: widths[0] } : {}) }}
       onPointerDown={drag(index)} onDoubleClick={() => reset(index)} role="separator" aria-orientation="vertical"
       aria-label={`${index === 0 ? 'Thread' : title(panes[index - 1]!)} width`} title="Drag to resize, double-click to reset" />
   )
@@ -210,7 +220,7 @@ export function ThreadPanes({ machine, thread, main }: { machine: PaneProps['mac
   // A tab in the strip: brings its column into view and gives it the focus.
   const show = (pane?: Pane) => {
     const column = columnOf(pane?.id)
-    column?.scrollIntoView({ inline: 'nearest', block: 'nearest', behavior: 'smooth' })
+    bringIntoView(pane?.id)
     focus(pane?.id)
     if (column) focusRegion(column, { visible: false })
   }
@@ -234,11 +244,14 @@ export function ThreadPanes({ machine, thread, main }: { machine: PaneProps['mac
 
   return (
     <div className={`sheet ${panes.length ? 'has-panes' : ''}`}>
-      {panes.length > 0 && <PaneStrip tabs={tabs} current={current} stacked={stacked} narrow={narrow} onShow={show} onClose={close}
+      {panes.length > 0 && <PaneStrip tabs={tabs} current={current} stacked={stacked} kept={kept} narrow={narrow} onShow={show} onClose={close}
         {...(has(machine, 'pane-move') ? { onMove: (id: string, to: number) => { flushSync(() => move(id, to)); show(panes.find((p) => p.id === id)) } } : {})} />}
       {/* Stacked, a grid: the thread, its handle, the panes on top of each other, the room at the end. */}
-      <div className={`panes ${narrow ? 'panes--narrow' : ''} ${stacked ? 'panes--stack' : ''} ${maximized ? 'has-maximized' : ''}`} ref={setRow} onScroll={onScroll}
-        style={stacked ? { gridTemplateColumns: `${threadWidth}px ${GAP}px ${stackWidth}px ${GAP}px` } : undefined}>
+      {/* Kept in view, the thread and its handle stand still at the start (sticky) and the panes pass under them: the
+          row's scroll-padding shows one brought into view beside them. */}
+      <div className={`panes ${narrow ? 'panes--narrow' : ''} ${stacked ? 'panes--stack' : ''} ${kept ? 'panes--keep' : ''} ${kept && scrolled > 0 ? 'is-scrolled' : ''} ${maximized ? 'has-maximized' : ''}`}
+        ref={setRow} onScroll={onScroll}
+        style={stacked ? { gridTemplateColumns: `${threadWidth}px ${GAP}px ${stackWidth}px ${GAP}px` } : kept ? { scrollPaddingLeft: widths[0]! + GAP } : undefined}>
         {/* Focus moving into a column (a click, a key) makes it the focused one: the app and the keyboard agree. */}
         <div data-column={THREAD_COLUMN} tabIndex={-1} className={`panes__column panes__column--thread ${threadMaximized ? 'is-maximized' : maximized ? 'is-covered' : ''}`}
           inert={Boolean(maximized) && !threadMaximized} style={threadMaximized ? undefined : { width: widths[0] }}
@@ -275,10 +288,11 @@ export function ThreadPanes({ machine, thread, main }: { machine: PaneProps['mac
  * Each column's width in px, from the shares of the row kept in this window (by `keys`: the thread's, then each
  * pane's), and the dragging of the handle after each. Until it's dragged, a column takes its share: the thread's half,
  * a pane's its kind's (`kindShares`). The last one's share is kept apart (`<key>:end`): dragged from its own handle at
- * the end, it's its width while it is last; never dragged, it takes what's left over. Stacked, the thread's is the only
- * one: its panes' column takes the rest. On a phone each is the row's width.
+ * the end, it's its width while it is last; never dragged, it takes what's left over. With the thread kept in view
+ * (`kept`), no pane is wider than what's in view beside it (see keptWidths). Stacked, the thread's is the only one: its
+ * panes' column takes the rest. On a phone each is the row's width.
  */
-function useColumnWidths(row: RefObject<HTMLDivElement | null>, { keys, kindShares, stacked, narrow }: { keys: string[]; kindShares: (number | undefined)[]; stacked: boolean; narrow: boolean }) {
+function useColumnWidths(row: RefObject<HTMLDivElement | null>, { keys, kindShares, stacked, narrow, kept }: { keys: string[]; kindShares: (number | undefined)[]; stacked: boolean; narrow: boolean; kept: boolean }) {
   const [shares, setShares] = useLocalState<Record<string, number>>('pane.widths', {})
   const [rowWidth, setRowWidth] = useState(0)
   const hasPanes = keys.length > 1
@@ -299,7 +313,7 @@ function useColumnWidths(row: RefObject<HTMLDivElement | null>, { keys, kindShar
   const [threadWidth, stackWidth] = stackWidths(room, shares.thread)
   const widths = narrow ? keys.map(() => rowWidth)
     : stacked ? [threadWidth, ...keys.slice(1).map(() => stackWidth)]
-    : scrollWidths(room, keys.map((_, i) => shareOf(i)))
+    : (kept ? keptWidths : scrollWidths)(room, keys.map((_, i) => shareOf(i)))
 
   // The gap after a column resizes it (`index`): its share of the row, kept for next time. The last one's, dragged to
   // about what the others leave, takes that again; past it, it's wider and the row scrolls. A double click puts any
@@ -354,14 +368,15 @@ type StripTab = {
  * small (scrolled) and the switch between the layouts. In the title bar, where the window has a place for it. A pane's
  * tab drags along it to move the pane (`onMove`, its place among the panes; none where the machine can't).
  */
-function PaneStrip({ tabs, current, stacked, narrow, onShow, onClose, onMove }: {
-  tabs: StripTab[]; current: string | undefined; stacked: boolean; narrow: boolean; onShow(pane: Pane | undefined): void; onClose(pane: Pane): void
+function PaneStrip({ tabs, current, stacked, kept, narrow, onShow, onClose, onMove }: {
+  tabs: StripTab[]; current: string | undefined; stacked: boolean; kept: boolean; narrow: boolean; onShow(pane: Pane | undefined): void; onClose(pane: Pane): void
   onMove?: (pane: string, to: number) => void
 }) {
   const dispatch = useRegistry().router.dispatch
   const slot = useContext(StripSlot)
   const total = tabs.reduce((sum, tab) => sum + tab.width, 0) || 1
   const layout = (next: PaneLayout) => void dispatch('pane.layout', { layout: next }, { source: 'strip' }).catch((error) => console.error(error))
+  const keep = () => void dispatch('pane.keepThread', { keep: !kept }, { source: 'strip' }).catch((error) => console.error(error))
   // In the title bar, short of room, its parts give way (overflow.tsx): the map, then the switch, then the other tabs.
   const inBar = Boolean(slot)
   const paneIds = tabs.flatMap((tab) => tab.id ?? [])
@@ -382,6 +397,15 @@ function PaneStrip({ tabs, current, stacked, narrow, onShow, onClose, onMove }: 
             <span className="strip__map" aria-hidden ref={mapRef}>
               {tabs.map((tab, i) => <i key={i} className={tab.shown >= 0.5 ? 'is-in' : ''} style={{ width: Math.max(4, Math.round((tab.width / total) * 52)) }} />)}
             </span>
+          )}
+          {/* Scrolled, the pin keeping the thread in view. */}
+          {!stacked && (
+            <OverflowBox id="strip:keep" priority={PRIORITY.keepThread} className="strip__keep-item"
+              row={<OverflowRow icon={PushPinIcon}>{kept ? 'Let thread scroll' : 'Keep thread in view'}</OverflowRow>}>
+              <IconButton label="Keep thread in view" aria-pressed={kept} className={`strip__keep ${kept ? 'is-on' : ''}`} onClick={keep}>
+                <PushPinIcon size={14} weight={kept ? 'fill' : 'regular'} aria-hidden />
+              </IconButton>
+            </OverflowBox>
           )}
           <OverflowBox id="strip:layout" priority={PRIORITY.layout} className="strip__layout-item"
             row={<OverflowRow icon={stacked ? ColumnsPlusRightIcon : CardsIcon}>{stacked ? 'Scroll panes' : 'Stack panes'}</OverflowRow>}

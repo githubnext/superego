@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Scrolled panes now pass beside the thread, which stays in view at the left. The pin next to the layout switch (or
+  “Keep thread in view” in ⌘K) lets the thread scroll away with them again.
 - Select element in the Browser pane (⌘⇧C, or the cursor button in its toolbar): hover the page to outline an element,
   ↑ to its parent, click to pick it. A card shows its selector, tag, text and an image of it, to copy the selector or
   add it to your prompt as a chip; the agent gets the page's address, the selector, its HTML, its box and styles, and

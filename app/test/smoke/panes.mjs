@@ -59,6 +59,9 @@ export default async function panes(t, s) {
   await t.check(`document.querySelectorAll('.panes__tab').length === 3`, 'not three pane tabs')
 
   // The room between two columns resizes the one on its left (as macOS does); the one on its right keeps its width.
+  // The thread let scroll with them: kept in view, it leaves its panes their least beside it (no room to widen it here).
+  await t.call('app.settings.set', { key: 'app.panes.keepThread', value: false }, 'app')
+  await t.until(`!document.querySelector('.panes--keep')`, 'the thread let scroll')
   const [threadBefore, firstBefore] = JSON.parse(await t.run(`JSON.stringify([...document.querySelectorAll('.panes > [data-column]')].map((c) => Math.round(c.getBoundingClientRect().width)))`))
   await t.run(`(() => {
     const gap = document.querySelector('.panes__gap')
@@ -68,6 +71,7 @@ export default async function panes(t, s) {
     window.dispatchEvent(new PointerEvent('pointerup', { clientX: x + 60, clientY: 300 }))
   })()`)
   await t.until(`(() => { const w = [...document.querySelectorAll('.panes > [data-column]')].map((c) => Math.round(c.getBoundingClientRect().width)); return Math.abs(w[0] - ${threadBefore} - 60) <= 2 && Math.abs(w[1] - ${firstBefore}) <= 2 })()`, 'the gap resized the thread, not the pane')
+  await t.call('app.settings.set', { key: 'app.panes.keepThread', value: true }, 'app')
   // Opened from outside the window (as the agent opens them), they open beside and the focus stays put. ⌘W closes the
   // one with the focus, from inside the page too: the window takes its shortcuts before a frame.
   await t.check(`!document.querySelector('.panes__tab.is-active')`, 'a pane the window did not open took the focus')
@@ -260,6 +264,8 @@ async function reorder(t, paned, panesOf) {
   t.key('Right', ['meta', 'alt', 'shift'])
   await t.until(async () => JSON.stringify(await ids()) === JSON.stringify([b, c, a]), '⌘⌥⇧→ moved it back')
 
+  await keepThread(t, paned, a)
+
   // A middle click on a pane's tab closes it, as in a browser; on the thread's it does nothing.
   const middle = async (selector) => {
     const r = await t.run(`(() => { const r = document.querySelector('${selector}').getBoundingClientRect(); return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) } })()`)
@@ -272,4 +278,24 @@ async function reorder(t, paned, panesOf) {
   await t.until(async () => JSON.stringify(await ids()) === JSON.stringify([c, a]), "a middle click closes a pane's tab")
   await t.call('pane.close', { thread: paned, pane: a })
   await t.until(`document.querySelectorAll('.strip__tab[data-pane]').length === 1`, 'one pane again')
+}
+
+/**
+ * Scrolled, the thread kept in view (on by default): the last pane focused shows beside it, the thread still at the
+ * start. The strip's pin turns it off (the row scrolls as one, the thread off to the left once it's past the window)
+ * and on again, kept in the app's settings.
+ */
+async function keepThread(t, paned, last) {
+  const row = `document.querySelector('.panes').getBoundingClientRect()`
+  const rect = (column) => `document.querySelector('[data-column="${column}"]').getBoundingClientRect()`
+  const setting = (value) => `window.superego.call('app', 'settings.watch', {}).then((r) => r.value.values['app.panes.keepThread'] === ${value})`
+  await t.check(`!!document.querySelector('.panes--keep')`, 'the thread kept in view by default')
+  await t.call('pane.focus', { thread: paned, pane: last })
+  await t.until(`(() => { const r = ${row}, th = ${rect('thread')}, p = ${rect(last)}; return Math.abs(th.left - r.left) < 1 && p.left >= th.right - 1 && p.right <= r.right + 1 })()`, 'kept: the thread and the last pane in view')
+  await t.click('.strip__keep')
+  await t.until(setting(false), 'the pin turned it off, in the settings')
+  await t.until(`!document.querySelector('.panes--keep') && (() => { const p = document.querySelector('.panes'); return p.scrollWidth <= p.clientWidth || ${rect('thread')}.right <= ${row}.left + 1 })()`, 'not kept: the thread scrolled away with the last pane')
+  await t.click('.strip__keep')
+  await t.until(setting(true), 'the pin turned it on again')
+  await t.until(`!!document.querySelector('.panes--keep') && Math.abs(${rect('thread')}.left - ${row}.left) < 1`, 'kept again: the thread back in view')
 }

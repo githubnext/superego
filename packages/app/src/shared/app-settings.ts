@@ -22,6 +22,8 @@ export const LAYOUT = 'app.layout'
  */
 export const PANE_LAYOUT = 'app.panes.layout'
 export type PaneLayout = 'scroll' | 'stack'
+/** Scrolled, whether the thread's column stays at the left while its panes scroll beside it; on unless turned off. */
+export const PANE_KEEP_THREAD = 'app.panes.keepThread'
 /** The desktop's: Superego in the menu bar, and the Dock icon hidden. */
 export const MENU_BAR = 'app.menuBar'
 export const HIDE_DOCK = 'app.hideDock'
@@ -70,6 +72,10 @@ export function registerAppSettings(settings: SettingsRegistry, desktop?: { app:
         description: 'Focus rings, primary buttons, links and selection. Any CSS colour.', type: { type: 'color' },
       },
       PANE_LAYOUT_SETTING,
+      {
+        key: PANE_KEEP_THREAD, title: 'Keep thread in view', default: true,
+        type: { type: 'boolean' }, hidden: () => settings.get(PANE_LAYOUT) === 'stack',
+      },
       LAYOUT_SETTING,
     ],
   })

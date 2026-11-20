@@ -1,6 +1,6 @@
 // The pane row's arithmetic: column widths scrolled and stacked, and which pane a stack shows.
 import { describe, expect, it } from 'vitest'
-import { arranged, dropIndex, endShare, frontOf, GAP, MIN_COLUMN, moved, placeAmong, roomFor, scrollWidths, slideOf, SNAP, stackWidths } from '../src/renderer/pane-layout.ts'
+import { arranged, dropIndex, endShare, frontOf, GAP, keptWidths, MIN_COLUMN, moved, placeAmong, roomFor, scrollWidths, slideOf, SNAP, stackWidths } from '../src/renderer/pane-layout.ts'
 
 describe('scrolled', () => {
   it('gives each column its share and the last what the others leave', () => {
@@ -33,6 +33,27 @@ describe('scrolled', () => {
 
   it('never makes a column wider than the room', () => {
     expect(scrollWidths(300, [0.5, undefined])).toEqual([300, 300])
+  })
+})
+
+describe('scrolled, the thread kept in view', () => {
+  it('fills the row as scrolled does while the panes fit', () => {
+    expect(keptWidths(1200, [0.5, undefined])).toEqual(scrollWidths(1200, [0.5, undefined]))
+    expect(keptWidths(1200, [0.4, undefined])).toEqual([480, 720])
+  })
+
+  it('keeps every pane narrow enough to show whole beside the thread', () => {
+    // Four columns' room of 1200 (the row 1232): the thread 600; in view beside it, 1232 less it and two gaps.
+    const room = 1200
+    const [thread, ...panes] = keptWidths(room, [0.5, 0.9, 0.8, undefined])
+    expect(thread).toBe(600)
+    for (const pane of panes) expect(pane).toBeLessThanOrEqual(room + 4 * GAP - thread! - 2 * GAP)
+    expect(panes.at(-1)).toBe(MIN_COLUMN)
+  })
+
+  it('leaves the panes room however wide the thread is dragged', () => {
+    expect(keptWidths(1200, [0.85, undefined])).toEqual([1200 - MIN_COLUMN, MIN_COLUMN])
+    expect(keptWidths(600, [0.85, undefined])).toEqual([300, 300])
   })
 })
 

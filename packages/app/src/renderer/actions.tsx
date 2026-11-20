@@ -2,11 +2,11 @@
 // forwarded to where they run (see `dispatch`). Every dispatch from this window is logged, and the log is one action
 // away (Show action log).
 import { useEffect, useState } from 'react'
-import { createRouter, int, lit, obj, offers, opt, str, type Router, union, type ActionDef, type ActionInfo, type ActionLogEntry, type AppConfig, type Exposure, type Json, type JsonSchema, type Static } from '@superego/protocol'
+import { bool, createRouter, int, lit, obj, offers, opt, str, type Router, union, type ActionDef, type ActionInfo, type ActionLogEntry, type AppConfig, type Exposure, type Json, type JsonSchema, type Static } from '@superego/protocol'
 import { Dialog } from '@superego/ui'
 import type { ReturnedMessage, ThreadInfo } from '@superego/protocol'
 import type { MachineEntry } from '../shared/bridge.ts'
-import { APP, PANE_LAYOUT, type PaneLayout } from '../shared/app-settings.ts'
+import { APP, PANE_KEEP_THREAD, PANE_LAYOUT, type PaneLayout } from '../shared/app-settings.ts'
 import type { NewThreadStart, Selection } from './state.tsx'
 import { threadBeside, type Project, type Sidebar } from './projects.ts'
 import { isPinned, pinAt, PINS, pinsOf, unpin, type Pin } from './pins.ts'
@@ -211,6 +211,15 @@ export const coreActions = (app: AppConfig): WindowAction[] => [
     params: obj({ layout: opt(union([lit('scroll'), lit('stack')])) }),
     run: ({ layout }, c) => c.dispatch('app.settings.set', {
       key: PANE_LAYOUT, value: layout ?? (c.appSetting<PaneLayout>(PANE_LAYOUT) === 'stack' ? 'scroll' : 'stack'),
+    }, { machine: APP, source: 'panes' }),
+  }),
+  // Scrolled, the thread kept at the left while its panes scroll beside it: `keep`, else the other way.
+  defineWindowAction({
+    id: 'pane.keepThread', title: 'Keep thread in view',
+    params: obj({ keep: opt(bool()) }),
+    when: (c) => c.appSetting<PaneLayout>(PANE_LAYOUT) !== 'stack',
+    run: ({ keep }, c) => c.dispatch('app.settings.set', {
+      key: PANE_KEEP_THREAD, value: keep ?? c.appSetting<boolean>(PANE_KEEP_THREAD) === false,
     }, { machine: APP, source: 'panes' }),
   }),
   // Another window (in a browser, another tab), starting as a copy of this one: the same thread, space and sidebar,

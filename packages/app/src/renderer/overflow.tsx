@@ -22,7 +22,7 @@ const FIT = 4
  * last first), the strip's switch, the profile's badge, archive, pin, rename; then the strip's other tabs shrink to
  * icons, then go; the pane opener last.
  */
-export const PRIORITY = { map: 10, parent: 20, chips: 25, header: 30, layout: 40, profile: 50, archive: 60, pin: 64, rename: 68, tabsCompact: 80, tabs: 90, panes: 95 }
+export const PRIORITY = { map: 10, parent: 20, chips: 25, header: 30, keepThread: 39, layout: 40, profile: 50, archive: 60, pin: 64, rename: 68, tabsCompact: 80, tabs: 90, panes: 95 }
 
 type Icon = ComponentType<{ size?: number; 'aria-hidden'?: boolean }>
 
