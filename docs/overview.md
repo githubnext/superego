@@ -212,7 +212,8 @@ resolved that way back as registry.npmjs.org has it (its `afterAllResolved` hook
 npm's metadata for that version confirms the mirror's tarball is the same one. That needs registry.npmjs.org's metadata
 (not its tarballs); where it can't be reached, the change fails, naming the packages, and leaves the lockfile alone: make
 it with `--registry=https://registry.npmjs.org/`, or on a machine that reaches npm. The lockfile records the pnpmfile's
-checksum, so a change to `.pnpmfile.mjs` goes with a `pnpm install` that updates it.
+checksum, so a change to `.pnpmfile.mjs` goes with a `pnpm install` that updates it. Resolving takes only versions a
+week old or more (`minimumReleaseAge` in `pnpm-workspace.yaml`), so a mirror a few days behind npm carries all of them.
 
 `superego mcp` is an MCP server on stdio, for agents outside Superego (Claude Code, Codex, an editor's): each action a
 machine exposes to outside agents is a tool named as the action (`thread.start` as `thread_start`, `pane.open` as

@@ -18,6 +18,6 @@
     "@superego/protocol": "workspace:*",
     "@superego/settings": "workspace:*",
     "sucrase": "^3.35.1",
-    "ws": "8.22.1"
+    "ws": "8.23.0"
   }
 }
