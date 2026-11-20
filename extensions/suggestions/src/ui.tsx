@@ -1,9 +1,11 @@
 // suggestions, UI half: what you might send next, numbered, over the composer once the agent has answered. Picking one
 // puts it in the composer to change; in the empty composer ←/→ pick one, ⏎ sends it and ⇥ puts it in the box. ⌃1–⌃9
-// send the one with that number, wherever the focus is in the thread.
+// send the one with that number, wherever the focus is in the thread. One that runs a skill shows the skill's name as
+// its chip does, its description as the tooltip.
 import { useEffect, useLayoutEffect, useRef } from 'react'
 import { defineUiExtension, keyLabel, useComposer, useValue, type MachineEntry } from '@superego/app/ui'
 import type { ThreadInfo } from '@superego/protocol'
+import { SparkleIcon } from '@superego/ui'
 import { about, NEXT, type Suggested } from './shared.ts'
 import './styles.css'
 
@@ -18,7 +20,7 @@ function Suggestions({ machine, thread }: { machine: MachineEntry; thread: Threa
   const next = useValue<Suggested>(machine, NEXT, { scope: thread.id })
   const composer = useComposer()
   const shown = !thread.archived && thread.status.state !== 'working' && !composer.text ? next?.prompts ?? [] : []
-  const offered = shown.join('\n')
+  const offered = shown.map((prompt) => prompt.text).join('\n')
   useEffect(() => { composer.suggest(offered ? offered.split('\n') : undefined); return () => composer.suggest(undefined) }, [offered, composer.suggest])
   const row = useRef<HTMLDivElement>(null)
   // One row, scrolled sideways: by a trackpad, or by a mouse's wheel turned into sideways, and to the pill ←/→ pick.
@@ -49,10 +51,13 @@ function Suggestions({ machine, thread }: { machine: MachineEntry; thread: Threa
   if (!shown.length) return null
   return (
     <div className="suggestions" aria-label="Suggestions" ref={row}>
-      {shown.map((prompt, index) => (
-        <button key={prompt} type="button" className={`suggestions__item ${index === composer.picked ? 'is-picked' : ''}`}
-          aria-keyshortcuts={index < 9 ? `Control+${index + 1}` : undefined} onClick={() => composer.fill(prompt)}>
-          {index < 9 && <span className="suggestions__key" aria-hidden>{keyLabel(`ctrl+${index + 1}`)}</span>}{prompt}
+      {shown.map(({ text, skill }, index) => (
+        <button key={text} type="button" className={`suggestions__item ${index === composer.picked ? 'is-picked' : ''}`} title={skill?.description}
+          aria-keyshortcuts={index < 9 ? `Control+${index + 1}` : undefined} onClick={() => composer.fill(text)}>
+          {index < 9 && <span className="suggestions__key" aria-hidden>{keyLabel(`ctrl+${index + 1}`)}</span>}
+          {skill
+            ? <><span className="suggestions__skill" aria-label={`$${skill.name}`}><SparkleIcon size={12} weight="fill" aria-hidden />{skill.name}</span>{text.slice(skill.name.length + 1)}</>
+            : text}
         </button>
       ))}
     </div>

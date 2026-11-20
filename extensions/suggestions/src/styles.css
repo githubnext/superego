@@ -12,3 +12,6 @@
 .suggestions__item.is-picked { color: var(--superego-text); box-shadow: 0 0 0 1.5px var(--superego-accent); }
 /* Its key, ⌃1–⌃9: quieter than the words. */
 .suggestions__key { margin-right: 6px; font-size: var(--superego-text-xs); color: var(--superego-muted); opacity: .7; font-variant-numeric: tabular-nums; }
+/* A skill it runs: its name as the composer's skill chip has it, the sparkle in the accent. */
+.suggestions__skill { color: var(--superego-text); }
+.suggestions__skill svg { color: var(--superego-accent); vertical-align: -1px; margin-right: 3px; }

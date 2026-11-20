@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- A suggestion over the composer can run one of your skills when it fits the next step, such as `$commit` after a
+  change: it shows the skill's sparkle and name, with what the skill is for on hover.
 - Suggestions over the composer stay on one row: more than fit scroll sideways (with a trackpad, the mouse wheel, or ←/→ picking one), fading at the edge where there's more.
 - A folder opened from a link in a thread shows what's really in it on the thread's machine, git-ignored and
   untracked files too, read a folder at a time as you open them. One that can't be read says why, instead of "No files

@@ -331,6 +331,11 @@ export type DaemonApi = {
   /** The actions on this machine, as data; `exposure`: only those offered to it (`cli`: what `superego do` runs). */
   actions(exposure?: Exposure): ActionInfo[]
   /**
+   * Read a method on this machine by id, another extension's (`skills.list`), as a client calls it: params checked first.
+   * Rejects when no extension set up here has it (one switched off, say).
+   */
+  call(id: string, params?: unknown): Promise<Json>
+  /**
    * A read, named `<name>.<method>` (given whole, as actions are): a plain request clients `call`, for data a pane or list shows. Not logged, not in
    * the palette, not run from the command line. `params`, when given, is checked (and coerced) first.
    */

@@ -4,7 +4,10 @@ import type { ExtensionAbout } from '@superego/protocol'
 /** What each thread's user might send next: a scoped value by thread (`Suggested`, null for none). */
 export const NEXT = 'suggestions.next'
 
-/** What a thread's user might send next, after its last answer. */
-export type Suggested = { prompts: string[] }
+/** A message the user might send next, as they'd type it; `skill`: the skill it runs (it opens with `$name`). */
+export type Suggestion = { text: string; skill?: { name: string; description: string } }
 
-export const about = { name: 'suggestions', version: '1.1.0', api: '^5', title: 'Prompt suggestions', description: 'After each answer, suggest what you might send next.' } satisfies ExtensionAbout
+/** What a thread's user might send next, after its last answer. */
+export type Suggested = { prompts: Suggestion[] }
+
+export const about = { name: 'suggestions', version: '2.0.0', api: '^5.2', title: 'Prompt suggestions', description: 'After each answer, suggest what you might send next, a skill when one fits.' } satisfies ExtensionAbout

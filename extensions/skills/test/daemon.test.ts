@@ -35,7 +35,7 @@ async function send(daemon: TestDaemon, text: string) {
 it('offers the skills to the agent, sends one a message names, and lists them for the composer', async () => {
   const daemon = await open()
   expect(await daemon.call('skills.list', {})).toEqual([
-    { name: 'commit', description: 'Write commit messages.' }, { name: 'secret', description: 'Only by name.' },
+    { name: 'commit', description: 'Write commit messages.' }, { name: 'secret', description: 'Only by name.', manual: true },
   ])
   // To browse, as a data view the window draws: offered for a space or beside the thread, not placed.
   const views = await daemon.watch<DataViewInfo[]>(DATA_VIEWS)
@@ -98,7 +98,7 @@ it("offers the app's own skills from where they are, a skill of the same name in
   }
   const daemon = await open(skillsExtension({ own: [await own('skill', 'superego', 'Use and extend Superego.'), await own('other', 'commit', 'The app\'s commits.')] }))
   expect(await daemon.call('skills.list', {})).toEqual([
-    { name: 'commit', description: 'Write commit messages.' }, { name: 'secret', description: 'Only by name.' }, { name: 'superego', description: 'Use and extend Superego.' },
+    { name: 'commit', description: 'Write commit messages.' }, { name: 'secret', description: 'Only by name.', manual: true }, { name: 'superego', description: 'Use and extend Superego.' },
   ])
   const { all, content } = await send(daemon, 'build it with $superego')
   expect(all).toContain(`<skill name=\\"superego\\" location=\\"${join(dir, 'app', 'skill', 'SKILL.md')}\\">Use and extend Superego.</skill>`)

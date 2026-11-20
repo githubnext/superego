@@ -503,6 +503,11 @@ export function createExtensionHost(host: Host, later: { profiles(): ProfileHost
       action: (action) => { life.live(`the action ${action.id}`); undo(router.register({ ...action, id: named(extension.name, action.id) }), 'an action'); note('actions', action.keys ? `${action.id} (${action.keys})` : action.id) },
       dispatch: (id, params) => router.dispatch(id, params ?? {}, { source: extension.name, notify: () => {} }, { source: extension.name }),
       actions: (exposure) => router.list(exposure),
+      async call(id, params) {
+        const run = methods.get(id)
+        if (!run) throw new Error(`No method ${id} on this machine`)
+        return run(params ?? {})
+      },
       method(name, run, options = {}) {
         const id = named(extension.name, name)
         life.live(`the method ${id}`)

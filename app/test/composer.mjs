@@ -61,10 +61,11 @@ await openApp({ name: 'composer', timeout: 180_000 }, async (t) => {
   // A busy transcript first, to run behind the suggestions when scrolled.
   await submit(idle, Array.from({ length: 12 }, (_, i) => `Line ${i + 1}: the importer reads each row's date as UTC midnight, then formats it in local time, so every date lands a day early.`).join('\n\n'))
   await until(`${state(idle)}.then((s) => s === 'done')`, 'busy transcript answered')
-  await submit(idle, 'What next? ["Run the tests", "Commit this", "Write a test for a row dated on the first of a month in summer time, and check the Nordea export too"]')
+  // One runs a skill (look.sh's `commit`), written as a model may: it's offered as `$commit`.
+  await submit(idle, 'What next? ["Run the tests", "/commit the date fix", "Write a test for a row dated on the first of a month in summer time, and check the Nordea export too"]')
   await until(`${state(idle)}.then((s) => s === 'done')`, 'idle thread answered')
   await open('Dates land a day early')
-  await until(`document.querySelectorAll('.suggestions__item').length === 3`, 'suggestions')
+  await until(`document.querySelectorAll('.suggestions__item').length === 3 && Boolean(document.querySelector('.suggestions__item:nth-child(2) .suggestions__skill'))`, 'suggestions, one a skill')
   await both('idle-suggestions')
   // One hovered, the transcript scrolled to run behind them: the pill stays solid over it.
   for (const theme of ['light', 'dark']) {

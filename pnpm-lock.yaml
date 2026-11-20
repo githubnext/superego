@@ -633,10 +633,16 @@ importers:
       '@superego/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol
+      '@superego/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
     devDependencies:
       '@superego/sdk':
         specifier: workspace:*
         version: link:../../packages/sdk
+      '@superego/skills':
+        specifier: workspace:*
+        version: link:../skills
       '@types/react':
         specifier: ^19
         version: 19.3.0

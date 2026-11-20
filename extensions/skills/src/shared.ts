@@ -10,8 +10,8 @@ export const LIST = 'skills.list'
 /** The skills on a machine to browse: a data view, and the method that feeds it. */
 export const VIEW = 'skills.view'
 
-/** A skill as the composer offers it. */
-export type SkillInfo = { name: string; description: string }
+/** A skill as the composer offers it; `manual`: only when asked for by name, not offered to models. */
+export type SkillInfo = { name: string; description: string; manual?: true }
 
 /** A skill a message named, sent with it whole: the block opens with this tag. */
 export const SENT = /^<skill name="([^"]*)" location="([^"]*)">/

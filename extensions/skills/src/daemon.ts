@@ -31,7 +31,7 @@ export function skillsExtension({ own = [] }: SkillsOptions = {}): DaemonExtensi
         if (!named.length) return
         return [...content, ...await Promise.all(named.map(async (skill) => ({ type: 'text' as const, text: await skillBlock(skill) })))]
       })
-      superego.method(LIST, async (): Promise<SkillInfo[]> => (await skills()).map(({ name, description }) => ({ name, description })))
+      superego.method(LIST, async (): Promise<SkillInfo[]> => (await skills()).map(({ name, description, manual }) => ({ name, description, ...(manual ? { manual: true as const } : {}) })))
       // The skills to browse, drawn by the window from data: offered for a space or beside the thread, placed by the user.
       superego.method(VIEW, async (): Promise<Block[]> => {
         const all = await skills()

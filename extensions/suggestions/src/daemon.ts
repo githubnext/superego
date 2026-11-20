@@ -1,9 +1,10 @@
 // suggestions, daemon half: when a run answers, a side call to the thread's own model guesses what the user might send
-// next, published for the UI to offer. Anything the thread does next takes the suggestions away.
+// next, published for the UI to offer. The machine's skills (the skills extension's `skills.list`) go with the ask, for
+// one suggestion to run a skill when it fits. Anything the thread does next takes the suggestions away.
 import { defineExtension, GenerationTask, hook } from '@earendil-works/pi-durable'
 import { defineDaemonExtension } from '@superego/daemon'
 import { about, NEXT, type Suggested } from './shared.ts'
-import { promptsOf, SYSTEM, transcriptOf } from './suggest.ts'
+import { offeredSkills, requestOf, suggestionsOf, transcriptOf, type SkillInfo } from './suggest.ts'
 
 export default defineDaemonExtension({
   ...about,
@@ -15,6 +16,17 @@ export default defineDaemonExtension({
     const forget = (thread: string) => {
       asks.set(thread, (asks.get(thread) ?? 0) + 1)
       next.delete(thread)
+    }
+    // The machine's skills, from the skills extension; none while it's switched off (its method gone).
+    const listSkills = async (): Promise<SkillInfo[]> => {
+      if (!superego.extensions().some((e) => e.name === 'skills' && e.on)) return []
+      try {
+        return await superego.call('skills.list') as SkillInfo[]
+      } catch (error) {
+        // Suggestions without skills are still worth offering: the failure is logged, and they go on without.
+        console.error('suggestions: listing skills:', error)
+        return []
+      }
     }
     // A thread's own conversation; not a subagent's.
     const threadOf = (conversationId: number) => {
@@ -47,13 +59,15 @@ export default defineDaemonExtension({
           if (!transcript) return undefined
           // Not awaited: the run ends now, and the suggestions follow when they come. It outlives the hook, not the
           // extension: torn down (switched off, the daemon stopping), the call is cut off.
+          const skills = offeredSkills(await listSkills(), transcript)
+          const { systemPrompt, prompt } = requestOf(transcript, skills)
           if (superego.signal.aborted) return undefined
           void models.completeSimple(model, {
-            systemPrompt: SYSTEM,
-            messages: [{ role: 'user', content: transcript, timestamp: Date.now() }],
+            systemPrompt,
+            messages: [{ role: 'user', content: prompt, timestamp: Date.now() }],
           }, { maxTokens: 300, signal: AbortSignal.any([superego.signal, AbortSignal.timeout(30_000)]) }).then((reply) => {
             if (superego.signal.aborted || asks.get(thread) !== ask || reply.stopReason === 'error' || reply.stopReason === 'aborted') return
-            const prompts = promptsOf(reply.content.map((b) => b.type === 'text' ? b.text : '').join(''))
+            const prompts = suggestionsOf(reply.content.map((b) => b.type === 'text' ? b.text : '').join(''), skills.map(({ skill }) => skill))
             if (prompts.length) next.set(thread, { prompts })
           }, () => {})
           return undefined
