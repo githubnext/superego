@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Superego no longer uses a Claude subscription token as an Anthropic key: one entered in Settings or with
+  `superego providers key` is refused with what to use instead (an API key; Max, Team and Ultra plans include API
+  credits), one already stored stops the provider until it's replaced, and `ANTHROPIC_OAUTH_TOKEN` is ignored.
 - A suggestion over the composer can run one of your skills when it fits the next step, such as `$commit` after a
   change: it shows the skill's sparkle and name, with what the skill is for on hover.
 - Suggestions over the composer stay on one row: more than fit scroll sideways (with a trackpad, the mouse wheel, or ←/→ picking one), fading at the edge where there's more.

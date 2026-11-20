@@ -22,6 +22,7 @@ import { replayProvider, withRecording } from './replay.ts'
 import { authFailure, Rejections, rejectionSummary, WAITING } from './provider-auth.ts'
 import { watchFiles } from './watch-files.ts'
 import { wrapStreams } from './provider-streams.ts'
+import { withoutSubscriptionAuth, withoutSubscriptionEnv } from './claude-subscription.ts'
 import { writeAtomic } from './write-atomic.ts'
 import type { AuthFlowEvent, AuthFlows } from './auth-flows.ts'
 
@@ -202,7 +203,8 @@ export type AgentSettings = {
 export async function createAgentSettings(settings: SettingsRegistry, dataDir: string, app: AppConfig, flows: AuthFlows): Promise<AgentSettings> {
   const env = appEnv(app)
   const credentials = new FileCredentialStore(join(dataDir, 'auth.json'))
-  const models = createModels({ credentials })
+  // No Claude subscription token reaches pi-ai, from the environment or stored (claude-subscription.ts).
+  const models = createModels({ credentials, authContext: withoutSubscriptionEnv() })
   const credentialListeners = new Set<(provider: string) => void>()
   const rejections = new Rejections(join(dataDir, 'auth-rejected.json'))
   const images = createModelImages(dataDir, await createNodePhotonImages())
@@ -213,7 +215,7 @@ export async function createAgentSettings(settings: SettingsRegistry, dataDir: s
     const blocks = () => rejections.blocks(provider.id) ? rejections.get(provider.id)!.summary : undefined
     return images.wrap(gated(record ? withRecording(provider, record) : provider, blocks))
   }
-  models.setProvider(recorded(anthropicProvider()))
+  models.setProvider(recorded(withoutSubscriptionAuth(anthropicProvider())))
   models.setProvider(recorded(withServiceTier(openaiProvider(), () => settings.get<boolean>(KEYS.fast) && FAST.has(chosen()?.provider ?? ''))))
   const model = env('MODEL')
   if (model === 'faux') models.setProvider(recorded(echoProvider().provider))

@@ -1,4 +1,5 @@
 import { execFileSync } from 'node:child_process'
+import { existsSync, readFileSync } from 'node:fs'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
@@ -160,6 +161,19 @@ describe('daemon', () => {
 
     await peer.call('auth.signOut', { provider: 'anthropic' })
     await until(() => providers(snapshot).find((p) => p.id === 'anthropic')?.stored === false)
+    await close()
+  })
+
+  it('refuses a Claude subscription token as an Anthropic API key, saying what to use instead', async () => {
+    const { peer, close } = await open({ faux: false })
+    const events: AuthEvent[] = []
+    peer.on('auth.event', ({ event }: Notifications['auth.event']) => events.push(event))
+    await peer.call('auth.signIn', { provider: 'anthropic', type: 'api_key', key: 'sk-ant-oat01-not-a-real-token' })
+    await until(() => events.some((e) => e.type === 'done' || e.type === 'failed'))
+    expect(events.at(-1)).toEqual({ type: 'failed', message: expect.stringMatching(/Claude subscription tokens .* only work in Claude Code itself.*API credits/) })
+    expect(existsSync(join(dir, 'auth.json')) ? JSON.parse(readFileSync(join(dir, 'auth.json'), 'utf8')).anthropic : undefined).toBeUndefined()
+    // Nor is Claude sign-in offered.
+    await expect(peer.call('auth.signIn', { provider: 'anthropic', type: 'oauth' })).rejects.toMatchObject({ kind: 'unsupported' })
     await close()
   })
 })
