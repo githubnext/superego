@@ -134,7 +134,7 @@ blockErrors(blocks, use): string[]
 | `buttons` / row buttons | `id` only. Pressing **answers** (ask_ui) or **sends the user's next message** (show_ui, a pane). `action` refused | `action` required: `<extension>.<name>`, run on that machine with `params` and `exposure: 'ui'`. Another extension's or the core's is refused |
 | Inputs | yes. Values go with every press | yes. Values go with every press, **merged into the action's params** by input id. A params key that's also an input id is refused (open question 2) |
 | Submit button / a lone choice that answers | yes | no: an extension view needs explicit buttons, since there is nothing to "submit" to |
-| `html` | sandboxed. `superego.reply`/`send` on a user gesture | sandboxed, **display only**: the frame is told it can't reply, so `superego.reply`/`send` are absent (open question 4) |
+| `html` | sandboxed. `superego.reply`/`send` propose; the user confirms with the window's own Send under the frame | sandboxed, **display only**: the frame is told it can't reply, so `superego.reply`/`send` are absent (open question 4) |
 | `open` (a pane link) | its thread's panes | `thread` views only. A `window` view has no thread, so it's refused there |
 | `image` by path | a file on the thread's machine, relative to its folder or a whole path | `thread` views: the same. `window` views: `https:`/`data:` only |
 | `list[].thread` | a link on the same machine | the same |
@@ -186,8 +186,11 @@ machine's or a project profile's view needs no consent, as data views need none 
 **An agent's blocks can:**
 - show things
 - take input
-- answer the agent or send a message to its own thread, as the user, on the user's press only. The frame gates
-  `reply`/`send` on user activation.
+- answer the agent or send a message to its own thread, as the user, on the user's press only. For `html`, the press
+  is the window's: the page's scripts run beside the frame's helpers and can post anything, with or without a click,
+  so nothing the frame says is taken as the user's. `reply`/`send` only propose; the window shows what would be said
+  under the frame, with Send and Discard of its own, and Send takes a press only once the proposal has shown, unchanged,
+  for half a second (so a page can't slip it under a click on its way).
 - open a pane of its own thread
 - show an image from its thread's folder (read through the machine, as the window reads any of a thread's images) or
   from the web

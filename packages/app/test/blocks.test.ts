@@ -4,7 +4,7 @@
 // user typed when new blocks come.
 import { act, createElement as h } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { afterEach, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Block, Json, Reply } from '@superego/protocol'
 import type { MachineEntry } from '../src/shared/bridge.ts'
 import { Blocks, type BlocksHost } from '../src/renderer/blocks/blocks.tsx'
@@ -134,4 +134,79 @@ it('moves a slider by its steps from the keyboard, and answers with the number',
   expect(container.querySelector('output')!.textContent).toBe('6')
   await press('Submit')
   expect(replies).toEqual([{ button: 'submit', values: { n: 6 } }])
+})
+
+const drawBlocks = draw
+
+// An html block's page runs the agent's scripts (or what it copied in) beside the helpers that post for them, so any
+// of them can post as `superego.reply`/`send` would, click or none. What it posts is only proposed: the window shows
+// it, and only the window's own Send, pressed by the user, sends it.
+describe('an html block speaking for the user', () => {
+  const page = (id?: string): Block[] => [{ type: 'html', html: '<button>Go</button>', ...(id ? { id } : {}) }]
+  const frame = () => container.querySelector('iframe')!
+  // happy-dom loads no frame, so it has no window: one of the test's own, which messages say they're from.
+  const draw = async (blocks: Block[], host: BlocksHost) => {
+    await drawBlocks(blocks, host)
+    Object.defineProperty(frame(), 'contentWindow', { configurable: true, value: { postMessage: () => {} } })
+  }
+  const post = (data: unknown, source: MessageEventSource | null = frame().contentWindow) =>
+    act(async () => { window.dispatchEvent(new MessageEvent('message', { data: { superego: true, ...(data as object) }, source })) })
+  const proposal = () => container.querySelector('.blocks-proposal')
+  const settle = () => act(() => new Promise((resolve) => setTimeout(resolve, 600)))
+
+  it('sends a message only when the user confirms it, after it has shown a moment', async () => {
+    const { replies, host } = agentReplies()
+    await draw(page(), host)
+    await post({ kind: 'send', text: 'Delete everything' })
+    expect(replies).toEqual([])
+    expect(proposal()?.textContent).toContain('Delete everything')
+    // Not at once: Send can't be slipped under a click already on its way.
+    expect(button('Send').disabled).toBe(true)
+    await press('Send')
+    expect(replies).toEqual([])
+    await settle()
+    await press('Send')
+    expect(replies).toEqual([{ text: 'Delete everything', values: {} }])
+    expect(proposal()).toBeNull()
+  })
+
+  it("answers with a reply's value, as the block's id, once confirmed", async () => {
+    const { replies, host } = agentReplies()
+    await draw(page('chart'), host)
+    await post({ kind: 'reply', value: { picked: [1, 2] } })
+    expect(proposal()?.textContent).toContain('{"picked":[1,2]}')
+    await settle()
+    await press('Send')
+    expect(replies).toEqual([{ button: 'chart', values: { chart: { picked: [1, 2] } } }])
+  })
+
+  it('waits again for a new proposal, and drops a discarded one', async () => {
+    const { replies, host } = agentReplies()
+    await draw(page(), host)
+    await post({ kind: 'send', text: 'Looks good' })
+    await settle()
+    // The page swaps what it says just as the user goes to press: Send waits again.
+    await post({ kind: 'send', text: 'Push to main' })
+    expect(proposal()?.textContent).toContain('Push to main')
+    expect(button('Send').disabled).toBe(true)
+    await press('Discard')
+    expect(proposal()).toBeNull()
+    expect(replies).toEqual([])
+  })
+
+  it("ignores what isn't the frame's, or isn't a proposal, and an extension's page altogether", async () => {
+    const { replies, host } = agentReplies()
+    await draw(page(), host)
+    await post({ kind: 'send', text: 'from elsewhere' }, window)
+    await post({ kind: 'send', text: { toString: () => 'not a string' } })
+    await post({ kind: 'send', text: '   ' })
+    expect(proposal()).toBeNull()
+    const run = vi.fn(async () => null)
+    await draw(page(), builds(run))
+    await post({ kind: 'send', text: 'Delete everything' })
+    await post({ kind: 'reply', value: 1 })
+    expect(proposal()).toBeNull()
+    expect(replies).toEqual([])
+    expect(run).not.toHaveBeenCalled()
+  })
 })

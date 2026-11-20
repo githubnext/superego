@@ -80,5 +80,8 @@
 .blocks-open__link:focus-visible { outline: 2px solid var(--superego-ring); border-radius: 3px; }
 
 .blocks-html { display: block; width: 100%; border: 0; background: transparent; color-scheme: light dark; }
+/* What an html block would say for the user, in the window's own controls, to confirm. */
+.blocks-proposal { display: flex; flex-direction: column; gap: var(--superego-space-2); padding: var(--superego-space-3); border-radius: 10px; background: var(--superego-bg); box-shadow: var(--superego-card-edge); }
+.blocks-proposal__text { max-height: 12em; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
 .blocks-answer { display: flex; align-items: center; gap: 6px; color: var(--superego-muted); white-space: pre-wrap; }
 .blocks-error { color: var(--superego-status-error); font-size: var(--superego-text-sm); }

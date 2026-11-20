@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- A page an agent draws (an `html` block) no longer answers or messages for you by itself: what it would say shows
+  under it, and goes only when you press Send there.
+
 ## 0.1.9
 
 - Themes for code and the terminal, one for light and one for dark (Settings → Appearance): GitHub, One, Tokyo Night,

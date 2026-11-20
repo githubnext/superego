@@ -356,16 +356,16 @@ export function showValue(input: InputBlock | undefined, value: Value | undefine
  * button with its row, `→ Cancel: npm run build`, as rows repeat the same buttons), or what was written. For UI that
  * doesn't wait (show_ui, a pane): the agent reads it as the user's next message.
  */
+/** What an html block's `superego.reply(value)` says, in words: a string as it is, anything else as JSON. */
+export const showHtmlValue = (value: Value | undefined) => typeof value === 'string' ? value : JSON.stringify(value ?? null)
+
 export function describeReply(blocks: Block[], reply: Reply, { submit = 'Submit' }: { submit?: string } = {}): string {
   if (reply.text !== undefined) return reply.text
   const inputs = inputsOf(blocks)
   const frames: Extract<Block, { type: 'html' }>[] = []
   walkBlocks(blocks, (block) => { if (block.type === 'html') frames.push(block) })
   const frame = frames.find((f) => (f.id ?? 'html') === reply.button)
-  if (frame) {
-    const value = reply.values[frame.id ?? 'html']
-    return `→ ${typeof value === 'string' ? value : JSON.stringify(value ?? null)}`
-  }
+  if (frame) return `→ ${showHtmlValue(reply.values[frame.id ?? 'html'])}`
   const shown = inputs.filter((input) => input.id in reply.values)
   if (reply.button === 'submit' && shown.length === 1 && shown[0]!.type === 'choice') return `→ ${showValue(shown[0], reply.values[shown[0]!.id])}`
   const pressed = buttonsOf(blocks).find(({ button }) => button.id === reply.button)
@@ -384,4 +384,4 @@ export const BLOCKS_GUIDE = `Blocks (JSON objects, by "type"; "?" marks optional
 - inputs, each with a unique id (its key in the answer) and label?: choice {options: [{label, value?, description?, preview?: block}], multiple?, style?: buttons|list, default?} | select {options: [{label, value?}], default?} | switch {label, default?} | text {placeholder?, default?} | textarea {placeholder?, default?} | number {min?, max?, step?, default?} | slider {min, max, step?, default?}
 - buttons {buttons: [{id, label, style?: primary|danger}]}: each sends {button: id} with every input's value. Without buttons, inputs get a submit button, and a lone single choice answers when picked.
 - open {label, kind, params?, title?}: a link that opens a pane beside the thread: a kind your instructions list under panes, with the params it takes there ({ path } for an editor).
-- html {html, height?, id?}: your own HTML/CSS/JS in a sandboxed frame (no network access to the app, no same-origin). Theme variables (--superego-text, --superego-muted, --superego-accent, --superego-border, --superego-surface, --superego-font, --superego-mono, --superego-radius) follow light/dark. Scripts get superego.reply(value) (answers, as values[id]) and superego.send(text) (a message), both only on a click or key press, and superego.resize(). For what blocks can't draw: charts, diagrams, custom widgets.`
+- html {html, height?, id?}: your own HTML/CSS/JS in a sandboxed frame (no network access to the app, no same-origin). Theme variables (--superego-text, --superego-muted, --superego-accent, --superego-border, --superego-surface, --superego-font, --superego-mono, --superego-radius) follow light/dark. Scripts get superego.reply(value) (answers, as values[id]) and superego.send(text) (a message), each shown to the user under the frame to confirm before it goes, and superego.resize(). For what blocks can't draw: charts, diagrams, custom widgets.`

@@ -5,7 +5,7 @@
 // in a sandboxed frame (see frame.html).
 import { createContext, useContext, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react'
 import {
-  blockErrors, initialValues, keptValues, needsSubmit, optionValue, picksAnswer, showValue,
+  blockErrors, initialValues, keptValues, needsSubmit, optionValue, picksAnswer, showHtmlValue, showValue,
   type Block, type BlocksUse, type Button as BlockButton, type ChoiceOption, type Json, type ListItem, type Reply, type ThreadInfo, type Value,
 } from '@superego/protocol'
 import {
@@ -401,7 +401,7 @@ function useThemeCss() {
   const read = () => {
     const style = getComputedStyle(document.documentElement)
     let css = ''
-    for (const name of style) if (name.startsWith('--superego-')) css += `${name}:${style.getPropertyValue(name).trim()};`
+    for (const name of Array.from(style)) if (name.startsWith('--superego-')) css += `${name}:${style.getPropertyValue(name).trim()};`
     return css
   }
   const [css, setCss] = useState(read)
@@ -414,35 +414,96 @@ function useThemeCss() {
   return css
 }
 
-type FrameMessage = { superego: true; kind: 'ready' } | { superego: true; kind: 'resize'; height: number } | { superego: true; kind: 'reply'; value: Value } | { superego: true; kind: 'send'; text: string }
+/**
+ * What a frame's message proposes to say for the user, or nothing: it comes from the page's own scripts, which may
+ * post anything, so it's checked here (a string to send; a value that's JSON, answered as the block's id).
+ */
+function proposalOf(data: { kind?: unknown; value?: unknown; text?: unknown }, id: string): Proposal | undefined {
+  if (data.kind === 'send') return typeof data.text === 'string' && data.text.trim() ? { reply: { text: data.text }, text: data.text } : undefined
+  if (data.kind !== 'reply') return undefined
+  let value: Value
+  try {
+    value = JSON.parse(JSON.stringify(data.value ?? null)) as Value
+  } catch (e) {
+    console.error(`An html block's reply isn't JSON: ${(e as Error).message}`)
+    return undefined
+  }
+  return { reply: { values: { [id]: value }, button: id }, text: showHtmlValue(value) }
+}
+
+type Proposal = { reply: Partial<Reply>; text: string }
+
+/**
+ * How long a proposal shows, unchanged, before Send takes a press: a page can't slip it under a click the user was
+ * already making on what was there before.
+ */
+const PROPOSAL_DELAY = 500
 
 /**
  * A page of its own: sandboxed (scripts, nothing else), sized to its content. An agent's talks back through
  * `superego.reply`/`send`; an extension's is display only, and the frame is told so (it has neither).
+ *
+ * The frame's scripts are the agent's, or whatever it copied in, and run beside the helpers that post for them, so
+ * nothing the frame says shows the user meant it. What it would say is only proposed: shown here, under the frame, in
+ * the window's own controls, and sent when the user presses Send.
  */
 function HtmlFrame({ block }: { block: Extract<Block, { type: 'html' }> }) {
   const form = useForm()
   const frame = useRef<HTMLIFrameElement>(null)
   const css = useThemeCss()
   const [height, setHeight] = useState(block.height ?? 80)
+  // The latest proposal, numbered so a new one (even the same words) is shown afresh and waits again.
+  const [proposal, setProposal] = useState<Proposal & { n: number; html: string }>()
   // The latest of what messages need, without listening again on every change.
   const latest = useRef({ form, css, html: block.html })
   latest.current = { form, css, html: block.html }
   const id = block.id ?? 'html'
   useEffect(() => {
     const receive = (event: MessageEvent) => {
-      const data = event.data as FrameMessage | undefined
-      if (!frame.current || event.source !== frame.current.contentWindow || !data?.superego) return
+      const data = event.data as { superego?: unknown; kind?: unknown; height?: unknown } | null | undefined
+      if (!frame.current || event.source !== frame.current.contentWindow || typeof data !== 'object' || !data?.superego) return
       const { form, css, html } = latest.current
       if (data.kind === 'ready') frame.current.contentWindow!.postMessage({ superego: true, kind: 'render', html, css, replies: form.replies }, '*')
-      else if (data.kind === 'resize' && !block.height && Number.isFinite(data.height)) setHeight(Math.min(Math.max(data.height, 20), 2000))
-      else if (data.kind === 'reply' && form.replies) form.act({ values: { [id]: data.value }, button: id })
-      else if (data.kind === 'send' && form.replies && data.text.trim()) form.act({ text: data.text })
+      else if (data.kind === 'resize') {
+        if (!block.height && typeof data.height === 'number' && Number.isFinite(data.height)) setHeight(Math.min(Math.max(data.height, 20), 2000))
+      } else if (form.replies && !form.locked) {
+        const next = proposalOf(data, id)
+        if (next) setProposal((now) => ({ ...next, n: (now?.n ?? 0) + 1, html }))
+      }
     }
     addEventListener('message', receive)
     return () => removeEventListener('message', receive)
   }, [id, block.height])
   useEffect(() => { frame.current?.contentWindow?.postMessage({ superego: true, kind: 'theme', css }, '*') }, [css])
-  // A new page is a new frame: written once, as it loads.
-  return <iframe key={block.html} ref={frame} className="blocks-html" src={new URL(frameUrl, document.baseURI).href} sandbox="allow-scripts" title={block.id ?? 'html'} style={{ height }} />
+  const shown = proposal && proposal.html === block.html && !form.locked ? proposal : undefined
+  return (
+    <>
+      {/* A new page is a new frame: written once, as it loads. */}
+      <iframe key={block.html} ref={frame} className="blocks-html" src={new URL(frameUrl, document.baseURI).href} sandbox="allow-scripts" title={block.id ?? 'html'} style={{ height }} />
+      {shown && (
+        <FrameProposal key={shown.n} text={shown.text} busy={form.busy} onDiscard={() => setProposal(undefined)}
+          onSend={() => { setProposal(undefined); form.act(shown.reply) }} />
+      )}
+    </>
+  )
+}
+
+/** What a frame would say for the user, and the window's own Send and Discard for it. Send waits a moment first. */
+function FrameProposal({ text, busy, onSend, onDiscard }: { text: string; busy: boolean; onSend(): void; onDiscard(): void }) {
+  const [ready, setReady] = useState(false)
+  useEffect(() => {
+    const timer = setTimeout(() => setReady(true), PROPOSAL_DELAY)
+    return () => clearTimeout(timer)
+  }, [])
+  const labelId = useId()
+  return (
+    <div className="blocks-proposal" role="group" aria-labelledby={labelId}>
+      <div className="blocks-field__label" id={labelId}>Send from this page?</div>
+      <div className="blocks-proposal__text">{text}</div>
+      <div className="blocks-actions">
+        <Button variant="primary" disabled={!ready || busy} onClick={onSend}>Send</Button>
+        <Button onClick={onDiscard}>Discard</Button>
+      </div>
+    </div>
+  )
 }

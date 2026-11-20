@@ -7,19 +7,15 @@
 // a blob or data: URL) inherits that policy; this page has none. The window sends it the block's HTML and the theme;
 // it writes them in as the frame's document and gives its scripts `superego`, which talks back over postMessage. An
 // agent's page may reply and send; an extension's view's is display only, so it gets neither (`replies: false`).
+// Nothing here is trusted: the page's own scripts run in this realm and can post anything. A reply or a message only
+// proposes; the window shows it under the frame, and it goes only when the user confirms it there (blocks.tsx).
 (() => {
   const post = (message) => parent.postMessage({ superego: true, ...message }, '*')
   const height = () => Math.ceil(document.documentElement.getBoundingClientRect().height)
-  // Replies speak for the user, so only as they act (a click, a key): a page can't answer or message on its own.
-  const acting = (what) => {
-    if (!navigator.userActivation || navigator.userActivation.isActive) return true
-    console.warn(`superego.${what}() works only in response to the user (a click or a key press)`)
-    return false
-  }
   // Kept on the window, so it outlives document.open() below and the agent's scripts find it as they run.
   window.superego = {
-    reply: (value) => acting('reply') && post({ kind: 'reply', value: JSON.parse(JSON.stringify(value ?? null)) }),
-    send: (text) => acting('send') && post({ kind: 'send', text: String(text) }),
+    reply: (value) => post({ kind: 'reply', value: JSON.parse(JSON.stringify(value ?? null)) }),
+    send: (text) => post({ kind: 'send', text: String(text) }),
     resize: () => post({ kind: 'resize', height: height() }),
   }
   const BASE = 'html,body{margin:0}body{font:var(--superego-text-body)/var(--superego-leading-body) var(--superego-font);color:var(--superego-text);background:transparent;padding:1px 0}'
