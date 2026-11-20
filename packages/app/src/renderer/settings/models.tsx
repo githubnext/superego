@@ -1,4 +1,4 @@
-// Settings → a machine → Model, under its settings: the favourite models, which every model menu lists first. Dragged
+// Settings → a machine → Favourite models: the favourite models, which every model menu lists first. Dragged
 // (or moved with ⌥↑ and ⌥↓ on the handle) into their order, unstarred, and added from a model menu.
 import { useEffect, useState } from 'react'
 import type { ModelCatalog, SectionInfo } from '@superego/protocol'
@@ -49,7 +49,6 @@ export function ModelFavourites({ target, section }: { target: string; section: 
 
   return (
     <div className="favourites">
-      <div className="setting__label"><div>Favourites</div></div>
       {favourites.map((favourite, i) => (
         <div key={favourite.value} className={`favourite ${favourite.unavailable ? 'is-unavailable' : ''} ${dragging === i ? 'is-dragging' : ''} ${over === i && dragging !== i ? 'is-over' : ''}`}
           draggable onDragStart={(e) => { setDragging(i); e.dataTransfer.effectAllowed = 'move' }}

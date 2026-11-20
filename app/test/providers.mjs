@@ -1,5 +1,5 @@
 // Screenshots of providers and models (run by test/look.sh <dir> providers): Settings → Providers with some signed in,
-// one added, the rest searched; Settings → Model's favourites; ⌘N's model menu, its favourites first, one starred and
+// one added, the rest searched; Settings → Favourite models; ⌘N's model menu, its favourites first, one starred and
 // one signed out.
 import { openApp } from './harness.mjs'
 

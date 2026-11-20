@@ -11,7 +11,7 @@
   URL, an optional key, and its models, listed from the endpoint or typed in. Edit or remove it later, or from the
   command line: `superego providers add --name … --base-url … [--key -]`.
 - Favourite models: star a model in the New thread dialog's model menu (or press ⌘D on it), and the model menus list
-  your favourites first. Reorder them by dragging in Settings → Model. `superego models` lists the models, and
+  your favourites first. Reorder them by dragging in Settings → Favourite models. `superego models` lists the models, and
   `superego models favourite <provider/model>` stars one.
 - The New thread dialog's model menu can be searched, and lists the models by provider.
 - The editor opens and saves files outside the thread's folder (a whole path, or `~/…`), showing where the file

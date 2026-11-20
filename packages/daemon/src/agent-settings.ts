@@ -332,9 +332,8 @@ export async function createAgentSettings(settings: SettingsRegistry, dataDir: s
   }
 
   settings.register({
-    id: 'model', title: 'Model', order: 10, ui: 'models',
+    id: 'model', title: 'Model', order: 10,
     description: 'What new turns in every thread on this machine run with.',
-    data: () => ({ favourites: favourites() }),
     settings: [
       {
         key: KEYS.model, title: 'Model', default: null,
@@ -380,7 +379,16 @@ export async function createAgentSettings(settings: SettingsRegistry, dataDir: s
         type: { type: 'boolean' },
         hidden: () => !FAST.has(chosen()?.provider ?? ''),
       },
-      // Starred in the model menus, ordered in the section's own list (null: not set yet, so seeded; see favourites()).
+    ],
+  })
+
+  // Its own section, drawn by its own component, so the Model section's settings still merge across machines.
+  settings.register({
+    id: 'model.favourites', title: 'Favourite models', order: 11, ui: 'models',
+    description: 'The model menus list these first.',
+    data: () => ({ favourites: favourites() }),
+    settings: [
+      // Starred in the model menus, ordered here (null: not set yet, so seeded; see favourites()).
       { key: KEYS.favourites, title: 'Favourites', default: null, type: { type: 'models' }, hidden: () => true },
     ],
   })
