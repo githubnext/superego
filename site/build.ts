@@ -9,6 +9,7 @@ import { micromark } from 'micromark'
 import { gfm, gfmHtml } from 'micromark-extension-gfm'
 import { parseFragment, serialize, type DefaultTreeAdapterMap } from 'parse5'
 import { highlight } from './highlight.ts'
+import { homeBody } from './home.ts'
 import { changelog, sections, type Page } from './pages.ts'
 
 type Node = DefaultTreeAdapterMap['childNode'] | DefaultTreeAdapterMap['documentFragment']
@@ -176,18 +177,10 @@ ${DEV ? `<script>new EventSource('/__reload').onmessage = () => location.reload(
 }
 
 const DESCRIPTION =
-  'An app for running agents: threads in your projects, on this Mac or over ssh, with panes beside them, worktrees of their own, and profiles and extensions to shape them.'
+  'An agent workbench you make your own: a small shell for running agents, on this Mac or over ssh, with panes beside them. The rest is profiles and extensions.'
 
 function home() {
-  return layout({
-    title: 'Superego',
-    body: `<main class="home">
-<h1>Superego</h1>
-<p>${DESCRIPTION}</p>
-<p class="links"><a class="button" href="${DOWNLOAD}">Download</a><a href="${BASE}docs/">Docs</a></p>
-<picture><source media="(prefers-color-scheme: dark)" srcset="${BASE}screenshot-dark.webp"><img src="${BASE}screenshot-light.webp" alt="The Superego window: a lead thread with its child threads in the sidebar, a question over the composer, and a board of the work beside it" width="2880" height="1800"></picture>
-</main>`,
-  })
+  return layout({ title: 'Superego', body: homeBody({ base: BASE, download: DOWNLOAD }) })
 }
 
 function docPage(page: Page, { html, toc }: Rendered) {
