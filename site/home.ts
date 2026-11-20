@@ -33,15 +33,30 @@ const builtIn: [string, string][] = [
   ['MCP servers', 'Linear, GitHub, Sentry and the like, signed in to once per machine.'],
 ]
 
-const extensionsAdd = [
-  'Tools for the agent, and what its prompt says',
+/** What a profile is made of. */
+const profileHas = [
+  'A prompt: who the agent is and how it works',
+  'A model, and how hard it thinks',
+  'The extensions it uses, and the built-ins it goes without',
+  'Its MCP servers',
+  'Another profile to start from',
+]
+
+/** What an extension can add. */
+const extensionHas = [
+  'Tools for the agent, and lines in its prompt',
   'Panes beside the thread',
-  'Skills',
-  'Ways for the agent to ask and show: questions, forms, cards in the thread',
+  'Ways for the agent to ask and show: questions, forms, cards',
   'What happens as a thread starts, finishes or is archived',
   'Threads that start and look after other threads',
-  'Marks and badges in the sidebar',
-  'Commands, shortcuts and settings',
+  'Marks in the sidebar, commands, shortcuts, settings',
+]
+
+/** Where profiles live, and so who has them. */
+const profileHome: [string, string][] = [
+  ['Yours', 'In <code>~/.superego/profiles</code>, for every project on that machine.'],
+  ['Your team’s', 'In a project’s <code>.superego/profiles</code>, in the repo: everyone who clones it gets it, once they allow it.'],
+  ['Someone else’s', 'Installed from a git repo, like mine above.'],
 ]
 
 /**
@@ -123,11 +138,27 @@ ${builtIn.map(([t, d]) => `<div><dt>${t}</dt><dd>${d}</dd></div>`).join('\n')}
 </section>
 
 <section>
-<h2>What an extension can add</h2>
+<h2>Profiles and extensions</h2>
+<div class="columns">
+<div>
+<h3>A profile is an agent</h3>
 <ul class="adds">
-${extensionsAdd.map((a) => `<li>${a}</li>`).join('\n')}
+${profileHas.map((a) => `<li>${a}</li>`).join('\n')}
 </ul>
-<p class="take">The sidebar, worktrees and the terminal are extensions too. <a href="${o.base}docs/extensions/">Making one</a></p>
+<p><a href="${o.base}docs/profiles/">Profiles</a></p>
+</div>
+<div>
+<h3>An extension is what it can do</h3>
+<ul class="adds">
+${extensionHas.map((a) => `<li>${a}</li>`).join('\n')}
+</ul>
+<p>The sidebar, worktrees and the terminal are extensions too. <a href="${o.base}docs/extensions/">Extensions</a></p>
+</div>
+</div>
+<p class="where-intro">Share one with your team, or build your own dream house.</p>
+<dl class="grid">
+${profileHome.map(([t, d]) => `<div><dt>${t}</dt><dd>${d}</dd></div>`).join('\n')}
+</dl>
 </section>
 </main>`
 }
