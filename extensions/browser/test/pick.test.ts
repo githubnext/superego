@@ -117,9 +117,12 @@ it('picks an element in the page, shows it, and sends it with the message as the
   await ui.type('.composer textarea', 'Make this bigger')
   await ui.key('enter')
   await ui.until(() => $$('.composer-item').length === 0, 'the chips sent')
+  // The composer empties as it sends: the message is the daemon's a moment later, and its run is waited out after that.
+  const sentMessage = async () => (JSON.parse(await daemon.transcript(thread.id)) as { kind: string; model?: { content: { type: string; text?: string; mimeType?: string }[] }[] }[])
+    .find((e) => e.kind === MESSAGE_ENTRY)
+  await vi.waitFor(async () => expect(await sentMessage()).toBeDefined())
   await daemon.idle(thread.id)
-  const sent = (JSON.parse(await daemon.transcript(thread.id)) as { kind: string; model?: { content: { type: string; text?: string; mimeType?: string }[] }[] }[])
-    .find((e) => e.kind === MESSAGE_ENTRY)!.model![0]!.content
+  const sent = (await sentMessage())!.model![0]!.content
   expect(sent.map((block) => block.type)).toEqual(['text', 'text', 'text', 'image'])
   expect(sent[0]!.text).toBe('Make this bigger')
   const note = sent[1]!.text!

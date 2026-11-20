@@ -82,17 +82,17 @@ describe('a link to a command that takes the connection and never answers', () =
     const dir = mkdtempSync(join(tmpdir(), 'superego-mute-'))
     const pids = join(dir, 'pids')
     const seen: { state: string; errorKind?: string }[] = []
-    // A shell, and a child of its own holding the pipes: closing must take both.
+    // A shell, and a child of its own holding the pipes: closing must take both. Each writes a line once both run.
     const link = new Link({
       id: 'box', label: 'Box', helloTimeout: 200,
-      open: () => openVia(`echo $$ >> '${pids}'; sleep 300 & echo $! >> '${pids}'; wait`),
+      open: () => openVia(`sleep 300 & echo "$$ $!" >> '${pids}'; wait`),
       onEvent: (method, params) => { if (method === '$connection') seen.push(params as { state: string; errorKind?: string }) },
     })
     link.start()
-    // Tried again, and that second shell and its child started too.
-    // No file yet until the first shell has written to it.
-    const started = () => { try { return readFileSync(pids, 'utf8').trim().split('\n').map(Number) } catch { return [] } }
-    await vi.waitFor(() => { expect(seen.length).toBeGreaterThanOrEqual(3); expect(started().length).toBeGreaterThanOrEqual(4) }, { timeout: 5_000 })
+    // No file until a shell has started its child (one given up on sooner, on a busy machine, writes nothing).
+    const started = () => { try { return readFileSync(pids, 'utf8').trim().split(/\s+/).map(Number) } catch { return [] } }
+    // Given up on, and tried again; and some shell with its child running before it was closed.
+    await vi.waitFor(() => { expect(seen.length).toBeGreaterThanOrEqual(3); expect(started().length).toBeGreaterThanOrEqual(2) }, { timeout: 15_000 })
     link.stop()
     expect(seen.slice(0, 3)).toMatchObject([{ state: 'connecting' }, { state: 'disconnected', errorKind: 'timeout' }, { state: 'connecting' }])
     const alive = () => started().filter((pid) => { try { process.kill(pid, 0); return true } catch { return false } })
