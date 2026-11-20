@@ -1109,6 +1109,25 @@ it('refuses a module that imports a path worked out as it runs: what it loads ca
     .rejects.toMatchObject({ kind: 'invalid', message: expect.stringMatching(/vault\.ts:3 .*import\(name\)/) })
 })
 
+it('reads import.meta as no import, wherever it is: in a call, or a URL beside the module', async () => {
+  const profile = join(project, '.superego', 'profiles', 'meta')
+  write(profile, {
+    'profile.ts': profileTs(['./vault.ts']),
+    'vault.ts': `const here = new URL('./data.json', import.meta.url)\nconsole.log(import.meta, String(here))\nexport default { name: 'vault' }\n`,
+  })
+  expect(await hashProfile(profile)).toMatch(/^[0-9a-f]{16}$/)
+})
+
+it('refuses an import() of a template literal: which file it loads is worked out as it runs too', async () => {
+  const profile = join(home, 'profiles', 'default')
+  write(profile, {
+    'profile.ts': profileTs(['./vault.ts']),
+    'vault.ts': "import { defineDaemonExtension } from 'superego'\nconst name = 'helper'\nexport default defineDaemonExtension({ name: 'vault', async setup() { await import(`./${name}.ts`) } })\n",
+  })
+  await expect(loadProfile(userRef('default') as ProfileRef, [{ dir: join(home, 'profiles') }], new Allowances(home)))
+    .rejects.toMatchObject({ kind: 'invalid', message: expect.stringMatching(/vault\.ts:3 .*import\(`\.\/\$\{name\}\.ts`\)/) })
+})
+
 it("tears down every part however its cleanups fail, refuses what it registers after, and ignores its old publishers", async () => {
   const profile = join(home, 'profiles', 'default')
   const vaultOf = (answer: string) => `import { defineDaemonExtension, defineAction, obj } from 'superego'
