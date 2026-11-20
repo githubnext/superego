@@ -4,14 +4,13 @@
 // Anthropic credential reached it), then points it at the mock with a key of the mock's, in a config folder of its own.
 import { execFileSync } from 'node:child_process'
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import type { LiveState } from '@earendil-works/pi-durable'
 import { testDaemon, type TestDaemon } from '@superego/sdk/testing'
 import { claudeEnv } from '../src/claude.ts'
 import { claudeAgent } from '../src/daemon.ts'
-import { projectConfig } from '../src/project.ts'
+import { projectConfig, ProjectAllowances } from '../src/project.ts'
 import { about, ALLOW, type ProjectFacts } from '../src/shared.ts'
 import { mockAnthropic, type MockAnthropic } from './mock-anthropic.ts'
 
@@ -20,6 +19,11 @@ const claude = (() => {
 })()
 
 const PROFILE = { 'profile.ts': "export default { agent: 'claude-agent' }\n" }
+
+// The tests' folders, where no one but this user can write all the way up: Claude Code reads `.mcp.json` from every
+// folder above its own too, so a folder's settings under a shared one (the system's /tmp) can't be allowed (project.ts).
+const SCRATCH = join(import.meta.dirname, '..', 'node_modules', '.tmp')
+const scratch = (prefix: string) => { mkdirSync(SCRATCH, { recursive: true }); return mkdtempSync(join(SCRATCH, prefix)) }
 
 describe.skipIf(!claude)("a Claude Agent thread, on the user's claude against a mock API", () => {
   let api: MockAnthropic
@@ -47,7 +51,7 @@ describe.skipIf(!claude)("a Claude Agent thread, on the user's claude against a 
   beforeAll(async () => { api = await mockAnthropic() })
   afterAll(async () => { await api.close() })
   beforeAll(() => {
-    dir = mkdtempSync(join(tmpdir(), 'claude-agent-'))
+    dir = scratch('claude-agent-')
     writeFileSync(join(dir, 'notes.txt'), 'The answer is 42.\n')
     // What a daemon started from a shell with credentials has: none of it may reach `claude`.
     Object.assign(process.env, { ANTHROPIC_API_KEY: 'sk-ant-api03-not-for-claude', ANTHROPIC_AUTH_TOKEN: 'tok', CLAUDE_CODE_OAUTH_TOKEN: 'oat', ANTHROPIC_BASE_URL: 'http://127.0.0.1:9' })
@@ -169,7 +173,7 @@ describe("claude's environment", () => {
 
 describe("a folder's own Claude Code configuration", () => {
   let root: string
-  beforeAll(() => { root = mkdtempSync(join(tmpdir(), 'claude-project-')) })
+  beforeAll(() => { root = scratch('claude-project-') })
   afterAll(() => rmSync(root, { recursive: true, force: true }))
   const write = (path: string, text = '{}') => { mkdirSync(join(root, path, '..'), { recursive: true }); writeFileSync(join(root, path), text) }
 
@@ -194,5 +198,26 @@ describe("a folder's own Claude Code configuration", () => {
     write('repo/CLAUDE.md', 'other notes')
     write('repo/.claude/worktrees/feature/.claude/settings.json', '{"x":1}')
     expect(projectConfig(join(root, 'repo'), user)!.hash).toBe(changed)
+    expect(config.unsafe).toBeUndefined()
+  })
+
+  it("can't be allowed where another user could change what Claude Code loads: a folder above it, or a file", async () => {
+    write('shared/repo/.claude/settings.json')
+    chmodSync(join(root, 'shared'), 0o777)
+    const under = projectConfig(join(root, 'shared', 'repo'))!
+    expect(under.unsafe).toBe(join(root, 'shared'))
+    write('own/repo/.claude/settings.json')
+    write('own/.mcp.json')
+    chmodSync(join(root, 'own', '.mcp.json'), 0o666)
+    const writable = projectConfig(join(root, 'own', 'repo'))!
+    expect(writable.unsafe).toBe(join(root, 'own', '.mcp.json'))
+
+    const allowances = new ProjectAllowances(join(root, 'allowed.json'))
+    await allowances.allow(under)
+    expect(allowances.allowed(under)).toBe(false)
+    const d = await testDaemon({ extensions: [claudeAgent({ executable: async () => '/bin/false' })] })
+    try {
+      await expect(d.call('action.run', { id: ALLOW, params: { cwd: join(root, 'own', 'repo'), hash: writable.hash } })).rejects.toMatchObject({ kind: 'unsafe' })
+    } finally { await d.close() }
   })
 })

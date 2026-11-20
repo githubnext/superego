@@ -44,8 +44,10 @@ const done = (peer: RpcPeer, id: string) => until(async () => (await peer.call<T
 beforeEach(async () => {
   dir = await mkdtemp(join(tmpdir(), 'superego-profiles-'))
   home = join(dir, 'home')
+  // A repository: its profiles are for threads anywhere in it.
   project = join(dir, 'acme')
   mkdirSync(join(project, 'src'), { recursive: true })
+  mkdirSync(join(project, '.git'))
 })
 afterEach(async () => { await rm(dir, { recursive: true, force: true }) })
 
@@ -160,6 +162,7 @@ describe("the user's own profiles, in the default data dir under ~", () => {
       'profile.ts': `import { defineProfile } from 'superego'\nexport default defineProfile({})\n`,
     })
     mkdirSync(join(fakeHome, 'acme', 'src'), { recursive: true })
+    mkdirSync(join(fakeHome, 'acme', '.git'))
     const { peer, close } = await open(dataDir)
     expect(await peer.call<ProfileInfo[]>('profile.list', { cwd: join(fakeHome, 'acme', 'src') })).toMatchObject([
       { name: 'support', scope: 'project', allowed: false },

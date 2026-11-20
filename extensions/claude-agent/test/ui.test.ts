@@ -34,3 +34,10 @@ it('says when they changed since allowed, and nothing once allowed or with none'
     ui = undefined
   }
 })
+
+it('offers nothing to allow where another user could change them, and says where', async () => {
+  const { drawn } = await notice({ ...project, unsafe: '/tmp' })
+  expect(drawn!.text()).toContain('Claude Code also reads settings from /tmp, which other users on this computer can change')
+  await expect(drawn!.click('Allow')).rejects.toThrow()
+  await drawn!.click('Dismiss')
+})

@@ -1,6 +1,7 @@
 // Claude Agent, UI half: over the composer of a Claude Agent thread whose folder has Claude Code settings of its own
 // not allowed as they are (the thread's facts, the daemon half's), a notice to allow them, with each of their files to
-// open and read first. Put off ("Not now"), it's remembered for those files as they are.
+// open and read first. Put off ("Not now"), it's remembered for those files as they are. Where another user could change
+// them, it says so, with nothing to allow.
 import { useState } from 'react'
 import { defineUiExtension, factsOf, useDispatch, useLocalState, type SlotProps } from '@superego/app/ui'
 import { Button } from '@superego/ui'
@@ -36,8 +37,11 @@ function ProjectNotice({ machine, thread }: SlotProps['composer.above']) {
         {project.changed ? 'This folder’s Claude Code settings changed since you allowed them.' : 'This folder has Claude Code settings of its own.'}
       </div>
       <div className="service-notice__note">
-        Their hooks, MCP servers and permissions can run commands, so Claude Code runs here without them (and without the
-        folder’s CLAUDE.md) until you allow them.
+        {project.unsafe
+          ? <>Claude Code also reads settings from <code>{project.unsafe}</code>, which other users on this computer can change,
+            so it runs here with your own settings only (and without the folder’s CLAUDE.md).</>
+          : <>Their hooks, MCP servers and permissions can run commands, so Claude Code runs here without them (and without the
+            folder’s CLAUDE.md) until you allow them.</>}
       </div>
       {open && (
         <ul className="claude-project__files">
@@ -45,8 +49,8 @@ function ProjectNotice({ machine, thread }: SlotProps['composer.above']) {
         </ul>
       )}
       <div className="service-notice__actions">
-        <Button variant="primary" onClick={allow}>Allow</Button>
-        <Button onClick={() => setDismissed((list) => [...list.filter((k) => !k.startsWith(`${machine.id}:${project.cwd}:`)), key])}>Not now</Button>
+        {!project.unsafe && <Button variant="primary" onClick={allow}>Allow</Button>}
+        <Button onClick={() => setDismissed((list) => [...list.filter((k) => !k.startsWith(`${machine.id}:${project.cwd}:`)), key])}>{project.unsafe ? 'Dismiss' : 'Not now'}</Button>
         <Button variant="ghost" className="claude-project__more" aria-expanded={open} onClick={() => setOpen(!open)}>
           {project.files.length === 1 ? '1 file' : `${project.files.length} files`}
         </Button>

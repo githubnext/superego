@@ -14,6 +14,8 @@ export type ProjectFacts = {
   allowed: boolean
   /** Allowed before, and changed since. */
   changed: boolean
+  /** A folder or file it's loaded from that another user could change: it can't be allowed. */
+  unsafe?: string
 }
 
 /** The action allowing a folder's Claude Code configuration, as it is now (or at `hash`, the one shown). */

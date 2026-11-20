@@ -32,6 +32,7 @@ import type { Extension } from '@earendil-works/pi-durable'
 import type { DaemonExtension } from './extension.ts'
 import { RpcError, type Json } from '@superego/protocol'
 import { CODE, digestOf, graphOf, profileImport, versionedUrl, versionOf, within } from './module-graph.ts'
+import { projectFolders, trusted } from './project-files.ts'
 import { writeAtomic } from './write-atomic.ts'
 
 /**
@@ -171,17 +172,18 @@ const real = (path: string) => { try { return realpathSync(path) } catch { retur
 const same = (a: string, b: string) => real(a) === real(b)
 
 /**
- * The folder holding a project's profiles: the nearest `.superego/profiles` at or above `cwd`, that isn't the user's
- * own. Walking up from any folder under `~` finds `~/.superego/profiles`: the user's, never a project's, even for a
- * daemon keeping its data elsewhere (`SUPEREGO_HOME`), as is each of the user's roots wherever it is.
+ * The folder holding a project's profiles: the nearest `.superego/profiles` from `cwd` up to the project's top, that
+ * isn't the user's own, and that no one else could have put there (project-files.ts). From `~` (or a repository whose
+ * top is `~`), that walk finds `~/.superego/profiles`: the user's, never a project's, even for a daemon keeping its
+ * data elsewhere (`SUPEREGO_HOME`), as is each of the user's roots wherever it is.
  */
 export function projectProfiles(cwd: string, roots: UserRoot[]): string | undefined {
-  for (let dir = resolve(cwd); ; dir = dirname(dir)) {
+  for (const dir of projectFolders(cwd)) {
     const candidate = join(dir, '.superego', 'profiles')
     const users = roots.some((root) => same(candidate, root.dir)) || same(dir, homedir())
-    if (!users && existsSync(candidate) && statSync(candidate).isDirectory()) return candidate
-    if (dirname(dir) === dir) return undefined
+    if (!users && trusted(join(dir, '.superego')) && trusted(candidate) && statSync(candidate).isDirectory()) return candidate
   }
+  return undefined
 }
 
 const names = (root: string | undefined) => !root || !existsSync(root) ? [] :

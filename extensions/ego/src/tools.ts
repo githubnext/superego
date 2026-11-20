@@ -109,8 +109,8 @@ What ${name} is:
   needed; \`${id} profile new [name]\` makes a bare one.
 - Skills live in ${agentsDir}/skills/<name>/SKILL.md: front matter with name and description (and
   disable-model-invocation: true to offer it only when named), then the instructions. Every agent is told about them; a
-  message with $name or /skill:name sends one along. ${agentsDir}/AGENTS.md, and AGENTS.md files from / down to a
-  thread's folder, are standing instructions for every agent.
+  message with $name or /skill:name sends one along. ${agentsDir}/AGENTS.md, and AGENTS.md files from the project's top
+  (its repository's) down to a thread's folder, are standing instructions for every agent.
 - Settings: each machine has its own (models, providers and sign-in, web access, …): superego_settings reads them and
   superego_set_setting changes them (as \`${id} do settings.set --key … --value …\` does). Providers sign in from the app's
   Settings → Providers (OAuth needs the browser). The app's own settings (fonts, accent colour, keyboard shortcuts,

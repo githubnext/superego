@@ -19,8 +19,9 @@ With `SUPEREGO_MODEL=faux` in the daemon's environment, turns echo instead of ca
 - **"allow it first"**: a project's profile changed since it was allowed (any file in its folder). The user looks it
   over and allows it: in the window (where the thread asks, or Settings → Profiles), or `superego profile allow <name>`
   in the project, in their own terminal. An agent can't: tell them.
-- **"No profile …"**: profiles are found from the thread's folder upward (`.superego/profiles/<name>/profile.ts`), then
-  in `~/.superego/profiles`. Check with `superego profile` in that folder.
+- **"No profile …"**: profiles are found from the thread's folder up to its repository's top (the folder alone outside
+  one) (`.superego/profiles/<name>/profile.ts`), then in `~/.superego/profiles`. One in a folder another user can write
+  isn't. Check with `superego profile` in that folder.
 - **"must export default …"**: `profile.ts` exports `defineProfile({ … })`; each `extensions` module exports an
   extension with a `name`; each `ui` module exports `defineUiExtension({ name, setup })`.
 - **"must name things \"orders.<name>\""**: a daemon half's actions and values start with its own name.

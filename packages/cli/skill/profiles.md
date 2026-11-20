@@ -6,7 +6,7 @@ A profile is what an agent is: a folder with a `profile.ts`, and whatever files 
 |---|---|---|
 | `~/.superego/profiles/<name>/` | yours, for every folder on this machine | always |
 | `<source>/profiles/<name>/` | yours, from a profile source you installed (see below) | always |
-| `<project>/.superego/profiles/<name>/` | the project's, for threads in it and below | once allowed |
+| `<project>/.superego/profiles/<name>/` | the project's, for threads in it and below (up to its repository's top) | once allowed |
 
 A thread takes its profile when it starts and keeps it. Without `-P`, it gets the profile called `default`: the
 project's if there is one, else yours, else none (plain Superego). A project's profile of a name replaces yours of
@@ -186,7 +186,9 @@ superego profile revoke-ui default -m box    # Settings → Machines lists them 
   own `/login`; Superego's model, tools and prompt sections don't apply to those threads. It loads the user's own
   Claude Code settings, and a folder's (`.claude/`, `.mcp.json`, `CLAUDE.md`) only once the user allowed them as they
   are: their hooks, MCP servers and permissions run commands. The thread asks (Allow, over its composer), and again
-  after they change; `superego do claude-agent.allow --cwd "$PWD"` allows them from a terminal.
+  after they change; `superego do claude-agent.allow --cwd "$PWD"` allows them from a terminal. Claude Code reads
+  `.mcp.json` from every folder above too, so where another user could put one there (under a shared `/tmp`, say), a
+  folder's settings can't be allowed.
 
 ## An example
 

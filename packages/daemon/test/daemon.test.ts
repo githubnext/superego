@@ -535,7 +535,7 @@ describe('record and replay', () => {
     await close()
   })
 
-  it('reads AGENTS.md: the shared one, then those from the root down to the thread\'s folder', async () => {
+  it('reads AGENTS.md: the shared one, then the project\'s down to the thread\'s folder', async () => {
     const { mkdir } = await import('node:fs/promises')
     await mkdir(join(dir, 'agents'), { recursive: true })
     await writeFile(join(dir, 'agents', 'AGENTS.md'), 'Always be kind.')

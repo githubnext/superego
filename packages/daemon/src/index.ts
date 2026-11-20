@@ -9,3 +9,4 @@ export { defineDaemonExtension, type DaemonApi, type DaemonExtension, type Exten
 export { defineAction, type AgentChoice, type AgentPart, type AgentPartsAnswer, type AgentPartsThread, type AuthFlow, type AuthFlowEvent, type ArchiveNote, type ArchiveNotes, type ThreadStarting, type ThreadDraft, type RunRecord, type ThreadHooks, type ThreadState, type ThreadStop } from './extension.ts'
 export { slugOf, titleOf } from './names.ts'
 export { sniff, type Sniffed } from './image-kind.ts'
+export { trusted } from './project-files.ts'

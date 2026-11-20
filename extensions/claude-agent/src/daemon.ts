@@ -4,7 +4,8 @@
 // docs/research/claude-code-agent.md). Off unless a profile picks it.
 //
 // Claude Code runs with the user's own settings, and a folder's own (`.claude/`, `.mcp.json`: project.ts) only once
-// the user allowed them as they are: a thread with some not allowed says so (its facts), for the window's notice.
+// the user allowed them as they are, and never where another user could change them: a thread with some not loaded
+// says so (its facts), for the window's notice.
 import { isAbsolute, join } from 'node:path'
 import { defineAction, defineDaemonExtension } from '@superego/daemon'
 import { obj, opt, RpcError, str, type Json } from '@superego/protocol'
@@ -69,6 +70,7 @@ export function claudeAgent({ executable = findClaude, env = () => claudeEnv(), 
           const project = projectConfig(cwd, userConfig)
           if (!project) throw new RpcError('not_found', `${cwd} has no Claude Code settings of its own`)
           if (hash && hash !== project.hash) throw new RpcError('changed', `${cwd}'s Claude Code settings changed since: look at them again`)
+          if (project.unsafe) throw new RpcError('unsafe', `Claude Code would also load settings from ${project.unsafe} there, which another user on this computer can change: they can't be allowed`)
           await allowances.allow(project)
           // Its threads say so now.
           for (const thread of await superego.threads.list()) {

@@ -74,7 +74,9 @@ project    a git repository (its worktrees too) or a folder, on a machine
 - **Skills** are the ones in `~/.agents/skills` on the thread's machine (a folder each, with a `SKILL.md`). The agent is
   told each one's name and description and reads one when it fits; `$name` or `/skill:name` in a message (completed
   as you type) sends that skill's instructions with it. `disable-model-invocation: true` keeps a skill to being named.
-  `~/.agents/AGENTS.md`, and any `AGENTS.md` from the root down to the thread's folder, are standing instructions.
+  `~/.agents/AGENTS.md`, and any `AGENTS.md` from the project's top (its repository's, or the thread's folder when it's
+  in none) down to the thread's folder, are standing instructions. One that another user on the machine could have
+  written (it, or a folder on the way, isn't yours or is writable by others) is skipped.
   A profile can do without either (`without: ['skills', 'agents-md']`), and a machine can turn either off. Skills are
   the `skills` extension; `AGENTS.md` is the core's. *Skills* lists every machine's to browse, once the layout places it
   (`skills.view`: a space, or beside the thread).
