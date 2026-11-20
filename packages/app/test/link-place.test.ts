@@ -14,7 +14,7 @@ import type { MachineEntry } from '../src/shared/bridge.ts'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
-type Found = { path: string | null; folder?: boolean; line?: number; outside?: boolean }
+type Found = { path: string | null; folder?: boolean; line?: number }
 const app = defineApp({ name: 'superego', id: 'superego' })
 const thread: ThreadInfo = { id: 't1', title: 't', cwd: '/home/me/work', createdAt: 0, activeAt: 0, project: { root: '/home/me/work', name: 'work' }, status: { state: 'idle' } }
 const View = () => null
@@ -117,13 +117,19 @@ it('opens a folder where folders show', async () => {
   expect(opened[0]!.params).toEqual({ thread: 't1', kind: 'files', params: { path: 'src' } })
 })
 
-it("says why it can't: outside the thread's folder, not there, or nothing here shows it", async () => {
-  files['../x.md'] = { path: null, outside: true }
+it('opens a file outside the thread\'s folder', async () => {
+  files['~/notes/draft.md'] = { path: '/home/me/notes/draft.md' }
+  await mount(registry(), { source: 'thread' })
+  expect(await open('~/notes/draft.md')).toBeUndefined()
+  expect(opened[0]!.params).toEqual({ thread: 't1', kind: 'editor', params: { path: '/home/me/notes/draft.md' } })
+})
+
+it("says why it can't: not there, or nothing here shows it", async () => {
   files['f.md'] = { path: 'f.md' }
   files.src = { path: 'src', folder: true }
   await mount(registry({ editor: false, folders: false }), { source: 'thread' })
-  expect(await open('../x.md')).toBe('outside ~/work, where this thread works')
   expect(await open('gone.md')).toBe('not in ~/work')
+  expect(await open('/tmp/gone.md')).toBe('not found')
   expect(await open('f.md')).toBe('a file, and nothing here shows files')
   expect(await open('src')).toBe('a folder, and nothing here shows folders')
   expect(opened).toEqual([])

@@ -1,7 +1,7 @@
 // files, daemon half: the files in a thread's folder (or one a thread is about to start in), for the file tree, quick
 // open and mentions. In a git repository, git's own list (tracked, and new files not ignored), so .gitignore holds;
-// elsewhere a walk that skips what's never wanted. And one folder of a thread's as it is on disk, ignored files too,
-// for a folder pane: one asked for by its path is shown whole.
+// elsewhere a walk that skips what's never wanted. And one folder as it is on disk, ignored files too, for a folder
+// pane: one asked for by its path is shown whole, in the thread's folder or anywhere else on its machine.
 import { execFile } from 'node:child_process'
 import { readdir, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
@@ -46,12 +46,11 @@ export async function listFiles(dir: string): Promise<FileList> {
 const UNLISTED = new Set(['.git', '.DS_Store'])
 
 /**
- * What's in the folder `path` of `root` (`''`: root itself), as it is on disk: folders first, then files, each by name.
- * A path out of `root`, or one that isn't a readable folder, throws, saying why.
+ * What's in the folder `path` (relative to `root`, `''` for root itself; absolute; or `~/…`), as it is on disk: folders
+ * first, then files, each by name. One that isn't a readable folder throws, saying why.
  */
 export async function folderEntries(root: string, path: string): Promise<FolderEntries> {
-  const dir = resolve(root, path)
-  if (dir !== root && !dir.startsWith(`${root.replace(/\/+$/, '')}/`)) throw new RpcError('invalid', `${path} is outside ${root}`)
+  const dir = resolve(root, home(path))
   const shown = path || root
   let found
   try {
@@ -71,10 +70,13 @@ export async function folderEntries(root: string, path: string): Promise<FolderE
   return { entries: entries.sort((a, b) => Number(b.folder) - Number(a.folder) || a.name.localeCompare(b.name)) }
 }
 
+/** `path` with a `~` at its start as the home folder. */
+const home = (path: string) => path.replace(/^~(?=\/|$)/, homedir())
+
 /** A folder as typed for a thread yet to start (`~/dev/x`), as a path; asked for none, refused. */
 function folder(cwd: string | undefined): string {
   if (!cwd?.trim()) throw new Error('files.list needs a thread or a folder (cwd)')
-  return resolve(cwd.trim().replace(/^~(?=\/|$)/, homedir()))
+  return resolve(home(cwd.trim()))
 }
 
 export default defineDaemonExtension({

@@ -161,7 +161,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     settings: () => ({ extensions: extensions.partsFor(extensions.withoutFor()) }),
   }, context)
   const threads = createThreads(host, { harness, extensions, profiles })
-  const files = threadFiles({ dataDir: options.dataDir, cwdOf: async (id) => (await threads.get(id)).meta.cwd })
+  const files = threadFiles({ cwdOf: async (id) => (await threads.get(id)).meta.cwd })
   const images = createWindowImages({ dataDir: options.dataDir, processor: agent.images.processor, file: files.resolve, block: threads.imageBlock })
 
   const machine: MachineInfo = {

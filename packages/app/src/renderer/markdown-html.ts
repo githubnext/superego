@@ -31,15 +31,24 @@ export function htmlPlugins(schemes: readonly string[] = []): NonNullable<Option
 }
 const plugins: NonNullable<Options['rehypePlugins']> = [rehypeRaw, [rehypeSanitize, schema]]
 
-/** `name` from the folder `dir` (`a/b/`, or '' at the top), as a path in the thread's folder; undefined if outside it. */
+/**
+ * `name` from the folder `dir` (`a/b/`, '' at the top of the thread's folder; or absolute, or `~/…`, for a file
+ * elsewhere), as a path on the thread's machine: relative to its folder (`../x` past it), absolute, or from home.
+ * Undefined for an address (`https:`, `mailto:`), which isn't a path.
+ */
 export function resolve(dir: string, name: string) {
-  if (/^([/~]|[a-z][\w+.-]*:)/i.test(name)) return undefined
+  if (/^[a-z][\w+.-]*:/i.test(name)) return undefined
+  const from = /^(\/|~(\/|$))/.test(name) ? name : `${dir}${name}`
+  const root = from.startsWith('/') ? '/' : ''
   const parts: string[] = []
-  for (const part of `${dir}${name}`.split('/')) {
-    if (part === '..') { if (!parts.pop()) return undefined }
-    else if (part !== '.' && part !== '') parts.push(part)
+  for (const part of from.split('/')) {
+    if (part === '..') {
+      const last = parts.at(-1)
+      if (last !== undefined && last !== '..' && last !== '~') parts.pop()
+      else if (!root) parts.push(part)
+    } else if (part !== '.' && part !== '') parts.push(part)
   }
-  return parts.join('/')
+  return root + parts.join('/')
 }
 
 /** Extensions a file named alone (no folder) is taken for one by: not `settings.get` or `x.y`, which are code. */
@@ -64,18 +73,15 @@ export function looksLikePath(text: string) {
 /** The folder `path` is in, as `resolve` takes it: `a/b/` for `a/b/c.md`, '' at the top. */
 export const folderOf = (path: string) => path.includes('/') ? path.slice(0, path.lastIndexOf('/') + 1) : ''
 
-/** Where an image in a message or a rendered file comes from: a web (or data, blob) address, a file of the thread's, or neither, and why. */
+/** Where an image in a message or a rendered file comes from: a web (or data, blob) address, a file on the thread's machine, or neither, and why. */
 export type ImageSource = { url: string } | { path: string } | { refused: string }
 
-export const OUTSIDE = "outside the thread's folder"
-
 /**
- * `src` as an image of the thread in `cwd` on its machine, written in a document in `dir` there (`a/b/`, or '' for a
- * message): a web, data or blob address as it is; a path (relative to `dir`, absolute, `~/…` or file://) as one in the
- * thread's folder, relative to it, or among the files the thread keeps (`attachments/<thread>/`, absolute). Anything
- * else is refused: `file.read` wouldn't read it, so it isn't asked to.
+ * `src` as an image of a thread's, written in a document in `dir` (as `resolve` takes it; '' for a message): a web,
+ * data or blob address as it is; a path (relative to `dir`, absolute, `~/…` or file://) as a file on the thread's
+ * machine. Any other address is refused.
  */
-export function imageSource(src: string, { cwd, dir = '', thread }: { cwd: string; dir?: string; thread?: string }): ImageSource {
+export function imageSource(src: string, { dir = '' }: { dir?: string } = {}): ImageSource {
   const given = src.trim()
   if (/^(https?|data|blob):/i.test(given)) return { url: given }
   let name: string
@@ -87,31 +93,7 @@ export function imageSource(src: string, { cwd, dir = '', thread }: { cwd: strin
   else name = given.split(/[?#]/)[0]!
   try { name = decodeURI(name) } catch {}
   if (!name) return { refused: 'no address' }
-  const folder = normalize(cwd)
-  if (/^~(\/|$)/.test(name)) {
-    // The machine's home, as far as the thread's folder tells it; one not under a home is not under this one either.
-    const home = /^(\/Users\/[^/]+|\/home\/[^/]+|\/root)(?=\/|$)/.exec(folder)?.[1]
-    if (!home) return { refused: OUTSIDE }
-    name = `${home}${name.slice(1)}`
-  }
-  if (!name.startsWith('/')) {
-    const path = resolve(dir, name)
-    return path === undefined ? { refused: OUTSIDE } : { path }
-  }
-  const path = normalize(name)
-  if (path.startsWith(`${folder}/`)) return { path: path.slice(folder.length + 1) }
-  if (thread && path.includes(`/attachments/${thread}/`)) return { path }
-  return { refused: OUTSIDE }
-}
-
-/** An absolute path with its `.`, `..` and doubled slashes gone (none above the root). */
-function normalize(path: string) {
-  const parts: string[] = []
-  for (const part of path.split('/')) {
-    if (part === '..') parts.pop()
-    else if (part !== '.' && part !== '') parts.push(part)
-  }
-  return `/${parts.join('/')}`
+  return { path: resolve(dir, name)! }
 }
 
 /** A srcset's candidates: each URL with its descriptor (`2x`, `640w`), if it has one. */

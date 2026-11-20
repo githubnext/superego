@@ -28,6 +28,7 @@ import { codeHighlight } from './code-highlight.ts'
 import { folderOf } from './markdown-html.ts'
 import { linkAt, livePreview } from './live-markdown.ts'
 import { arrivals } from './arrivals.ts'
+import { filePath } from './short-path.ts'
 
 /** The file a `FileEditor` shows, and what goes around it. */
 export type FileEditorProps = {
@@ -326,7 +327,7 @@ export function FileEditor({ machine, thread, path, line, actions, children, onO
 
   const openIn = (kind: string | undefined, file: string) => kind && dispatch('pane.open', { thread: thread.id, kind, params: { path: file } }, { machine: machine.id, source: 'editor' })
   // Its images, read from beside it on the thread's machine.
-  const images = useMemo(() => imagesIn(machine, thread.id, thread.cwd, folderOf(path)), [machine, thread.id, thread.cwd, path])
+  const images = useMemo(() => imagesIn(machine, thread.id, folderOf(path)), [machine, thread.id, path])
   const slot: EditorSlotProps = {
     machine, thread, path,
     open: (file, { beside = false } = {}) => onOpenFile
@@ -336,7 +337,7 @@ export function FileEditor({ machine, thread, path, line, actions, children, onO
   return (
     <div className={`file-editor ${rendered ? 'file-editor--rendered' : live ? 'file-editor--live' : ''}`}>
       <div className="pane-bar">
-        <code title={path}>{path}</code>
+        <code title={path}>{filePath(thread.cwd, path)}</code>
         <span className={`pane-bar__note ${note?.error ? 'is-error' : ''}`}>{note?.text}</span>
         {actions}
         <Slot name="editor.bar" props={slot} />

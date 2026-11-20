@@ -310,7 +310,10 @@ export type Methods = {
   'thread.list': { params: { archived?: boolean; hidden?: boolean }; result: ThreadInfo[] }
   'thread.start': { params: NewThread; result: ThreadInfo }
   'agent.models': { params: {}; result: ModelCatalog }
-  /** A file in a thread's folder (not outside it), as text, with its version as `file.stat` says it. */
+  /**
+   * A file on a thread's machine (a path relative to its folder, absolute, or `~/…`), as text (refused for a binary
+   * file) or base64, with its version as `file.stat` says it.
+   */
   'file.read': { params: { thread: ThreadId; path: string; base64?: boolean }; result: { path: string; content: string } & FileVersion }
   /**
    * An image of a thread's, as base64: whole, or as a `thumbnail` (at most 1600×4800, as small as a window shows it
@@ -318,19 +321,20 @@ export type Methods = {
    * is the one read, as `file.stat` says it. With the `image-read` feature.
    */
   'image.read': { params: { thread: ThreadId; image: ImageRef; thumbnail?: boolean }; result: { data: string; mimeType: string; width?: number; height?: number; version?: FileVersion } }
-  /** Which version of each file there is, without reading them (null: none, or not the thread's). */
+  /** Which version of each file there is, without reading them (null: none). */
   'file.stat': { params: { thread: ThreadId; paths: string[] }; result: { files: (FileVersion | null)[] } }
-  /** A file in a thread's folder, then `file.changed` whenever it changes on disk (by anyone), until unwatched. */
+  /** A file of a thread's (as `file.read` takes it), then `file.changed` whenever it changes on disk (by anyone), until unwatched. */
   'file.watch': { params: { thread: ThreadId; path: string }; result: { sub: string; content: string | null } }
   /**
-   * What a path a message names points at in a thread's folder: a file (or a note by its name), or a `folder` (`''` the
-   * folder itself), with the `line` it names. `path` is null when there's nothing, `outside` when it's past the folder.
+   * What a path a message names points at: a file (or a note in the thread's folder by its name), or a `folder` (`''`
+   * the thread's own), with the `line` it names. `path` is relative to the thread's folder when it's in it, else
+   * absolute; null when there's nothing.
    */
-  'file.find': { params: { thread: ThreadId; name: string }; result: { path: string | null; folder?: boolean; line?: number; outside?: boolean } }
+  'file.find': { params: { thread: ThreadId; name: string }; result: { path: string | null; folder?: boolean; line?: number } }
   /**
-   * The file or folder each path names in a thread's folder, exactly as given (no search by name, a `:line` or `#L`
-   * kept apart): what a window draws as a link in a message's code. Null for nothing there, or past the folder. With
-   * the `file-locate` feature.
+   * The file or folder each path names (relative to a thread's folder, absolute or `~/…`), exactly as given (no search
+   * by name, a `:line` or `#L` kept apart): what a window draws as a link in a message's code. Its `path` as
+   * `file.find` gives it; null for nothing there. With the `file-locate` feature.
    */
   'file.locate': { params: { thread: ThreadId; names: string[] }; result: { found: ({ path: string; folder?: boolean; line?: number } | null)[] } }
   /** A profile's UI halves: their entry modules, and a hash that changes when any of its files do. */

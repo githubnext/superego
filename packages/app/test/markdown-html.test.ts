@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { describe, expect, it } from 'vitest'
-import { folderOf, htmlPlugins, imageSource, imageType, OUTSIDE, looksLikePath, mediaMatches, parseSrcset, resolve } from '../src/renderer/markdown-html.ts'
+import { folderOf, htmlPlugins, imageSource, imageType, looksLikePath, mediaMatches, parseSrcset, resolve } from '../src/renderer/markdown-html.ts'
 
 const render = (text: string) => renderToStaticMarkup(createElement(ReactMarkdown, { remarkPlugins: [remarkGfm], rehypePlugins: htmlPlugins(['ticket']), urlTransform: (url: string) => url }, text))
 
@@ -40,22 +40,32 @@ describe('HTML in a rendered file', () => {
 })
 
 describe('relative paths', () => {
-  it('resolves against the document’s folder, inside the thread’s', () => {
+  it('resolves against the document’s folder', () => {
     expect(folderOf('docs/writing-extensions.md')).toBe('docs/')
     expect(folderOf('README.md')).toBe('')
-    const file = (src: string) => imageSource(src, { cwd: '/repo', dir: 'docs/' })
+    const file = (src: string) => imageSource(src, { dir: 'docs/' })
     expect(file('writing-extensions/big-picture.svg')).toEqual({ path: 'docs/writing-extensions/big-picture.svg' })
     expect(file('./a%20b.png?v=2#x')).toEqual({ path: 'docs/a b.png' })
-    expect(imageSource('../img/x.png', { cwd: '/repo', dir: 'docs/guide/' })).toEqual({ path: 'docs/img/x.png' })
-    expect(file('../../outside.png')).toEqual({ refused: OUTSIDE })
-    expect(file('/etc/passwd')).toEqual({ refused: OUTSIDE })
+    expect(imageSource('../img/x.png', { dir: 'docs/guide/' })).toEqual({ path: 'docs/img/x.png' })
     expect(resolve('a/', 'b/../c.md')).toBe('a/c.md')
+  })
+
+  it('goes past the thread’s folder, and from a document elsewhere', () => {
+    expect(imageSource('../../outside.png', { dir: 'docs/' })).toEqual({ path: '../outside.png' })
+    expect(resolve('', '../../x.md')).toBe('../../x.md')
+    expect(resolve('/Users/me/.superego/', 'notes/a.md')).toBe('/Users/me/.superego/notes/a.md')
+    expect(resolve('/Users/me/', '../../../etc/hosts')).toBe('/etc/hosts')
+    expect(resolve('~/notes/', '../a.md')).toBe('~/a.md')
+    expect(resolve('~/', '../a.md')).toBe('~/../a.md')
+    expect(resolve('docs/', '/etc/hosts')).toBe('/etc/hosts')
+    expect(resolve('docs/', '~/a.md')).toBe('~/a.md')
+    expect(resolve('docs/', '~a.md')).toBe('docs/~a.md')
+    expect(resolve('docs/', 'https://x.com')).toBeUndefined()
   })
 })
 
 describe('images in a thread', () => {
-  const cwd = '/Users/me/dev/dinky'
-  const at = (src: string) => imageSource(src, { cwd, thread: 't1' })
+  const at = (src: string) => imageSource(src)
 
   it('reads a relative path from the thread’s folder', () => {
     expect(at('shots/a.png')).toEqual({ path: 'shots/a.png' })
@@ -63,31 +73,12 @@ describe('images in a thread', () => {
     expect(at('shots/../a.png')).toEqual({ path: 'a.png' })
   })
 
-  it('reads an absolute path inside the thread’s folder, as one in it', () => {
-    expect(at('/Users/me/dev/dinky/build/reviews/pr-77/corner-comparison.png')).toEqual({ path: 'build/reviews/pr-77/corner-comparison.png' })
-    expect(at('/Users/me/dev/dinky/./a/../b.png')).toEqual({ path: 'b.png' })
-    expect(at('file:///Users/me/dev/dinky/c%20d.png')).toEqual({ path: 'c d.png' })
-  })
-
-  it('refuses a path outside the thread’s folder', () => {
-    expect(at('../other/a.png')).toEqual({ refused: OUTSIDE })
-    expect(at('/Users/me/dev/dinky-other/a.png')).toEqual({ refused: OUTSIDE })
-    expect(at('/Users/me/dev/dinky/../secret.png')).toEqual({ refused: OUTSIDE })
-    expect(at('/etc/passwd')).toEqual({ refused: OUTSIDE })
+  it('reads any path on the thread’s machine: absolute, from home, or a local file:// address', () => {
+    expect(at('/Users/me/dev/dinky/./a/../b.png')).toEqual({ path: '/Users/me/dev/dinky/b.png' })
+    expect(at('/etc/x.png')).toEqual({ path: '/etc/x.png' })
+    expect(at('~/Desktop/a.png')).toEqual({ path: '~/Desktop/a.png' })
+    expect(at('file:///Users/me/dev/dinky/c%20d.png')).toEqual({ path: '/Users/me/dev/dinky/c d.png' })
     expect(at('file://elsewhere/Users/me/dev/dinky/a.png')).toHaveProperty('refused')
-  })
-
-  it('takes ~ as the home the thread’s folder is in', () => {
-    expect(at('~/dev/dinky/a.png')).toEqual({ path: 'a.png' })
-    expect(at('~/Desktop/a.png')).toEqual({ refused: OUTSIDE })
-    expect(imageSource('~/a.png', { cwd: '/home/me/x' })).toEqual({ refused: OUTSIDE })
-    expect(imageSource('~/x/a.png', { cwd: '/home/me/x' })).toEqual({ path: 'a.png' })
-    expect(imageSource('~/a.png', { cwd: '/srv/app' })).toEqual({ refused: OUTSIDE })
-  })
-
-  it('leaves the files the thread keeps to its machine to read', () => {
-    expect(at('/Users/me/.superego/attachments/t1/shown/x.png')).toEqual({ path: '/Users/me/.superego/attachments/t1/shown/x.png' })
-    expect(at('/Users/me/.superego/attachments/t2/shown/x.png')).toEqual({ refused: OUTSIDE })
   })
 
   it('shows web, data and blob addresses as they are; refuses other schemes', () => {

@@ -73,12 +73,12 @@ export default async function images(t, s) {
   }
 
   // Its answer's own images, inline: read from the thread's folder (by a relative path, file:// or a whole one), fitted
-  // to the column; one outside the folder is refused, quietly, saying why. Any opens in the same lightbox, through the
+  // to the column; one that isn't there (outside the folder: read all the same) is broken, quietly, saying why. Any opens in the same lightbox, through the
   // message's images.
   const inline = `[...document.querySelectorAll('.msg__text .image-frame--inline')]`
   await t.until(`(() => { const m = ${inline}; m[0]?.scrollIntoView({ block: 'center' }); return m.length === 4 })()`, 'inline images in the answer')
   await t.until(`${inline}.slice(0, 3).every((f) => f.classList.contains('is-ready') && f.querySelector('img').src.startsWith('blob:'))`, 'inline images read from the thread’s folder')
-  await t.until(`(() => { const f = ${inline}[3]; return f.classList.contains('is-broken') && f.textContent === 'Elsewhere' && f.title.includes("outside the thread's folder") })()`, 'an image outside the folder, refused')
+  await t.until(`(() => { const f = ${inline}[3]; return f.classList.contains('is-broken') && f.textContent === 'Elsewhere' && f.title.includes('not found') })()`, 'a missing image outside the folder, saying so')
   await t.check(`${inline}.every((f) => f.getBoundingClientRect().right <= f.closest('.msg').getBoundingClientRect().right + 0.5)`, 'inline images overflow the message')
   await t.run(`${inline}[0].click()`)
   // Keys are the dialog's once the focus is in it, a frame after it opens (Base UI moves it on the next frame).

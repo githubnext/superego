@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- The editor opens and saves files outside the thread's folder (a whole path, or `~/…`), showing where the file
+  is in its bar. Links to such files in a thread open them too, as do folder panes and images. A file that can't be
+  opened says why: not there, a folder, a binary file, or no permission.
 - Scrolled panes now pass beside the thread, which stays in view at the left. The pin next to the layout switch (or
   “Keep thread in view” in ⌘K) lets the thread scroll away with them again.
 - Select element in the Browser pane (⌘⇧C, or the cursor button in its toolbar): hover the page to outline an element,

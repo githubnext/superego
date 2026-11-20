@@ -58,10 +58,10 @@ it('shows files and web images, kept among the thread’s files for every client
   expect(new Set([...results.values()].flatMap((r) => r.details?.images.map((i) => i.path) ?? []).filter(Boolean)).size).toBe(4)
   expect(results.get('many')!.details!.layout).toBe('carousel')
 
-  // file.read still takes a relative path in the thread's folder, and nothing of another thread's files.
+  // file.read still takes a relative path in the thread's folder.
   await writeFile(join(dir, 'project/notes.md'), 'notes')
   expect((await peer.call<{ content: string }>('file.read', { thread: thread.id, path: 'notes.md' })).content).toBe('notes')
-  await expect(peer.call('file.read', { thread: thread.id, path: join(dir, 'home/attachments/other/x.png') })).rejects.toMatchObject({ kind: 'invalid' })
+  await expect(peer.call('file.read', { thread: thread.id, path: join(dir, 'home/attachments/other/x.png') })).rejects.toMatchObject({ kind: 'not_found' })
   await close()
 })
 

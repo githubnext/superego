@@ -2,6 +2,7 @@
 // shared/bridge.ts's artifactUrl), sandboxed, to the web views that show them (web-views.ts) alone.
 import { protocol, type Session } from 'electron'
 import type { Link } from '@superego/client'
+import { artifactFile } from '@superego/protocol'
 
 /** What an artifact may do: run its own scripts and forms, nothing of the app's (an opaque origin). */
 const ARTIFACT_POLICY = "sandbox allow-scripts allow-forms allow-popups; default-src 'self' data: blob: https: 'unsafe-inline' 'unsafe-eval'"
@@ -25,8 +26,9 @@ export function serveArtifacts(session: Session, linkOf: (machine: string) => Li
     const [thread, ...rest] = url.pathname.split('/').filter(Boolean).map(decodeURIComponent)
     const link = linkOf(decodeURIComponent(url.hostname))
     if (!link || !thread || !rest.length) return new Response('Not found', { status: 404 })
+    const path = artifactFile(rest.join('/'))
+    if (!path) return new Response("Outside the thread's folder", { status: 403 })
     try {
-      const path = rest.join('/')
       const { content } = await link.call('file.read', { thread, path, base64: true }) as { content: string }
       return new Response(Buffer.from(content, 'base64'), { headers: {
         'content-type': ARTIFACT_TYPES[path.split('.').at(-1)?.toLowerCase() ?? ''] ?? 'application/octet-stream',

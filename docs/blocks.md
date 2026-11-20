@@ -136,7 +136,7 @@ blockErrors(blocks, use): string[]
 | Submit button / a lone choice that answers | yes | no: an extension view needs explicit buttons, since there is nothing to "submit" to |
 | `html` | sandboxed. `superego.reply`/`send` on a user gesture | sandboxed, **display only**: the frame is told it can't reply, so `superego.reply`/`send` are absent (open question 4) |
 | `open` (a pane link) | its thread's panes | `thread` views only. A `window` view has no thread, so it's refused there |
-| `image` by path | a file in the thread's folder | `thread` views: the thread's folder. `window` views: `https:`/`data:` only |
+| `image` by path | a file on the thread's machine, relative to its folder or a whole path | `thread` views: the same. `window` views: `https:`/`data:` only |
 | `list[].thread` | a link on the same machine | the same |
 
 **Profiles** fall out of this table. A profile's daemon half is an extension: its views use the extension column, in

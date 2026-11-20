@@ -690,7 +690,7 @@ export function registerBuiltInPanes(superego: UiApi) {
 
 const params = <T,>(pane: Pane) => (pane.params ?? {}) as T
 
-/** A file in the thread's folder, to read and edit (see FileEditor). */
+/** A file of the thread's, in its folder or anywhere on its machine, to read and edit (see FileEditor). */
 function EditorPane({ machine, thread, pane }: PaneProps) {
   const { path, line } = params<{ path?: string; line?: number }>(pane)
   const registry = useRegistry()

@@ -38,13 +38,21 @@ it('lists a git-ignored folder, and an untracked one, as they are on disk', asyn
   expect((await entries(thread.id, '')).map((e) => e.name)).toEqual(['notes', 'scripts', '.gitignore', 'README.md'])
 })
 
+it('lists a folder outside the thread\'s, by a path relative to it or its whole path', async () => {
+  await put(['inner/'])
+  await mkdir(join(daemon.dataDir, 'beside'))
+  await writeFile(join(daemon.dataDir, 'beside/a.md'), '')
+  const thread = await daemon.thread(undefined, { cwd: join(repo, 'inner') })
+  expect(await entries(thread.id, '../../beside')).toEqual([{ name: 'a.md', folder: false }])
+  expect(await entries(thread.id, join(daemon.dataDir, 'beside'))).toEqual([{ name: 'a.md', folder: false }])
+})
+
 it("tells an empty folder from one it can't read", async () => {
   await put(['empty/', 'file.txt', 'locked/secret.txt'])
   const thread = await daemon.thread(undefined, { cwd: repo })
   expect(await entries(thread.id, 'empty')).toEqual([])
   await expect(entries(thread.id, 'gone')).rejects.toThrow("gone isn't there")
   await expect(entries(thread.id, 'file.txt')).rejects.toThrow('file.txt is a file, not a folder')
-  await expect(entries(thread.id, '../..')).rejects.toThrow('is outside')
   if (process.getuid?.() !== 0) {
     await chmod(join(repo, 'locked'), 0o000)
     await expect(entries(thread.id, 'locked')).rejects.toThrow('No permission to read locked')

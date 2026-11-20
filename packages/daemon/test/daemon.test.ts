@@ -2,8 +2,8 @@ import { execFileSync } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:net'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { homedir, tmpdir } from 'node:os'
+import { basename, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { applyImmutable, type Op } from '@earendil-works/chord/delta'
 import type { ConversationView } from '@earendil-works/pi-durable'
@@ -408,14 +408,28 @@ describe('record and replay', () => {
     await close()
   })
 
-  it("reads and writes files in a thread's folder only", async () => {
+  it("reads and writes a thread's files: relative to its folder, or anywhere else on its machine", async () => {
     const { peer, close } = await open()
-    const thread = await peer.call<ThreadInfo>('thread.start', { cwd: dir })
-    await writeFile(join(dir, 'notes.md'), 'one\n')
-    expect((await peer.call<{ content: string }>('file.read', { thread: thread.id, path: 'notes.md' })).content).toBe('one\n')
-    await expect(peer.call('file.read', { thread: thread.id, path: '../../etc/passwd' })).rejects.toMatchObject({ kind: 'invalid' })
+    await mkdir(join(dir, 'repo'))
+    const thread = await peer.call<ThreadInfo>('thread.start', { cwd: join(dir, 'repo') })
+    await writeFile(join(dir, 'repo/notes.md'), 'one\n')
+    const read = async (path: string) => (await peer.call<{ path: string; content: string }>('file.read', { thread: thread.id, path }))
+    expect((await read('notes.md')).content).toBe('one\n')
     await peer.call('file.write', { thread: thread.id, path: 'notes.md', content: 'two\n' })
-    expect((await peer.call<{ content: string }>('file.read', { thread: thread.id, path: 'notes.md' })).content).toBe('two\n')
+    expect(await read('notes.md')).toMatchObject({ path: join(dir, 'repo/notes.md'), content: 'two\n' })
+    // Outside the folder: by its whole path, or one relative to the folder that leaves it.
+    await writeFile(join(dir, 'draft.md'), 'draft\n')
+    expect(await read(join(dir, 'draft.md'))).toMatchObject({ path: join(dir, 'draft.md'), content: 'draft\n' })
+    await peer.call('file.write', { thread: thread.id, path: join(dir, 'draft.md'), content: 'sent\n' })
+    expect((await read('../draft.md')).content).toBe('sent\n')
+    // Why not, in words.
+    await expect(read(join(dir, 'gone.md'))).rejects.toMatchObject({ kind: 'not_found', message: `${join(dir, 'gone.md')} isn't there` })
+    await expect(read('.')).rejects.toMatchObject({ kind: 'invalid', message: '. is a folder, not a file' })
+    await writeFile(join(dir, 'blob.bin'), Buffer.from([1, 0, 2]))
+    await expect(read('../blob.bin')).rejects.toMatchObject({ kind: 'invalid', message: '../blob.bin is a binary file, not text' })
+    expect((await peer.call<{ content: string }>('file.read', { thread: thread.id, path: '../blob.bin', base64: true })).content).toBe('AQAC')
+    await expect(peer.call('file.write', { thread: thread.id, path: join(dir, 'no/such/x.md'), content: '' }))
+      .rejects.toMatchObject({ kind: 'not_found', message: `${join(dir, 'no/such')} isn't there` })
     await close()
   })
 
@@ -431,10 +445,14 @@ describe('record and replay', () => {
     expect(await stat('shot.png')).toEqual({ files: [{ mtimeMs: 1_000_000, size: 3 }] })
     await writeFile(join(dir, 'shot.png'), 'three')
     await utimes(join(dir, 'shot.png'), 2000, 2000)
-    // Outside its folder, missing, or a folder: none, without failing the rest.
-    expect(await stat('shot.png', '../../etc/passwd', '/etc/hosts', 'gone.png', '.')).toEqual({
-      files: [{ mtimeMs: 2_000_000, size: 5 }, null, null, null, null],
+    // Missing, or a folder: none, without failing the rest. One outside its folder is there.
+    const elsewhere = `${dir}-elsewhere.png`
+    await writeFile(elsewhere, 'xy')
+    await utimes(elsewhere, 3000, 3000)
+    expect(await stat('shot.png', `../${basename(elsewhere)}`, 'gone.png', '.')).toEqual({
+      files: [{ mtimeMs: 2_000_000, size: 5 }, { mtimeMs: 3_000_000, size: 2 }, null, null],
     })
+    await rm(elsewhere)
     await close()
   })
 
@@ -459,7 +477,7 @@ describe('record and replay', () => {
     expect(await peer.call('image.read', { thread: thread.id, image: { entry, message: 0, block: 2 } })).toEqual({ data: png, mimeType: 'image/png' })
     const saved = join(dir, 'attachments', thread.id)
     expect(await peer.call('image.read', { thread: thread.id, image: { path: join(saved, 'shot.png') }, thumbnail: true })).toMatchObject({ data: png, version: { size: 8 } })
-    await expect(peer.call('image.read', { thread: thread.id, image: { path: '/etc/hosts' } })).rejects.toMatchObject({ kind: 'invalid' })
+    await expect(peer.call('image.read', { thread: thread.id, image: { path: join(dir, 'gone.png') } })).rejects.toMatchObject({ kind: 'not_found' })
     expect(user.content[3]!.text).toBe(`<attachment name="notes.md" type="text/markdown" path="${join(saved, 'notes.md')}">\n# Hi\n\n</attachment>`)
     expect(user.content[4]!.text).toContain(`path="${join(saved, 'notes-2.md')}"`)
     expect(await readFile(join(saved, 'shot.png'), 'base64')).toBe(png)
@@ -569,15 +587,18 @@ describe('record and replay', () => {
     expect(await find('Work/Old/Plan')).toBe('Work/Old/Plan.md')
     expect(await find('diagram.png')).toBe('Work/diagram.png')
     expect(await find('Readme')).toBeNull()
-    expect(await find('../../etc/passwd')).toBeNull()
-    // Paths as agents write them: a folder, a line, the whole path, or one past the folder.
+    expect(await find('../gone/Plan.md')).toBeNull()
+    // Paths as agents write them: a folder, a line, the whole path, or one past the folder (as a whole path).
     const where = async (name: string) => peer.call('file.find', { thread: thread.id, name })
     expect(await where('Work/Old/')).toEqual({ path: 'Work/Old', folder: true })
     expect(await where('Work/Plan.md:12')).toEqual({ path: 'Work/Plan.md', line: 12 })
     expect(await where('Work/Plan.md#L3-L9')).toEqual({ path: 'Work/Plan.md', line: 3 })
     expect(await where(join(dir, 'Work/Plan.md'))).toEqual({ path: 'Work/Plan.md' })
     expect(await where(dir)).toEqual({ path: '', folder: true })
-    expect(await where('/etc/passwd')).toEqual({ path: null, outside: true })
+    expect(await where('/etc/hosts:3')).toEqual({ path: '/etc/hosts', line: 3 })
+    expect(await where(`${dir}/../`)).toEqual({ path: join(dir, '..'), folder: true })
+    expect(await where('~')).toEqual({ path: homedir(), folder: true })
+    expect(await where('/no/such/file.md')).toEqual({ path: null })
     await close()
   })
 
@@ -590,14 +611,15 @@ describe('record and replay', () => {
     const thread = await peer.call<ThreadInfo>('thread.start', { cwd: dir })
     const { found } = await peer.call<{ found: unknown[] }>('file.locate', {
       thread: thread.id,
-      names: ['scripts/product-shape.md', 'scripts/product-shape.md:3', join(dir, 'scripts/product-shape.md'), 'scripts/', 'product-shape.md', 'scripts/product-shape', 'scripts/gone.md', '/etc/passwd', '../x.md'],
+      names: ['scripts/product-shape.md', 'scripts/product-shape.md:3', join(dir, 'scripts/product-shape.md'), 'scripts/', 'product-shape.md', 'scripts/product-shape', 'scripts/gone.md', '../x.md', '/etc/hosts'],
     })
     expect(found).toEqual([
       { path: 'scripts/product-shape.md' },
       { path: 'scripts/product-shape.md', line: 3 },
       { path: 'scripts/product-shape.md' },
       { path: 'scripts', folder: true },
-      null, null, null, null, null,
+      null, null, null, null,
+      { path: '/etc/hosts' },
     ])
     await close()
   })

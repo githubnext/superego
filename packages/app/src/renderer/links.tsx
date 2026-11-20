@@ -55,20 +55,20 @@ export function useLinkPlace(machine: MachineEntry, thread: ThreadInfo, { near, 
       const peer = client(machine)
       const at = withLine(name)
       const beside = near === undefined ? undefined : resolve(near, at.name)
-      const folder = shortPath(thread.cwd)
-      let found: { path: string | null; folder?: boolean; line?: number; outside?: boolean }
+      // A path from the top (absolute, `~`) is looked for as it is; any other, in the thread's folder.
+      const elsewhere = /^(\/|~(\/|$))/.test(at.name)
+      let found: { path: string | null; folder?: boolean; line?: number }
       if (exact) {
         // As the path it is, beside the file first: what was drawn as a link, unless it has gone since.
         const names = beside ? [`${beside}${at.line}`, name] : [name]
         const { found: each } = await peer.call('file.locate', { thread: thread.id, names })
         const hit = each.find((one) => one !== null)
-        if (!hit) return `no longer in ${folder}`
+        if (!hit) return elsewhere ? 'no longer there' : `no longer in ${shortPath(thread.cwd)}`
         found = hit
       } else {
         const there = beside ? await peer.call('file.find', { thread: thread.id, name: `${beside}${at.line}` }) : undefined
         found = there && (there.path === beside || there.path === `${beside}.md`) ? there : await peer.call('file.find', { thread: thread.id, name })
-        if (found.outside) return `outside ${folder}, where this thread works`
-        if (found.path === null) return `not in ${folder}`
+        if (found.path === null) return elsewhere ? 'not found' : `not in ${shortPath(thread.cwd)}`
       }
       const where = { machine, thread }
       const kind = found.folder ? folderKind(registry, where) : fileKind(registry, where, found.path!)

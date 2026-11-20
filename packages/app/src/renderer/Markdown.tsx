@@ -99,12 +99,12 @@ function CodeBlock(props: ComponentProps<'pre'> & { node?: unknown }) {
 export type ImagesIn = { machine: MachineEntry; thread: string; resolve(src: string): ImageItem }
 export const Images = createContext<ImagesIn | undefined>(undefined)
 
-/** The images of a thread in `cwd`, written in a document in `dir` there (`a/b/`; '' for a message). */
-export function imagesIn(machine: MachineEntry, thread: string, cwd: string, dir = ''): ImagesIn {
+/** The images of a thread, written in a document in `dir` (`a/b/` in its folder, or one elsewhere; '' for a message). */
+export function imagesIn(machine: MachineEntry, thread: string, dir = ''): ImagesIn {
   return {
     machine, thread,
     resolve(src) {
-      const source = imageSource(src, { cwd, dir, thread })
+      const source = imageSource(src, { dir })
       return 'refused' in source ? { name: src, problem: source.refused } : { name: src, ...source }
     },
   }

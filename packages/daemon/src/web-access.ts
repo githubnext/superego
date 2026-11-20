@@ -4,12 +4,12 @@
 // machine with more than one tailscaled, `web.tailscale.socket` says which one serves it.
 import { randomUUID } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
-import { Lifetime, obj, RpcError, str, type Router } from '@superego/protocol'
+import { artifactFile, Lifetime, obj, RpcError, str, type Router } from '@superego/protocol'
 import type { SettingsRegistry } from '@superego/settings'
 import type { Clients } from './clients.ts'
 import type { Daemon, DaemonContext, DaemonOptions } from './daemon.ts'
 import { defineAction } from './extension.ts'
-import { inFolder } from './files.ts'
+import { fileIn } from './files.ts'
 import type { Relay } from './relay.ts'
 import { describeInstance, otherInstances, startServe, stopServe, tailnetNames, type TailscaleState } from './tailscale.ts'
 import { serveWeb, webOrigin, type ServedByTailscale, type WebServer } from './web.ts'
@@ -85,9 +85,13 @@ export async function openWebAccess({ options, settings, router, clients, relay,
         web = await serveWeb({ root: options.webRoot!, port, devices: webDevices, serve,
           tailscale: () => served && { ...served, pairOwner: pairOwner(), nodeAt },
           origin: () => chosen().origin,
-          artifact: async (thread, path, elsewhere) => elsewhere
-            ? Buffer.from((await relay.call(elsewhere, 'file.read', { thread, path, base64: true }) as { content: string }).content, 'base64')
-            : readFile(inFolder(await cwdOf(thread), path)) })
+          artifact: async (thread, asked, elsewhere) => {
+            const path = artifactFile(asked)
+            if (!path) throw new RpcError('invalid', `${asked} is outside the thread's folder`)
+            return elsewhere
+              ? Buffer.from((await relay.call(elsewhere, 'file.read', { thread, path, base64: true }) as { content: string }).content, 'base64')
+              : readFile(fileIn(await cwdOf(thread), path))
+          } })
       } catch (error) {
         webError = (error as Error).message
       }

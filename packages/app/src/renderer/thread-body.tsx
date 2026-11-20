@@ -73,7 +73,7 @@ export function ThreadBody({ machine, thread }: { machine: MachineEntry; thread:
   }, [view, atStart, older.loading])
 
   // Its images, in messages: files of its folder on its machine.
-  const images = useMemo(() => imagesIn(machine, thread.id, thread.cwd), [machine, thread.id, thread.cwd])
+  const images = useMemo(() => imagesIn(machine, thread.id), [machine, thread.id])
 
   // At the end, the transcript stays at its end as anything changes size: a reply streaming in, a step opening, code
   // laid out, the composer floating over the end growing (suggestions, a question, files; the transcript keeps room for

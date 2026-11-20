@@ -24,7 +24,7 @@ export type ImageItem = {
   path?: string
   entry?: { id: number; message: number; block: number }
   url?: string
-  /** Why it can't be read, when that's known before trying (a path outside the thread's folder). */
+  /** Why it can't be read, when that's known before trying (an address that isn't a file or on the web). */
   problem?: string
   mimeType?: string
   /** Its size in pixels, when known, so its place is kept before it loads. */
@@ -42,7 +42,6 @@ export const describeImage = (image: ImageItem) => image.alt || image.caption ||
 /** Why a read failed, as a tooltip says it. */
 const why = (error: unknown) => {
   const { kind, message } = (error ?? {}) as { kind?: string; message?: string }
-  if (kind === 'invalid' && /outside/.test(message ?? '')) return "outside the thread's folder"
   if (kind === 'not_found') return 'not found'
   return message || 'can’t be read'
 }
