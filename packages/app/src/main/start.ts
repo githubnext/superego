@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { app } from 'electron'
-import { appEnv, defaultDataDir } from '@superego/daemon/client'
+import { appEnv, appSocketPath, defaultDataDir } from '@superego/daemon/client'
 import { installTypes } from '@superego/client/author-types'
 import { createRouter, envName, type AppConfig } from '@superego/protocol'
 import { SettingsRegistry } from '@superego/settings'
@@ -22,6 +22,7 @@ import { LayoutFile } from './layout-file.ts'
 import { createMachines } from './machines.ts'
 import { createNotifier } from './notify.ts'
 import { createService } from './service.ts'
+import { serveAppSocket, type AppSocket } from './app-socket.ts'
 
 /**
  * Run an app's main process: its windows, the links to every machine (starting this computer's daemon, which outlives
@@ -112,7 +113,7 @@ export function startApp(appConfig: AppConfig) {
 
   const router = createRouter<AppActionContext>()
   machines.registerActions(router)
-  registerAppActions(router, { app: appConfig, settings, cli, service, layoutFile, sites, quit: () => app.quit(), restart: () => restartApp(devRestart) })
+  registerAppActions(router, { app: appConfig, dataDir, packaged: app.isPackaged, windows: () => windows, settings, cli, service, layoutFile, sites, quit: () => app.quit(), restart: () => restartApp(devRestart) })
   const windows = createWindows({
     app: appConfig, dataDir, headless,
     methods: (window) => appMethods(window, { settings, router, service, notifier, machines, windows, desktop, build }),
@@ -143,8 +144,10 @@ export function startApp(appConfig: AppConfig) {
   })
 
   registerArtifactScheme()
+  let appSocket: AppSocket | undefined
   app.whenReady().then(() => {
     if (!primary) return
+    serveAppSocket(appSocketPath(appConfig, dataDir), router).then((socket) => { appSocket = socket }, (error) => console.error('app socket:', error))
     serveWebViews({ windowOf: windows.of, linkOf: machines.linkOf, sites })
     desktop.start()
     setUpSession()
@@ -157,7 +160,7 @@ export function startApp(appConfig: AppConfig) {
 
   app.on('window-all-closed', () => desktop.allClosed())
   // Every window open as it quits comes back at the next launch.
-  app.on('before-quit', () => { windows.quitting(); layoutFile.stop(); forwards.close(); machines.stop() })
+  app.on('before-quit', () => { appSocket?.close(); windows.quitting(); layoutFile.stop(); forwards.close(); machines.stop() })
 }
 
 /**

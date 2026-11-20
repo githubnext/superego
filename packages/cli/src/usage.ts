@@ -102,6 +102,11 @@ function groups(id: string, name: string, added: CliCommand[]): Entry[][] {
       { use: 'settings set <key> <value> [--all]', does: 'Change a setting (value is JSON, or plain text)', options: [['    --all', 'On every enabled machine']], examples: [`${id} settings set agent.model anthropic/claude-sonnet-4-5`] },
       { use: 'settings reset <key> [--all]', does: 'Back to the default', options: [['    --all', 'On every enabled machine']] },
       { use: 'layout', does: "Where the window's views go: layout.json (edit it; Edit layout… in ⌘K), with the\nviews there are and the places each fits" },
+      {
+        use: 'app profile [--seconds 10] [--window <id>]', does: `Profile the running app's windows: each renderer's CPU profile, what it showed, every\nprocess's CPU and a trace, in ~/.${id}/profiles; prints the hot spots`,
+        options: [['    --seconds <n>', 'How long (default 10)'], ['    --window <id>', 'Only this window'], ['    --no-trace', 'Without the trace']],
+        examples: [`${id} app profile --seconds 15`],
+      },
       { use: 'providers', does: 'List providers and how they are signed in (Settings → Providers)' },
       { use: 'providers key <provider>', does: 'Sign in with an API key (prompted, or read from stdin)' },
       { use: 'providers sign-out <provider>', does: 'Remove a stored credential' },

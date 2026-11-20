@@ -20,6 +20,16 @@ export function socketPath(app: AppConfig, dataDir: string) {
   return join(tmpdir(), `${app.id}-${createHash('sha256').update(dataDir).digest('hex').slice(0, 16)}.sock`)
 }
 
+/**
+ * The running app's own socket, where the command line reaches it (`<id> app profile`): beside the daemon's in the data
+ * dir when the path fits, else in tmp. One app per data dir, so one socket.
+ */
+export function appSocketPath(app: AppConfig, dataDir: string) {
+  const inside = join(dataDir, `${app.id}-app.sock`)
+  if (Buffer.byteLength(inside) < 100) return inside
+  return join(tmpdir(), `${app.id}-app-${createHash('sha256').update(dataDir).digest('hex').slice(0, 16)}.sock`)
+}
+
 /** The running daemon's pid, beside its data. */
 export const pidPath = (dataDir: string) => join(dataDir, 'daemon.pid')
 

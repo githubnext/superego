@@ -25,7 +25,7 @@ import {
   type MachineConfig, type Transport,
 } from '@superego/client'
 // The daemon itself only for `daemon run`: loading it costs every other command most of its start.
-import { appEnv, daemonStarting, defaultDataDir, installService, isListening, readBuild, socketPath, spawnDaemon, startService, uninstallService } from '@superego/daemon/client'
+import { appEnv, appSocketPath, connectSocket, daemonStarting, defaultDataDir, installService, isListening, readBuild, socketPath, spawnDaemon, startService, uninstallService } from '@superego/daemon/client'
 import {
   AUTH_REJECTED, compareVersions, consentRefused, driftPhrase, PROTOCOL_VERSION, RpcError, threadEnv, unreadThreads, versionOf, statusShape, statusWord, STATUS_WORDS, type ActionInfo, type AppConfig, type AuthEvent, type Hello, type Json, type MethodName, type Params, type ProviderAuthInfo, type Result,
   type ProfileInfo, type ProfileRef, type ProfileSourceInfo, type ProviderRejection, type ThreadInfo, type SettingsSnapshot,
@@ -958,6 +958,59 @@ function layoutCommand() {
   print({ file, content }, () => console.log(`${file}\n\n${content.trimEnd()}`))
 }
 
+/** A renderer profile, as the app's `app.profileRenderer` returns it (the app's profile-renderer.ts). */
+type RendererProfile = {
+  dir: string; seconds: number; summary: string; trace?: string; traceError?: string
+  processes: { pid: number; type: string; name: string; cpu: number; memoryMB: number }[]
+  windows: {
+    window: string; pid: number; error?: string; cpuprofile?: string
+    shown?: { machine: string; thread: string }
+    page?: { tabs?: { label: string; pane?: string; state: string }[]; nodes?: number; animations?: Record<string, number> }
+    metrics?: Record<string, number>
+    profile?: { busyPercent: number; functions: { name: string; where: string; percent: number }[]; components: { name: string; where: string; percent: number; inclusivePercent: number }[] }
+  }[]
+}
+
+/** `app profile`: profile the running app's windows, through its own socket (the app's app-socket.ts). */
+async function appCommand(sub: string | undefined, values: { machine?: string; seconds?: string; window?: string; 'no-trace'?: boolean }) {
+  if (sub !== 'profile') throw new RpcError('usage', sub ? `Unknown: ${app.id} app ${sub}` : `${app.id} app profile [--seconds 10]`)
+  if (resolveMachine(values.machine).config) throw new RpcError('usage', `${app.id} app profile profiles the app on this computer`)
+  const seconds = values.seconds === undefined ? 10 : Number(values.seconds)
+  if (!(seconds > 0 && seconds <= 300)) throw new RpcError('usage', '--seconds is a number above 0, at most 300')
+  const path = appSocketPath(app, dataDir)
+  if (!(await isListening(path))) throw new RpcError('no_app', `${app.name} isn't running here, or runs a build from before \`${app.id} app\`: restart it`)
+  const { peer, socket } = await connectSocket(path)
+  if (!json) console.error(`Profiling for ${seconds} s…`)
+  let result: RendererProfile
+  try {
+    result = await peer.call<RendererProfile>('app.profileRenderer', { seconds, ...(values.window ? { window: values.window } : {}), trace: !values['no-trace'] })
+  } finally { socket.destroy() }
+  print(result, () => {
+    console.log(`Processes (CPU % of one core over ${result.seconds} s):`)
+    table(result.processes.filter((p) => p.cpu >= 0.5 || p.type === 'Tab').map((p) => [String(p.pid), `${p.cpu}%`, `${p.memoryMB} MB`, `${p.type}: ${p.name}`]))
+    for (const w of result.windows) {
+      console.log(`\nWindow ${w.window} (pid ${w.pid})${w.shown ? `: thread ${w.shown.machine}/${w.shown.thread}` : ''}`)
+      if (w.error) { console.log(`  Not profiled: ${w.error}`); continue }
+      const tabs = w.page?.tabs ?? []
+      if (tabs.length) console.log(`  Tabs: ${tabs.map((t) => `${t.label} (${t.state})`).join(', ')}`)
+      const animations = Object.entries(w.page?.animations ?? {})
+      if (animations.length) console.log(`  Animations: ${animations.map(([what, n]) => `${n}× ${what}`).join('; ')}`)
+      const m = w.metrics
+      if (m) console.log(`  Main thread busy ${m.taskPercent}% (script ${m.scriptPercent}%, layout ${m.layoutPercent}%, style ${m.stylePercent}%), ${m.layoutsPerSecond} layouts/s, ${m.nodes} nodes`)
+      if (w.profile) {
+        console.log(`  JS profile busy ${w.profile.busyPercent}%; top functions:`)
+        for (const f of w.profile.functions.slice(0, 10)) console.log(`    ${String(f.percent).padStart(5)}%  ${f.name}  ${f.where}`)
+        const components = w.profile.components.slice(0, 8)
+        if (components.length) console.log('  Components (own % / inclusive %):')
+        for (const c of components) console.log(`    ${String(c.percent).padStart(5)}% ${String(c.inclusivePercent).padStart(5)}%  ${c.name}  ${c.where}`)
+      }
+    }
+    console.log(`\nSummary: ${result.summary}`)
+    if (result.trace) console.log(`Trace:   ${result.trace}`)
+    if (result.traceError) console.log(`No trace: ${result.traceError}`)
+  })
+}
+
 // ── Dispatch ────────────────────────────────────────────────────────────────────────────────────────────────────────
 
 /** The commands by name, the app's own with the core's (and `help`): set up by `runCli`. */
@@ -977,7 +1030,7 @@ async function main() {
     user: { type: 'boolean' }, archived: { type: 'boolean' }, ui: { type: 'boolean' }, tool: { type: 'boolean' }, badge: { type: 'boolean' }, thread: { type: 'string' },
     all: { type: 'boolean' }, name: { type: 'string' }, command: { type: 'string' }, via: { type: 'string' },
     start: { type: 'boolean' }, update: { type: 'boolean' }, now: { type: 'boolean' }, help: { type: 'boolean', short: 'h' }, skill: { type: 'boolean' },
-    wait: { type: 'boolean' }, timeout: { type: 'string' }, count: { type: 'boolean' },
+    wait: { type: 'boolean' }, timeout: { type: 'string' }, count: { type: 'boolean' }, seconds: { type: 'string' }, window: { type: 'string' }, 'no-trace': { type: 'boolean' },
   } as const
   const { values, positionals } = parseArgs({ allowPositionals: true, options: Object.assign({}, ...added().map((command) => command.options ?? {}), core) as typeof core })
   json = Boolean(values.json)
@@ -1020,6 +1073,7 @@ async function main() {
     case 'actions': return actionsCommand(rest[0], values)
     case 'web': return webCommand(rest[0], rest.slice(1), values)
     case 'layout': return layoutCommand()
+    case 'app': return appCommand(rest[0], values)
     case 'mcp': return mcpCommand(values.machine)
   }
   const command = added().find((c) => c.name === first)

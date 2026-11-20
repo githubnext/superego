@@ -2,7 +2,7 @@
 // extensions declare), the desktop's methods (shared/bridge.ts's AppHandlers), and the app's actions, served under
 // their ids like a daemon's.
 import { dialog, shell } from 'electron'
-import { arr, defineAction, lit, nullable, obj, opt, RpcError, str, union, unknown, type AppConfig, type Json, type Router } from '@superego/protocol'
+import { arr, bool, defineAction, lit, nullable, num, obj, opt, RpcError, str, union, unknown, type AppConfig, type Json, type Router } from '@superego/protocol'
 import { declaredSpec, serveSettings, type SettingsRegistry } from '@superego/settings'
 import type { AppHandlers } from '../shared/bridge.ts'
 import type { LayoutView } from '../shared/layout.ts'
@@ -14,6 +14,7 @@ import type { Desktop } from './desktop.ts'
 import type { LayoutFile } from './layout-file.ts'
 import type { Machines } from './machines.ts'
 import type { Notifier } from './notify.ts'
+import { profileRenderers } from './profile-renderer.ts'
 import type { Service } from './service.ts'
 import type { SitePermissionsHandle } from './site-permissions.ts'
 
@@ -85,8 +86,13 @@ export function callApp(router: Router<AppActionContext>, window: AppWindow, met
 }
 
 /** The app's own actions, besides the machines' (machines.ts). */
-export function registerAppActions(router: Router<AppActionContext>, { app: appConfig, settings, cli, service, layoutFile, sites, quit, restart }: {
+export function registerAppActions(router: Router<AppActionContext>, { app: appConfig, dataDir, packaged, windows, settings, cli, service, layoutFile, sites, quit, restart }: {
   app: AppConfig
+  dataDir: string
+  /** A packaged app: the developers' actions (profiling) are only for the command line there, not ⌘K. */
+  packaged: boolean
+  /** Called only as an action runs, so it may be made after. */
+  windows: () => Pick<Windows, 'all'>
   settings: SettingsRegistry
   cli: ReturnType<typeof commandLine>
   /** What sites in Browser panes may use: forgotten from Settings. Granted only in a page's pane, never by an action. */
@@ -138,6 +144,21 @@ export function registerAppActions(router: Router<AppActionContext>, { app: appC
   router.register(defineAction({
     id: 'app.layout.open', title: 'Open the layout file in its own app', runs: 'app', expose: ['ui'],
     async run() { await layoutFile.read(); const error = await shell.openPath(layoutFile.path); if (error) throw new RpcError('failed', error); return null },
+  }))
+  router.register(defineAction({
+    id: 'app.profileRenderer', title: 'Profile the windows (CPU, for 10 seconds)', runs: 'app', expose: packaged ? ['cli'] : ['ui', 'cli'],
+    description: "Profile every window's renderer (or one, by id) for some seconds: a CPU profile, layouts and style recalcs, what it showed, each process's CPU, and a trace, in <dataDir>/profiles",
+    params: obj({ seconds: opt(num()), window: opt(str()), trace: opt(bool()) }),
+    async run({ seconds = 10, window: id, trace = true }, { window }) {
+      if (!(seconds > 0 && seconds <= 300)) throw new RpcError('invalid', 'seconds is between 0 and 300')
+      const all = windows().all()
+      const targets = id ? all.filter((w) => w.id === id) : all
+      if (id && !targets.length) throw new RpcError('not_found', `No window ${id}; there are: ${all.map((w) => w.id).join(', ') || 'none'}`)
+      const result = await profileRenderers({ dataDir, seconds, trace, windows: targets })
+      // Asked from a window (⌘K): show where it went.
+      if (window) shell.showItemInFolder(result.summary)
+      return result
+    },
   }))
   router.register(defineAction({ id: 'app.quit', title: `Quit ${appConfig.name}`, runs: 'app', run: quit }))
   router.register(defineAction({ id: 'app.restart', title: `Restart ${appConfig.name}`, runs: 'app', expose: ['ui'], run: restart }))
