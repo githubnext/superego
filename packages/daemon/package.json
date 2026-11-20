@@ -8,7 +8,8 @@
     "./client": "./src/client.ts",
     "./image-fixtures": "./test/image-fixtures.ts",
     "./module-graph": "./src/module-graph.ts",
-    "./sdk": "./src/sdk.ts"
+    "./sdk": "./src/sdk.ts",
+    "./snapshot": "./src/snapshot.ts"
   },
   "dependencies": {
     "@earendil-works/chord": "1.5.0",

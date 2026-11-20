@@ -27,10 +27,13 @@ export function superegoConfig(root: string) {
       build: {
         externalizeDeps: false,
         rolldownOptions: { external: ['electron', /^node:/, ...NATIVE] },
-        lib: { entry: { main: resolve(root, 'src/main.ts'), daemon: resolve(root, 'src/daemon.ts'), ...entries } },
+        lib: { entry: { main: resolve(root, 'src/main.ts'), daemon: DAEMON, 'daemon-main': resolve(root, 'src/daemon.ts'), ...entries } },
       },
       plugins: [
         stamp.main,
+        // The daemon: daemon.js (DAEMON) runs it from a snapshot of the build, daemon-main.js (the app's src/daemon.ts)
+        // serves. The launcher knows the app (its data dir) by its superego.config.ts.
+        { name: 'superego-app-config', resolveId: (id) => id === 'superego:app-config' ? resolve(root, 'superego.config.ts') : undefined },
         // The commit it's built from, written in: a packaged app has no checkout to ask.
         { name: 'superego-commit', writeBundle: (options) => writeCommit(root, options.dir!) },
         { name: 'superego-native', writeBundle: (options) => copyNative(root, resolve(options.dir!, '../node_modules')) },
@@ -54,6 +57,9 @@ export function superegoConfig(root: string) {
     },
   })
 }
+
+/** The app's daemon.js, which launches its daemon (see daemon.ts). */
+const DAEMON = fileURLToPath(new URL('./daemon.ts', import.meta.url))
 
 /** The SDK's runner for `<id> extension test`, of the @superego/cli the app at `root` depends on. */
 const authorTest = (root: string) => createRequire(createRequire(resolve(root, 'package.json')).resolve('@superego/cli')).resolve('@superego/sdk/runner')

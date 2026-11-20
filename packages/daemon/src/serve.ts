@@ -4,6 +4,7 @@ import { readBuild } from './build.ts'
 import { openDaemon } from './daemon.ts'
 import { RESTART_EXIT, restartVia, saveRestartEnv, takeRestartEnv } from './service.ts'
 import { listen } from './server.ts'
+import { sweepSnapshots } from './snapshot.ts'
 import { appEnv, defaultDataDir, pidPath, socketPath } from './paths.ts'
 import type { AppConfig, MachineInfo } from '@superego/protocol'
 import type { DaemonExtension } from './extension.ts'
@@ -28,6 +29,9 @@ export async function serveDaemon({ app, dataDir = defaultDataDir(app), socket =
   const pidFile = pidPath(dataDir)
   await writeFile(pidFile, String(process.pid))
   console.error(`${app.id} daemon ${process.pid} on ${socket}, build ${build}`)
+  // This data dir's daemon now: the snapshots of builds it doesn't run are no one's (see snapshot.ts). Housekeeping, so
+  // one that can't be removed is said here and left for the next start.
+  try { sweepSnapshots(dataDir, import.meta.dirname) } catch (error) { console.error(`Could not remove old snapshots of the build: ${error instanceof Error ? error.message : String(error)}`) }
   const close = async () => {
     server.close()
     await daemon.close()

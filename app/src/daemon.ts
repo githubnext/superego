@@ -1,4 +1,5 @@
-// The daemon: Electron's binary run as Node, started detached by the app or `superego`, so agents outlive the app.
+// The daemon: Electron's binary run as Node, started detached by the app or `superego`, so agents outlive the app. Built
+// as daemon-main.js, which the app's daemon.js runs from a snapshot of the build (see @superego/app's daemon.ts).
 import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
