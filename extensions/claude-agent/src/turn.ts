@@ -2,7 +2,7 @@
 // the Agent SDK, one process for the turn, resuming the thread's Claude Code session. It appends what Claude Code says
 // and does to the thread's conversation as it goes, publishes the answer as it streams, and completes with its answer.
 // The run around it (working, done, failed, Stop, messages sent meanwhile) is pi-durable's.
-import { query, type Options, type Query, type SDKMessage } from '@anthropic-ai/claude-agent-sdk'
+import { query, type Options, type Query, type SDKMessage, type SettingSource } from '@anthropic-ai/claude-agent-sdk'
 import type { Context } from '@earendil-works/chord/context'
 import { AssistantEntry, defineDoc, defineTask, LiveDoc, ToolResultEntry, type EntryId, type TaskRuntime } from '@earendil-works/pi-durable'
 import type { Message } from '@earendil-works/pi-ai'
@@ -27,11 +27,19 @@ export const SessionDoc = defineDoc<Session>({
   initial: () => ({}), checkpointWhen: () => true,
 })
 
-/** What a turn runs: the user's `claude`, and the environment it gets (without Anthropic credentials). */
+/**
+ * What a turn runs: the user's `claude`, the environment it gets (without Anthropic credentials), and the settings it
+ * loads in the thread's folder (`sources`).
+ */
 export type TurnHost = {
   /** Where the user's `claude` is; undefined when it isn't installed. */
   executable(): Promise<string | undefined>
   env(): Record<string, string>
+  /**
+   * The settings Claude Code loads for a turn of the thread whose conversation it is, in `cwd`: the user's own, and the
+   * folder's only once the user allowed them as they are now (project.ts).
+   */
+  sources(conversationId: number, cwd: string): Promise<SettingSource[]>
 }
 
 type Checkpoint = { phase: 'run' }
@@ -69,7 +77,7 @@ export function turnTask(name: string, host: TurnHost) {
         if (task.restarts !== undefined) return fail(runtime, 'Interrupted: Superego stopped during this turn. Send again to go on.', context)
         const executable = await host.executable()
         if (!executable) return fail(runtime, NOT_INSTALLED, context)
-        await runTurn(runtime, executable, host.env(), context)
+        await runTurn(runtime, executable, host, context)
       },
     },
     abort: async (_task, runtime, context) => {
@@ -84,7 +92,7 @@ async function fail(runtime: Runtime, message: string, context: Context) {
   await runtime.commit(async () => ({ status: 'terminal', outcome: { status: 'failed', error: { message } } }), context)
 }
 
-async function runTurn(runtime: Runtime, executable: string, env: Record<string, string>, context: Context) {
+async function runTurn(runtime: Runtime, executable: string, host: TurnHost, context: Context) {
   const conversationId = runtime.conversationId
   const [view, live, session, agent] = await Promise.all([
     runtime.context(conversationId, context),
@@ -95,6 +103,8 @@ async function runTurn(runtime: Runtime, executable: string, env: Record<string,
   const prompt = promptOf(view.entries, live?.run?.first)
   if (!prompt) return fail(runtime, 'Nothing to send: Claude Agent threads take text only for now', context)
   const head = view.head?.id ?? null
+  // Without a folder of its own, Claude Code runs in the daemon's.
+  const settingSources = await host.sources(conversationId, agent.cwd ?? process.cwd())
   const resume = session?.id && session.head === head ? session.id : undefined
 
   // Every write in order, one at a time: a published partial never lands after the entry that replaced it.
@@ -154,14 +164,14 @@ async function runTurn(runtime: Runtime, executable: string, env: Record<string,
   const abort = new AbortController()
   const options: Options = {
     pathToClaudeCodeExecutable: executable,
-    env,
+    env: host.env(),
     abortController: abort,
     ...(agent.cwd ? { cwd: agent.cwd } : {}),
     ...(resume ? { resume } : {}),
     includePartialMessages: true,
     // No approvals yet: a tool the user's own settings don't allow is refused, not asked about.
     permissionMode: 'dontAsk',
-    settingSources: ['user', 'project', 'local'],
+    settingSources,
     systemPrompt: { type: 'preset', preset: 'claude_code' },
     stderr: (data) => { stderr.push(...data.split('\n').filter(Boolean)); stderr.splice(0, Math.max(0, stderr.length - STDERR_LINES)) },
   }

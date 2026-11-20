@@ -8,6 +8,10 @@
 - A page an agent draws (an `html` block) no longer answers or messages for you by itself: what it would say shows
   under it, and goes only when you press Send there.
 - Allowing a project's profile now covers everything it can load: a change to any file it runs asks to allow it again.
+- Claude Agent threads no longer run a folder's own Claude Code settings (`.claude/`, `.mcp.json`) until you allow
+  them: their hooks, MCP servers and permissions can run commands. The thread asks over its composer, listing the files
+  to read first, and asks again after they change. Until then Claude Code runs with your own settings only, without the
+  folder's `CLAUDE.md`.
 
 ## 0.1.9
 

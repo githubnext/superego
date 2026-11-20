@@ -3,7 +3,7 @@
 // or costs anything. `claude` is started through a wrapper that writes down the environment it was given (to check no
 // Anthropic credential reached it), then points it at the mock with a key of the mock's, in a config folder of its own.
 import { execFileSync } from 'node:child_process'
-import { chmodSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
@@ -11,6 +11,8 @@ import type { LiveState } from '@earendil-works/pi-durable'
 import { testDaemon, type TestDaemon } from '@superego/sdk/testing'
 import { claudeEnv } from '../src/claude.ts'
 import { claudeAgent } from '../src/daemon.ts'
+import { projectConfig } from '../src/project.ts'
+import { about, ALLOW, type ProjectFacts } from '../src/shared.ts'
 import { mockAnthropic, type MockAnthropic } from './mock-anthropic.ts'
 
 const claude = (() => {
@@ -104,6 +106,40 @@ describe.skipIf(!claude)("a Claude Agent thread, on the user's claude against a 
     expect(JSON.stringify(failed.status)).toContain('Not logged in · run `claude` and `/login`')
   }, 60_000)
 
+  it("runs a folder's own Claude Code settings (hooks, MCP servers) only once allowed as they are, and says so", async () => {
+    const d = await start()
+    const repo = join(dir, 'repo')
+    const ran = (what: string) => existsSync(join(dir, `${what}-ran`))
+    const settings = (hook: string) => writeFileSync(join(repo, '.claude', 'settings.json'), JSON.stringify({
+      hooks: { SessionStart: [{ hooks: [{ type: 'command', command: `touch ${dir}/${hook}-ran` }] }] },
+      enableAllProjectMcpServers: true,
+    }))
+    mkdirSync(join(repo, '.claude'), { recursive: true })
+    settings('hook')
+    writeFileSync(join(repo, '.mcp.json'), JSON.stringify({ mcpServers: { repo: { command: 'sh', args: ['-c', `touch ${dir}/mcp-ran; sleep 2`] } } }))
+    const facts = async (thread: { id: string }) => (await d.info(thread)).facts?.[about.name] as ProjectFacts | undefined
+
+    // Not allowed: the thread says so before its first turn, and the turn runs without them.
+    const thread = await d.thread(undefined, { cwd: repo })
+    expect(await facts(thread)).toMatchObject({ files: ['.claude/settings.json', '.mcp.json'], allowed: false, changed: false })
+    expect((await d.send(thread, 'Say hi')).status.state).toBe('done')
+    expect([ran('hook'), ran('mcp')]).toEqual([false, false])
+
+    // Allowed as shown: the next turn loads them.
+    const { hash } = (await facts(thread))!
+    await d.call('action.run', { id: ALLOW, params: { cwd: repo, hash } })
+    expect(await facts(thread)).toMatchObject({ allowed: true })
+    expect((await d.send(thread, 'Again')).status.state).toBe('done')
+    expect([ran('hook'), ran('mcp')]).toEqual([true, true])
+
+    // Changed since: not loaded again until allowed again, and a stale hash doesn't allow it.
+    settings('changed')
+    expect((await d.send(thread, 'Once more')).status.state).toBe('done')
+    expect(ran('changed')).toBe(false)
+    expect(await facts(thread)).toMatchObject({ allowed: false, changed: true })
+    await expect(d.call('action.run', { id: ALLOW, params: { cwd: repo, hash } })).rejects.toMatchObject({ kind: 'changed' })
+  }, 60_000)
+
   it('streams the answer as it comes, and Stop interrupts it, keeping what it said', async () => {
     const d = await start()
     const thread = await d.thread(undefined, { cwd: dir })
@@ -128,5 +164,35 @@ describe("claude's environment", () => {
       CLAUDE_CODE_OAUTH_TOKEN: 'c', CLAUDE_CODE_USE_BEDROCK: '1', CLAUDE_CODE_USE_VERTEX: '1', AWS_BEARER_TOKEN_BEDROCK: 'b', ELECTRON_RUN_AS_NODE: '1',
     })
     expect(env).toEqual({ PATH: '/bin', HOME: '/home/me' })
+  })
+})
+
+describe("a folder's own Claude Code configuration", () => {
+  let root: string
+  beforeAll(() => { root = mkdtempSync(join(tmpdir(), 'claude-project-')) })
+  afterAll(() => rmSync(root, { recursive: true, force: true }))
+  const write = (path: string, text = '{}') => { mkdirSync(join(root, path, '..'), { recursive: true }); writeFileSync(join(root, path), text) }
+
+  it("is its .claude/ and every .mcp.json from it up: not the user's own, nor Claude Code's checkouts", () => {
+    const user = join(root, 'home', '.claude')
+    write('home/.claude/settings.json')
+    expect(projectConfig(join(root, 'home'), user)).toBeUndefined()
+    write('.mcp.json')
+    write('repo/.claude/settings.json')
+    write('repo/.claude/settings.local.json')
+    write('repo/.claude/hooks/start.sh', 'echo hi')
+    write('repo/.claude/worktrees/feature/.claude/settings.json')
+    write('repo/.claude/hooks/node_modules/x.js')
+    write('repo/CLAUDE.md', 'notes')
+    symlinkSync(join(root, 'repo', '.claude', 'hooks'), join(root, 'repo', '.claude', 'again'))
+    const config = projectConfig(join(root, 'repo'), user)!
+    expect(config.files).toEqual(['.claude/again/start.sh', '.claude/settings.json', '.claude/settings.local.json', join(root, '.mcp.json')])
+    write('repo/.claude/hooks/start.sh', 'echo changed')
+    const changed = projectConfig(join(root, 'repo'), user)!.hash
+    expect(changed).not.toBe(config.hash)
+    // What isn't in it changes nothing.
+    write('repo/CLAUDE.md', 'other notes')
+    write('repo/.claude/worktrees/feature/.claude/settings.json', '{"x":1}')
+    expect(projectConfig(join(root, 'repo'), user)!.hash).toBe(changed)
   })
 })

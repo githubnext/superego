@@ -183,7 +183,10 @@ superego profile revoke-ui default -m box    # Settings → Machines lists them 
 - `model`, `thinking` and `options` apply where a thread hasn't chosen its own.
 - `agent` picks another kind of agent for the threads that start with the profile, fixed for each thread's life: an
   extension's (`superego.agentKind`). `'claude-agent'` (experimental) runs the user's own Claude Code, signed in with its
-  own `/login`; Superego's model, tools and prompt sections don't apply to those threads.
+  own `/login`; Superego's model, tools and prompt sections don't apply to those threads. It loads the user's own
+  Claude Code settings, and a folder's (`.claude/`, `.mcp.json`, `CLAUDE.md`) only once the user allowed them as they
+  are: their hooks, MCP servers and permissions run commands. The thread asks (Allow, over its composer), and again
+  after they change; `superego do claude-agent.allow --cwd "$PWD"` allows them from a terminal.
 
 ## An example
 

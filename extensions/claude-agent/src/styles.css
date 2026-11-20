@@ -1,0 +1,5 @@
+/* A folder's Claude Code settings waiting to be allowed, over the composer (ui.tsx). */
+.claude-project__files { list-style: none; margin: 6px 0 0; padding: 0; }
+.claude-project__file { font: inherit; font-family: var(--superego-mono); color: var(--superego-text); background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline; text-decoration-color: var(--superego-border); text-underline-offset: 2px; }
+.claude-project__file:hover { text-decoration-color: currentColor; }
+.service-notice__actions .claude-project__more { color: var(--superego-muted); margin-left: auto; }

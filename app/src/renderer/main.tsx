@@ -2,6 +2,7 @@
 // here; the sidebar's, required, comes first.
 import { mountApp } from '@superego/app/ui'
 import agentUi from '@superego/agent-ui/ui'
+import claudeAgent from '@superego/claude-agent/ui'
 import ego from '@superego/ego/ui'
 import files from '@superego/files/ui'
 import git from '@superego/git/ui'
@@ -19,4 +20,4 @@ import browser from '@superego/browser/ui'
 import worktrees from '@superego/worktrees/ui'
 import app from '../../superego.config.ts'
 
-mountApp(app, { extensions: [threads, worktrees, agentUi, ego, files, git, images, links, mcpServers, mentions, skills, suggestions, tasks, terminal, unread, browser] })
+mountApp(app, { extensions: [threads, worktrees, agentUi, claudeAgent, ego, files, git, images, links, mcpServers, mentions, skills, suggestions, tasks, terminal, unread, browser] })

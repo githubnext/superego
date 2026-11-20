@@ -382,12 +382,18 @@ importers:
       '@earendil-works/pi-durable':
         specifier: file:../../vendor/earendil-works-pi-durable-1.5.0.tgz
         version: file:vendor/earendil-works-pi-durable-1.5.0.tgz(patch_hash=d071c462b7d72b75fdec1cc6ad4c27a24848f99901fa613fdd1ac6c1240dd6af)(@aws-sdk/credential-provider-node@3.972.91)(@modelcontextprotocol/sdk@1.32.2(zod@4.6.7))(@smithy/signature-v4@5.7.5)(undici@7.30.1)(ws@8.22.0)(zod@4.6.7)
+      '@superego/app':
+        specifier: workspace:*
+        version: link:../../packages/app
       '@superego/daemon':
         specifier: workspace:*
         version: link:../../packages/daemon
       '@superego/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol
+      '@superego/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
     devDependencies:
       '@earendil-works/chord':
         specifier: file:../../vendor/earendil-works-chord-1.5.0.tgz
@@ -395,6 +401,12 @@ importers:
       '@superego/sdk':
         specifier: workspace:*
         version: link:../../packages/sdk
+      '@types/react':
+        specifier: ^19
+        version: 19.3.0
+      react:
+        specifier: ^19
+        version: 19.3.1
 
   extensions/ego:
     dependencies:
