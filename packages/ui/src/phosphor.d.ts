@@ -46,6 +46,7 @@ declare module '@phosphor-icons/react/dist/csr/ChatCircle' { export const ChatCi
 declare module '@phosphor-icons/react/dist/csr/ChatText' { export const ChatTextIcon: import('@phosphor-icons/react').Icon }
 declare module '@phosphor-icons/react/dist/csr/ChatsCircle' { export const ChatsCircleIcon: import('@phosphor-icons/react').Icon }
 declare module '@phosphor-icons/react/dist/csr/Chats' { export const ChatsIcon: import('@phosphor-icons/react').Icon }
+declare module '@phosphor-icons/react/dist/csr/CursorClick' { export const CursorClickIcon: import('@phosphor-icons/react').Icon }
 declare module '@phosphor-icons/react/dist/csr/Check' { export const CheckIcon: import('@phosphor-icons/react').Icon }
 declare module '@phosphor-icons/react/dist/csr/Columns' { export const ColumnsIcon: import('@phosphor-icons/react').Icon }
 declare module '@phosphor-icons/react/dist/csr/ColumnsPlusRight' { export const ColumnsPlusRightIcon: import('@phosphor-icons/react').Icon }

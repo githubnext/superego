@@ -41,7 +41,7 @@ function desktop() {
     const op = (name: string) => (...args: unknown[]) => { view.ops.push([name, ...args]) }
     return {
       place: op('place'), load: op('load'), go: op('go'), reload: op('reload'), stop: op('stop'), focus: op('focus'), reveal: op('reveal'), answer: op('answer'),
-      snapshot: async () => null, onEvent: (listener) => { view.listener = listener }, close: op('close'),
+      snapshot: async () => null, run: async () => undefined, capture: async () => null, onEvent: (listener) => { view.listener = listener }, close: op('close'),
     }
   }
   return views

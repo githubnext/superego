@@ -66,3 +66,19 @@ a.superego-icon-button { text-decoration: none; }
 .browser-page { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .browser-stage.is-sized { background: var(--superego-chrome); }
 .browser-stage.is-sized > .browser-page { position: absolute; transform-origin: 0 0; box-shadow: 0 0 0 1px var(--superego-line); }
+/* Select element (pick.tsx): pressed while picking, in the accent. */
+.browser-toolbar .browser-pick.is-on, .browser-toolbar .browser-pick.is-on:hover:not(:disabled) { color: var(--superego-accent); background: var(--superego-selected); }
+/* The element picked, at the pane's foot: its image, its selector over its tag and text, and what to do with it. */
+.browser-picked {
+  flex: none; display: flex; align-items: center; gap: var(--superego-space-2); min-height: 48px; box-sizing: border-box; padding: 6px var(--superego-space-2) 6px var(--superego-space-3);
+  background: var(--superego-pane-tab); border-top: 1px solid var(--superego-line); font-size: var(--superego-text-sm); color: var(--superego-text);
+}
+.browser-picked__image { flex: none; max-width: 72px; max-height: 40px; object-fit: contain; border-radius: 4px; box-shadow: 0 0 0 1px var(--superego-line); }
+.browser-picked__text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.browser-picked__text > * { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.browser-picked__selector { font: var(--superego-text-xs) var(--superego-mono); }
+.browser-picked__about { font-size: var(--superego-text-xs); color: var(--superego-muted); }
+.browser-picked__about code { font-family: var(--superego-mono); }
+.browser-picked .superego-icon-button { flex: none; color: var(--superego-muted); }
+.browser-picked .superego-icon-button:hover { color: var(--superego-text); }
+.browser-picked .superego-button--primary { flex: none; }

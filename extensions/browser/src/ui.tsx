@@ -14,13 +14,18 @@
 // ahead of that as the page's milestones come, full as it's done, then fading; a spinner in place of the globe on the
 // pane's tab and in the address; Reload is Stop. None of it for a load done within SHOW_AFTER, so a quick one doesn't
 // flash. A page that doesn't load says why, in its place (the app's WebView).
+//
+// Select element (⌘⇧C, pick.tsx): the element clicked in the page, in a card at the pane's foot, to add to the thread's
+// composer or copy the selector of.
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react'
-import { askText, call, defineAction, defineUiExtension, hasWebViews, PaneMessage, useApp, useAppSetting, useDispatch, useTabGlyph, thisComputer, WebView, type PaneProps, type PermissionAsk, type WebViewEvent, type WebViewHandle } from '@superego/app/ui'
+import { askText, call, Chip, defineAction, defineUiExtension, hasWebViews, PaneMessage, useApp, useAppSetting, useDispatch, useShortcut, useTabGlyph, thisComputer, WebView, type PaneProps, type PermissionAsk, type WebViewEvent, type WebViewHandle } from '@superego/app/ui'
 import type { Pane } from '@superego/protocol'
-import { autoFocusOnOpen, ArrowClockwiseIcon, ArrowLeftIcon, ArrowRightIcon, ArrowsOutLineHorizontalIcon, ArrowSquareOutIcon, Button, DeviceMobileIcon, DeviceTabletIcon, Glyph, GlobeIcon, IconButton, LaptopIcon, Menu, ResizeIcon, XIcon } from '@superego/ui'
+import { autoFocusOnOpen, ArrowClockwiseIcon, CursorClickIcon, ArrowLeftIcon, ArrowRightIcon, ArrowsOutLineHorizontalIcon, ArrowSquareOutIcon, Button, DeviceMobileIcon, DeviceTabletIcon, Glyph, GlobeIcon, IconButton, LaptopIcon, Menu, ResizeIcon, XIcon } from '@superego/ui'
 import './styles.css'
 import { about, BROWSER, type BrowserParams, type Viewport } from './shared.ts'
 import { fit, isViewport, parseViewport, PRESETS, presetOf, viewportText, type Fit } from './viewport.ts'
+import { PickButton, PickedCard, usePicking } from './pick.tsx'
+import { readElement, type SentElement } from './element.ts'
 import { DEFAULT_SEARCH_ENGINE, destination, SEARCH_ENGINE, SEARCH_ENGINES, webAddress, type Destination, type SearchEngine } from './address.ts'
 
 const params = (pane: Pane) => (pane.params ?? {}) as BrowserParams
@@ -41,6 +46,25 @@ export default defineUiExtension({
         options: Object.entries(SEARCH_ENGINES).map(([value, { label }]) => ({ value, label })),
       }],
     })
+    // Pick mode in the Browser pane that has the keyboard (its page's too): the pane hears it, and toggles.
+    superego.action(defineAction({
+      id: PICK, title: 'Select element', keys: 'mod+shift+c',
+      when: () => Boolean(document.activeElement?.closest('.browser-frame')),
+      run: () => { document.activeElement?.closest('.browser-frame')?.dispatchEvent(new CustomEvent(PICK)) },
+    }))
+    // An element picked and sent: a chip under the message (its image shows beside it, as an image sent does).
+    superego.composer.sentWith<SentElement>({
+      read: (blocks) => {
+        const found = blocks.flatMap((block, index) => {
+          const element = block.type === 'text' ? readElement(block.text) : undefined
+          return element ? [{ element, index }] : []
+        })
+        return found.length ? { items: found.map((f) => f.element), blocks: found.map((f) => f.index) } : undefined
+      },
+      component: ({ items }) => <>{items.map((element, index) => (
+        <Chip key={index} icon={<CursorClickIcon size={13} aria-hidden />} title={element.selector}>{element.label} · {element.where}</Chip>
+      ))}</>,
+    })
     // A blank page beside the thread shown, its address bar ready to type in.
     superego.action(defineAction({
       id: 'browser.new', title: 'New browser', keys: 'mod+t',
@@ -52,6 +76,9 @@ export default defineUiExtension({
     }))
   },
 })
+
+/** Pick mode's action, and the event it sends the pane that has the keyboard. */
+const PICK = 'browser.pick'
 
 /** The page a pane shows: where it loads from here, with whose cookies; or why it can't. */
 type Target = { src: string; partition: 'browser' | 'artifact'; revision?: string | undefined } | { message: string } | undefined
@@ -117,7 +144,8 @@ function BrowserPane({ machine, thread, pane }: PaneProps) {
 
   /** Where the page is, as the address bar says it: a web page's address (from its machine), or a file's path. */
   const current = state?.url || src
-  const address = !current ? '' : url && src ? fromMachine(url, src, current) : artifact && path !== undefined ? fileAt(machine.id, thread.id, current) ?? current : current
+  const addressOf = (at: string) => url && src ? fromMachine(url, src, at) : artifact && path !== undefined ? fileAt(machine.id, thread.id, at) ?? at : at
+  const address = !current ? '' : addressOf(current)
   const where = url && src && src !== url && current?.startsWith(new URL(src).origin)
     ? `${machine.label}${new URL(src).port !== new URL(url).port ? `, here at ${new URL(src).host}` : ''}` : undefined
 
@@ -158,8 +186,26 @@ function BrowserPane({ machine, thread, pane }: PaneProps) {
   }
   const native = hasWebViews()
   const isWeb = Boolean(current && /^https?:/i.test(current))
+  // Selecting an element: in a view of its own, any page; framed, only one of this window's origin (a frame's page of
+  // another can't be reached into, nor can an HTML file's, which has no origin).
+  const picking = usePicking(view, frame, (text) => setNotice({ text }))
+  const framedAway = !native && src !== undefined && (target && 'partition' in target && target.partition === 'artifact' || new URL(src, location.href).origin !== location.origin)
+  const pickable = Boolean(src) && !framedAway
+  const pickKeys = useShortcut(PICK)
+  const toggle = useRef(picking.toggle)
+  toggle.current = () => { if (pickable) picking.toggle() }
+  useEffect(() => {
+    const el = frame.current
+    const onPick = () => toggle.current()
+    el?.addEventListener(PICK, onPick)
+    return () => el?.removeEventListener(PICK, onPick)
+  }, [])
+  // The page gone elsewhere (or loading again) while picking: its picker went with it.
+  const pickingNow = picking.picking
+  useEffect(() => { if (pickingNow) picking.cancel() }, [current, src])
   return (
-    <div ref={frame} className="browser-frame" aria-busy={busy}>
+    <div ref={frame} className="browser-frame" aria-busy={busy}
+      onKeyDown={(event) => { if (event.key === 'Escape' && picking.picking && !event.defaultPrevented) { event.preventDefault(); picking.cancel() } }}>
       <div className="browser-toolbar">
         {native && <IconButton label="Back" variant="ghost" disabled={!state?.canGoBack} onClick={() => { begin(); view.current?.go(-1) }}><ArrowLeftIcon size={14} aria-hidden /></IconButton>}
         {native && <IconButton label="Forward" variant="ghost" disabled={!state?.canGoForward} onClick={() => { begin(); view.current?.go(1) }}><ArrowRightIcon size={14} aria-hidden /></IconButton>}
@@ -184,7 +230,9 @@ function BrowserPane({ machine, thread, pane }: PaneProps) {
               {where && <span className="browser-where">{where}</span>}
             </Address>}
         {revisionError && <span className="browser-hint" role="alert" title={revisionError}>Won't reload as it changes: {revisionError}</span>}
-        {waiting && !editing && <ReturnHint />}
+        {picking.picking ? <span className="browser-hint">↑ parent · esc to cancel</span> : waiting && !editing && <ReturnHint />}
+        <PickButton picking={picking.picking} disabled={!pickable} why={framedAway ? 'Select element needs the desktop app: this page is framed from another site' : undefined}
+          keys={pickKeys} onClick={picking.toggle} />
         {sizing
           ? <SizeField viewport={viewport} onDone={(next) => { setSizing(false); if (next) resize(next) }} />
           : <SizeMenu viewport={viewport} scale={fitted?.scale ?? 1} onPick={resize} onCustom={() => setSizing(true)} />}
@@ -208,6 +256,10 @@ function BrowserPane({ machine, thread, pane }: PaneProps) {
             </div>
           : !blank && <PaneMessage>{target?.message ?? 'Loading…'}</PaneMessage>}
       </div>
+      {picking.selection && (
+        <PickedCard selection={picking.selection} address={addressOf(picking.selection.picked.url)} where={{ machine: machine.id, thread: thread.id }}
+          onDone={picking.dismiss} onError={(text) => setNotice({ text })} />
+      )}
     </div>
   )
 }

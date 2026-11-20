@@ -142,6 +142,13 @@ export type BridgeWebView = {
   focus(on: boolean): void
   /** A still of the page as it is now, as an image's bytes (PNG); none while it has nothing drawn. */
   snapshot(): Promise<Uint8Array | null>
+  /**
+   * Run `code` (a script's source) in the page, in a world of the app's own beside the page's (its DOM, not its
+   * scripts' globals): what it ends with, awaited if it's a promise, as structured data.
+   */
+  run(code: string): Promise<unknown>
+  /** A part of the page as it's drawn now (`rect`, in the page's CSS pixels), as an image's bytes (PNG); none when nothing is. */
+  capture(rect: { x: number; y: number; width: number; height: number }): Promise<Uint8Array | null>
   /** Show a file it saved in the Finder (or the system's file manager). */
   reveal(path: string): void
   /** The user's answer to what the page asks now (its state's `ask`). */
@@ -158,6 +165,7 @@ export const CHANNEL = {
   call: 'superego:call', machines: 'superego:machines', event: 'superego:event', forward: 'superego:forward',
   // A window's web views (main/web-views.ts): opened, told what to do, a still of one, and what they tell their pane.
   viewOpen: 'superego:view-open', view: 'superego:view', viewSnapshot: 'superego:view-snapshot', viewEvent: 'superego:view-event',
+  viewRun: 'superego:view-run', viewCapture: 'superego:view-capture',
   // A window's protocol channels, held for it by the main process: opened, ready for data (once the window knows its
   // id), their data, written, read and closed; the main process drops all of a window's as its page (re)loads.
   open: 'superego:ch-open', start: 'superego:ch-start', data: 'superego:ch-data', write: 'superego:ch-write', ack: 'superego:ch-ack', close: 'superego:ch-close',

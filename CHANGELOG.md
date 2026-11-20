@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Select element in the Browser pane (⌘⇧C, or the cursor button in its toolbar): hover the page to outline an element,
+  ↑ to its parent, click to pick it. A card shows its selector, tag, text and an image of it, to copy the selector or
+  add it to your prompt as a chip; the agent gets the page's address, the selector, its HTML, its box and styles, and
+  the image. Pick as many as you like. Desktop app only: a browser (Web access) can't reach into another site's page.
 - Claude Agent (experimental): a profile with `agent: 'claude-agent'` runs its threads on your own Claude Code,
   signed in with its own `/login`: answers stream in, its tool calls show as rows, Stop interrupts it. Superego never
   sees your Claude sign-in, and keeps Anthropic API keys in its environment away from it.

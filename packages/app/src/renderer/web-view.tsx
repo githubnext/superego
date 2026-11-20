@@ -27,7 +27,24 @@ export const OVERLAYS = '.superego-layer, .superego-dialog__backdrop, .superego-
  * What a pane does to its page: take it somewhere (where it is already: again), go back and forward, reload it, stop
  * its loading, give it the keyboard, show a file it saved, answer what it asks (its state's `ask`).
  */
-export type WebViewHandle = { load(url: string): void; go(by: -1 | 1): void; reload(): void; stop(): void; focus(): void; reveal(path: string): void; answer(allow: boolean): void }
+export type WebViewHandle = {
+  load(url: string): void; go(by: -1 | 1): void; reload(): void; stop(): void; focus(): void; reveal(path: string): void; answer(allow: boolean): void
+  /**
+   * Run `fn` in the page, given its window and `args` (JSON), and what it returns (awaited; structured data). Its source
+   * alone goes there (a `function` or an arrow, not a method), so it may use nothing from outside it. On the desktop it
+   * runs in a world of the app's own beside the page's: the page's DOM, not its scripts' globals. Framed, in the frame's
+   * page itself, and only when that's of this window's origin: else it rejects.
+   */
+  run<A extends unknown[], R>(fn: (window: Window, ...args: A) => R, ...args: A): Promise<Awaited<R>>
+  /** A part of the page as it's drawn now (`rect`, in its CSS pixels), as a PNG; none framed, or when nothing's drawn there. */
+  capture(rect: { x: number; y: number; width: number; height: number }): Promise<Blob | undefined>
+}
+
+/** Where `run` can't reach: a framed page of another origin. */
+const UNREACHABLE = "The page is another site's: the window can't reach into it"
+
+/** `fn` called with the page's window and `args`, as a script's source. */
+export const scriptOf = (fn: (...args: never[]) => unknown, args: unknown[]) => `(${fn.toString()})(window, ...${JSON.stringify(args)})`
 
 /** A page to show: its address, and whose cookies it keeps (`partition`). */
 export type WebViewProps = {
@@ -114,6 +131,13 @@ function FramedWebView({ src, partition, title, sandbox, revision, onEvent, onWa
   // loading be stopped, its document being another origin's: the pane stops waiting for it.
   useImperativeHandle(ref, () => ({
     load: () => setKey((k) => k + 1), go: () => {}, reload: () => setKey((k) => k + 1), stop: () => loading(false), focus: () => frame.current?.focus(), reveal: () => {}, answer: () => {},
+    // A framed page of this origin is reached directly; another's (or one sandboxed to no origin) throws on its document.
+    run: async (fn, ...args) => {
+      const page = frame.current?.contentWindow
+      try { if (!page?.document) throw new Error(UNREACHABLE) } catch { throw new Error(UNREACHABLE) }
+      return await fn(page as Window & typeof globalThis, ...args) as never
+    },
+    capture: async () => undefined,
   }), [src])
   return (
     <div className="web-view web-view--framed" tabIndex={-1} data-focus onKeyDown={onReturn(() => frame.current?.focus())}
@@ -195,6 +219,15 @@ function NativeWebView({ src, partition, revision, onEvent, onWaiting, sized = f
   useImperativeHandle(ref, () => ({
     load: (url) => view()?.load(url), go: (by) => view()?.go(by), reload: () => view()?.reload(), stop: () => view()?.stop(), focus: () => enterRef.current(),
     reveal: (path) => view()?.reveal(path), answer: (allow) => view()?.answer(allow),
+    run: async (fn, ...args) => {
+      const page = view()
+      if (!page) throw new Error('The page is gone')
+      return await page.run(scriptOf(fn, args)) as never
+    },
+    capture: async (rect) => {
+      const bytes = await view()?.capture(rect)
+      return bytes ? new Blob([bytes as Uint8Array<ArrayBuffer>], { type: 'image/png' }) : undefined
+    },
   }), [])
 
   // Return gives the page the keyboard; the focus moving on to something else in the window takes it back. The window

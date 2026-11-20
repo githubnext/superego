@@ -24,6 +24,9 @@ import type { Link } from '@superego/client'
 /** The sessions' partitions: web pages' kept on disk, an artifact's in memory. */
 export const PARTITIONS: Record<WebViewPartition, string> = { browser: 'persist:browser', artifact: 'superego-artifact' }
 
+/** The world the window's scripts run in, in a page (`BridgeWebView.run`): its own, apart from the page's (0) and Electron's (999). */
+const APP_WORLD = 1001
+
 /** What a page may have without asking anyone: putting text on the clipboard (a page's Copy button). */
 const GRANTED = new Set(['clipboard-sanitized-write'])
 
@@ -341,6 +344,40 @@ export function serveWebViews({ windowOf, linkOf, sites }: WebViewsOptions) {
     if (next) contents.enableDeviceEmulation(next)
     else contents.disableDeviceEmulation()
   }
+  // A script of the window's in the page (a Browser pane's element picker): in a world of the app's own, so the page's
+  // scripts neither see its globals nor change what it calls.
+  ipcMain.handle(CHANNEL.viewRun, async (event, id: string, code: string) => {
+    const view = viewOf(event, id)
+    if (!view || view.view.webContents.isDestroyed()) throw new Error('The page is gone')
+    return view.view.webContents.executeJavaScriptInIsolatedWorld(APP_WORLD, [{ code }], true)
+  })
+  // A part of the page as it's drawn now. Its CSS pixels are the view's, but for a page at a set size, drawn scaled.
+  ipcMain.handle(CHANNEL.viewCapture, async (event, id: string, rect: { x: number; y: number; width: number; height: number }) => {
+    const view = viewOf(event, id)
+    if (!view || view.view.webContents.isDestroyed()) return null
+    const contents = view.view.webContents
+    const scale = view.emulated?.scale ?? 1
+    const area = { x: Math.floor(rect.x * scale), y: Math.floor(rect.y * scale), width: Math.ceil(rect.width * scale), height: Math.ceil(rect.height * scale) }
+    if (area.width < 1 || area.height < 1) return null
+    try {
+      const image = await contents.capturePage(area)
+      if (!image.isEmpty()) return new Uint8Array(image.toPNG())
+    } catch {
+      // A window never on the screen (the app's own checks) has nothing drawn to capture: expected there, and the way
+      // below says why if it fails too.
+    }
+    // Nothing drawn to capture: DevTools' screenshot of it, which draws the page anew.
+    const debug = contents.debugger
+    const attached = debug.isAttached()
+    try {
+      if (!attached) debug.attach()
+      const { data } = await debug.sendCommand('Page.captureScreenshot', { format: 'png', clip: { ...rect, scale: 1 } }) as { data: string }
+      return new Uint8Array(Buffer.from(data, 'base64'))
+    } catch (error) {
+      console.error(`A part of ${contents.getURL()}, by DevTools' screenshot:`, error)
+      return null
+    } finally { if (!attached && debug.isAttached()) debug.detach() }
+  })
   ipcMain.handle(CHANNEL.viewSnapshot, async (event, id: string) => {
     const view = viewOf(event, id)
     if (!view || view.view.webContents.isDestroyed()) return null

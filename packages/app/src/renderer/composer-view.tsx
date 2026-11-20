@@ -15,6 +15,7 @@ import { useLocalState } from './local-state.ts'
 import { splitMessage } from './attachments.ts'
 import { readSent } from './composer.ts'
 import { ComposerBox } from './composer-box.tsx'
+import { composerItems, focusTaken, setComposerItems, useComposerItems, useFocusAsked } from './composer-items.ts'
 import { onGivenBack, takeBack } from './returned.ts'
 import { ProfileSwitch } from './profile-pick.tsx'
 import { UnarchiveButton } from './thread-actions.tsx'
@@ -124,6 +125,16 @@ export function ComposerView({ machine, thread, busy, inbox, onJump }: { machine
   // Files going with the next message: picked, dropped on the composer or pasted into it.
   const [files, setFiles] = useState<Attachment[]>([])
   useEffect(() => { setFiles([]) }, [thread.id])
+  // What panes put in it (an element picked in a page), kept for the thread while the window's open; put in, it takes
+  // the keyboard.
+  const where = useMemo(() => ({ machine: machine.id, thread: thread.id }), [machine.id, thread.id])
+  const items = useComposerItems(where)
+  const focusAsked = useFocusAsked(where)
+  useEffect(() => {
+    if (!focusAsked) return
+    input.current?.focus()
+    focusTaken(where)
+  }, [focusAsked, where])
   // Messages you'd queued, given back as the thread was stopped from this window: after what's typed, each its own
   // paragraph, in order, their files with them. Their words as the transcript shows them: without what extensions
   // put in (a skill named) or the files' tags.
@@ -168,18 +179,22 @@ export function ComposerView({ machine, thread, busy, inbox, onJump }: { machine
     // What the box holds now: a keypress straight after typing can come before the typing's render.
     const value = (typed ?? input.current?.value ?? text).trim()
     const sending = claim ? [] : files
-    if (!value && !sending.length) return
+    const sendingItems = claim ? [] : items
+    const attachments = [...sending, ...sendingItems.flatMap((item) => item.files)]
+    if (!value && !attachments.length) return
     setText('')
     setFiles([])
+    if (sendingItems.length) setComposerItems(where, [])
     setError(undefined)
     try {
       if (claim) { await claim.submit(value); return }
       await dispatch('thread.send', {
-        thread: thread.id, text: value, ...(sending.length ? { attachments: sending } : {}), requestId: crypto.randomUUID(), ...(busy ? { whenBusy } : {}),
+        thread: thread.id, text: value, ...(attachments.length ? { attachments } : {}), requestId: crypto.randomUUID(), ...(busy ? { whenBusy } : {}),
       }, { machine: machine.id, source: 'composer' })
     } catch (error) {
       setText(value)
       setFiles(sending)
+      if (sendingItems.length) setComposerItems(where, [...sendingItems, ...composerItems(where)])
       setError(error as { kind?: string; message: string })
     }
   }
@@ -209,7 +224,7 @@ export function ComposerView({ machine, thread, busy, inbox, onJump }: { machine
       await send()
     } catch (e) { setError(e as { kind?: string; message: string }) }
   }
-  const sendable = Boolean(text.trim()) || (!claim && files.length > 0)
+  const sendable = Boolean(text.trim()) || (!claim && (files.length > 0 || items.length > 0))
   const onKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (claim?.keyDown?.(event, text)) { event.preventDefault(); return }
     if (suggested && !event.metaKey && !event.altKey && !event.ctrlKey && !event.shiftKey) {
@@ -232,6 +247,7 @@ export function ComposerView({ machine, thread, busy, inbox, onJump }: { machine
     <ComposerContext.Provider value={composer}>
     {/* The box holds the words and one button at their end: Send, Steer or Answer, one key, ⏎ (Unarchive, archived). */}
     <ComposerBox className="dock" where={{ machine, cwd: thread.cwd, thread }} text={text} setText={setText} files={files} setFiles={setFiles}
+      items={items} onRemoveItem={(id) => setComposerItems(where, composerItems(where).filter((item) => item.id !== id))}
       open={!claim} disabled={disabled} inputRef={input} onKeyDown={onKeyDown}
       onError={(message) => setError({ message })}
       placeholder={archived ? 'Archived: read only' : disabled ? `${machine.label} is ${machine.state}` : claim ? claim.placeholder : busy ? 'Steer the agent…' : suggested ? `${suggested}  ⏎` : 'Reply…'}

@@ -133,6 +133,9 @@ spinner while a page loads: `<Glyph shape="working" quiet />`), null for its kin
 A web page in a pane: `<WebView src partition="browser" title sandbox onEvent ref>` shows it as Browser does, as a browser
 tab on the desktop (its own cookies, back and forward through `ref`'s `go(-1)`, `reload()`, `stop()`, `load(url)`, `focus()`; `onEvent` hears where it is
 now, whether it's loading and how far (`state.loading`, `state.progress`), a file it saved, what it was refused), framed in a browser (`sandbox` is the frame's). `hasWebViews()` says which.
+`ref`'s `run(fn, ...args)` runs a self-contained function in the page (`(window, ...args) => …`, its source alone
+goes there; on the desktop in a world of the app's own, framed only in a page of the window's origin) and gives back
+what it returns; `capture(rect)` gives a part of the page as a PNG (none framed).
 Focused, the pane keeps the keyboard until Return (or a click) passes it into the page; `onWaiting(waiting)` says when
 it's waiting for that, for a hint.
 
@@ -172,7 +175,8 @@ mounts, opens the page in the browser, asks what the flow asks, and has Cancel),
 uses (`ArchiveIcon`, …).
 
 Others: `useComposer()` (the message box), `useComposerClaim({ placeholder, submit })` (take the message box over while
-something waits on the user), `useLocalState(key, initial, { shared? })` (state kept in the window across reloads; `shared` by every window), `useShortcut(actionId)` (its key's
+something waits on the user), `addToComposer({ machine, thread }, { label, detail?, files })` (a chip in a thread's
+composer, its files sent with the next message; it takes the keyboard), `useLocalState(key, initial, { shared? })` (state kept in the window across reloads; `shared` by every window), `useShortcut(actionId)` (its key's
 label), `score` (fuzzy matching), `transcriptLinks(machine, thread)` (the links a thread's transcript shows, in order: `{ text, href, target, open(beside) }`), `h` (`React.createElement`, for modules without JSX).
 
 ## Reading threads

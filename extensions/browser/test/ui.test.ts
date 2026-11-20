@@ -86,7 +86,7 @@ it('shows a page in a view of its own on the desktop: placed over the pane, its 
     const op = (name: string) => (...args: unknown[]) => { view.ops.push([name, ...args]) }
     return {
       place: op('place'), load: op('load'), go: op('go'), reload: op('reload'), stop: op('stop'), focus: op('focus'), reveal: op('reveal'), answer: op('answer'),
-      snapshot: async () => null, onEvent: (listener) => { view.listener = listener }, close: () => { view.closed = true },
+      snapshot: async () => null, run: async () => undefined, capture: async () => null, onEvent: (listener) => { view.listener = listener }, close: () => { view.closed = true },
     }
   }
   const pane = await ui.render({ pane: { kind: BROWSER, params: { url: 'http://localhost:5179/as/mikker' } } })
@@ -150,7 +150,7 @@ it("asks for what the page asks for, under its toolbar, until the user answers; 
     const op = (name: string) => (...args: unknown[]) => { ops.push([name, ...args]) }
     return {
       place: op('place'), load: op('load'), go: op('go'), reload: op('reload'), stop: op('stop'), focus: op('focus'), reveal: op('reveal'), answer: op('answer'),
-      snapshot: async () => null, onEvent: (next) => { listener = next }, close: () => {},
+      snapshot: async () => null, run: async () => undefined, capture: async () => null, onEvent: (next) => { listener = next }, close: () => {},
     }
   }
   const pane = await ui.render({ pane: { kind: BROWSER, params: { url: 'https://okta.example.com/signin' } } })
@@ -207,7 +207,7 @@ it('shows a page loading: a line under the toolbar, from a moment in, at its pro
     const op = (name: string) => (...args: unknown[]) => { ops.push([name, ...args]) }
     return {
       place: op('place'), load: op('load'), go: op('go'), reload: op('reload'), stop: op('stop'), focus: op('focus'), reveal: op('reveal'), answer: op('answer'),
-      snapshot: async () => null, onEvent: (next) => { listener = next }, close: () => {},
+      snapshot: async () => null, run: async () => undefined, capture: async () => null, onEvent: (next) => { listener = next }, close: () => {},
     }
   }
   const pane = await ui.render({ pane: { kind: BROWSER, params: { url: 'https://example.com/' } } })
@@ -279,7 +279,7 @@ it('starts the line at once when sent somewhere from the pane, before the page s
     const op = () => () => {}
     return {
       place: op(), load: op(), go: op(), reload: op(), stop: op(), focus: op(), reveal: op(), answer: op(),
-      snapshot: async () => null, onEvent: (next) => { listener = next }, close: () => {},
+      snapshot: async () => null, run: async () => undefined, capture: async () => null, onEvent: (next) => { listener = next }, close: () => {},
     }
   }
   const pane = await ui.render({ pane: { kind: BROWSER, params: { url: 'https://example.com/' } } })

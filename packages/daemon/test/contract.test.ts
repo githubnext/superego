@@ -44,9 +44,9 @@ it("refuses a profile's extension that needs a newer extension API, when the pro
   const profile = join(home, 'profiles', 'default')
   mkdirSync(profile, { recursive: true })
   writeFileSync(join(profile, 'profile.ts'), `import { defineProfile } from 'superego'\nexport default defineProfile({ extensions: ['./next.ts'] })\n`)
-  writeFileSync(join(profile, 'next.ts'), `import { defineDaemonExtension } from 'superego'\nexport default defineDaemonExtension({ name: 'next', version: '3.0.0', api: '^5.4', setup() {} })\n`)
+  writeFileSync(join(profile, 'next.ts'), `import { defineDaemonExtension } from 'superego'\nexport default defineDaemonExtension({ name: 'next', version: '3.0.0', api: '^5.5', setup() {} })\n`)
   const { peer, close } = await open([], home)
-  await expect(peer.call('thread.start', { cwd: dir })).rejects.toThrow(/Extension next needs extension API \^5.4, and this Superego has 5.3.0/)
+  await expect(peer.call('thread.start', { cwd: dir })).rejects.toThrow(/Extension next needs extension API \^5.5, and this Superego has 5.4.0/)
   await close()
 })
 

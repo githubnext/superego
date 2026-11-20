@@ -50,11 +50,13 @@ import type { ExtensionAbout } from './app.ts'
  * 5.2: the daemon half's `call(id, params)`: another extension's read method on this machine.
  * 5.3: the daemon half's `agentKind({ name, runner })`: a kind of agent whose threads (a profile's `agent`) have their
  * turns run by a task of the extension's instead of a model.
+ * 5.4: the UI half's `addToComposer(where, item)` (a chip in a thread's composer, its files sent with the next message);
+ * a `WebView`'s `run(fn, ...args)` (a function run in its page) and `capture(rect)` (a part of it, as an image).
  * Minor: something added (an extension that uses it asks for `^3.<minor>`); major: something an extension could rely
  * on changed or went, from 2.5 on without exception. An extension whose `api` range this doesn't satisfy is refused
  * when it's set up.
  */
-export const EXTENSION_API = '5.3.0'
+export const EXTENSION_API = '5.4.0'
 
 /** What a machine says of an extension set up there: `hello.extensions` and `features.changed` carry one each. */
 export type ExtensionManifest = Pick<ExtensionAbout, 'name' | 'version' | 'api'>

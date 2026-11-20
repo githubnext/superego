@@ -4,7 +4,8 @@
 // Under it, Attach at the left and what the caller adds at the right.
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type KeyboardEvent, type ReactNode, type Ref } from 'react'
 import type { Attachment } from '@superego/protocol'
-import { Button, FileIcon, PaperclipIcon, TextArea } from '@superego/ui'
+import { Button, FileIcon, HoverCard, PaperclipIcon, TextArea } from '@superego/ui'
+import type { HeldItem } from './composer-items.ts'
 import { useRegistry } from './registry.tsx'
 import { completionsIn } from './lookups.ts'
 import { readAttachment } from './attachments.ts'
@@ -18,6 +19,9 @@ export type ComposerBoxProps = {
   setText(text: string | ((typed: string) => string)): void
   files: Attachment[]
   setFiles(files: Attachment[] | ((was: Attachment[]) => Attachment[])): void
+  /** What panes put in it to go with the message (composer-items.ts), a chip each after the files; and taking one off. */
+  items?: readonly HeldItem[]
+  onRemoveItem?(id: string): void
   /** Whether it takes files and completes words now (not while something above claims what's typed). */
   open?: boolean
   disabled?: boolean
@@ -39,7 +43,7 @@ export type ComposerBoxProps = {
   autoFocus?: boolean
 }
 
-export function ComposerBox({ where, className, text, setText, files, setFiles, open = true, disabled, placeholder, error, onError, onKeyDown, inputRef, action, footer = {}, children, autoFocus, ...aria }: ComposerBoxProps) {
+export function ComposerBox({ where, className, text, setText, files, setFiles, items = [], onRemoveItem, open = true, disabled, placeholder, error, onError, onKeyDown, inputRef, action, footer = {}, children, autoFocus, ...aria }: ComposerBoxProps) {
   const registry = useRegistry()
   const input = useRef<HTMLTextAreaElement | null>(null)
   const setInput = (node: HTMLTextAreaElement | null) => {
@@ -102,7 +106,7 @@ export function ComposerBox({ where, className, text, setText, files, setFiles, 
       onDrop={(e) => { setDragging(false); if (open && !disabled && e.dataTransfer.files.length) { e.preventDefault(); void attach(e.dataTransfer.files) } }}>
       {children}
       <div className="dock__box">
-        {files.length > 0 && open && (
+        {(files.length > 0 || items.length > 0) && open && (
           <div className="composer__files">
             {files.map((file, index) => (
               <span key={`${file.name}-${index}`} className="attachment">
@@ -111,6 +115,7 @@ export function ComposerBox({ where, className, text, setText, files, setFiles, 
                 <button type="button" className="attachment__remove" aria-label={`Remove ${file.name}`} onClick={() => setFiles((was) => was.filter((_, i) => i !== index))}>×</button>
               </span>
             ))}
+            {items.map((item) => <ItemChip key={item.id} item={item} onRemove={() => onRemoveItem?.(item.id)} />)}
           </div>
         )}
         {error && <div className="composer__error">{error}</div>}
@@ -148,5 +153,25 @@ export function ComposerBox({ where, className, text, setText, files, setFiles, 
         </div>
       )}
     </div>
+  )
+}
+
+/** A pane's item in the composer: its icon (or image) and label, and on hover its image larger and its detail. */
+function ItemChip({ item, onRemove }: { item: HeldItem; onRemove(): void }) {
+  const image = item.files.find((file) => file.mimeType.startsWith('image/'))
+  const src = image && `data:${image.mimeType};base64,${image.data}`
+  const chip = (
+    <span className={`attachment composer-item ${item.icon ? 'attachment--chip' : ''}`}>
+      {item.icon ? <span className="attachment__icon">{item.icon}</span> : src ? <img src={src} alt="" /> : <span className="attachment__icon"><FileIcon size={14} aria-hidden /></span>}
+      <span className="attachment__name">{item.label}</span>
+      <button type="button" className="attachment__remove" aria-label={`Remove ${item.label}`} onClick={onRemove}>×</button>
+    </span>
+  )
+  if (!src && !item.detail) return chip
+  return (
+    <HoverCard side="top" className="composer-item__card" card={<>
+      {src && <img src={src} alt="" />}
+      {item.detail && <code>{item.detail}</code>}
+    </>}>{chip}</HoverCard>
   )
 }
