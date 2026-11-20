@@ -15,6 +15,7 @@ import { placeView, type Place } from '../shared/layout.ts'
 import { registerLayoutText } from './layout-text.tsx'
 import { Profiles } from './settings/profiles.tsx'
 import { Providers } from './settings/providers.tsx'
+import { ModelFavourites } from './settings/models.tsx'
 import { CommandLine } from './command-line.tsx'
 import { SitePermissions } from './site-permissions.tsx'
 import { WebAccess } from './web-access.tsx'
@@ -79,6 +80,7 @@ export function windowRegistry(app: AppConfig, extensions: UiExtension[]) {
   // The Providers settings section is the core's own custom component.
   const registry = createRegistry(app, extensions, (core) => {
     core.settings('providers', Providers)
+    core.settings('models', ModelFavourites)
     core.settings('web', WebAccess)
     core.settings('clients', ConnectedClients)
     core.settings('profiles', Profiles)

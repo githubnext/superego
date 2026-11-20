@@ -4,6 +4,12 @@ import { join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { defineConfig } from 'vitest/config'
 import { versionedImport } from './packages/daemon/src/module-graph.ts'
+import { builtins, keyShape } from './packages/daemon/src/providers.ts'
+
+// No test signs in to a provider from this machine's environment (OPENROUTER_API_KEY, AWS_PROFILE): each starts signed
+// out of all of them, whatever the machine has (empty reads as unset).
+const providerEnv: Record<string, string> = {}
+for (const provider of builtins()) for (const name of (await keyShape(provider.auth.apiKey)).env) providerEnv[name] = ''
 
 // Where ssh's master sockets go when a test's data dir is too long for one (see @superego/client's ssh.ts): a
 // directory of this run's own, not the shared /tmp.
@@ -28,6 +34,6 @@ export default defineConfig({
   test: {
     include: ['packages/*/test/**/*.test.ts', 'extensions/*/test/**/*.test.ts'], testTimeout: 20_000,
     // The author types tests share (packages/cli/test/author-types.ts): a data dir to install them in, once a run.
-    env: { XDG_RUNTIME_DIR: runtime, SUPEREGO_TEST_AUTHOR_TYPES: join(runtime, 'author') },
+    env: { ...providerEnv, XDG_RUNTIME_DIR: runtime, SUPEREGO_TEST_AUTHOR_TYPES: join(runtime, 'author') },
   },
 })

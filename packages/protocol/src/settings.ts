@@ -26,6 +26,8 @@ export type SettingType =
   | { type: 'layout' }
   /** Threads pinned to the top of the sidebar, in their order: each by its machine and id (`[{ machine, thread }]`). */
   | { type: 'pins' }
+  /** Models, in their order, each as `provider/model` (`["anthropic/claude-opus-5-5"]`). */
+  | { type: 'models' }
 
 /** A setting as clients see it: its type, with options resolved for the current state. */
 export type SettingInfo = SettingType & {
@@ -74,10 +76,24 @@ export type ProviderAuthInfo = {
   /** Whether Superego stores its credential, and so can sign out. */
   stored: boolean
   apiKey: boolean
+  /** Signing in with an API key asks for more than the key (a region, an account, which credentials): a flow to run. */
+  keyFlow?: true
+  /** The environment variables it reads its credentials from, as the daemon runs. */
+  env?: string[]
   /** The label of its OAuth sign-in, when it has one. */
   oauth?: string
+  /** How many models it offers: with its sign-in, those that sign-in reaches. */
   models: number
+  /** One the user added (an OpenAI-compatible endpoint, in models.json): its base URL and model ids. */
+  custom?: { baseUrl: string; models: string[] }
 }
+
+/**
+ * An OpenAI-compatible provider to add (`providers.save`), or one added before to change (`id`). `key`: its API key,
+ * kept as other providers' are; left out, the one it has stays; `null` takes it away. `models`: their ids; left out
+ * or empty, those its endpoint lists at `<baseUrl>/models`.
+ */
+export type CustomProviderInput = { id?: string; name: string; baseUrl: string; key?: string | null; models?: string[] }
 
 /**
  * A provider that rejected this machine's credentials (an invalid or expired key, a sign-in that couldn't be renewed),

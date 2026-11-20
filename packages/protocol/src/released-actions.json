@@ -565,5 +565,70 @@
       "id"
     ],
     "additionalProperties": false
+  },
+  "providers.save": {
+    "type": "object",
+    "properties": {
+      "id": {
+        "type": "string"
+      },
+      "name": {
+        "type": "string"
+      },
+      "baseUrl": {
+        "type": "string"
+      },
+      "key": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "const": null
+          }
+        ]
+      },
+      "models": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    },
+    "required": [
+      "name",
+      "baseUrl"
+    ],
+    "additionalProperties": false
+  },
+  "providers.remove": {
+    "type": "object",
+    "properties": {
+      "provider": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "provider"
+    ],
+    "additionalProperties": false
+  },
+  "providers.models": {
+    "type": "object",
+    "properties": {
+      "baseUrl": {
+        "type": "string"
+      },
+      "key": {
+        "type": "string"
+      },
+      "provider": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "baseUrl"
+    ],
+    "additionalProperties": false
   }
 }

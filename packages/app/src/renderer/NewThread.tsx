@@ -15,6 +15,7 @@ import { useAllThreads, useMachines, useSelection, useShell, type NewThreadStart
 import { APP } from '../shared/app-settings.ts'
 import { ctrlDigit, keyLabel } from './keys.ts'
 import { ComposerBox } from './composer-box.tsx'
+import { ModelPicker, withFavourites } from './model-picker.tsx'
 import { FolderField, recentFolders, type FolderFieldHandle } from './folder-field.tsx'
 
 /** The machine the last thread started from here was on. Every window's. */
@@ -114,7 +115,7 @@ export function NewThreadDialog({ start: asked, onClose }: { start: NewThreadSta
 
   /** Go to a field, as its key does: the folder with its list open. */
   const focus = (name: FieldName) => name === 'folder' ? folderField.current?.open()
-    : body.current?.querySelector<HTMLElement>(`[data-field="${name}"] :is(input:not([type=file]), select, textarea):not(:disabled)`)?.focus()
+    : body.current?.querySelector<HTMLElement>(`[data-field="${name}"] :is(input:not([type=file]), select, textarea, [role=combobox]):not(:disabled)`)?.focus()
   // It opens where it's still to be decided: the machine (where there's a choice), else the folder; asked for a
   // project (the sidebar's +), what to work on there. Under a finger none takes it (no keyboard over the dialog).
   const [first] = useState<FieldName | null>(() => !autoFocusOnOpen() ? null : asked.cwd ? 'prompt' : machines.length > 1 ? 'machine' : 'folder')
@@ -250,8 +251,15 @@ export function NewThreadDialog({ start: asked, onClose }: { start: NewThreadSta
                 : <Select aria-label="Profile" options={[]} value={null} nullLabel={profiles ? 'Unavailable' : 'Loading…'} disabled onChange={() => {}} />}
             </Field>
             <Field name="model" label="Model">
-              <Select aria-label="Model" options={models?.models ?? []} value={model} nullLabel={models ? defaultLabel : catalog ? 'Unavailable' : 'Loading…'} disabled={!models}
-                onChange={(value) => { setModel(value); setThinking(null) }} />
+              <ModelPicker label="Model" catalog={models} value={model} nullLabel={defaultLabel} placeholder={catalog ? 'Unavailable' : 'Loading…'}
+                onChange={(value) => { setModel(value); setThinking(null) }}
+                onStar={(next) => {
+                  if (!machine || !models) return
+                  setCatalog(withFavourites(models, next))
+                  void dispatch('settings.set', { key: 'agent.favourites', value: next }, { machine: machine.id, source: 'new thread' })
+                    .then(() => client(machine.id).call('agent.models', {}))
+                    .then(setCatalog, (e: Error) => { console.error('Starring a model failed', e); setCatalog(models); setError({ message: `Couldn't star it: ${e.message}` }) })
+                }} />
             </Field>
             <Field name="thinking" label="Thinking">
               <Select aria-label="Thinking" options={levels.map((l) => ({ value: l, label: l }))} value={thinking} disabled={!levels.length}

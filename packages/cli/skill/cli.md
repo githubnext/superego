@@ -168,14 +168,20 @@ superego settings                     # every setting and its value
 superego settings set <key> <value>   # value is JSON, or plain text; --all: every enabled machine
 superego settings reset <key>
 superego layout                       # the window's layout.json: the views there are, the places each fits, and where they are
-superego providers                    # providers and how each is signed in
-superego providers key <provider>     # sign in with an API key (prompted, or from stdin)
+superego providers                    # every provider pi-ai has and how each is signed in, signed-in first
+superego providers key <provider>     # sign in with an API key (prompted, or from stdin); asks more where it needs more
 superego providers sign-out <provider>
 superego providers retry [provider]   # retry the threads waiting for sign-in now
+superego providers add --name Ollama --base-url http://localhost:11434/v1 [--key -] [--model <id>...]
+superego providers remove <provider>  # one you added
+superego models                       # the signed-in providers' models, favourites (★) first
+superego models favourite <provider/model>   # or unfavourite: the model menus list favourites first
 ```
 
-Each machine has its own settings (models, providers, which extensions are on). OAuth sign-in happens in the app's
-Settings.
+Each machine has its own settings (models, providers, favourites, which extensions are on). OAuth sign-in (ChatGPT,
+GitHub Copilot, OpenRouter) happens in the app's Settings. Providers you add are OpenAI-compatible endpoints, kept in
+`~/.superego/models.json` in pi's format (`providers.<id>.{ name, baseUrl, api, models: [{ id }] }`); their keys are in
+`auth.json` with the others. Credentials in the environment count too (`GROQ_API_KEY`, `AWS_PROFILE`, …).
 
 ## MCP servers
 

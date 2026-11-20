@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process'
+import { createServer } from 'node:http'
 import { existsSync, lstatSync, mkdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { mkdtemp, readdir, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -100,6 +101,34 @@ describe('superego', () => {
     expect((await superegoJson(['providers'])).find((p: any) => p.id === 'anthropic')).toMatchObject({ stored: true, auth: { type: 'api_key' } })
     await superego(['providers', 'sign-out', 'anthropic'])
     expect((await superegoJson(['providers'])).find((p: any) => p.id === 'anthropic').stored).toBe(false)
+  })
+
+  it('lists every provider, signed-in first; adds an OpenAI-compatible one; stars models', async () => {
+    const server = createServer((request, response) => {
+      if (request.url === '/v1/models' && request.headers.authorization === 'Bearer sk-mock') return response.end(JSON.stringify({ data: [{ id: 'mock-a' }, { id: 'mock-b' }] }))
+      response.writeHead(401).end()
+    })
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+    onTestFinished(() => new Promise<void>((resolve) => server.close(() => resolve())))
+    const baseUrl = `http://127.0.0.1:${(server.address() as { port: number }).port}/v1`
+
+    await superego(['providers', 'key', 'groq'], 'gsk-test\n')
+    const providers = await superegoJson(['providers'])
+    expect(providers[0]).toMatchObject({ id: 'groq', auth: { type: 'api_key' } })
+    expect(providers.map((p: any) => p.id)).toEqual(expect.arrayContaining(['mistral', 'amazon-bedrock', 'github-copilot']))
+    expect(await superego(['providers'])).toMatch(/groq\s+api key \(stored credential\)\s+\d+ models/)
+
+    expect(await superego(['providers', 'add', '--name', 'Mock', '--base-url', baseUrl, '--key', '-'], 'sk-mock\n')).toContain('with 2 models: mock-a, mock-b')
+    expect((await superegoJson(['models'])).filter((m: any) => m.group === 'Mock').map((m: any) => m.value)).toEqual(['mock/mock-a', 'mock/mock-b'])
+    await superego(['models', 'favourite', 'mock/mock-b'])
+    expect(await superego(['models'])).toMatch(/★ mock\/mock-b/)
+    await expect(superego(['models', 'favourite', 'mock/nope'])).rejects.toThrow(/No model mock\/nope/)
+    await superego(['models', 'unfavourite', 'mock/mock-b'])
+    expect(await superego(['models'])).not.toMatch(/★ mock\/mock-b/)
+
+    await superego(['providers', 'remove', 'mock'])
+    await superego(['providers', 'sign-out', 'groq'])
+    expect((await superegoJson(['providers'])).some((p: any) => p.id === 'mock')).toBe(false)
   })
 
   it('lists actions and runs any of them with do', async () => {

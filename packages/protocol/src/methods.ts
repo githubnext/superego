@@ -4,7 +4,7 @@ import type { ConversationView } from '@earendil-works/pi-durable'
 import type { ActionInfo, ActionLogEntry, Exposure } from './actions.ts'
 import type { ExtensionAbout } from './app.ts'
 import type { ExtensionManifest } from './contract.ts'
-import type { AuthEvent, Json, SettingsSnapshot } from './settings.ts'
+import type { AuthEvent, CustomProviderInput, Json, SettingsSnapshot } from './settings.ts'
 import type { Status } from './status.ts'
 import type { MachineVersion } from './version.ts'
 
@@ -129,6 +129,11 @@ export type ThreadInfo = {
 export type ModelCatalog = {
   models: { value: string; label: string; group: string; thinking: string[] }[]
   default: { model?: string; thinking: string | null }
+  /**
+   * The models shown first in a model menu, in the user's order (the `agent.favourites` setting; until it's set, the
+   * default and each signed-in provider's preferred model). One that can't be used here says why (`unavailable`).
+   */
+  favourites?: { value: string; label: string; group: string; unavailable?: string }[]
 }
 
 /**
@@ -390,6 +395,11 @@ export type Methods = {
   'auth.respond': { params: { flow: string; prompt: string; value: string }; result: null }
   'auth.cancel': { params: { flow: string }; result: null }
   'auth.signOut': { params: { provider: string }; result: null }
+  /** Add an OpenAI-compatible provider, or change one added before (see `CustomProviderInput`). */
+  'providers.save': { params: CustomProviderInput; result: { id: string } }
+  'providers.remove': { params: { provider: string }; result: null }
+  /** The models an OpenAI-compatible endpoint lists (`provider`: with that provider's stored key, without `key`). */
+  'providers.models': { params: { baseUrl: string; key?: string; provider?: string }; result: { models: string[] } }
 
   /**
    * Snapshot of an extension's live value, then `value.changed` with each new one. Watched by name: null until an

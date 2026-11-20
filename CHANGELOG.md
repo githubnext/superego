@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- Every model provider pi-ai supports is offered, not just Anthropic and OpenAI: Google, Vertex AI, Amazon Bedrock,
+  Azure, Mistral, xAI, Groq, Cerebras, Together, Fireworks, OpenRouter, Vercel AI Gateway, Hugging Face, DeepSeek, Kimi,
+  Z.ai and more, each with an API key (or its environment variable, an AWS profile, gcloud credentials). GitHub Copilot
+  and OpenRouter can be signed in to from the browser, as ChatGPT can.
+- Settings → Providers lists the ones you're signed in to first, then a search field and the rest, a line each.
+- Add a provider of your own: any OpenAI-compatible endpoint (Ollama, LM Studio, vLLM, a company proxy), with its base
+  URL, an optional key, and its models, listed from the endpoint or typed in. Edit or remove it later, or from the
+  command line: `superego providers add --name … --base-url … [--key -]`.
+- Favourite models: star a model in the New thread dialog's model menu (or press ⌘D on it), and the model menus list
+  your favourites first. Reorder them by dragging in Settings → Model. `superego models` lists the models, and
+  `superego models favourite <provider/model>` stars one.
+- The New thread dialog's model menu can be searched, and lists the models by provider.
 - The editor opens and saves files outside the thread's folder (a whole path, or `~/…`), showing where the file
   is in its bar. Links to such files in a thread open them too, as do folder panes and images. A file that can't be
   opened says why: not there, a folder, a binary file, or no permission.

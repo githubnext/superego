@@ -88,6 +88,9 @@ function check(spec: SettingSpec, value: Json): void {
       if (!Array.isArray(value) || !value.every((pin) => pin !== null && typeof pin === 'object' && !Array.isArray(pin)
         && typeof pin.machine === 'string' && typeof pin.thread === 'string')) throw bad('expected threads, each { machine, thread }')
       return
+    case 'models':
+      if (!Array.isArray(value) || !value.every((model) => typeof model === 'string' && /^[^/]+\/./.test(model))) throw bad('expected models, each as provider/model')
+      return
     case 'choice':
       if (value === null && type.nullable) return
       if (typeof value !== 'string' || !type.options.some((option) => option.value === value)) throw bad(`unknown choice ${JSON.stringify(value)}`)

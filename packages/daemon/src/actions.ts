@@ -262,6 +262,22 @@ export function registerCoreActions(host: Host, { harness, machine, threads, pro
     async run({ provider }) { await agent.logout(provider); return null },
   }))
   router.register(defineAction({
+    id: 'providers.save', title: 'Add or change a provider', expose: ['ui', 'cli'],
+    description: 'An OpenAI-compatible endpoint, by its base URL: its models are those it lists, unless given.',
+    params: obj({ id: opt(str()), name: str(), baseUrl: str(), key: opt(union([str(), lit(null)])), models: opt(arr(str())) }),
+    async run(input) { return { id: await agent.saveProvider(input) } },
+  }))
+  router.register(defineAction({
+    id: 'providers.remove', title: 'Remove a provider you added', expose: ['ui', 'cli'],
+    params: obj({ provider: str() }),
+    async run({ provider }) { await agent.removeProvider(provider); return null },
+  }))
+  router.register(defineAction({
+    id: 'providers.models', title: "List an endpoint's models", runs: 'machine',
+    params: obj({ baseUrl: str(), key: opt(str()), provider: opt(str()) }),
+    async run({ baseUrl, key, provider }) { return { models: await agent.endpointModels(baseUrl, key, provider) } },
+  }))
+  router.register(defineAction({
     id: 'daemon.restart', title: 'Restart the daemon', expose: ['ui', 'cli'],
     params: obj({ build: str(), interrupt: opt(bool()), env: opt(unknown()) }),
     run({ build, interrupt, env }) {

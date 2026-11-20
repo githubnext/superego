@@ -27,7 +27,7 @@ import {
 // The daemon itself only for `daemon run`: loading it costs every other command most of its start.
 import { appEnv, appSocketPath, connectSocket, daemonStarting, defaultDataDir, installService, isListening, readBuild, socketPath, spawnDaemon, startService, uninstallService } from '@superego/daemon/client'
 import {
-  AUTH_REJECTED, compareVersions, consentRefused, driftPhrase, PROTOCOL_VERSION, RpcError, threadEnv, unreadThreads, versionOf, statusShape, statusWord, STATUS_WORDS, type ActionInfo, type AppConfig, type AuthEvent, type Hello, type Json, type MethodName, type Params, type ProviderAuthInfo, type Result,
+  AUTH_REJECTED, compareVersions, consentRefused, driftPhrase, PROTOCOL_VERSION, RpcError, threadEnv, unreadThreads, versionOf, statusShape, statusWord, STATUS_WORDS, type ActionInfo, type AppConfig, type AuthEvent, type AuthPrompt, type Hello, type Json, type MethodName, type Params, type ProviderAuthInfo, type Result,
   type ProfileInfo, type ProfileRef, type ProfileSourceInfo, type ProviderRejection, type ThreadInfo, type SettingsSnapshot,
 } from '@superego/protocol'
 
@@ -434,14 +434,19 @@ async function readSecret(prompt: string): Promise<string> {
   })
 }
 
-async function providersCommand(sub: string | undefined, rest: string[], machineName?: string) {
+/** How a provider is signed in, in a few words. */
+const signedIn = (p: ProviderAuthInfo) => p.auth ? `${p.auth.type === 'oauth' ? 'signed in' : 'api key'}${p.auth.source ? ` (${p.auth.source})` : ''}` : 'not signed in'
+
+async function providersCommand(sub: string | undefined, rest: string[], machineName: string | undefined, values: { name?: string; 'base-url'?: string; key?: string; model?: string[] }) {
   const machine = resolveMachine(machineName)
   if (!sub) {
     const { snapshot, rejected } = await on(machine, async (call) => ({ snapshot: await call('settings.watch', {}).then((r) => r.value), rejected: await rejectedOn(call) }))
     const providers = (snapshot.sections.find((s) => s.id === 'providers')?.data ?? []) as ProviderAuthInfo[]
-    const listed = providers.map((p) => ({ ...p, ...(rejected.some((r) => r.provider === p.id) ? { rejected: rejected.find((r) => r.provider === p.id) } : {}) }))
+    // Signed in first, then the rest; each part by name.
+    const sorted = [...providers].sort((a, b) => Number(!a.auth) - Number(!b.auth) || a.name.localeCompare(b.name))
+    const listed = sorted.map((p) => ({ ...p, ...(rejected.some((r) => r.provider === p.id) ? { rejected: rejected.find((r) => r.provider === p.id) } : {}) }))
     return print(listed, () => {
-      table(listed.map((p) => [p.id, (p.auth ? `${p.auth.type === 'oauth' ? 'signed in' : 'api key'}${p.auth.source ? ` (${p.auth.source})` : ''}` : 'not signed in') + (p.rejected ? ' · rejected' : '')]))
+      table(listed.map((p) => [p.id, signedIn(p) + (p.rejected ? ' · rejected' : ''), `${p.models} model${p.models === 1 ? '' : 's'}`]))
       sayRejected(rejected, machine)
     })
   }
@@ -449,28 +454,89 @@ async function providersCommand(sub: string | undefined, rest: string[], machine
     const { retried } = await on(machine, (call) => call('action.run', { id: 'auth.retry', params: rest[0] ? { provider: rest[0] } : {}, exposure: 'cli' })) as { retried: number }
     return print({ retried }, () => console.log(retried ? `Retrying ${retried} thread${retried === 1 ? '' : 's'} on ${machine.label}.` : `Nothing waits for sign-in on ${machine.label}.`))
   }
+  if (sub === 'add') {
+    if (!values.name || !values['base-url']) throw new RpcError('usage', `${app.id} providers add --name <name> --base-url <url> [--key -] [--model <id>...]`)
+    const key = values.key === undefined ? undefined : values.key === '-' ? await readSecret(`API key for ${values.name}: `) : values.key
+    const { id } = await on(machine, (call) => call('providers.save', { name: values.name!, baseUrl: values['base-url']!, ...(key ? { key } : {}), ...(values.model?.length ? { models: values.model } : {}) }))
+    const added = await on(machine, (call) => call('settings.watch', {})).then((r) => (r.value.sections.find((s) => s.id === 'providers')?.data as ProviderAuthInfo[] | undefined)?.find((p) => p.id === id))
+    return print({ id, models: added?.custom?.models ?? [] }, () => console.log(`Added ${values.name} (${id}) on ${machine.label}, with ${added?.custom?.models.length ?? 0} models: ${added?.custom?.models.join(', ') ?? ''}`))
+  }
   const provider = rest[0]
   if (!provider) throw new RpcError('usage', `${app.id} providers ${sub} <provider>`)
   if (sub === 'sign-out') {
     await on(machine, (call) => call('auth.signOut', { provider }))
     return print({ ok: true }, () => console.log(`Signed out of ${provider} on ${machine.label}.`))
   }
+  if (sub === 'remove') {
+    await on(machine, (call) => call('providers.remove', { provider }))
+    return print({ ok: true }, () => console.log(`Removed ${provider} from ${machine.label}.`))
+  }
   if (sub !== 'key') throw new RpcError('usage', `Unknown: ${app.id} providers ${sub}. Sign in with a browser from the app's Settings.`)
-  const key = await readSecret(`API key for ${provider}: `)
-  if (!key) throw new RpcError('usage', 'No key given')
+  const info = await on(machine, (call) => call('settings.watch', {})).then((r) => (r.value.sections.find((s) => s.id === 'providers')?.data as ProviderAuthInfo[] | undefined)?.find((p) => p.id === provider))
+  if (!info) throw new RpcError('not_found', `No provider ${provider} on ${machine.label}`, { hint: `See: ${app.id} providers` })
+  // A provider that asks for more than its key (Bedrock's way to sign in, Azure's resource) asks each thing as it goes.
+  const key = info.keyFlow ? undefined : await readSecret(`API key for ${provider}: `)
+  if (!info.keyFlow && !key) throw new RpcError('usage', 'No key given')
+  if (info.keyFlow && !process.stdin.isTTY) throw new RpcError('usage', `${info.name} asks more than a key as it's signed in to: run this in a terminal, or sign in from the app's Settings → Providers`)
   // Sign in on that machine and wait for it to say how it went.
   const { transport } = await connect(machine)
   try {
-    const outcome = new Promise<AuthEvent>((done) => transport.peer.on('auth.event', ({ event }: { event: AuthEvent }) => {
+    const outcome = new Promise<AuthEvent>((done) => transport.peer.on('auth.event', ({ flow, event }: { flow: string; event: AuthEvent }) => {
       if (event.type === 'done' || event.type === 'failed') done(event)
+      else if (event.type === 'info') console.log(event.message + (event.links?.length ? ` ${event.links.map((l) => l.url).join(' ')}` : ''))
+      else if (event.type === 'prompt') void answer(event.prompt).then((value) => transport.peer.call('auth.respond', { flow, prompt: event.id, value }))
+        .catch((error: Error) => { console.error(error.message); void transport.peer.call('auth.cancel', { flow }) })
     }))
-    await transport.peer.call('auth.signIn', { provider, type: 'api_key', key })
-    const event = await within(outcome, 30_000, () => new RpcError('timeout', `${machine.label} did not say how signing in went in 30s`))
+    await transport.peer.call('auth.signIn', { provider, type: 'api_key', ...(key ? { key } : {}) })
+    // A flow that asks waits on the user; one given just a key answers at once.
+    const event = info.keyFlow ? await outcome : await within(outcome, 30_000, () => new RpcError('timeout', `${machine.label} did not say how signing in went in 30s`))
     if (event.type === 'failed') throw new RpcError('auth_failed', event.message)
   } finally {
     transport.close()
   }
-  return print({ ok: true }, () => console.log(`Stored an API key for ${provider} on ${machine.label}.`))
+  return print({ ok: true }, () => console.log(`Signed in to ${info.name} on ${machine.label}.`))
+}
+
+/** Ask what a sign-in flow asks, in the terminal: a choice by its number, else the text (a secret unechoed). */
+async function answer(prompt: AuthPrompt): Promise<string> {
+  if (prompt.type !== 'select') return prompt.type === 'secret' ? readSecret(`${prompt.message}: `) : readLine(`${prompt.message}${prompt.placeholder ? ` (${prompt.placeholder})` : ''}: `)
+  prompt.options.forEach((option, i) => console.log(`  ${i + 1}. ${option.label}${option.description ? ` (${option.description})` : ''}`))
+  for (;;) {
+    const picked = prompt.options[Number(await readLine(`${prompt.message} [1-${prompt.options.length}]: `)) - 1]
+    if (picked) return picked.id
+  }
+}
+
+/** A line typed in the terminal, echoed. */
+function readLine(prompt: string): Promise<string> {
+  const rl = createInterface({ input: process.stdin, output: process.stdout })
+  return new Promise((done) => rl.question(prompt, (line) => { rl.close(); done(line.trim()) }))
+}
+
+async function modelsCommand(sub: string | undefined, rest: string[], machineName?: string) {
+  const machine = resolveMachine(machineName)
+  const catalog = await on(machine, (call) => call('agent.models', {}))
+  const favourites = catalog.favourites ?? []
+  if (!sub) {
+    const starred = new Set(favourites.map((f) => f.value))
+    type Listed = { value: string; label: string; group: string; favourite: boolean; unavailable?: string }
+    const listed: Listed[] = [
+      ...favourites.map((f) => ({ ...f, favourite: true })),
+      ...catalog.models.filter((m) => !starred.has(m.value)).map((m) => ({ value: m.value, label: m.label, group: m.group, favourite: false })),
+    ]
+    return print(listed, () => table(listed.map((m) => [
+      `${m.favourite ? '★' : ' '} ${m.value}`, m.label, m.unavailable ?? (m.value === catalog.default.model ? 'default' : ''),
+    ])))
+  }
+  const model = rest[0]
+  if ((sub !== 'favourite' && sub !== 'unfavourite') || !model) throw new RpcError('usage', `${app.id} models favourite|unfavourite <provider/model>`)
+  const values = favourites.map((f) => f.value)
+  if (sub === 'favourite' && !values.includes(model) && !catalog.models.some((m) => m.value === model)) {
+    throw new RpcError('not_found', `No model ${model} among ${machine.label}'s signed-in providers`, { hint: `See: ${app.id} models` })
+  }
+  const next = sub === 'favourite' ? [...values.filter((v) => v !== model), model] : values.filter((v) => v !== model)
+  await on(machine, (call) => call('settings.set', { key: 'agent.favourites', value: next }))
+  return print({ favourites: next }, () => console.log(sub === 'favourite' ? `Starred ${model} on ${machine.label}.` : `Unstarred ${model} on ${machine.label}.`))
 }
 
 async function daemonCommand(sub: string | undefined, now: boolean) {
@@ -1031,6 +1097,7 @@ async function main() {
     all: { type: 'boolean' }, name: { type: 'string' }, command: { type: 'string' }, via: { type: 'string' },
     start: { type: 'boolean' }, update: { type: 'boolean' }, now: { type: 'boolean' }, help: { type: 'boolean', short: 'h' }, skill: { type: 'boolean' },
     wait: { type: 'boolean' }, timeout: { type: 'string' }, count: { type: 'boolean' }, seconds: { type: 'string' }, window: { type: 'string' }, 'no-trace': { type: 'boolean' },
+    'base-url': { type: 'string' }, key: { type: 'string' }, model: { type: 'string', multiple: true },
   } as const
   const { values, positionals } = parseArgs({ allowPositionals: true, options: Object.assign({}, ...added().map((command) => command.options ?? {}), core) as typeof core })
   json = Boolean(values.json)
@@ -1067,7 +1134,8 @@ async function main() {
     }
     case 'machines': return machinesCommand(rest[0], rest.slice(1), values)
     case 'settings': return settingsCommand(rest[0], rest.slice(1), values)
-    case 'providers': return providersCommand(rest[0], rest.slice(1), values.machine)
+    case 'providers': return providersCommand(rest[0], rest.slice(1), values.machine, values)
+    case 'models': return modelsCommand(rest[0], rest.slice(1), values.machine)
     case 'daemon': return daemonCommand(rest[0], Boolean(values.now))
     case 'connect': return values.update ? updateHere(Boolean(values.now)) : bridge(Boolean(values.start))
     case 'actions': return actionsCommand(rest[0], values)

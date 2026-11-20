@@ -4,6 +4,7 @@
 // (`Dialog`, `Switch`, `Slider`, `SegmentedControl`, `Menu`, …) is a component of ours, exported under its own name.
 //
 // - Autocomplete: an input with a list of suggestions it filters; the box is a combobox and its list a listbox.
+// - Combobox: a button that opens a list to pick one from, with a search field in it (grouped, filtered by the caller).
 // - Dialog: a modal's parts, for one that isn't a framed sheet with a header (the image lightbox).
 // - Drawer: a panel from a screen's edge that follows a finger out (from its `SwipeArea`) and back, settles by how far
 //   and how fast it went, and is a modal dialog while out. Styled from its data attributes and CSS variables.
@@ -12,6 +13,7 @@
 //   or either (toggle buttons). Each group is one the arrow keys move through, and says what's picked with
 //   `data-checked` (radio, checkbox) or `data-pressed` (toggle).
 export { Autocomplete } from '@base-ui/react/autocomplete'
+export { Combobox } from '@base-ui/react/combobox'
 export { Dialog } from '@base-ui/react/dialog'
 export { Drawer } from '@base-ui/react/drawer'
 export { Tabs } from '@base-ui/react/tabs'
