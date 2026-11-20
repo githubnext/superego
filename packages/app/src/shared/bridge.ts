@@ -3,6 +3,7 @@ import type { ConnectionState, MachineConfig, MachineEntry as Base, MachineId } 
 import type { AllowedUi } from '@superego/client'
 import type { ActionInfo, ActionLogEntry, DeclaredSection, Methods, VersionDrift } from '@superego/protocol'
 import type { ServiceState } from './service.ts'
+import type { UpdateState } from './updates.ts'
 
 export type { ConnectionState, MachineConfig, MachineId }
 
@@ -189,6 +190,8 @@ export type AppHandlers = {
   'action.log'(): Promise<ActionLogEntry[]>
   /** How Superego sits on the desktop now. */
   'service.get'(): Promise<ServiceState>
+  /** Where updating the app itself stands (main/updates.ts). */
+  'update.get'(): Promise<UpdateState>
   /** The page is listening for app events: answer with what it was asked to show before it was. */
   'app.ready'(): Promise<{ open?: ThreadRef; settings?: boolean }>
   /**

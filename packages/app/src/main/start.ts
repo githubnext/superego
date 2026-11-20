@@ -23,6 +23,7 @@ import { createMachines } from './machines.ts'
 import { createNotifier } from './notify.ts'
 import { createService } from './service.ts'
 import { serveAppSocket, type AppSocket } from './app-socket.ts'
+import { createAppUpdates } from './app-updates.ts'
 
 /**
  * Run an app's main process: its windows, the links to every machine (starting this computer's daemon, which outlives
@@ -99,10 +100,25 @@ export function startApp(appConfig: AppConfig) {
   })
   const service = createService({
     app: appConfig, dataDir, headless, machines,
+    // Packaged (its build in an app.asar), the daemon runs from inside the app, which only an update replaces.
+    restartsAfterUpdate: /\.asar([/\\]|$)/.test(import.meta.dirname),
     changed(state) {
       windows.broadcast({ machine: APP, method: 'service.changed', params: state })
       desktop.refresh()
     },
+  })
+  // The released app updating itself; Settings → About shows where that stands.
+  const updates = createAppUpdates({
+    app: appConfig, headless, service,
+    quitting: () => windows.quitting(),
+    changed(state) {
+      windows.broadcast({ machine: APP, method: 'update.changed', params: state })
+      settings.invalidate()
+    },
+  })
+  settings.register({
+    id: 'about', title: 'About', order: 2000, ui: 'about', settings: [],
+    data: () => updates.state,
   })
   const notifier = createNotifier({
     headless, settings, machines,
@@ -113,17 +129,17 @@ export function startApp(appConfig: AppConfig) {
 
   const router = createRouter<AppActionContext>()
   machines.registerActions(router)
-  registerAppActions(router, { app: appConfig, dataDir, packaged: app.isPackaged, windows: () => windows, settings, cli, service, layoutFile, sites, quit: () => app.quit(), restart: () => restartApp(devRestart) })
+  registerAppActions(router, { app: appConfig, dataDir, packaged: app.isPackaged, windows: () => windows, settings, cli, service, updates, layoutFile, sites, quit: () => app.quit(), restart: () => restartApp(devRestart) })
   const windows = createWindows({
     app: appConfig, dataDir, headless,
-    methods: (window) => appMethods(window, { settings, router, service, notifier, machines, windows, desktop, build }),
+    methods: (window) => appMethods(window, { settings, router, service, updates, notifier, machines, windows, desktop, build }),
     changed: () => desktop.refresh(),
     lookedAtChanged: () => notifier.refreshBadge(),
     closed(window) {
       if (window.declaredViews) void layoutFile.setViews(window.id, undefined).catch((error) => console.error('layout.json:', error))
     },
   })
-  const desktop = createDesktop({ app: appConfig, headless, settings, machines, service, windows, refreshBadge: notifier.refreshBadge })
+  const desktop = createDesktop({ app: appConfig, headless, settings, machines, service, updates, windows, refreshBadge: notifier.refreshBadge })
   const forwards = createForwards({ machines: machines.entries, linkOf: machines.linkOf })
   serveIpc({
     machines: machines.entries, linkOf: machines.linkOf, windowOf: windows.of, callApp: (window, method, params) => callApp(router, window, method, params),
@@ -152,6 +168,7 @@ export function startApp(appConfig: AppConfig) {
     desktop.start()
     setUpSession()
     machines.start()
+    updates.start()
     const window = windows.reopen()
     const open = openArgument(process.argv)
     if (open) window.pending = { open }

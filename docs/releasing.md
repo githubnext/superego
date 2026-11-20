@@ -1,8 +1,8 @@
 # Releasing Superego
 
 A release is a signed, notarized `Superego.app` for Apple Silicon, zipped and attached to a GitHub release on
-`githubnext/superego`. The repository is private, so only people with access to it can download a release. There are no
-automatic updates: people download the zip and replace the app.
+`githubnext/superego`, with `update.json` beside it: the feed the released app updates itself from (see
+[Automatic updates](#automatic-updates)). The first install is by hand: download the zip and open the app.
 
 Releasing is by hand, on a Mac that can sign and notarize (for now, the one that has the Developer ID and the
 `TunaNotary` profile): no CI builds it.
@@ -13,12 +13,64 @@ pnpm release 0.1.0 --no-publish  # the same up to the notarized zip; nothing is 
 pnpm bundle                      # this checkout as it is, notarized into app/dist (the version in app/package.json)
 ```
 
+## Automatic updates
+
+The released app updates itself with Electron's `autoUpdater` (Squirrel.Mac), in
+[packages/app/src/main/app-updates.ts](../packages/app/src/main/app-updates.ts) and
+[updates.ts](../packages/app/src/main/updates.ts):
+
+- **The feed** is `updateFeed` in [app/superego.config.ts](../app/superego.config.ts), one URL:
+  `https://github.com/githubnext/superego/releases/latest/download/update.json`, the newest release's `update.json`. It's
+  Squirrel's JSON format (`serverType: 'json'`): `currentRelease` is the newest version, and its `updateTo.url` the
+  release's zip. The app updates when `currentRelease` isn't its own version. GitHub serves both without credentials
+  once the repository is public; while it's private, every check fails (Settings → About says so).
+- **Only a release's build** carries the feed (`updateFeed` in the bundle's package.json, from `--update-feed`, which
+  `pnpm release` passes). `pnpm package` and `pnpm bundle` builds, and the app run from source, never update themselves.
+  `SUPEREGO_UPDATE_FEED=<url>` sets another feed for a packaged app, for a test.
+- **When:** 10 seconds after launch, then every 4 hours, until an update is downloaded. A check the app makes on its
+  own while offline fails quietly; any other failure shows in Settings → About, and a failed download or install in the
+  notice in the rail too. Check for Updates… (the app menu, Settings → About) checks now.
+- **Installing:** Restart (in the notice, or Settings → About) stops this computer's daemon, which runs from inside the
+  app, asking first while agents work (they resume after), then quits, installs and opens the new app, which starts
+  the daemon again. Quitting with an update downloaded installs it too, without reopening; the daemon is left running,
+  as quitting always leaves it, on the replaced app. A packaged app that finds its daemon on older code as it starts
+  restarts it onto its own as soon as no agent is working ("Restart when idle", which can be cancelled).
+- **Squirrel checks the update's code signature** against the running app's designated requirement: both signed with
+  the same Developer ID (team `DDB8SQMXS9`) and bundle id. An ad hoc signed app can't update.
+
+### Trying an update locally
+
+Two builds signed with the Developer ID (no need to notarize: Squirrel checks the signature, not the ticket), a feed
+on a local HTTP server, and a data dir of their own, so neither touches your daemon:
+
+```sh
+export SUPEREGO_SIGN_IDENTITY="Developer ID Application: Mikkel Malmberg (DDB8SQMXS9)"
+T=/tmp/sg-update-test && mkdir -p $T/feed $T/apps $T/home
+cd app && pnpm exec electron-vite build
+# The update. Its daemon code must differ from the first's to see the daemon restart onto it (a changed line will do).
+node scripts/package.ts --version 0.0.2-test && cp dist/Superego-0.0.2-test-arm64.zip $T/feed/
+node --input-type=module -e "import { updateFeedJson } from '@superego/app/package'; process.stdout.write(updateFeedJson({
+  version: '0.0.2-test', notes: '- A test', zipUrl: 'http://127.0.0.1:8765/Superego-0.0.2-test-arm64.zip' }))" > $T/feed/update.json
+# The app to update, with the local feed in it.
+node scripts/package.ts --version 0.0.1-test --update-feed http://127.0.0.1:8765/update.json
+ditto dist/mac-arm64/Superego.app $T/apps/Superego.app
+(cd $T/feed && python3 -m http.server 8765 --bind 127.0.0.1 &)
+SUPEREGO_HOME=$T/home $T/apps/Superego.app/Contents/MacOS/Superego
+```
+
+About 10 seconds in, the server logs `GET /update.json` and the zip, and the rail shows "Superego 0.0.2-test is
+ready". Restart: the daemon stops, ShipIt installs (its log: `~/Library/Caches/com.githubnext.superego.ShipIt/`) and
+opens the new app. It opens without `SUPEREGO_HOME`, so on your own data dir, where your running app takes it over:
+start it again as above, and `superego daemon status` (the app's CLI, with `SUPEREGO_HOME`) shows a new daemon on the
+new build. To try the quit path, quit instead of Restart: ShipIt installs, the old daemon keeps running, and starting
+the new app restarts it. Afterwards: `superego daemon stop` with `SUPEREGO_HOME=$T/home`, and stop the server.
+
 ## Machines on releases
 
 A machine the app reaches over ssh can run a release instead of main:
 [`scripts/install-machine.sh --release [version]`](../scripts/install-machine.sh), the newest by default.
 
-- **macOS:** it downloads the release's zip with `gh` (signed in there, with access to the repository), puts
+- **macOS:** it downloads the release's zip with `gh` (signed in there), puts
   `Superego.app` in `~/Applications` (replacing an older one), and writes `~/.local/bin/superego` to run the app's CLI.
   It needs no checkout, pnpm or Node.
 - **Linux** (there's no Linux build): the checkout checks out the release's tag instead of pulling main, and installs as
@@ -37,9 +89,12 @@ ssh <host> '~/dev/superego/scripts/install-machine.sh --release'
 
 After a release, update each machine the same way, or with Update in the app (`superego machines update <host>`): a
 Mac on releases runs main's install-machine.sh from GitHub, a checkout at a release's tag checks out the newest tag. A
+Mac that runs the app updates itself too (see [Automatic updates](#automatic-updates)), its daemon with it. A
 Mac's ssh command stays `~/.local/bin/superego connect --start`. To bring a Linux machine back to main, run its
 install-machine.sh without `--release`.
 
+
+## Once per Mac
 
 Signing and notarizing need two things in the keychain. `pnpm bundle` says which one is missing.
 
@@ -91,8 +146,13 @@ local `main` as it is when it starts, so merge first.
    zip's name, not into `app/package.json`. Nothing is committed for a release; the tag says which commit it was.
    If anything fails, nothing has left this Mac, and the worktree is kept to look at.
 4. An annotated tag `v<version>` on that commit, then pushes it and that commit to `main` on GitHub.
-5. `gh release create v<version>` with the zip, titled `Superego <version>`, its notes the `## <version>` section of
-   `CHANGELOG.md` on main. Then it removes the worktree.
+5. `gh release create v<version> --latest` with the zip and `update.json`, titled `Superego <version>`, its notes the
+   `## <version>` section of `CHANGELOG.md` on main. `update.json` names this version and its zip
+   (`https://github.com/<repo>/releases/download/v<version>/Superego-<version>-arm64.zip`) with the same notes; as the
+   newest release's, it's what every released app finds at its feed. Then it removes the worktree.
+
+The build has the app config's `updateFeed` in it (`--update-feed`). `--no-publish` builds the same, and uploads
+nothing: the feed still names the release before.
 
 Before releasing, consolidate the changelog: move `## Unreleased`'s notes under a new `## <version>` heading,
 tighten them into short sections grouped by what the user sees, leave an empty `## Unreleased` above it, and merge
@@ -140,4 +200,7 @@ sg extension new foo && sg extension test foo && sg extension new bar --ui && sg
 - **Notarization Invalid**: the error prints Apple's log; it names each file and what was wrong with it (usually
   something unsigned, or signed without the hardened runtime or a timestamp).
 - **It failed publishing** (pushing, or at `gh release create`): the zip is notarized and the tag made. It prints the
-  commands that finish it by hand, with the zip's path; run those rather than releasing again.
+  commands that finish it by hand, with the zip's and `update.json`'s paths; run those rather than releasing again.
+- **A released app doesn't update:** Settings → About shows the last check's error; the app's console has each
+  failure (`Updating the app (check|download|install): …`). `curl -L <updateFeed>` shows what it read. A signature
+  error means the new build isn't signed by the same Developer ID as the running one.

@@ -1,5 +1,6 @@
 // This computer's daemon as a service of the app's: restarted onto newer code (the ServiceRestart state machine,
-// restart.ts, wired to the local link here), and stopped with its agents when quitting asks for it.
+// restart.ts, wired to the local link here), and stopped with its agents when quitting asks for it, or for an update of
+// the app it runs from.
 import { readFileSync } from 'node:fs'
 import { app } from 'electron'
 import { pidPath, readBuild } from '@superego/daemon/client'
@@ -15,13 +16,18 @@ export type ServiceOptions = {
   app: AppConfig
   dataDir: string
   headless: boolean
+  /**
+   * A packaged app's daemon runs from inside the app, so finding it out of date as the app starts means the app was
+   * replaced under it (updated as it quit, say): then it restarts on its own, as soon as no agent is working.
+   */
+  restartsAfterUpdate: boolean
   machines: Pick<Machines, 'local' | 'working' | 'restartLocal' | 'allLinks'>
   changed(state: ServiceState): void
 }
 
 export type Service = ReturnType<typeof createService>
 
-export function createService({ app: appConfig, dataDir, headless, machines, changed }: ServiceOptions) {
+export function createService({ app: appConfig, dataDir, headless, restartsAfterUpdate, machines, changed }: ServiceOptions) {
   /** The local link once it is connected with a new daemon (not `pid`), or a timeout. */
   const reconnected = (pid: number | undefined) => waitUntil(() => {
     const link = machines.local()
@@ -84,8 +90,17 @@ export function createService({ app: appConfig, dataDir, headless, machines, cha
     },
     changed,
   })
+  /** Whether the first look since the app started was had (see `restartsAfterUpdate`). */
+  let looked = !restartsAfterUpdate
+  const afterUpdate = () => {
+    // Not before it was had: a poll while another runs looks at nothing.
+    if (looked || restart.state.installedBuild === undefined || restart.state.phase === 'error') return
+    looked = true
+    // One of another generation is left to the notice: stopping it can't wait for its agents, and asks.
+    if (restart.state.phase === 'required' && !restart.state.refused) void restart.act('restart')
+  }
   /** Look again whether the daemon runs the code installed: every few seconds, and as the local link connects. */
-  const poll = () => { if (machines.local()?.state === 'connected' || refused()) void restart.poll() }
+  const poll = () => { if (machines.local()?.state === 'connected' || refused()) void restart.poll().then(afterUpdate) }
   setInterval(poll, 3000).unref()
 
   /** Quit, and stop this computer's daemon and its agents too, asking first while any are working. */
@@ -102,8 +117,32 @@ export function createService({ app: appConfig, dataDir, headless, machines, cha
     app.quit()
   }
 
+  /**
+   * Make way for an update of the app: stop this computer's daemon, which runs from inside it, asking first while
+   * agents work (they resume after). False: the user said no. The new app starts it again.
+   */
+  async function stopForUpdate(): Promise<boolean> {
+    const working = machines.working('local').length
+    if (working && !headless && !await confirm({
+      type: 'warning', buttons: ['Update and Restart', 'Cancel'], defaultId: 1, cancelId: 1,
+      message: `${agentsAre(working)} still working`,
+      detail: `Updating restarts ${appConfig.name}: agents stop mid-turn and pick up again after. Threads and their history are kept.`,
+    })) return false
+    const pid = daemonPid()
+    // Not linked, so nothing starts it again meanwhile.
+    machines.local()?.stop()
+    if (pid) {
+      try { process.kill(pid, 'SIGTERM') } catch { /* gone already: nothing to stop */ }
+      await exited(pid)
+    }
+    return true
+  }
+
   return {
     get state() { return restart.state },
+    stopForUpdate,
+    /** Link to this computer's daemon again (starting it), after `stopForUpdate` when the update didn't go ahead. */
+    relink: () => machines.restartLocal(),
     act: (action: Parameters<ServiceRestart['act']>[0]) => restart.act(action),
     poll,
     quitAndStop,

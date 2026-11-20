@@ -7,6 +7,7 @@ import { declaredSpec, serveSettings, type SettingsRegistry } from '@superego/se
 import type { AppHandlers } from '../shared/bridge.ts'
 import type { LayoutView } from '../shared/layout.ts'
 import type { ServiceAction } from '../shared/service.ts'
+import type { AppUpdates } from './app-updates.ts'
 import { windowState, type AppWindow, type Windows } from './app-windows.ts'
 import { buildsDiffer } from './build.ts'
 import type { commandLine } from './command-line.ts'
@@ -25,6 +26,7 @@ export type EndpointOptions = {
   settings: SettingsRegistry
   router: Router<AppActionContext>
   service: Pick<Service, 'state'>
+  updates: Pick<AppUpdates, 'state'>
   notifier: Pick<Notifier, 'refreshBadge'>
   machines: Pick<Machines, 'update' | 'uiAllowed'>
   windows: Pick<Windows, 'create' | 'ids'>
@@ -34,7 +36,7 @@ export type EndpointOptions = {
 }
 
 /** A window's methods on the app's endpoint. */
-export function appMethods(window: AppWindow, { settings, router, service, notifier, machines, windows, desktop, build }: EndpointOptions): AppHandlers {
+export function appMethods(window: AppWindow, { settings, router, service, updates, notifier, machines, windows, desktop, build }: EndpointOptions): AppHandlers {
   return {
     'settings.watch': serveSettings(settings, (params) => window.sendApp('settings.changed', params), window.subs)['settings.watch'],
     async unwatch({ sub }) { window.subs.get(sub)?.(); window.subs.delete(sub); return null },
@@ -46,6 +48,7 @@ export function appMethods(window: AppWindow, { settings, router, service, notif
     'action.list': async () => router.list(),
     'action.log': async () => router.log(),
     async 'service.get'() { return service.state },
+    async 'update.get'() { return updates.state },
     async 'app.build'({ build: window }) { return { differs: buildsDiffer(window, build) } },
     async 'app.ready'() {
       window.ready = true
@@ -86,7 +89,7 @@ export function callApp(router: Router<AppActionContext>, window: AppWindow, met
 }
 
 /** The app's own actions, besides the machines' (machines.ts). */
-export function registerAppActions(router: Router<AppActionContext>, { app: appConfig, dataDir, packaged, windows, settings, cli, service, layoutFile, sites, quit, restart }: {
+export function registerAppActions(router: Router<AppActionContext>, { app: appConfig, dataDir, packaged, windows, settings, cli, service, updates, layoutFile, sites, quit, restart }: {
   app: AppConfig
   dataDir: string
   /** A packaged app: the developers' actions (profiling) are only for the command line there, not ⌘K. */
@@ -98,6 +101,7 @@ export function registerAppActions(router: Router<AppActionContext>, { app: appC
   /** What sites in Browser panes may use: forgotten from Settings. Granted only in a page's pane, never by an action. */
   sites: Pick<SitePermissionsHandle<unknown>, 'forget'>
   service: Pick<Service, 'state' | 'act'>
+  updates: Pick<AppUpdates, 'state' | 'check' | 'install'>
   layoutFile: LayoutFile
   quit(): void
   /** Quit and start again, onto the build on disk now. */
@@ -127,6 +131,16 @@ export function registerAppActions(router: Router<AppActionContext>, { app: appC
     id: 'service.act', title: 'Restart the daemon', runs: 'app', expose: ['ui'],
     params: obj({ action: union([lit('restart'), lit('interrupt'), lit('later'), lit('review')]) }),
     async run({ action }) { await service.act(action as ServiceAction); return service.state },
+  }))
+  router.register(defineAction({
+    id: 'app.update.check', title: 'Check for updates', runs: 'app', expose: ['ui'],
+    params: obj({}),
+    run: () => updates.check(),
+  }))
+  router.register(defineAction({
+    id: 'app.update.install', title: `Restart to update ${appConfig.name}`, runs: 'app', expose: ['ui'],
+    params: obj({}),
+    async run() { await updates.install(); return updates.state },
   }))
   /** Where a view goes, as a window tells the layout file. */
   const placement = nullable(union([str(), arr(str()), lit(false)]))

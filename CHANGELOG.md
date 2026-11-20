@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- The app updates itself: it looks for a new release at launch and every few hours, downloads it in the background,
+  and shows "Superego 0.1.9 is ready" with Restart in the sidebar's rail. Restarting stops this computer's daemon
+  first (asking while agents work; they pick up again after). Quitting installs it too, and the daemon restarts onto it
+  once its agents are idle. Check for Updates… is in the app menu and in Settings → About, which shows the version.
+  This release is the last one you install by hand.
 - Every model provider pi-ai supports is offered, not just Anthropic and OpenAI: Google, Vertex AI, Amazon Bedrock,
   Azure, Mistral, xAI, Groq, Cerebras, Together, Fireworks, OpenRouter, Vercel AI Gateway, Hugging Face, DeepSeek, Kimi,
   Z.ai and more, each with an API key (or its environment variable, an AWS profile, gcloud credentials). GitHub Copilot

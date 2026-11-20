@@ -9,6 +9,7 @@ import type { Windows } from './app-windows.ts'
 import type { Machines } from './machines.ts'
 import { MenuBar } from './menu-bar.ts'
 import type { Service } from './service.ts'
+import type { AppUpdates } from './app-updates.ts'
 
 /** Its callbacks are never called while it's being made. */
 export type DesktopOptions = {
@@ -17,6 +18,7 @@ export type DesktopOptions = {
   settings: SettingsRegistry
   machines: Pick<Machines, 'entries' | 'threads'>
   service: Pick<Service, 'state' | 'act' | 'quitAndStop'>
+  updates: Pick<AppUpdates, 'on' | 'checkFromMenu'>
   windows: Pick<Windows, 'all' | 'show' | 'focused' | 'recent' | 'reopen' | 'putAway'>
   /** Count the app icon's threads again. */
   refreshBadge(): void
@@ -24,7 +26,7 @@ export type DesktopOptions = {
 
 export type Desktop = ReturnType<typeof createDesktop>
 
-export function createDesktop({ app: appConfig, headless, settings, machines, service, windows, refreshBadge }: DesktopOptions) {
+export function createDesktop({ app: appConfig, headless, settings, machines, service, updates, windows, refreshBadge }: DesktopOptions) {
   const mac = process.platform === 'darwin'
   const menuBarOn = () => settings.get<boolean>(MENU_BAR)
   const dockHidden = () => menuBarOn() && settings.get<boolean>(HIDE_DOCK)
@@ -91,7 +93,9 @@ export function createDesktop({ app: appConfig, headless, settings, machines, se
     ...(mac ? [{
       label: appConfig.name,
       submenu: [
-        { role: 'about' }, { type: 'separator' }, { role: 'services' }, { type: 'separator' },
+        { role: 'about' },
+        ...(updates.on ? [{ label: 'Check for Updates…', click: () => void updates.checkFromMenu().catch((error: unknown) => console.error('Check for updates:', error)) }] : []),
+        { type: 'separator' }, { role: 'services' }, { type: 'separator' },
         { role: 'hide' }, { role: 'hideOthers' }, { role: 'unhide' }, { type: 'separator' },
         { label: `Quit ${appConfig.name}`, accelerator: 'CommandOrControl+Q', click: quitKey },
       ],

@@ -20,6 +20,7 @@ import { RailButton } from './marks.tsx'
 import { forgetWindows, useLocalState } from './local-state.ts'
 import { ServiceNotice } from './ServiceNotice.tsx'
 import { BuildNotice } from './BuildNotice.tsx'
+import { UpdateNotice } from './UpdateNotice.tsx'
 import { RevokedUiNotice } from './profile-ui-notice.tsx'
 import { LayoutEditor, LayoutNotice, LayoutViews } from './layout-text.tsx'
 import { ViewContextMenu, withContextMenu, withMenuButton } from './view-menu.tsx'
@@ -149,7 +150,7 @@ export function Shell() {
   )
   const sideOpen = spaces.length > 0 && (narrow ? drawer : !sidebar.hidden && tab === 'space')
   // The notices: wide, in the rail above Settings, each a mark that opens to all it says; on a phone, at the drawer's foot.
-  const notices = <><AuthNotice rail={!narrow} /><ServiceNotice rail={!narrow} /><BuildNotice rail={!narrow} /><LayoutNotice rail={!narrow} /><RevokedUiNotice rail={!narrow} /></>
+  const notices = <><AuthNotice rail={!narrow} /><ServiceNotice rail={!narrow} /><BuildNotice rail={!narrow} /><UpdateNotice rail={!narrow} /><LayoutNotice rail={!narrow} /><RevokedUiNotice rail={!narrow} /></>
   // What the sidebar holds: the space it shows; in the drawer, the notices, the other spaces and Settings at its foot.
   const sidebarBody = <>
     {narrow && <div className="app__drag" />}

@@ -17,6 +17,7 @@ import { Profiles } from './settings/profiles.tsx'
 import { Providers } from './settings/providers.tsx'
 import { ModelFavourites } from './settings/models.tsx'
 import { CommandLine } from './command-line.tsx'
+import { About } from './about.tsx'
 import { SitePermissions } from './site-permissions.tsx'
 import { WebAccess } from './web-access.tsx'
 import { ConnectedClients } from './connected.tsx'
@@ -86,6 +87,7 @@ export function windowRegistry(app: AppConfig, extensions: UiExtension[]) {
     core.settings('profiles', Profiles)
     core.settings('command-line', CommandLine)
     core.settings('sites', SitePermissions)
+    core.settings('about', About)
     core.appSettings({
       id: 'navigation', title: 'Navigation', order: 60,
       settings: [

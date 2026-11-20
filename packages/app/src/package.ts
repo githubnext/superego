@@ -32,6 +32,8 @@ export type PackageOptions = {
   notarize?: NotaryAuth | null
   /** The version the app says it is (and its zip is named by); defaults to the package.json's. */
   version?: string
+  /** Where the app looks for updates (a release's build: the app config's `updateFeed`); unset, it never updates itself. */
+  updateFeed?: string
 }
 
 const BUILDER = 'electron-builder@26'
@@ -71,6 +73,7 @@ export async function packageApp(root: string, app: AppConfig, options: PackageO
   if (existsSync(join(root, 'resources'))) cpSync(join(root, 'resources'), join(stage, 'resources'), { recursive: true, filter: (path) => !path.endsWith('.icon') && !path.includes('.icon/') })
   writeFileSync(join(stage, 'package.json'), JSON.stringify({
     name: app.id, productName: app.name, version, description: pkg.description ?? app.name, main: 'out/main/main.js', type: 'module',
+    ...(options.updateFeed ? { updateFeed: options.updateFeed } : {}),
   }, null, 2))
   const entitlements = join(stage, 'entitlements.plist')
   writeFileSync(entitlements, ENTITLEMENTS)
@@ -134,6 +137,15 @@ export async function packageApp(root: string, app: AppConfig, options: PackageO
   rmSync(zip, { force: true })
   execFileSync('ditto', ['-c', '-k', '--sequesterRsrc', '--keepParent', bundle, zip])
   return [bundle, zip]
+}
+
+/**
+ * The feed Squirrel.Mac reads (`serverType: 'json'`): the newest release, and where its zip is. The app updates when
+ * `currentRelease` isn't its own version (CFBundleVersion, which is the version), and shows `name` as the version ready.
+ */
+export function updateFeedJson({ version, zipUrl, notes, date = new Date() }: { version: string; zipUrl: string; notes: string; date?: Date }): string {
+  const updateTo = { version, pub_date: date.toISOString(), notes, name: version, url: zipUrl }
+  return `${JSON.stringify({ currentRelease: version, releases: [{ version, updateTo }] }, null, 2)}\n`
 }
 
 /** electron-builder takes a Developer ID by the name after its kind ("Name (TEAM)"), and picks the kind itself. */

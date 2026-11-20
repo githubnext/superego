@@ -22,6 +22,11 @@ export type AppConfig = {
    * (`/mcp/callback`). Fixed per app, since an authorization server registers the address. Unset: 1456.
    */
   callbackPort?: number
+  /**
+   * Where the released app looks for updates: a Squirrel.Mac JSON feed (`{ currentRelease, releases }`) naming the newest
+   * release and its zip, which `pnpm release` writes. Only a release's build carries it. Unset: it doesn't update itself.
+   */
+  updateFeed?: string
 }
 
 export function defineApp(config: AppConfig): AppConfig {
