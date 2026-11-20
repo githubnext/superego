@@ -1,5 +1,5 @@
 // Themes for code and the terminal (run by `test/look.sh <dir> themes`): a thread with code and a diff in its answer,
-// a file in the editor beside it, then the terminal, under Superego's own and three built-in pairs, light and dark; then
+// a file in the editor beside it, then the terminal, under Superego's own and four built-in pairs, light and dark; then
 // Settings → Appearance's pickers and samples, with a theme imported. Screenshots into $SUPEREGO_SHOWCASE_OUT.
 import { openApp } from './harness.mjs'
 
@@ -8,6 +8,7 @@ const PAIRS = [
   ['github', 'github-light', 'github-dark'],
   ['tokyo-night', 'tokyo-night-day', 'tokyo-night'],
   ['rose-pine', 'rose-pine-dawn', 'rose-pine'],
+  ['zenbones', 'zenbones-light', 'zenbones-dark'],
 ]
 
 await openApp({ name: 'themes', timeout: 240_000 }, async (t) => {

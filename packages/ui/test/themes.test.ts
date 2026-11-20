@@ -71,7 +71,7 @@ describe('the built-in themes', () => {
       expect(Object.keys(theme.terminal!).sort(), theme.id).toEqual([...TERMINAL_ROLES].sort())
     }
     expect(new Set(BUILTIN_THEMES.map((t) => t.id)).size).toBe(BUILTIN_THEMES.length)
-    const families = ['github', 'one', 'tokyo-night', 'catppuccin', 'solarized', 'rose-pine', 'gruvbox']
+    const families = ['github', 'one', 'tokyo-night', 'catppuccin', 'solarized', 'rose-pine', 'gruvbox', 'zenbones']
     for (const family of families) {
       const of = BUILTIN_THEMES.filter((t) => t.id === family || t.id.startsWith(`${family}-`))
       expect(of.map((t) => t.appearance).sort(), family).toEqual(['dark', 'light'])
@@ -141,6 +141,12 @@ describe('importing', () => {
     expect(fromGhostty(fixture('ghostty-theme'), 'Tomorrow')).toEqual({
       name: 'Tomorrow', appearance: 'dark',
       terminal: { 'black': '#1d1f21', 'red': '#cc6666', 'bright-white': '#ffffff', 'bg': '#1d1f21', 'fg': '#c5c8c6', 'cursor': '#c5c8c6', 'selection': '#373b41' },
+    })
+  })
+
+  it('reads a Ghostty theme’s quoted colours', () => {
+    expect(fromGhostty('foreground = "#2C363C"\nbackground = "#F0EDEC"\n# black\npalette = 0=#F0EDEC\n', 'Paper')).toEqual({
+      name: 'Paper', appearance: 'light', terminal: { fg: '#2C363C', bg: '#F0EDEC', black: '#F0EDEC' },
     })
   })
 

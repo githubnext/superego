@@ -116,10 +116,11 @@ export function fromVsCode(json: unknown, fallbackName: string): ImportedTheme {
   return { name, appearance, ...(Object.keys(syntax).length ? { syntax } : {}), ...(Object.keys(terminal).length ? { terminal } : {}) }
 }
 
-/** A Ghostty theme (`palette = 0=#1d1f21`, `background = 1d1f21`, …) as ours: the terminal's colours. */
+/** A Ghostty theme (`palette = 0=#1d1f21`, `background = 1d1f21`, `foreground = "#c5c8c6"`, …) as ours: the terminal's colours. */
 export function fromGhostty(text: string, name: string): ImportedTheme {
   const terminal: Theme['terminal'] = {}
-  const hex = (value: string) => {
+  const hex = (given: string) => {
+    const value = given.replace(/^"(.*)"$/, '$1')
     const colour = /^[0-9a-f]{6}$/i.test(value) ? `#${value}` : value
     return isColor(colour) ? colour : undefined
   }

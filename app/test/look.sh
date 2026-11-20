@@ -31,7 +31,7 @@
 #   beside it (the page itself).
 # - `providers`: Settings → Providers (signed in, added, searched, the add form), Favourite models, ⌘N's model menu.
 # - `claude-agent`: a Claude Agent thread waiting on a permission (needs `claude` installed; nothing is signed in or spent).
-# - `themes`: code in a message, the editor and the terminal under Superego's theme and three built-in pairs, light and
+# - `themes`: code in a message, the editor and the terminal under Superego's theme and four built-in pairs, light and
 #   dark, and Settings → Appearance's theme pickers.
 set -e
 cd "$(dirname "$0")/.."

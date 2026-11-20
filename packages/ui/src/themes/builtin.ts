@@ -91,4 +91,19 @@ export const BUILTIN_THEMES: readonly Theme[] = [
     syntax: { keyword: '#fb4934', string: '#b8bb26', number: '#d3869b', comment: '#928374', function: '#fabd2f', type: '#fabd2f', tag: '#8ec07c', attribute: '#fabd2f', definition: '#83a598', meta: '#83a598', inserted: '#b8bb26', deleted: '#fb4934', invalid: '#cc241d' },
     terminal: { fg: '#ebdbb2', bg: '#282828', cursor: '#ebdbb2', selection: '#689d6a40', black: '#3c3836', red: '#cc241d', green: '#98971a', yellow: '#d79921', blue: '#458588', magenta: '#b16286', cyan: '#689d6a', white: '#a89984', 'bright-black': '#928374', 'bright-red': '#fb4934', 'bright-green': '#b8bb26', 'bright-yellow': '#fabd2f', 'bright-blue': '#83a598', 'bright-magenta': '#d3869b', 'bright-cyan': '#8ec07c', 'bright-white': '#ebdbb2' },
   },
+  // zenbones-theme/zenbones.nvim 8304d8d (MIT): the terminal's from extras/ghostty, code's from colors/zenbones.vim's groups
+  // (Statement, String, Number, Comment, Function, Type, Special, Identifier, PreProc, Added, Removed, Error). Zenbones sets
+  // keywords bold, and comments and strings italic, which our roles carry as colour only. No accent in the dark: its
+  // blue (#6099c0) doesn't carry white text.
+  {
+    id: 'zenbones-light', name: 'Zenbones Light', appearance: 'light', accent: '#286486',
+    syntax: { keyword: '#2c363c', string: '#556570', number: '#556570', comment: '#948985', function: '#2c363c', type: '#6a5549', tag: '#4f5e68', attribute: '#44525b', definition: '#44525b', meta: '#2c363c', inserted: '#4f6c31', deleted: '#a8334c', invalid: '#a8334c' },
+    terminal: { fg: '#2c363c', bg: '#f0edec', cursor: '#2c363c', selection: '#cbd9e3', black: '#f0edec', red: '#a8334c', green: '#4f6c31', yellow: '#944927', blue: '#286486', magenta: '#88507d', cyan: '#3b8992', white: '#2c363c', 'bright-black': '#cfc1ba', 'bright-red': '#94253e', 'bright-green': '#3f5a22', 'bright-yellow': '#803d1c', 'bright-blue': '#1d5573', 'bright-magenta': '#7b3b70', 'bright-cyan': '#2b747c', 'bright-white': '#4f5e68' },
+  },
+  // zenbones-theme/zenbones.nvim 8304d8d (MIT): the terminal's from extras/ghostty, code's from colors/zenbones.vim's groups
+  {
+    id: 'zenbones-dark', name: 'Zenbones Dark', appearance: 'dark',
+    syntax: { keyword: '#b4bdc3', string: '#868c91', number: '#868c91', comment: '#6e6763', function: '#b4bdc3', type: '#a1938c', tag: '#8d9499', attribute: '#979fa4', definition: '#979fa4', meta: '#b4bdc3', inserted: '#819b69', deleted: '#de6e7c', invalid: '#de6e7c' },
+    terminal: { fg: '#b4bdc3', bg: '#1c1917', cursor: '#c4cacf', selection: '#3d4042', black: '#1c1917', red: '#de6e7c', green: '#819b69', yellow: '#b77e64', blue: '#6099c0', magenta: '#b279a7', cyan: '#66a5ad', white: '#b4bdc3', 'bright-black': '#403833', 'bright-red': '#e8838f', 'bright-green': '#8bae68', 'bright-yellow': '#d68c67', 'bright-blue': '#61abda', 'bright-magenta': '#cf86c1', 'bright-cyan': '#65b8c1', 'bright-white': '#888f94' },
+  },
 ]

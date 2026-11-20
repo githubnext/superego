@@ -39,6 +39,8 @@
 - On a phone, the thread's sheet (tap its title) is a plain menu: a row each for its model and other details, Rename
   (the title at its top becomes a field), Pin, Archive or Unarchive, and the panes to open beside it, each with its
   icon, sized for a finger.
+- A new built-in theme: Zenbones, light and dark (Settings → Appearance).
+- Importing a Ghostty theme reads its quoted colours (`foreground = "#2c363c"`), where its foreground, background, cursor and selection were left out.
 - Claude Agent finds your `claude` when your shell has it as an alias (such as `claude --dangerously-skip-permissions`): it runs the `claude` on your shell's PATH, without the alias's flags.
 - Claude Agent threads ask before Claude Code does something your Claude Code settings don't allow: the thread
   shows "Permission" (in the sidebar, the menu bar, notifications and on your phone), with Allow, Deny and, when

@@ -14,8 +14,8 @@ The rest of the window (its backgrounds and text) keeps Superego's own look.
 ## Built in
 
 Superego (the default), GitHub Light and Dark, One Light and Dark, Tokyo Night and Tokyo Night Day, Catppuccin Latte
-and Mocha, Solarized Light and Dark, Rosé Pine and Rosé Pine Dawn, Gruvbox Light and Dark. Each is taken from its
-project's published theme.
+and Mocha, Solarized Light and Dark, Rosé Pine and Rosé Pine Dawn, Gruvbox Light and Dark, Zenbones Light and Dark.
+Each is taken from its project's published theme.
 
 ## Importing
 
