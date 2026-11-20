@@ -15,7 +15,7 @@ let ownGroup: number | null | undefined
  * The user's own group, when it's theirs alone: the one named after them that most Linux systems make for each user
  * (where a umask of 002 leaves their folders group-writable). Null when their group is shared (macOS's `staff`).
  */
-export function privateGroup(): number | null {
+function privateGroup(): number | null {
   if (ownGroup !== undefined) return ownGroup
   const gid = process.getgid?.()
   let name: string | undefined
@@ -45,9 +45,9 @@ export function trusted(path: string, group: number | null = privateGroup()): bo
  * The folders a thread in `cwd` takes a project's files from, nearest first: `cwd` up to the repository's top, through
  * `trusted` folders only. Just `cwd` when no repository's top is in reach that way, and none when `cwd` isn't trusted.
  */
-export function projectFolders(cwd: string, group: number | null = privateGroup()): string[] {
+export function projectFolders(cwd: string): string[] {
   const chain: string[] = []
-  for (let dir = resolve(cwd); trusted(dir, group); dir = dirname(dir)) {
+  for (let dir = resolve(cwd); trusted(dir); dir = dirname(dir)) {
     chain.push(dir)
     if (existsSync(join(dir, '.git'))) return chain
     if (dirname(dir) === dir) break

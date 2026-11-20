@@ -7,7 +7,7 @@ import { Button, TextField } from '@superego/ui'
 import { renderSVG } from 'uqr'
 import { useRegistry } from './registry.tsx'
 
-type Device = { id: string; name: string; created?: number; lastSeen: number; address: string; tailscale?: true; os?: string; waiting?: true }
+type Device = { id: string; name: string; created: number; lastSeen: number; address: string; tailscale?: true; os?: string; waiting?: true }
 type Tailscale =
   | { state: 'starting' | 'missing' | 'logged-out' }
   | { state: 'no-https' | 'busy' | 'error'; message?: string }

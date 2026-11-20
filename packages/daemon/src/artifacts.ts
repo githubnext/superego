@@ -6,7 +6,7 @@
 // page itself: a script in HTML the agent wrote (from whatever it read on the web, or a repo it cloned) can ask for any
 // address beside it. So an artifact gets the thread's folder, and nothing past it: no `..` out of it, no absolute or `~`
 // path, and no symlink (of the file or of a folder on the way) that leads out of it, however it's swapped meanwhile.
-import { constants } from 'node:fs'
+import { constants, type Stats } from 'node:fs'
 import { open, readlink, realpath, stat } from 'node:fs/promises'
 import { join, sep } from 'node:path'
 import { RpcError } from '@superego/protocol'
@@ -29,7 +29,7 @@ export function artifactFile(path: string): string | undefined {
 }
 
 /** Where an open file really is. Linux says, of the file itself; elsewhere its path is resolved again, and must be it. */
-async function whereIs(fd: number, path: string, ino: number, dev: number): Promise<string | undefined> {
+async function whereIs(fd: number, path: string, opened: Stats): Promise<string | undefined> {
   const proc = await readlink(`/proc/self/fd/${fd}`).catch(() => undefined)
   if (proc !== undefined) return proc
   // No /proc (macOS): the path as it resolves now, if it's still the file that was opened. A swap after the open would
@@ -37,7 +37,7 @@ async function whereIs(fd: number, path: string, ino: number, dev: number): Prom
   const real = await realpath(path).catch(() => undefined)
   if (!real) return undefined
   const now = await stat(real).catch(() => undefined)
-  return now && now.ino === ino && now.dev === dev ? real : undefined
+  return now && now.ino === opened.ino && now.dev === opened.dev ? real : undefined
 }
 
 /** An artifact's file in `folder` (a thread's), as `asked` by its page: refused unless it really is in the folder. */
@@ -54,7 +54,7 @@ export async function readArtifact(folder: string, asked: string): Promise<Buffe
   })
   try {
     const info = await handle.stat()
-    const real = await whereIs(handle.fd, file, info.ino, info.dev)
+    const real = await whereIs(handle.fd, file, info)
     if (!real?.startsWith(root === sep ? root : root + sep)) throw new RpcError('forbidden', `${path} leads outside the thread's folder`)
     if (!info.isFile()) throw new RpcError('invalid', `${path} isn't a file`)
     if (info.size > ARTIFACT_LIMIT) throw new RpcError('too_large', `${path} is larger than ${ARTIFACT_LIMIT / 1024 / 1024} MB`)

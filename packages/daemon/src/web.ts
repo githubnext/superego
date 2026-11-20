@@ -6,9 +6,10 @@
 // Who may: a paired device (web-devices.ts), by its HttpOnly cookie; and through serve, a device of the machine's owner
 // the user approved, by its Tailscale node (never their login alone: the machines they run agents on share it). Nothing
 // secret is ever in an address. Every request must name a host the daemon is served at (so a DNS-rebound page can't
-// reach it), and a WebSocket must come from the page's own origin (so another site can't ride the cookie). The hosts are loopback's, the one the `web.host` setting names (a name it's reached at some other way: a
-// proxy of the user's own, whose requests are plain loopback ones, so pairing still decides who gets in through it), and
-// through serve, Tailscale's.
+// reach it), and a WebSocket must come from the page's own origin (so another site can't ride the cookie). The hosts
+// are loopback's, the one the `web.host` setting names (a name it's reached at some other way: a proxy of the user's
+// own, whose requests are plain loopback ones, so pairing still decides who gets in through it), and through serve,
+// Tailscale's.
 //
 // Two listeners. 127.0.0.1:<port>, which anyone on this computer reaches (every local user, and pages in a browser
 // here), so what a request there says of itself counts for nothing: it's a device by its cookie or no one. And while
@@ -85,11 +86,9 @@ const decode = (value: string) => { try { return decodeURIComponent(value) } cat
 /** A request's path and query. Malformed for a target that's no path (`*`, an absolute URL) or no URL at all. */
 function targetOf(request: IncomingMessage): { path: string; search: string } {
   const target = request.url ?? '/'
-  if (!target.startsWith('/')) throw new Malformed(`Not a path: ${target}`)
-  try {
-    const url = new URL(`http://x${target}`)
-    return { path: url.pathname, search: url.search }
-  } catch { throw new Malformed(`Not a path: ${target}`) }
+  const url = target.startsWith('/') ? URL.parse(`http://x${target}`) : null
+  if (!url) throw new Malformed(`Not a path: ${target}`)
+  return { path: url.pathname, search: url.search }
 }
 
 const cookieOf = (request: IncomingMessage) => {
@@ -191,12 +190,12 @@ export async function serveWeb({ root, port, devices, tailscale, serveSocket, or
   // name for "this device's view of this thread's files", which the rest of the page's requests carry. The page can
   // read its own address, and a script in it (the agent's, from whatever it read) can send it anywhere, so a grant is
   // held to whom and where it was given: the device as long as it may in, and through serve, the same tailnet device
-  // (its address, which serve vouches for), so it's worth nothing from any other. On loopback every
-  // caller looks alike (anyone on this computer, or behind a proxy of the user's), so there it can't be held to one:
-  // it lapses instead, GRANT_IDLE after the page last used it. Grants are the server's: a restart ends them all.
+  // (its address, which serve vouches for), so it's worth nothing from any other. On loopback every caller looks alike
+  // (anyone on this computer, or behind a proxy of the user's), so there it can't be held to one: it lapses instead,
+  // GRANT_IDLE after the page last used it. Grants are the server's: a restart ends them all.
   type Grant = { who: string; thread: string; address: string; serve: boolean; used: number }
   const grants = new Map<string, Grant>()
-  const fresh = (grant: Grant, now = Date.now()) => grant.serve || now - grant.used < GRANT_IDLE
+  const fresh = (grant: Grant) => grant.serve || Date.now() - grant.used < GRANT_IDLE
   /** Whether a grant still stands for a request: from where it was given, by whom it was given to. */
   const stands = (grant: Grant, caller: Caller) =>
     fresh(grant) && grant.serve === Boolean(caller.serve) && grant.address === caller.address && devices.has(grant.who)
@@ -331,14 +330,11 @@ export async function serveWeb({ root, port, devices, tailscale, serveSocket, or
   const listener = (viaServe: boolean) => {
     const server = createServer((request, response) => {
       handle(request, response, viaServe).catch((error: unknown) => {
-        if (error instanceof Malformed) {
-          if (!response.headersSent) response.writeHead(400, { 'content-type': 'text/plain' }).end(error.message)
-          else response.destroy()
-          return
-        }
-        console.error(`Web access: ${request.method} ${request.url} failed:`, error)
-        if (!response.headersSent) response.writeHead(500, { 'content-type': 'text/plain' }).end('Something went wrong here: the daemon\'s log says what.')
-        else response.destroy()
+        const malformed = error instanceof Malformed
+        if (!malformed) console.error(`Web access: ${request.method} ${request.url} failed:`, error)
+        if (response.headersSent) return void response.destroy()
+        response.writeHead(malformed ? 400 : 500, { 'content-type': 'text/plain' })
+          .end(malformed ? error.message : 'Something went wrong here: the daemon\'s log says what.')
       })
     })
     server.on('upgrade', (request: IncomingMessage, socket: Duplex, head: Buffer) => {

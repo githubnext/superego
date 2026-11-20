@@ -25,8 +25,7 @@ const HTML = { 'content-type': 'text/html; charset=utf-8', connection: 'close' }
  */
 function addressOf(request: IncomingMessage, base: string | URL): URL | undefined {
   const target = request.url ?? '/'
-  if (!target.startsWith('/') || target.startsWith('//')) return undefined
-  try { return new URL(target, base) } catch { return undefined }
+  return target.startsWith('/') && !target.startsWith('//') ? URL.parse(target, base) ?? undefined : undefined
 }
 
 /** What the browser sees once it's back. */

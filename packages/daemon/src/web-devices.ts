@@ -37,7 +37,7 @@ type State = { devices: Stored[]; nodes: Node[] }
  * A device as Settings and the CLI show it: never its secret. An owner's tailnet device is `tailscale`, with its OS, and
  * `waiting` until approved.
  */
-export type DeviceInfo = { id: string; name: string; created?: number; lastSeen: number; address: string; tailscale?: true; os?: string; waiting?: true }
+export type DeviceInfo = { id: string; name: string; created: number; lastSeen: number; address: string; tailscale?: true; os?: string; waiting?: true }
 export type Ticket = { ticket: string; code: string; expires: number }
 
 const hash = (secret: string) => createHash('sha256').update(secret).digest()
@@ -146,14 +146,11 @@ export class WebDevices {
       void this.#save()
       return false
     }
-    if (entry.name !== node.name || entry.os !== node.os) {
-      entry.name = node.name
-      if (node.os) entry.os = node.os
-      else delete entry.os
-      entry.address = address
-      entry.lastSeen = this.#now()
-      void this.#save()
-    } else this.#seen(entry, address)
+    const renamed = entry.name !== node.name || entry.os !== node.os
+    entry.name = node.name
+    if (node.os) entry.os = node.os
+    else delete entry.os
+    this.#seen(entry, address, renamed)
     return Boolean(entry.approved)
   }
 
@@ -236,13 +233,13 @@ export class WebDevices {
     return this.#state.devices
   }
 
-  /** Seen now: kept at most once a minute (and at once when it's from somewhere new). */
-  #seen(entry: { lastSeen: number; address: string }, address: string) {
+  /** Seen now: kept at most once a minute (and at once when it's from somewhere new, or else `changed`). */
+  #seen(entry: { lastSeen: number; address: string }, address: string, changed = false) {
     const now = this.#now()
     const moved = entry.address !== address
     entry.lastSeen = now
     entry.address = address
-    if (moved || now - this.#saved > 60_000) void this.#save()
+    if (changed || moved || now - this.#saved > 60_000) void this.#save()
   }
 
   #sweep() {

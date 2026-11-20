@@ -389,7 +389,12 @@ describe('the web server', () => {
       expect((await ws('100.64.0.8')).result).toBe('401')
       expect((await http(viaServe(), '/artifact/t1/page.html', { headers: through('100.64.0.8') })).status).toBe(401)
       expect((await http(viaServe(), '/rpc', { headers: through('100.64.0.7') })).status).toBe(401)
-      expect(devices.list()).toMatchObject([{ id: 'tailscale:nPHONE', name: 'phone', waiting: true }, { id: 'tailscale:nBOX', name: 'workbox', waiting: true }])
+      // Both waiting (in whichever order: they may have asked in the same millisecond).
+      expect(devices.list()).toHaveLength(2)
+      expect(devices.list()).toEqual(expect.arrayContaining([
+        expect.objectContaining({ id: 'tailscale:nPHONE', name: 'phone', waiting: true }),
+        expect.objectContaining({ id: 'tailscale:nBOX', name: 'workbox', waiting: true }),
+      ]))
       // Approved (from somewhere already in), the phone is in, by its node; the box still waits.
       await devices.approve('tailscale:nPHONE')
       expect((await http(viaServe(), '/rpc', { headers: through('100.64.0.7') })).status).toBe(204)

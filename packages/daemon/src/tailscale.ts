@@ -1,7 +1,7 @@
 // Web access over Tailscale: `tailscale serve` fronts the daemon with HTTPS at this machine's `<machine>.<tailnet>.ts.net`
 // name, and tells it where a request came from (X-Forwarded-For): `tailscale whois` says which device of the tailnet
-// that is, and whose. The daemon sets serve up and takes it down
-// itself, through the `tailscale` command, and only ever touches the handler it set up.
+// that is, and whose. The daemon sets serve up and takes it down itself, through the `tailscale` command, and only ever
+// touches the handler it set up.
 //
 // Serve proxies to a Unix socket of the daemon's (`unix:<path>`), in a folder only its user opens: tailscaled runs as
 // root, so it gets in, and no one else on the computer does. That's what makes its identity headers believable there.
@@ -28,7 +28,7 @@ type Status = {
   Version?: string
   BackendState?: string
   CertDomains?: string[] | null
-  Self?: { DNSName?: string; HostName?: string; UserID?: number; TailscaleIPs?: string[]; Tags?: string[] | null }
+  Self?: { DNSName?: string; UserID?: number; Tags?: string[] | null }
   CurrentTailnet?: { Name?: string } | null
   User?: Record<string, { LoginName?: string }>
 }
@@ -68,13 +68,13 @@ const ours = (proxy: string | undefined, { port, target }: Ours) =>
 type Ours = { target: string; port: number }
 
 /** The first tailscaled that serves to a Unix socket (`unix:` targets, identity headers and all). */
-export const SERVES_SOCKETS = [1, 94] as const
+const SERVES_SOCKETS = [1, 94] as const
 
 /** Whether a tailscaled of `version` serves to a Unix socket; one that doesn't say is let try (and says so if not). */
 const servesSockets = (version: string | undefined) => {
   const [major, minor] = (version ?? '').split(/[.-]/).map(Number)
-  if (major === undefined || minor === undefined || Number.isNaN(major) || Number.isNaN(minor)) return true
-  return major > SERVES_SOCKETS[0] || (major === SERVES_SOCKETS[0] && minor >= SERVES_SOCKETS[1])
+  if (!Number.isInteger(major) || !Number.isInteger(minor)) return true
+  return major! > SERVES_SOCKETS[0] || (major === SERVES_SOCKETS[0] && minor! >= SERVES_SOCKETS[1])
 }
 
 /** Serve the daemon's socket `target` at https://<name>/, through the tailscaled at `socket`; what came of it. */
