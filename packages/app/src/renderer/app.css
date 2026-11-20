@@ -218,7 +218,7 @@ details[open] > .row > .row__chevron { transform: rotate(90deg); }
 .row { max-width: calc(100% + 33px); }
 .steps, .step, .run__steps { min-width: 0; max-width: 100%; }
 .row__meta { flex: none; font: var(--superego-text-xs) var(--superego-mono); color: var(--superego-faint); }
-.row__failed { color: var(--superego-status-error); font-size: var(--superego-text-sm); }
+.row__failed { flex: none; white-space: nowrap; color: var(--superego-status-error); font-size: var(--superego-text-sm); }
 .step--error > .row .row__label, .step--error > .row .row__icon { color: var(--superego-status-error); }
 .stat--add { color: var(--superego-diff-added); }
 .stat--del { color: var(--superego-diff-removed); }
@@ -261,6 +261,7 @@ details[open] > .row > .row__chevron { transform: rotate(90deg); }
 /* A turn that did work ends on a hairline, with what it did at the right: the boundary between turns. */
 .turn-end { display: flex; gap: 6px; margin-top: -4px; font-size: calc(11.5px * var(--superego-text-scale)); color: var(--superego-faint); font-variant-numeric: tabular-nums; }
 .turn-end > * + *::before { content: '·'; margin-right: 6px; }
+.turn-end > * { white-space: nowrap; }
 
 /* Markdown: the reading column's size and rhythm, one step of space between blocks, wherever it's put. Where it sits in
    text set its own way (a note in the work, your bubble, a notice), it takes that text's size. */
