@@ -328,20 +328,31 @@ function placeView(host: HTMLElement, view: BridgeWebView, setStill: (still: Sti
     return true
   }
 
-  /** Check each frame until nothing's changed for half a second. */
+  /** Check each frame until nothing's changed for half a second (`QUIET` frames): something moves (resize, scroll, a transition or an animation). */
+  const QUIET = 30
   const wake = () => {
     quiet = 0
     if (!frame && !stopped) frame = requestAnimationFrame(tick)
+  }
+  /**
+   * The window's page changed: checked once, in the next frame, and on from there only if the view moved. What then
+   * moves by itself starts a transition or an animation, which wakes it. Each frame for half a second after every
+   * change would be every frame while threads work, for as long as a web view is open (they change the page all the time).
+   */
+  const glance = () => {
+    if (frame || stopped) return
+    quiet = QUIET - 1
+    frame = requestAnimationFrame(tick)
   }
   const tick = () => {
     frame = 0
     if (stopped) return
     quiet = check() ? 0 : quiet + 1
-    if (quiet < 30) frame = requestAnimationFrame(tick)
+    if (quiet < QUIET) frame = requestAnimationFrame(tick)
   }
   const resize = new ResizeObserver(wake)
   resize.observe(host)
-  const mutations = new MutationObserver(wake)
+  const mutations = new MutationObserver(glance)
   mutations.observe(document.body, { subtree: true, childList: true, attributes: true, attributeFilter: ['class', 'style', 'inert', 'hidden', 'open', 'data-open', 'data-closed'] })
   const events = ['scroll', 'resize', 'transitionrun', 'animationstart', 'visibilitychange'] as const
   for (const name of events) window.addEventListener(name, wake, true)

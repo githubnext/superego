@@ -6,7 +6,14 @@
   color: inherit; font: inherit; cursor: zoom-in;
 }
 .image-frame:focus-visible { outline: none; box-shadow: 0 0 0 2px var(--superego-ring); }
-.image-frame.is-loading::after { content: ''; position: absolute; inset: 0; background: linear-gradient(100deg, transparent 30%, var(--superego-hover) 50%, transparent 70%); background-size: 250% 100%; animation: image-shimmer 1.4s ease-in-out infinite; }
+/* The shimmer, while it's being read (`is-asked`: not one far off the screen, waiting its turn): a band wider than the
+   frame, moved across it. It moves by `transform`, which the compositor runs on its own; moving a background would draw
+   the whole page again every frame for as long as an image loads. */
+.image-frame.is-loading.is-asked::after {
+  content: ''; position: absolute; top: 0; bottom: 0; left: 0; width: 250%;
+  background: linear-gradient(100deg, transparent 30%, var(--superego-hover) 50%, transparent 70%);
+  animation: image-shimmer 1.4s ease-in-out infinite;
+}
 .image-frame.is-broken { cursor: default; }
 .image-frame__img { display: block; opacity: 0; transition: opacity .2s ease; }
 .image-frame.is-ready .image-frame__img { opacity: 1; }
@@ -93,10 +100,10 @@
   .lightbox:has(.lightbox__side) .lightbox__caption { margin-bottom: 64px; }
 }
 
-@keyframes image-shimmer { from { background-position: 100% 0; } to { background-position: -50% 0; } }
+@keyframes image-shimmer { from { transform: translateX(-60%); } to { transform: translateX(30%); } }
 @keyframes image-fade { from { opacity: 0; } }
 @keyframes image-spin { to { rotate: 1turn; } }
 @media (prefers-reduced-motion: reduce) {
-  .image-frame.is-loading::after, .lightbox { animation: none; }
+  .image-frame.is-loading.is-asked::after, .lightbox { animation: none; }
   .lightbox__image, .image-frame__img { transition: none; }
 }

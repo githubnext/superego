@@ -25,6 +25,8 @@ export type PageInfo = {
   nodes?: number; images?: number; canvases?: number; iframes?: number
   /** Animations running, by name and what they animate. */
   animations?: Record<string, number>
+  /** Images not drawn yet (the first 20). */
+  loadingImages?: { title: string; asked: boolean; inView: boolean }[]
 }
 
 export type WindowResult = {
@@ -67,8 +69,13 @@ const PAGE_INFO = `(() => {
     ...(el.dataset.pane ? { pane: el.dataset.pane } : {}),
     state: el.classList.contains('is-focused') ? 'focused' : el.classList.contains('is-shown') ? 'shown' : 'away',
   }))
+  // Images not drawn yet: whether each is being read (is-asked) and on the screen.
+  const loadingImages = [...document.querySelectorAll('.image-frame.is-loading')].slice(0, 20).map((el) => {
+    const r = el.getBoundingClientRect()
+    return { title: el.title, asked: el.classList.contains('is-asked'), inView: r.bottom > 0 && r.top < innerHeight && r.right > 0 && r.left < innerWidth }
+  })
   return {
-    title: document.title, visibility: document.visibilityState, focused: document.hasFocus(), tabs,
+    title: document.title, visibility: document.visibilityState, focused: document.hasFocus(), tabs, loadingImages,
     nodes: document.getElementsByTagName('*').length, images: document.images.length,
     canvases: document.querySelectorAll('canvas').length, iframes: document.querySelectorAll('iframe').length, animations,
   }
@@ -228,6 +235,7 @@ function markdown(result: ProfileResult): string {
       if (page.tabs?.length) lines.push(`Tabs: ${page.tabs.map((t) => `${t.label} (${t.state})`).join(', ')}.`)
       const animations = Object.entries(page.animations ?? {}).sort((a, b) => b[1] - a[1])
       if (animations.length) lines.push(`Running animations: ${animations.map(([what, n]) => `${n}× ${what}`).join('; ')}.`)
+      if (page.loadingImages?.length) lines.push(`Images not drawn yet: ${page.loadingImages.map((i) => `${i.title || '(untitled)'}${i.asked ? ', being read' : ', waiting'}${i.inView ? ', in view' : ''}`).join('; ')}.`)
     }
     if (w.metrics) {
       const m = w.metrics

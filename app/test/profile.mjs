@@ -2,8 +2,8 @@
 // with a scripted model (test/profile/turns.mjs) in an isolated app.
 // - `idle`: about 30 threads in the sidebar, four of them working (a long `sleep`), nothing happening: first with the
 //   window never shown yet (as the other tests run it), then shown, then with a terminal open beside the thread.
-// - `streaming`: three threads printing a line every half second, then a fourth streaming long Markdown, code and tool
-//   calls, shown; then another the same, not shown.
+// - `streaming`: three threads printing a line every half second (then one of them shown, a Browser pane beside it),
+//   then a fourth streaming long Markdown, code and tool calls, shown; then another the same, not shown.
 // - `transcript`: a thread of a few thousand entries (tool calls, outputs, images, edits) opened, scrolled through, and
 //   streamed into.
 // - `memory`: for PROFILE_MINUTES (12), threads switched, panes opened and closed (editor, diff, terminal, browser,
@@ -149,6 +149,7 @@ await openApp({ name: 'profile', timeout: (MINUTES + 45) * 60_000, shots: OUT, m
       },
       jsHeapMB: { start: round(before.JSHeapUsedSize / 1048576), end: round(after.JSHeapUsedSize / 1048576) }, nodes: after.Nodes, listeners: after.JSEventListeners,
       longTasks: page.longTasks, components: page.components, callbacks: page.callbacks, reactErrors: page.errors,
+      drawing: await drawingAnimations(),
       cpuSeries: samples.map((s) => round(s.renderer.cpu)),
     }
     if (profile) {
@@ -162,6 +163,15 @@ await openApp({ name: 'profile', timeout: (MINUTES + 45) * 60_000, shots: OUT, m
     save()
     return result
   }
+
+  /**
+   * The endless animations running as a phase ends that draw the page again every frame: ones of anything but
+   * `transform`, `opacity` and the like, which the compositor can't run on its own (a background moving, an SVG's
+   * part turning). Each keeps the window's main thread busy for as long as it runs, seen or not.
+   */
+  const COMPOSITED = new Set(['transform', 'opacity', 'rotate', 'translate', 'scale'])
+  const drawingAnimations = async () => (await run('window.__profile.animations()'))
+    .filter((a) => a.props.some((p) => !COMPOSITED.has(p))).map((a) => `${a.name} on ${a.target} (${a.props.join(', ')})${a.visible ? '' : ', not visible'}`)
 
   // ── The threads ──
   const list = () => run(`window.superego.call('local', 'thread.list', {})`)
@@ -268,6 +278,18 @@ await openApp({ name: 'profile', timeout: (MINUTES + 45) * 60_000, shots: OUT, m
       await working(id, title)
     }
     await measure('three threads printing', { seconds: 60 })
+    if (runs('streaming')) {
+      // One of them shown, a Browser pane beside it: its page is placed over the pane, checked as the window's page
+      // changes (twice a second here) and not every frame for as long as threads work (web-view.tsx).
+      await select(titles.printers[0])
+      await run(`window.superego.call('local', 'pane.open', ${JSON.stringify({ thread: printers[0], kind: 'browser', params: { path: 'page.html' } })})`)
+      const pane = await until(async () => (await list()).find((th) => th.id === printers[0])?.panes.find((p) => p.kind === 'browser')?.id, 'the browser pane opened')
+      await until(`Boolean(document.querySelector('[data-column="${pane}"] .web-view'))`, 'the browser pane shown')
+      await tick(3000)
+      await phase('streaming', 'a printing thread shown, a browser pane beside', { seconds: 60 })
+      await run(`window.superego.call('local', 'pane.close', ${JSON.stringify({ thread: printers[0], pane })})`)
+      await until(`!document.querySelector('[data-column="${pane}"]')`, 'the browser pane closed')
+    }
     const shown = await start(titles.stream[0])
     await select(titles.stream[0])
     await measure('streaming, shown', {
@@ -327,11 +349,26 @@ await openApp({ name: 'profile', timeout: (MINUTES + 45) * 60_000, shots: OUT, m
     await scrolling('scrolling up', 'up', true)
     await scrolling('scrolling down', 'down', false)
     await phase('transcript', 'shown, idle', { seconds: 30 })
+    // An image being read, in view, as one slow to come (a big screenshot) is: its frame as images.tsx draws it, at the
+    // transcript's end. Its shimmer is the compositor's to run, not the page drawn again every frame (images.css).
+    await run(`(() => {
+      const frame = Object.assign(document.createElement('button'), { className: 'image-frame image-frame--inline is-loading is-asked', id: 'profile-loading-image' })
+      document.querySelector('.transcript').append(frame)
+      document.querySelector('.thread__scroll').scrollTop = 1e9
+    })()`)
+    await tick(3000)
+    await phase('transcript', 'an image loading, in view', { seconds: 30 })
+    await run(`document.getElementById('profile-loading-image').remove()`)
     // Every run of work opened, as one reading it all would.
     const runs = `document.querySelectorAll('.thread__scroll details.steps--run')`
     await run(`${runs}.forEach((d) => { d.open = true })`)
     await until(`[...${runs}].every((d) => d.querySelector('.run__steps'))`, 'every run opened', 60_000)
     scenario.opened = await heap()
+    // At its end, at rest: the images far above wait to be read, without a shimmer (images.tsx), which would draw the
+    // page again every frame.
+    await run(`document.querySelector('.thread__scroll').scrollTop = 1e9`)
+    await tick(3000)
+    await phase('transcript', 'every run opened, idle at its end', { seconds: 30 })
     await scrolling('every run opened, scrolling up', 'up', true)
     await run(`${runs}.forEach((d) => { d.open = false })`)
   }
@@ -490,6 +527,8 @@ function markdown(r) {
       for (const [key, ms, pct] of p.profile.total.slice(0, 25)) lines.push(`| ${ms} | ${pct} | \`${key}\` |`)
     }
   }
+  const drawing = [...new Set(phases.flatMap(([, , p]) => p.drawing ?? []))]
+  lines.push('', '## Endless animations that draw the page every frame', '', ...(drawing.length ? drawing.map((a) => `- ${a}`) : ['None.']))
   if (r.scenarios.idle?.animations) lines.push('', '## Endless animations while idle', '', ...r.scenarios.idle.animations.map((a) => `- ${a.name} on \`${a.target}\` (${a.props.join(', ')})${a.visible ? '' : ', not visible'}`))
   const t = r.scenarios.transcript
   if (t?.open) lines.push('', '## The long transcript', '', `Opened in ${t.open.ms} ms. Before: ${JSON.stringify(t.open.before)}. Shown: ${JSON.stringify(t.open.after)}. Every run opened: ${JSON.stringify(t.opened)}. Left: ${JSON.stringify(t.left)}.`)

@@ -190,7 +190,9 @@ export function ImageFrame({ machine, thread, image, onOpen, className = '', img
 }) {
   const frame = useRef<HTMLButtonElement>(null)
   const near = useNear(frame, nearFrom)
-  const { src, broken: unread, problem } = useImageSource(machine, thread, image, near && wanted)
+  // Read once it's near the screen (and wanted): until then it waits, still, in its place.
+  const asked = near && wanted
+  const { src, broken: unread, problem } = useImageSource(machine, thread, image, asked)
   useRecheckInView(frame, machine.id, thread, near && !image.url ? image.path : undefined)
   // Which image was drawn (any version of it): a newer version of the same file takes the old one's place without the
   // shimmer between.
@@ -209,7 +211,7 @@ export function ImageFrame({ machine, thread, image, onOpen, className = '', img
     <button
       ref={frame}
       type="button"
-      className={`image-frame ${className} ${broken ? 'is-broken' : drawn === which && src ? 'is-ready' : 'is-loading'} ${sized ? 'has-size' : ''} ${tall ? 'is-tall' : ''}`}
+      className={`image-frame ${className} ${broken ? 'is-broken' : drawn === which && src ? 'is-ready' : 'is-loading'} ${asked ? 'is-asked' : ''} ${sized ? 'has-size' : ''} ${tall ? 'is-tall' : ''}`}
       style={sized ? { ...sized, ...style } : style}
       title={broken ? `${image.name}: ${reason}` : image.caption ?? imageFileName(image.name)}
       aria-label={broken ? `${name}: ${reason}` : `Open ${name}`}

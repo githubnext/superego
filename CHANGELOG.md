@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- The window uses far less CPU while an image loads in a thread (a shimmer that redrew the whole window every frame
+  now costs next to nothing, and images far off the screen no longer shimmer while they wait), and while a Browser pane
+  is open beside threads that are working.
 - The app updates itself: it looks for a new release at launch and every few hours, downloads it in the background,
   and shows "Superego 0.1.9 is ready" with Restart in the sidebar's rail. Restarting stops this computer's daemon
   first (asking while agents work; they pick up again after). Quitting installs it too, and the daemon restarts onto it

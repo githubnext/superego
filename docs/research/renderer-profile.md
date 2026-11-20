@@ -119,3 +119,26 @@ slowly (about +55 MB over the next ten). The JS heap doesn't account for this. T
   long answer cost the same however far into it the agent is.
 - **The ego button's "beckon" animates `box-shadow`, which runs on the main thread.** It's short-lived (first run
   only), but `opacity` or `transform` would let the compositor do it.
+
+## Profiling the running app (November 2026, later)
+
+`superego app profile [--seconds 10]` (⌘K in a dev build: "Profile the windows") profiles the live app's windows
+through each page's debugger: a CPU profile, Chromium's counts, what the window showed (tabs, running animations,
+images not drawn yet), each process's CPU named by the window or web view it draws, and a Perfetto trace
+(`trace.json`, a protobuf trace despite its name: open it in ui.perfetto.dev). Written to `~/.superego/profiles/`.
+
+The first live profile (the window at 38.6% of a core, 5 threads working, 8,100 DOM nodes, a Browser pane focused)
+found two things the replay didn't:
+
+1. **An image's loading shimmer moved its background**, which the compositor can't do: the whole page went through
+   style, paint and compositing every frame (about 2 ms a frame, at 120 Hz: 30–50% of the main thread). Images far off
+   the screen, waiting to be read, shimmered too, for as long as the thread was shown. The shimmer now moves by
+   `transform`, and only on an image being read (`is-asked`). In `profile.sh transcript`, "an image loading, in view":
+   16.2% → 4.2% (3.2% without it).
+2. **A Browser pane's placing checked every frame for half a second after any change to the window's page**: with
+   threads working, that's every frame, each a main frame of its own (5–17% of the main thread live). A change to the
+   page is now checked once, in the next frame; only scrolling, resizing, transitions and animations check every
+   frame until things settle. The replay's window is too small for this to show (`streaming`, "a printing thread
+   shown, a browser pane beside": 4.1% → 3.8%).
+
+`profile.mjs` now lists, for every phase, the endless animations that draw the page every frame.
