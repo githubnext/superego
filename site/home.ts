@@ -118,6 +118,7 @@ export function homeBody(o: { base: string; download: string }) {
 <p class="tagline">An agent workbench you make your own.</p>
 <p class="sub">A small shell for running agents: threads, panes beside them, and machines to run them on. The rest is profiles and extensions, which you get by asking an agent for them.</p>
 <p class="links"><a class="button" href="${o.download}">Download</a><a href="${o.base}docs/">Docs</a></p>
+<p class="byline">An experimental project by <a href="https://github.com/mikker"><img src="${o.base}mikker.png" alt="" width="20" height="20">mikker</a> at <a href="https://githubnext.com"><img src="${o.base}githubnext.png" alt="" width="20" height="20">GitHub Next</a></p>
 
 <figure class="shot">
 <picture><source media="(prefers-color-scheme: dark)" srcset="${o.base}screenshot-dark.webp"><img src="${o.base}screenshot-light.webp" alt="The Superego window: a lead thread with its child threads in the sidebar, a question over the composer, and a board of the work beside it" width="2880" height="1800"></picture>

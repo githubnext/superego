@@ -278,6 +278,8 @@ export function build() {
   writeFileSync(join(OUT, 'style.css'), `${appTokens()}\n${readFileSync(join(SITE, 'style.css'), 'utf8')}`)
   // The window, from `app/test/look.sh <dir> staff`: staff-wide-light.png and -dark.png (cwebp -q 82).
   for (const shot of ['screenshot-light.webp', 'screenshot-dark.webp']) cpSync(join(SITE, shot), join(OUT, shot))
+  // The byline's avatars, from avatars.githubusercontent.com.
+  for (const avatar of ['mikker.png', 'githubnext.png']) cpSync(join(SITE, avatar), join(OUT, avatar))
   cpSync(join(ROOT, 'app/resources/icon.png'), join(OUT, 'icon.png'))
   write('', home())
   for (const page of docs) write(urlOf(page).slice(BASE.length), docPage(page, render(page)))

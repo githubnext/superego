@@ -46,6 +46,9 @@ a:hover { text-decoration: underline; }
 .home p { max-width: 560px; margin: 16px auto 0; color: var(--superego-muted); font-size: 17px; text-wrap: balance; }
 .home .tagline { margin-top: 6px; color: var(--superego-text); font-size: 22px; font-weight: 500; letter-spacing: -.01em; }
 .home .links { display: flex; justify-content: center; align-items: center; gap: 24px; margin-top: 32px; }
+.home .byline { margin-top: 28px; font-size: 14px; }
+.byline a { color: var(--superego-text); white-space: nowrap; }
+.byline img { width: 20px; height: 20px; margin: 0 5px 0 3px; border-radius: 50%; vertical-align: -5px; }
 .home code { padding: 1px 5px; border-radius: 4px; background: var(--superego-code-chip); font: .85em var(--superego-mono); overflow-wrap: anywhere; }
 
 .shot { position: relative; margin: 56px 0 0; }
