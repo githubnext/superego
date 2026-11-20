@@ -185,7 +185,7 @@ function home() {
 <h1>Superego</h1>
 <p>${DESCRIPTION}</p>
 <p class="links"><a class="button" href="${DOWNLOAD}">Download</a><a href="${BASE}docs/">Docs</a></p>
-<picture><source media="(prefers-color-scheme: dark)" srcset="${BASE}screenshot-dark.webp"><img src="${BASE}screenshot-light.webp" alt="The Superego window: a project's threads in the sidebar, a thread, and its changes beside it" width="2200" height="1520"></picture>
+<picture><source media="(prefers-color-scheme: dark)" srcset="${BASE}screenshot-dark.webp"><img src="${BASE}screenshot-light.webp" alt="The Superego window: a lead thread with its child threads in the sidebar, a question over the composer, and a board of the work beside it" width="2880" height="1800"></picture>
 </main>`,
   })
 }
@@ -275,7 +275,7 @@ export function build() {
   rmSync(OUT, { recursive: true, force: true })
   mkdirSync(OUT, { recursive: true })
   cpSync(join(SITE, 'style.css'), join(OUT, 'style.css'))
-  // The window, from app/test/look.sh's open-changes-light.png and -dark.png (cwebp -q 82).
+  // The window, from `app/test/look.sh <dir> staff`: staff-wide-light.png and -dark.png (cwebp -q 82).
   for (const shot of ['screenshot-light.webp', 'screenshot-dark.webp']) cpSync(join(SITE, shot), join(OUT, shot))
   cpSync(join(ROOT, 'app/resources/icon.png'), join(OUT, 'icon.png'))
   write('', home())
