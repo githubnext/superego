@@ -1,6 +1,6 @@
 #!/bin/sh
 # The window's layout in the states the design covers, screenshotted:
-# `test/look.sh <dir> [look|focus|panes|panehead|composer|images|mcp|web|terminal|toolbar|titlebar|titlebar-fit|pins|folds|states|cards|dialogs|machines]` (look, unless given), each a script of
+# `test/look.sh <dir> [look|focus|panes|panehead|composer|images|mcp|web|terminal|toolbar|titlebar|titlebar-fit|pins|folds|states|cards|dialogs|machines|staff]` (look, unless given), each a script of
 # that name here:
 # - `look`: the sidebar shown, dragged and hidden, the thread alone and with panes, details, a phone; the first-launch
 #   page, ⌘N's dialog, Settings and its Keyboard;
@@ -24,13 +24,15 @@
 # - `dialogs`: the palette, ⌘L (archived threads too), the pane picker and ⌘N's fields.
 # - `machines`: Settings → Machines with two other machines, one behind and needing a service, wide and narrow, and a
 #   row's menu.
+# - `staff`: a lead on the chief-of-staff profile at work, its children, its board and its question (the public site's
+#   hero).
 set -e
 cd "$(dirname "$0")/.."
 # A heavy check: it waits for a slot (../scripts/check.ts), is stopped after 8 minutes (SUPEREGO_SHOWCASE_TIMEOUT, in
 # seconds), and builds the app first if its sources changed.
 [ "$SUPEREGO_CHECK_COMMAND" = test/look.sh ] || exec node ../scripts/check.ts --timeout SUPEREGO_SHOWCASE_TIMEOUT=480 test/look.sh "$@"
 node scripts/build.ts
-OUT="$(cd "$(dirname "${1:?usage: look.sh <dir> [look|focus|panes|panehead|composer|images|mcp|web|terminal|toolbar|titlebar|titlebar-fit|pins|folds|states|cards]}")" && pwd)/$(basename "$1")"
+OUT="$(cd "$(dirname "${1:?usage: look.sh <dir> [look|focus|panes|panehead|composer|images|mcp|web|terminal|toolbar|titlebar|titlebar-fit|pins|folds|states|cards|dialogs|machines|staff]}")" && pwd)/$(basename "$1")"
 mkdir -p "$OUT"
 unset ANTHROPIC_API_KEY ANTHROPIC_OAUTH_TOKEN OPENAI_API_KEY
 export SUPEREGO_HOME="$(mktemp -d)" SUPEREGO_HEADLESS=1 SUPEREGO_SHOWCASE_OUT="$OUT" SUPEREGO_REPLAY_SPEED=0 TZ=Europe/Copenhagen
@@ -42,6 +44,13 @@ export SUPEREGO_MODEL="replay:$SUPEREGO_HOME/turns.jsonl"
 if [ "$2" = mcp ]; then
   node test/showcase/mcp-setup.mjs "$SUPEREGO_HOME" "$SUPEREGO_HOME/mcp-turns.jsonl"
   export SUPEREGO_MODEL="replay:$SUPEREGO_HOME/mcp-turns.jsonl"
+fi
+# `staff`: the chief-of-staff profile as one of this home's own (test/showcase/profiles), and its scene's turns.
+if [ "$2" = staff ]; then
+  cp -R test/showcase/profiles "$SUPEREGO_HOME/profiles"
+  rm "$SUPEREGO_HOME/profiles/README.md"
+  node test/showcase/staff.mjs "$SUPEREGO_HOME/staff-turns.jsonl"
+  export SUPEREGO_MODEL="replay:$SUPEREGO_HOME/staff-turns.jsonl"
 fi
 # Skills of its own (shown in the Skills data view), not this machine's ~/.agents.
 export SUPEREGO_AGENTS="$SUPEREGO_HOME/agents"

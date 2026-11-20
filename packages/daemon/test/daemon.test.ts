@@ -309,6 +309,33 @@ describe('record and replay', () => {
     delete process.env.SUPEREGO_REPLAY_SPEED
   })
 
+  it("plays a turn naming a thread only to the conversation that thread's first message is in, ids filled in", async () => {
+    const turns = join(dir, 'scoped.jsonl')
+    const turn = (text: string, thread?: string) => JSON.stringify({ at: 0, provider: 'x', model: 'x', ...(thread ? { thread } : {}), message: { role: 'assistant', content: [{ type: 'text', text }], stopReason: 'stop' } })
+    await writeFile(turns, [turn('for beta', 'beta'), turn('for alpha, see {{thread:Notes}}', 'alpha'), turn('for anyone'), turn('beta again', 'beta')].join('\n') + '\n')
+    process.env.SUPEREGO_MODEL = 'replay:' + turns
+    process.env.SUPEREGO_REPLAY_SPEED = '0'
+    const daemon = await openDaemon({ app: SUPEREGO, dataDir: dir, defaultCwd: dir, agentsDir: join(dir, 'agents') })
+    const server = await listen(daemon, join(dir, 'superego.sock'))
+    const { peer, socket } = await connectSocket(join(dir, 'superego.sock'))
+    await peer.call('hello', { client: 'test', version: PROTOCOL_VERSION })
+    const answer = async (id: string, text: string) => {
+      await peer.call('thread.seen', { thread: id })
+      await peer.call('thread.send', { thread: id, text })
+      await until(async () => (await threads(peer)).find((t) => t.id === id)!.status.state === 'done')
+      return (await peer.call<{ text: string | null }>('thread.lastAnswer', { thread: id })).text
+    }
+    const alpha = await peer.call<ThreadInfo>('thread.start', {})
+    const beta = await peer.call<ThreadInfo>('thread.start', {})
+    expect(await answer(alpha.id, 'alpha, go: [Notes](thread:42)')).toBe('for alpha, see 42')
+    expect(await answer(alpha.id, 'more')).toBe('for anyone')
+    expect(await answer(beta.id, 'beta, go')).toBe('for beta')
+    expect(await answer(beta.id, 'more')).toBe('beta again')
+    expect(await answer(alpha.id, 'more')).toContain('Replay finished')
+    socket.destroy(); server.close(); await daemon.close()
+    delete process.env.SUPEREGO_REPLAY_SPEED
+  })
+
   it('lists its actions, runs them from the command line with coerced params, and logs each dispatch', async () => {
     const { peer, close } = await open()
     const actions = await peer.call<ActionInfo[]>('action.list', {})
