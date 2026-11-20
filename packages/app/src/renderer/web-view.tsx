@@ -5,8 +5,9 @@
 // A view over the window draws above everything in it, the window's own menus and dialogs too. So the pane places it,
 // following its box as the pane moves, resizes, scrolls or is hidden (behind a stack, under a maximized pane), and
 // whenever anything of the window's is over it (a menu, a popover, a tooltip, a dialog: OVERLAYS), or the pane is
-// partly out of view (a view can't be cut short), the pane shows a still of the page in its place and hides the view
-// until it's clear again. A still is taken just before the view is hidden, and again each second while it's shown.
+// partly out of view (past its row's edge, or under the thread kept in view as the panes scroll under it), the pane
+// shows a still of the page in its place and hides the view until it's clear again. A view can't be cut short: one in a
+// smaller View isn't clipped to it, and smaller bounds would lay the page out again at each step of a scroll. A still is taken just before the view is hidden, and again each second while it's shown.
 //
 // A pane's page is kept for the pane, not for the component drawing it (kept-web-views.ts): leaving its thread hides
 // it, as it was, and coming back shows it again; it only goes somewhere else when the pane points it there (`src`).
@@ -366,23 +367,52 @@ function placeView(host: HTMLElement, view: BridgeWebView, setStill: (still: Sti
   }
 }
 
+type Box = { left: number; top: number; right: number; bottom: number }
+
+/** Whether `el` scrolls (its content passing under what sticks in it), as against only cutting it off. */
+const scrolls = (style: CSSStyleDeclaration) => /auto|scroll/.test(style.overflowX) || /auto|scroll/.test(style.overflowY)
+
 /**
- * Where `host` is in the window, and whether all of it is in view; null when it's not shown at all: hidden (behind a
- * stack, under a maximized pane, closed), or scrolled out of view.
+ * `clip` short of `over`, something stuck at one of its edges (the thread kept in view at a row's start): what's left of
+ * it beside that. Over it elsewhere (in its middle, or not across it), it can't be cut that way: none of it.
+ */
+function trim(clip: Box, over: Box): Box | null {
+  if (over.right <= clip.left || over.left >= clip.right || over.bottom <= clip.top || over.top >= clip.bottom) return clip
+  const across = over.top <= clip.top + 0.5 && over.bottom >= clip.bottom - 0.5
+  const down = over.left <= clip.left + 0.5 && over.right >= clip.right - 0.5
+  if (across && over.left <= clip.left + 0.5) return { ...clip, left: over.right }
+  if (across && over.right >= clip.right - 0.5) return { ...clip, right: over.left }
+  if (down && over.top <= clip.top + 0.5) return { ...clip, top: over.bottom }
+  if (down && over.bottom >= clip.bottom - 0.5) return { ...clip, bottom: over.top }
+  return null
+}
+
+/**
+ * Where `host` is in the window, and whether all of it is in view; null when none of it is: hidden (behind a stack, under
+ * a maximized pane, closed), scrolled out of view, or under what stands still in a row while the rest scrolls (the
+ * thread kept in view, `position: sticky`). A view draws above the window's page, so nothing of the page can cut it short:
+ * what does (a scroller's edge, what sticks in it) is found here.
  */
 export function placeOf(host: HTMLElement, sized = false): { rect: WebViewRect; whole: boolean } | null {
   if (host.closest('[inert]') || !host.checkVisibility({ visibilityProperty: true, opacityProperty: true })) return null
   const box = host.getBoundingClientRect()
   if (box.width < 1 || box.height < 1) return null
-  let clip = { left: 0, top: 0, right: innerWidth, bottom: innerHeight }
-  for (let el = host.parentElement; el && el !== document.body; el = el.parentElement) {
+  // What's in view of it: its box, cut by each ancestor that clips, and by what sticks over it in each that scrolls.
+  let seen: Box | null = { left: Math.max(box.left, 0), top: Math.max(box.top, 0), right: Math.min(box.right, innerWidth), bottom: Math.min(box.bottom, innerHeight) }
+  for (let el = host.parentElement; seen && el && el !== document.body; el = el.parentElement) {
     const style = getComputedStyle(el)
     if (style.overflowX === 'visible' && style.overflowY === 'visible') continue
     const r = el.getBoundingClientRect()
-    clip = { left: Math.max(clip.left, r.left), top: Math.max(clip.top, r.top), right: Math.min(clip.right, r.right), bottom: Math.min(clip.bottom, r.bottom) }
+    seen = { left: Math.max(seen.left, r.left), top: Math.max(seen.top, r.top), right: Math.min(seen.right, r.right), bottom: Math.min(seen.bottom, r.bottom) }
+    if (!scrolls(style)) continue
+    for (const child of el.children) {
+      if (!seen) break
+      if (child.contains(host) || getComputedStyle(child).position !== 'sticky') continue
+      seen = trim(seen, child.getBoundingClientRect())
+    }
   }
-  if (clip.right - Math.max(clip.left, box.left) < 1 || clip.bottom - Math.max(clip.top, box.top) < 1 || Math.min(clip.right, box.right) <= clip.left || Math.min(clip.bottom, box.bottom) <= clip.top) return null
-  const whole = box.left >= clip.left - 0.5 && box.top >= clip.top - 0.5 && box.right <= clip.right + 0.5 && box.bottom <= clip.bottom + 0.5
+  if (!seen || seen.right - seen.left < 1 || seen.bottom - seen.top < 1) return null
+  const whole = seen.left <= box.left + 0.5 && seen.top <= box.top + 0.5 && seen.right >= box.right - 0.5 && seen.bottom >= box.bottom - 0.5
   return { rect: { x: box.left, y: box.top, width: box.width, height: box.height, ...(sized ? { layout: { width: host.offsetWidth, height: host.offsetHeight } } : {}) }, whole }
 }
 

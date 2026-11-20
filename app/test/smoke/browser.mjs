@@ -2,7 +2,7 @@
 // redirects to another holds, and still does after a reload; the header follows the page's address and goes back; ⌘L in
 // the page is the navigator; the address bar, clicked, takes a bare host typed there, an HTML file's path shows the file
 // (with its own cookies), and the web page again is still signed in; a page that refuses frames loads; a link to a new
-// window goes to the browser. The view follows its pane: hidden (a still in its place) under a dialog, hidden at the back of a stack. It's kept for its pane: drawn again, it's as it was.
+// window goes to the browser. The view follows its pane: hidden (a still in its place) under a dialog, hidden at the back of a stack, a still under the thread kept in view as the panes scroll under it. It's kept for its pane: drawn again, it's as it was.
 import { writeFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { join } from 'node:path'
@@ -175,7 +175,37 @@ export default async function browser(t) {
   await t.until(() => !viewShown(), 'hidden behind the editor')
   await t.click('.strip__layout [aria-label="Scroll panes"]')
   await t.until(`!document.querySelector('.panes--stack')`, 'scrolled again')
-  await t.call('pane.close', { thread, pane: (await t.call('thread.list')).find((x) => x.id === thread).panes.find((p) => p.kind === 'editor').id })
+
+  // The panes scrolled under the thread kept in view: the page cut short by it is a still in its place, which the thread
+  // covers (the view itself would draw over the thread); wholly under it, not placed at all; scrolled back, shown.
+  await t.call('pane.open', { thread, kind: 'editor', params: { path: 'more.md' } })
+  await t.until(`Boolean(document.querySelector('.panes--keep'))`, 'the thread kept in view')
+  // The last pane focused, and the row come to rest there: scrolled by hand from there on.
+  await t.call('pane.focus', { thread, pane: (await t.call('thread.list')).find((x) => x.id === thread).panes.at(-1).id })
+  const scrollLeft = () => t.run(`document.querySelector('.panes').scrollLeft`)
+  await t.until(async () => { const was = await scrollLeft(); await t.settled(); await t.settled(); return was === await scrollLeft() && await t.run(`document.querySelector('.panes__column.is-last').getBoundingClientRect().right <= document.querySelector('.panes').getBoundingClientRect().right + 1`) }, 'the row at rest at the last pane')
+  const placedView = () => t.win().contentView.children.find((v) => v.webContents === page())
+  const scrollUnder = (by) => t.run(`(() => {
+    const row = document.querySelector('.panes'), edge = document.querySelector('.panes__gap--thread').getBoundingClientRect().right
+    const page = document.querySelector('.web-view').getBoundingClientRect()
+    row.scrollLeft += page.left - edge + ${by === 'all' ? 'page.width + 8' : by}
+    return document.querySelector('.web-view').getBoundingClientRect().left - edge
+  })()`)
+  const partly = await scrollUnder(120)
+  if (partly > -100) t.fail(`the page not scrolled under the thread (its left ${partly}px from the thread's edge)`)
+  await t.until(() => !viewShown(), 'the page cut short by the thread: the view out of sight')
+  await t.until(`Boolean(document.querySelector('.web-view__still'))`, 'a still in its place')
+  const covering = await t.run(`(() => { const r = document.querySelector('.web-view').getBoundingClientRect(), at = document.elementFromPoint(r.left + 40, r.top + r.height / 2); return at?.closest('.panes__column--thread, .panes__gap--thread') ? '' : \`\${at?.outerHTML.slice(0, 120)} at \${r.left + 40}\` })()`)
+  if (covering) t.fail(`the still not under the thread: ${covering}`)
+  await scrollUnder('all')
+  await t.until(`document.querySelector('.web-view').getBoundingClientRect().right <= document.querySelector('.panes__gap--thread').getBoundingClientRect().right`, 'the page wholly under the thread')
+  await t.until(() => !placedView()?.getVisible(), 'wholly under the thread: not placed')
+  await t.call('pane.focus', { thread, pane: await browserPane() })
+  await t.until(viewShown, 'scrolled back beside the thread: shown')
+  const back = placedView().getBounds()
+  const edge = await t.run(`document.querySelector('.panes__gap--thread').getBoundingClientRect().right`)
+  if (back.x < edge * t.contents().getZoomFactor() - 1) t.fail(`the view at ${back.x}, over the thread's edge at ${edge}`)
+  for (const pane of (await t.call('thread.list')).find((x) => x.id === thread).panes.filter((p) => p.kind === 'editor')) await t.call('pane.close', { thread, pane: pane.id })
 
   // The page is the pane's, not its drawing's: drawn again (the window resized, the sidebar hidden and shown, Settings
   // opened and closed, another thread shown and this one again), it's as it was, where the user took it, never loaded

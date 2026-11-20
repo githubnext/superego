@@ -75,7 +75,7 @@ function NothingUnread({ onClose }: { onClose(): void }) {
     window.addEventListener('pointerdown', onClose)
     return () => { clearTimeout(done); window.removeEventListener('keydown', onClose); window.removeEventListener('pointerdown', onClose) }
   }, [])
-  return <div className="unread-none" role="status">Nothing unread</div>
+  return <div className="unread-none" role="status" data-superego-overlay>Nothing unread</div>
 }
 
 function UnreadList({ onClose }: { onClose(): void }) {
