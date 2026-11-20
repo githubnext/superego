@@ -3,11 +3,11 @@
 // the thread, so `thread_start` starts a child of this thread, `pane_open` opens beside it, `ask_user` waits in its
 // question card. And what Superego says of itself in a thread's prompt, appended to Claude Code's own.
 //
-// Pi-only, for now: the coding tools (Claude Code has its own), skills (Claude Code reads its own `.claude/skills`),
-// AGENTS.md (it reads `CLAUDE.md`), the MCP servers of Settings and profiles (passing them on is a later wave), Ego's
-// setup tools (Ego's thread isn't a Claude Agent one), and every other extension's agent parts: their tools may need
-// more of pi-durable's tool runtime than this gives (nested calls, tasks of their own), and their hooks don't run in
-// Claude Code's loop.
+// Pi-only, for now: the coding tools (Claude Code has its own), skills (Claude Code reads its own `.claude/skills`, and
+// gets Superego's `superego` skill as a plugin: plugin.ts), AGENTS.md (it reads `CLAUDE.md`), the MCP servers of
+// Settings and profiles (passing them on is a later wave), Ego's setup tools (Ego's thread isn't a Claude Agent one),
+// and every other extension's agent parts: their tools may need more of pi-durable's tool runtime than this gives
+// (nested calls, tasks of their own), and their hooks don't run in Claude Code's loop.
 import { randomUUID } from 'node:crypto'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { CallToolRequestSchema, ListToolsRequestSchema, type CallToolResult } from '@modelcontextprotocol/sdk/types.js'
@@ -17,6 +17,7 @@ import type { JsonValue } from '@earendil-works/chord'
 import type { Agent, TaskRuntime, ToolExecutionApi, ToolRegistration } from '@earendil-works/pi-durable'
 import { validateToolArguments } from '@earendil-works/pi-ai/utils/validation'
 import type { ToolResultMessage } from '@earendil-works/pi-ai'
+import { PLUGIN } from './plugin.ts'
 import { SERVER } from './shared.ts'
 
 /** The tools a Claude Agent thread gets over MCP, by name, from its own agent's (those its extensions give it). */
@@ -53,7 +54,10 @@ const firstSentence = (text: string) => (/^[\s\S]*?[.!?](?=\s|$)/.exec(text.trim
  * What Superego appends to Claude Code's system prompt: its tools, a line each (MCP tools reach the model through
  * ToolSearch, so it has to know to load them), then the thread's sections, rendered as a Superego thread's are.
  */
-export async function appendedPrompt(runtime: Runtime, agent: Agent, tools: readonly ToolRegistration[], context: Context): Promise<string> {
+export async function appendedPrompt(runtime: Runtime, agent: Agent, tools: readonly ToolRegistration[], context: Context, { skill = false }: {
+  /** Claude Code has Superego's skill (its plugin's): the command line is worth a line. */
+  skill?: boolean
+} = {}): Promise<string> {
   const parts = [
     'You are working in a Superego thread: Superego is the app showing this conversation to the user, beside others, '
       + 'with panes it can open beside it. What follows is Superego\'s, about the thread and its tools.',
@@ -65,6 +69,13 @@ export async function appendedPrompt(runtime: Runtime, agent: Agent, tools: read
         + `("select:${mcpName('<name>')}") before its first use. Where these instructions name one by its short name, they mean it.`,
       ...tools.map((tool) => `- ${tool.name}: ${firstSentence(tool.description)}`),
       '</superego_tools>',
+    ].join('\n'))
+  }
+  if (skill) {
+    parts.push([
+      '<superego_cli>',
+      `The \`superego\` command line works from Bash here, for scripting Superego (threads, actions, profiles, extensions); what it starts or sends is signed as this thread's. The ${PLUGIN}:superego skill says how. For the user (questions, panes, UI), use the tools above.`,
+      '</superego_cli>',
     ].join('\n'))
   }
   const env = await runtime.env(context).catch((error: unknown) => { runtime.report(error); return undefined })

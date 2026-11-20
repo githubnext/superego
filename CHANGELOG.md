@@ -28,7 +28,8 @@
   again after they change. Until then Claude Code runs with your settings only, without the folder's `CLAUDE.md`.
   Where another user on the computer could change those settings, there's nothing to allow.
 - Another user account on the same computer can no longer pass as you through Web access over Tailscale.
-- A malformed request to Web access, or to a sign-in page's callback, no longer stops the daemon and every agent with it.
+- A malformed request to Web access, or to a sign-in page's callback, no longer stops the daemon and every agent with
+  it.
 - An HTML artifact is served only files really in its thread's folder (a symlink leading outside is refused), and in a
   browser its address works only for the device that opened it (over Tailscale) or briefly after its page last used it
   (on this computer), so a page that sends its address elsewhere doesn't give the folder away.
@@ -46,15 +47,25 @@
 - Claude Agent threads ask before Claude Code does something your Claude Code settings don't allow: the thread
   shows "Permission" (in the sidebar, the menu bar, notifications and on your phone), with Allow, Deny and, when
   Claude Code offers it, "Always allow …" above the message box (⌃1–⌃3; type to deny and say what to do instead).
-  What you always allow is remembered for that folder, without changing its own Claude Code settings.
-  Its questions come as question cards, and a plan comes with Approve plan or Keep planning. A profile picks how much
-  it asks with `claudeAgent: { permissionMode }` (`default`, `acceptEdits`, `plan`, `auto`; `bypassPermissions` only
-  when the profile says so), and can narrow `settingSources`, `allowedTools` and `disallowedTools`.
+  What you always allow is remembered for that folder, without changing its own Claude Code settings. Its questions
+  come as question cards, and a plan comes with Approve plan or Keep planning. A profile picks how much it asks with
+  `claudeAgent: { permissionMode }` (`default`, `acceptEdits`, `plan`, `auto`; `bypassPermissions` only when the
+  profile says so), and can narrow `settingSources`, `allowedTools` and `disallowedTools`.
 - Claude Agent threads have Superego's tools: they start threads of their own (whose reports come back), open panes
   beside themselves, ask you things, show UI and images, and report their work as tasks, as other threads do. A
   profile's instructions are added to Claude Code's own prompt.
 - A Claude Agent subagent's steps show under its call, while it runs too.
+- Claude Agent threads have Superego's skill, and the `superego` command works from their Bash as that thread: what
+  it starts or sends comes from the thread. Nothing is added to your `~/.claude`.
+- Claude Agent finds your `claude` when your shell has it as an alias (such as
+  `claude --dangerously-skip-permissions`): it runs the `claude` on your shell's PATH, without the alias's flags.
 - A Claude Agent turn cut off by Superego restarting says so ("Interrupted: send again") instead of running again.
+- An image file opens as the picture in the editor pane (from a link in a message, the file tree or `pane_open`),
+  fitted to the pane with its size in pixels, instead of "is a binary file". SVG still opens as its source.
+- A new built-in theme: Zenbones, light and dark (Settings → Appearance).
+- Importing a Ghostty theme reads its quoted colours (`foreground = "#2c363c"`), where its foreground, background,
+  cursor and selection were left out.
+- The public website now uses GitHub Next analytics to track visits.
 
 ## 0.1.9
 

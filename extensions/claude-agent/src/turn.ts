@@ -50,8 +50,10 @@ export const SessionDoc = defineDoc<Session>({
 export type TurnHost = {
   /** Where the user's `claude` is; undefined when it isn't installed. */
   executable(): Promise<string | undefined>
-  /** The environment it gets (without Anthropic credentials). */
-  env(): Record<string, string>
+  /** The environment it gets for `thread`'s turn (without Anthropic credentials; marked with the thread). */
+  env(thread: string): Record<string, string>
+  /** Superego's plugin (its skills) for Claude Code to load, if it has one: a folder. */
+  plugin?: string
   /**
    * The settings Claude Code loads for a turn of the thread whose conversation it is, in `cwd`: the user's own, and the
    * folder's only once the user allowed them as they are now (project.ts).
@@ -202,7 +204,7 @@ async function runTurn(runtime: Runtime, executable: string, host: TurnHost, con
   // The profile's, and what the user said to always allow in the folder.
   const allowedTools = [...choices.allowedTools ?? [], ...host.rules(cwd)]
   const tools = offeredTools(agent)
-  const append = await appendedPrompt(runtime, agent, tools, context)
+  const append = await appendedPrompt(runtime, agent, tools, context, { skill: Boolean(host.plugin) })
 
   // Every write in order, one at a time: a published partial never lands after the entry that replaced it.
   let writes: Promise<unknown> = Promise.resolve()
@@ -361,7 +363,7 @@ async function runTurn(runtime: Runtime, executable: string, host: TurnHost, con
   const mode = choices.permissionMode ?? 'default'
   const options: Options = {
     pathToClaudeCodeExecutable: executable,
-    env: host.env(),
+    env: host.env(thread),
     abortController: abort,
     ...(agent.cwd ? { cwd: agent.cwd } : {}),
     ...(resume ? { resume } : {}),
@@ -375,6 +377,8 @@ async function runTurn(runtime: Runtime, executable: string, host: TurnHost, con
     settingSources,
     systemPrompt: { type: 'preset', preset: 'claude_code', append },
     mcpServers: { [SERVER]: server },
+    // Superego's skills: a plugin of the daemon's, for this session alone (nothing written to the user's `~/.claude`).
+    ...(host.plugin ? { plugins: [{ type: 'local' as const, path: host.plugin }] } : {}),
     stderr: (data) => { stderr.push(...data.split('\n').filter(Boolean)); stderr.splice(0, Math.max(0, stderr.length - STDERR_LINES)) },
   }
   let q: Query | undefined

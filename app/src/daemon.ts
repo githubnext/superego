@@ -11,7 +11,7 @@ import { machineHub } from '@superego/client'
 // (`threads`, required, whose name is the core's namespace: nothing to switch or do without). Whether each is required
 // or optional is its own declaration (`about`), not decided here.
 import agentUi from '@superego/agent-ui/daemon'
-import claudeAgent from '@superego/claude-agent/daemon'
+import { claudeAgent } from '@superego/claude-agent/daemon'
 import ego from '@superego/ego/daemon'
 import files from '@superego/files/daemon'
 import git from '@superego/git/daemon'
@@ -36,12 +36,14 @@ const webRoot = [join(import.meta.dirname, '../renderer'), join(import.meta.dirn
 
 // The skills extension offers the app's own `superego` skill (out/skill once built), beside those in ~/.agents/skills.
 const skills = skillsExtension({ own: [SKILL_DIR] })
+// Claude Agent threads get it too, as a plugin for their Claude Code.
+const claude = claudeAgent({ skills: [SKILL_DIR] })
 
 // The daemon links to the machines this computer reaches (the same list the app and `superego machines` keep), to serve
 // them to browsers and agents (see the daemon's relay.ts).
 serveDaemon({
   app, defaultCwd: homedir(), extensions: [
-    worktrees, agentUi, claudeAgent, ego, files, git, images, links, mcpServers, mentions, skills, suggestions, tasks, terminal, threadTools, threadReports, unread, browser,
+    worktrees, agentUi, claude, ego, files, git, images, links, mcpServers, mentions, skills, suggestions, tasks, terminal, threadTools, threadReports, unread, browser,
   ], ...(webRoot ? { webRoot } : {}),
   reach: (dataDir, self) => machineHub({ app, dataDir, self }),
 }).catch((error) => {

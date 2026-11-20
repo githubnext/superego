@@ -14,9 +14,10 @@
 // What its subagents do is kept with the thread, by their Agent call, for those calls' rows.
 import { isAbsolute, join } from 'node:path'
 import { defineAction, defineDaemonExtension } from '@superego/daemon'
-import { envName, lit, obj, opt, RpcError, str, union, type Json } from '@superego/protocol'
+import { envName, lit, obj, opt, RpcError, str, threadEnv, union, type Json } from '@superego/protocol'
 import { AlwaysAllowed } from './always.ts'
 import { claudeEnv, findClaude } from './claude.ts'
+import { writePlugin } from './plugin.ts'
 import { projectConfig, ProjectAllowances } from './project.ts'
 import {
   about, ALLOW, ANSWER, KEPT, optionsProblem, PROFILE_KEY, WAITING,
@@ -29,11 +30,19 @@ const SUBAGENTS_KEPT = 20
 /** How often subagents' work is saved while it goes on. */
 const SAVE_MS = 250
 
-/**
- * The daemon half; `executable`, `env` and `userConfig` (the user's own Claude Code folder) are for tests (otherwise
- * the user's `claude`, `<APPID>_CLAUDE` when set, the daemon's environment and `~/.claude`).
- */
-export function claudeAgent({ executable, env = () => claudeEnv(), userConfig }: Partial<Pick<TurnHost, 'executable' | 'env'> & { userConfig: string }> = {}) {
+export type ClaudeAgentSetup = {
+  /** Skill folders (each with a SKILL.md) Claude Code gets in every thread: the app's own `superego` skill. */
+  skills?: string[]
+  /** For tests: the `claude` to run (otherwise the user's, `<APPID>_CLAUDE` when set). */
+  executable?: TurnHost['executable']
+  /** For tests: the environment it starts from (otherwise the daemon's, without credentials: `claudeEnv`). */
+  env?: () => Record<string, string>
+  /** For tests: the user's own Claude Code folder (otherwise `CLAUDE_CONFIG_DIR`, else `~/.claude`). */
+  userConfig?: string
+}
+
+/** The daemon half. */
+export function claudeAgent({ skills = [], executable, env = () => claudeEnv(), userConfig }: ClaudeAgentSetup = {}) {
   return defineDaemonExtension({
     ...about,
     async setup(superego) {
@@ -79,6 +88,8 @@ export function claudeAgent({ executable, env = () => claudeEnv(), userConfig }:
         },
       }))
 
+      // The skills as a plugin of the daemon's own, made again as it starts (the build it runs may be new).
+      const plugin = skills.length ? await writePlugin(join(superego.dataDir, 'claude-agent', 'plugin'), skills) : undefined
       // ── What Claude Code waits on the user for ──────────────────────────────────────────────────────────────────
       const always = new AlwaysAllowed(join(superego.dataDir, 'claude-agent', 'always-allowed.json'))
       await always.load()
@@ -168,7 +179,10 @@ export function claudeAgent({ executable, env = () => claudeEnv(), userConfig }:
       superego.agentKind({
         name: 'claude-agent',
         runner: turnTask('claude-agent.turn', {
-          executable: executable ?? (() => findClaude(given)), env,
+          executable: executable ?? (() => findClaude(given)),
+          // Marked with its thread, as a Superego thread's shell is: `superego` run there knows who's calling (see threadEnv).
+          env: (thread) => ({ ...env(), [threadEnv(superego.app)]: thread }),
+          ...(plugin ? { plugin } : {}),
           threadOf: (conversationId) => superego.threads.of(conversationId),
           async sources(conversationId, cwd) {
             const thread = superego.threads.of(conversationId)

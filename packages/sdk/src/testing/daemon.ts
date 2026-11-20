@@ -80,6 +80,8 @@ export type TestDaemon = {
   readonly features: string[]
   /** The extensions set up there, each at its version. */
   readonly extensions: ExtensionManifest[]
+  /** The socket it listens on (a new one after `restart`): for a `superego` command line to reach it (`<APPID>_SOCKET`). */
+  readonly socket: string
   /** The connection, to call anything a client can (open a channel: `Channels.of(daemon.peer)`): the new one after `restart`. */
   readonly peer: RpcPeer
   /** Another client's connection (said hello), as a second window's: closed with the daemon (or a restart), or by `close()` before. */
@@ -313,6 +315,7 @@ export async function testDaemon(options: TestDaemonOptions = {}): Promise<TestD
   const test: TestDaemon = {
     app, dataDir, agentsDir: join(dataDir, 'agents'), profileDir,
     profile: profileDir ? { scope: 'user', name, dir: profileDir } : undefined,
+    get socket() { return now().socket },
     get peer() { return peer() },
     get features() { return now().hello.features },
     get extensions() { return now().hello.extensions },

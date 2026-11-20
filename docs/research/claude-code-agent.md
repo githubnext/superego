@@ -243,7 +243,8 @@ turn through a small tool runner (`tools.ts`: the call's id is Claude Code's `to
 Superego thread's (`mcp__superego__x` is named `x` in the transcript).
 - **Offered:** `thread_start`, `thread_read`, `thread_send`, `thread_list`, `thread_machines`, `thread_archive`,
   `pane_open`, `ask_user`, `ask_ui`, `show_ui`, `open_ui`, `update_ui`, `show_images`, `task_start`, `task_finish`.
-- **Pi-only, and why:** the coding tools (Claude Code has its own); skills (it reads its own `.claude/skills`);
+- **Pi-only, and why:** the coding tools (Claude Code has its own); skills (it reads its own `.claude/skills`, and
+  gets Superego's own as a plugin, below);
   AGENTS.md (it reads `CLAUDE.md`); the MCP servers of Settings and profiles (passing them on is later work); Ego's
   setup tools (Ego's thread isn't a Claude Agent one); any other extension's tools, which may need what the runner
   doesn't give (nested calls, tasks, memos: refused, saying so), and every extension's hooks, which don't run in
@@ -254,6 +255,24 @@ Superego thread's (`mcp__superego__x` is named `x` in the transcript).
   `instructions` last.
 - **The binary:** `SUPEREGO_CLAUDE` names one; else the login shell's `claude`, as before. (Settings → Claude Agent is
   wave 3.)
+
+**The `superego` skill and command line (2026-11-20).** A Claude Agent thread's Claude Code has Superego's own skill
+and knows which thread its `superego` calls come from, as a Superego thread does:
+- **The skill as a plugin of the daemon's.** The SDK's `plugins` (`{ type: 'local', path }`, passed as
+  `--plugin-dir`) loads a plugin for the session alone. The daemon makes one as it starts,
+  `<dataDir>/claude-agent/plugin` (`.claude-plugin/plugin.json` named `superego`, and `skills/superego` linking the
+  skill folder of the build it runs, `out/skill`), so Claude Code lists `superego:superego` beside the user's own
+  skills. Nothing is written to `~/.claude` or to `.claude/skills` in the thread's folder (`settingSources` still
+  reads the user's own). The app passes the folder in (`claudeAgent({ skills: [SKILL_DIR] })`), as it does the skills
+  extension's.
+- **The calling thread.** Claude Code's environment carries `SUPEREGO_THREAD=<thread id>` (`threadEnv`), as every
+  Superego thread's shell does, so `superego` run from its Bash says so in hello (`from`): it's refused the user's
+  consent, and what it sends or starts is that thread's (`superego send` and `superego start`'s first message signed
+  from it). `superego start` doesn't make a child (as from a pi thread's shell); `superego do thread.start --parent
+  "$SUPEREGO_THREAD"` does. The rest of what the CLI needs to reach the daemon (`SUPEREGO_HOME`, `SUPEREGO_SOCKET`
+  when set) comes with the daemon's own environment, as for a pi thread. The thread id is no secret.
+- **The prompt** gains a `<superego_cli>` line: the command line works from Bash for scripting, signed as this thread,
+  the skill says how, and the MCP tools stay the way to reach the user (questions, panes, UI).
 
 ### 3.6 Remote machines and sign-in
 

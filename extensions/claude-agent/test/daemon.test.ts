@@ -3,8 +3,9 @@
 // or costs anything. `claude` is started through a wrapper that writes down the environment it was given (to check no
 // Anthropic credential reached it), then points it at the mock with a key of the mock's, in a config folder of its own.
 import { execFileSync } from 'node:child_process'
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import type { LiveState } from '@earendil-works/pi-durable'
 import type { ThreadInfo } from '@superego/protocol'
@@ -17,6 +18,11 @@ import { claudeAgent } from '../src/daemon.ts'
 import { projectConfig, ProjectAllowances } from '../src/project.ts'
 import { about, ALLOW, ANSWER, KEPT, WAITING, type Approval, type Kept, type ProjectFacts } from '../src/shared.ts'
 import { mockAnthropic, type MockAnthropic } from './mock-anthropic.ts'
+
+/** This checkout's `superego` command line. */
+const CLI = fileURLToPath(new URL('../../../app/bin/superego.ts', import.meta.url))
+/** Its `superego` skill, as the app's daemon gives it. */
+const SKILL_DIR = fileURLToPath(new URL('../../../packages/cli/skill/', import.meta.url))
 
 const claude = (() => {
   try { return execFileSync('sh', ['-c', 'command -v claude'], { encoding: 'utf8' }).trim() || undefined } catch { return undefined }
@@ -38,19 +44,42 @@ describe.skipIf(!claude)("a Claude Agent thread, on the user's claude against a 
   let daemon: TestDaemon | undefined
   const saved = { ...process.env }
 
-  /** A wrapper standing in for the user's `claude`: signed in to the mock (`signedIn`), or to nothing. */
-  function wrapper(name: string, signedIn: boolean) {
+  /**
+   * A wrapper standing in for the user's `claude`: signed in to the mock (`signedIn`), or to nothing. Its config is a
+   * folder of the test's own, or, given a `home`, that home's `~/.claude` (Claude Code's default), as the user's is.
+   */
+  function wrapper(name: string, signedIn: boolean, home?: string) {
     const file = join(dir, name)
     const key = signedIn ? 'ANTHROPIC_API_KEY=sk-ant-api03-mock ' : ''
-    writeFileSync(file, `#!/bin/sh\nenv > "${dir}/env.$$"\nexec env ANTHROPIC_BASE_URL=${api.url} ${key}CLAUDE_CONFIG_DIR="${dir}/config" CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1 "${claude}" "$@"\n`)
+    const config = home ? `HOME="${home}" ` : `CLAUDE_CONFIG_DIR="${dir}/config" `
+    writeFileSync(file, `#!/bin/sh\nenv > "${dir}/env.$$"\nexec env ANTHROPIC_BASE_URL=${api.url} ${key}${config}CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1 "${claude}" "$@"\n`)
     chmodSync(file, 0o755)
     return file
   }
   const envs = () => readdirSync(dir).filter((f) => f.startsWith('env.')).map((f) => readFileSync(join(dir, f), 'utf8'))
 
-  async function start({ signedIn = true, profile = profileOf() }: { signedIn?: boolean; profile?: Record<string, string> } = {}) {
-    const executable = wrapper(signedIn ? 'claude' : 'claude-signed-out', signedIn)
-    daemon = await testDaemon({ extensions: [claudeAgent({ executable: async () => executable }), agentUi, threadTools, threadReports({ quietMs: 50, maxMs: 200 })], profile })
+  /**
+   * A daemon with Claude Agent on the wrapper. `cli`: as the app's (its id `superego`, with its `superego` skill), and
+   * this checkout's `superego` command line on the PATH Claude Code's Bash gets, pointed at this daemon.
+   */
+  async function start({ signedIn = true, profile = profileOf(), cli = false, home }: { signedIn?: boolean; profile?: Record<string, string>; cli?: boolean; home?: string } = {}) {
+    const executable = wrapper(home ? 'claude-at-home' : signedIn ? 'claude' : 'claude-signed-out', signedIn, home)
+    const bin = join(dir, 'bin')
+    if (cli) {
+      mkdirSync(bin, { recursive: true })
+      writeFileSync(join(bin, 'superego'), `#!/bin/sh\nexec "${process.execPath}" "${CLI}" "$@"\n`)
+      chmodSync(join(bin, 'superego'), 0o755)
+    }
+    let made: TestDaemon | undefined
+    const env = () => ({
+      ...claudeEnv(),
+      ...(cli && made ? { PATH: `${bin}:${process.env.PATH}`, SUPEREGO_SOCKET: made.socket, SUPEREGO_HOME: made.dataDir, SUPEREGO_APP: made.dataDir } : {}),
+    })
+    const extension = claudeAgent({ executable: async () => executable, env, ...(cli ? { skills: [SKILL_DIR] } : {}) })
+    made = daemon = await testDaemon({
+      extensions: [extension, agentUi, threadTools, threadReports({ quietMs: 50, maxMs: 200 })], profile,
+      ...(cli ? { appId: 'superego' } : {}),
+    } as Parameters<typeof testDaemon>[0])
     return daemon
   }
   /** A folder of the test's own to work in: what one thread allows "always" stays out of the others'. */
@@ -358,6 +387,72 @@ describe.skipIf(!claude)("a Claude Agent thread, on the user's claude against a 
       expect(system).toContain('<threads>')
       expect(system).toContain('<instructions>\nAlways answer in haiku.\n</instructions>')
     }, 60_000)
+  })
+
+  describe("Superego's skill and command line", () => {
+    const bypass = profileOf({ permissionMode: 'bypassPermissions' })
+    /** The messages of a thread's that came from another thread (`from`, its id), by their text. */
+    const fromOf = async (d: TestDaemon, thread: string) => {
+      const { sub, value } = await d.call<{ sub: string; value: { entries: { data?: { from?: string } }[] } }>('thread.watch', { thread })
+      await d.call('unwatch', { sub })
+      return value.entries.flatMap((e) => e.data?.from ? [e.data.from] : [])
+    }
+
+    it("gives Claude Code the superego skill, as a plugin of the daemon's", async () => {
+      const d = await start({ cli: true })
+      const before = api.requests.length
+      expect((await d.thread('Say hi', { cwd: folder() })).status.state).toBe('done')
+      const said = JSON.stringify(api.requests.slice(before).map((r) => [r.system, r.messages]))
+      // Claude Code tells its model of the skill (by its plugin's name), and Superego's prompt of the command line.
+      expect(said).toContain('superego:superego')
+      expect(said).toContain('superego_cli')
+      // The plugin is the daemon's, linking the skill of the build it runs.
+      expect(realpathSync(join(d.dataDir, 'claude-agent', 'plugin', 'skills', 'superego'))).toBe(realpathSync(SKILL_DIR))
+    }, 60_000)
+
+    it("leaves the user's ~/.claude alone", async () => {
+      const home = mkdtempSync(join(dir, 'home-'))
+      mkdirSync(join(home, '.claude'), { recursive: true })
+      writeFileSync(join(home, '.claude', 'settings.json'), '{"theme":"dark"}\n')
+      const d = await start({ cli: true, home })
+      const cwd = folder()
+      const before = api.requests.length
+      expect((await d.thread('Say hi', { cwd })).status.state).toBe('done')
+      // It had the skill, with its own config at ~/.claude (its sessions are there)…
+      expect(JSON.stringify(api.requests.slice(before).map((r) => [r.system, r.messages]))).toContain('superego:superego')
+      expect(existsSync(join(home, '.claude', 'projects'))).toBe(true)
+      // …without Superego writing a skill or a plugin there, or in the thread's folder.
+      expect(readFileSync(join(home, '.claude', 'settings.json'), 'utf8')).toBe('{"theme":"dark"}\n')
+      expect(existsSync(join(home, '.claude', 'skills'))).toBe(false)
+      // (Its sessions are kept by the folder's path, which may say superego: the tests' folders are in this checkout.)
+      const written = readdirSync(join(home, '.claude'), { recursive: true }).map(String).filter((path) => !path.startsWith('projects'))
+      expect(JSON.stringify(written)).not.toMatch(/superego/)
+      expect(existsSync(join(cwd, '.claude'))).toBe(false)
+    }, 60_000)
+
+    it('`superego` in its Bash runs as the thread: a child of it with --parent "$SUPEREGO_THREAD", what it starts and sends signed from it', async () => {
+      const d = await start({ cli: true, profile: bypass })
+      const parent = await d.thread(undefined, { cwd: folder() })
+      const marked = await d.send(parent, 'Run echo "thread=$SUPEREGO_THREAD"')
+      expect(marked.status.state).toBe('done')
+      expect((await d.toolCalls(parent)).at(-1)!.result!.text).toContain(`thread=${parent.id}`)
+
+      const child = await d.send(parent, 'Run superego do thread.start --parent "$SUPEREGO_THREAD" --title "Its child" --prompt "Say hi"')
+      expect(child.status.state).toBe('done')
+      const made = (await d.call<ThreadInfo[]>('thread.list', {})).find((t) => t.title === 'Its child')
+      expect(made).toMatchObject({ parent: parent.id })
+      expect(await fromOf(d, made!.id)).toEqual([parent.id])
+
+      const started = await d.send(parent, 'Run superego start -p "Say hello"')
+      expect(started.status.state).toBe('done')
+      const other = (await d.call<ThreadInfo[]>('thread.list', {})).find((t) => t.id !== parent.id && t.id !== made!.id)!
+      expect(await fromOf(d, other.id)).toEqual([parent.id])
+
+      await d.idle(made!)
+      const sent = await d.send(parent, `Run superego send ${made!.id} Hello again`)
+      expect(sent.status.state).toBe('done')
+      await d.until(async () => (await fromOf(d, made!.id)).length === 2, 'the message, signed', 20_000)
+    }, 120_000)
   })
 
   it("nests a subagent's steps under its Agent call", async () => {
