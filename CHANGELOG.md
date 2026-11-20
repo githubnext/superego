@@ -3,7 +3,9 @@
 ## Unreleased
 
 - **Upgrade:** Web access over Tailscale needs Tailscale 1.94 or later on the machine that serves it (Settings → Web
-  access says so when it's older), and no longer lets in every device logged in to Tailscale as you, such as the
+  access says so when it's older). Where Tailscale lets only an administrator set it up (Linux, unless you may run
+  `sudo tailscale` without a password), Settings → Web access shows a `sudo tailscale serve …` command to run once. It
+  no longer lets in every device logged in to Tailscale as you, such as the
   machines your agents run on. The first time one of your devices opens the page, it waits in Settings → Web access
   (or `superego web devices`) until you approve it from the app or a device that's already in; pairing with a code
   still works. The "Require pairing for my Tailscale login too" setting is gone.

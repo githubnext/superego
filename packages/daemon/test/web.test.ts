@@ -616,6 +616,7 @@ case "$1 $2" in
   "serve status") cat ${JSON.stringify(join(dir, 'serve.json'))} ;;
   "whois --json") cat ${JSON.stringify(join(dir, 'whois.json'))} ;;
   *) for last; do :; done
+     if [ -e ${JSON.stringify(join(dir, 'deny'))} ] && [ "$last" != off ]; then echo "sending serve config: 401 Unauthorized: must be root, or be an operator and able to run 'sudo tailscale' to serve a path or Unix socket" >&2; exit 1; fi
      if [ "$last" = off ]; then echo '{}' > ${JSON.stringify(join(dir, 'serve.json'))}
      else printf '{"Web":{"box.tail1234.ts.net:443":{"Handlers":{"/":{"Proxy":"%s"}}}}}' "$last" > ${JSON.stringify(join(dir, 'serve.json'))}; fi ;;
 esac
@@ -693,6 +694,25 @@ esac
       expect((await section()).data).toMatchObject({ tailscale: { state: 'missing' } })
       await close()
       process.env.PATH = saved
+    })
+
+    it('says how to set serve up when tailscaled lets only root serve to a socket, and uses it once set up', async () => {
+      await stub(running)
+      await writeFile(join(dir, 'deny'), '')
+      const port = 20000 + Math.floor(Math.random() * 20000)
+      const target = join(dir, 'web', 'tailscale.sock')
+      let opened = await open({ 'web.access': 'tailscale' as never, 'web.port': port as never })
+      await until(async () => ((await opened.section()).data as { tailscale?: { state: string } }).tailscale?.state === 'error')
+      expect(((await opened.section()).data as { tailscale: { message: string } }).tailscale.message).toContain(`sudo tailscale serve --bg --https=443 unix:${target}`)
+      await opened.close()
+      // The user ran it as root: the daemon finds its socket served and doesn't ask again (which would be refused).
+      await writeFile(join(dir, 'serve.json'), JSON.stringify({ Web: { 'box.tail1234.ts.net:443': { Handlers: { '/': { Proxy: `unix:${target}` } } } } }))
+      await writeFile(log, '')
+      opened = await open({ 'web.access': 'tailscale' as never, 'web.port': port as never })
+      await until(async () => ((await opened.section()).data as { tailscale?: { state: string } }).tailscale?.state === 'serving')
+      expect(await readFile(log, 'utf8')).not.toContain('--bg')
+      await opened.close()
+      await rm(join(dir, 'deny'))
     })
 
     it('serves through the tailscaled chosen, and takes over a serve that already reaches its port', async () => {

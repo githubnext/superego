@@ -87,13 +87,23 @@ export async function startServe(daemon: Ours, socket?: string): Promise<Tailsca
     if (!servesSockets(s.Version)) return { state: 'error', message: `Tailscale ${s.Version?.split('-')[0]} can't serve Web access: update it to ${SERVES_SOCKETS.join('.')} or later.` }
     const proxy = await served(name, socket)
     if (proxy && !ours(proxy, daemon)) return { state: 'busy', message: `https://${name}/ already serves ${proxy}` }
-    try {
-      await tailscale(['serve', '--bg', '--yes', '--https=443', `unix:${daemon.target}`], socket, 30_000)
-    } catch (error) {
-      const message = (error as Error).message
-      // Serve not enabled for the tailnet: the command says where to turn it on.
-      if (/not enabled|enable.*https|https.*disabled|serve.*not allowed|permission/i.test(message)) return { state: 'no-https', message }
-      return { state: 'error', message }
+    // Already serving the daemon's socket (set up earlier, maybe by the user with sudo): nothing to do, and asking again
+    // could be refused (below).
+    if (proxy !== `unix:${daemon.target}`) {
+      try {
+        await tailscale(['serve', '--bg', '--yes', '--https=443', `unix:${daemon.target}`], socket, 30_000)
+      } catch (error) {
+        const message = (error as Error).message
+        // tailscaled lets only root, or an operator who may run `sudo tailscale` without a password, serve to a socket:
+        // the user does it once, as root, and it stays.
+        if (/must be root|be an operator/i.test(message)) {
+          const command = ['sudo tailscale', ...(socket ? [`--socket=${socket}`] : []), 'serve --bg --https=443', `unix:${daemon.target}`].join(' ')
+          return { state: 'error', message: `Tailscale lets only an administrator serve to the daemon's socket. Run this once in a terminal, then switch Web access off and on: ${command}` }
+        }
+        // Serve not enabled for the tailnet: the command says where to turn it on.
+        if (/not enabled|enable.*https|https.*disabled|serve.*not allowed|permission/i.test(message)) return { state: 'no-https', message }
+        return { state: 'error', message }
+      }
     }
     // A tagged machine has no owner: its "user" is the tag's, which nobody logs in as.
     const owner = s.Self?.UserID !== undefined && !s.Self.Tags?.length ? s.User?.[String(s.Self.UserID)]?.LoginName : undefined
