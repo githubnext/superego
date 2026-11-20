@@ -2,8 +2,12 @@
 
 ## Unreleased
 
+- **Upgrade:** a profile's modules can import only `'superego'`, Node's built-ins and files by their paths. One that
+  imports a package by name (from a `node_modules`) or a `#` alias from a `package.json` no longer loads, and says why:
+  import the file by its path instead.
 - A page an agent draws (an `html` block) no longer answers or messages for you by itself: what it would say shows
   under it, and goes only when you press Send there.
+- Allowing a project's profile now covers everything it can load: a change to any file it runs asks to allow it again.
 
 ## 0.1.9
 

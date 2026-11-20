@@ -83,7 +83,10 @@ that loads with one anyway (a key no extension here reads, a `without` naming no
 
 Profile files are TypeScript (the daemon strips the types as it loads them) or JavaScript. They may import each other
 and Node's built-ins (`node:fs/promises`, …). `'superego'` is the only package they get (and `'superego/ui'` and
-`'react'` in UI modules); there is no `npm install`.
+`'react'` in UI modules); there is no `npm install`. Anything else imported by name, a package or a `#` alias from a
+`package.json`, is refused, and the profile doesn't load: what it would run is resolved by what's around the profile,
+outside what allowing it vouches for. A file imported by its path is fine wherever it is (`node_modules` too), and is
+part of what's allowed.
 
 ## Types
 
@@ -98,8 +101,8 @@ types [name]` gives it to profiles that were there before (all of this project's
   build, and the app copies its own there whenever it starts, so an upgrade brings new ones; the link stays.
 - `.gitignore`: `node_modules`, since the link is this computer's.
 
-The daemon doesn't load from `node_modules`, and neither it nor the `.gitignore` counts toward a project profile's
-allowance; the `tsconfig.json` does, so `profile types` allows again a profile that was allowed. `superego extension test`
+The daemon doesn't load packages from `node_modules`, and neither it nor the `.gitignore` counts toward a project
+profile's allowance; the `tsconfig.json` does, so `profile types` allows again a profile that was allowed. `superego extension test`
 checks types with the same tsconfig before it runs the tests.
 
 ## What 'superego' exports
@@ -143,7 +146,8 @@ profiles' do: from each thread's next turn.
 ## Allowing
 
 A project's profile runs code from that repository, so the daemon refuses it until it is allowed, and again whenever
-any file in its folder changes (the folder is hashed; `node_modules` and dotfiles aside):
+any file it runs changes: any file in its folder (`node_modules` and dotfiles aside), and every file its code
+imports, wherever it is:
 
 ```sh
 superego profile allow support     # in the project

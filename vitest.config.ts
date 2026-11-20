@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { defineConfig } from 'vitest/config'
-import { versionedImport } from './packages/daemon/src/module-graph.ts'
+import { profileImport } from './packages/daemon/src/module-graph.ts'
 import { builtins, keyShape } from './packages/daemon/src/providers.ts'
 
 // No test signs in to a provider from this machine's environment (OPENROUTER_API_KEY, AWS_PROFILE): each starts signed
@@ -16,19 +16,22 @@ for (const provider of builtins()) for (const name of (await keyShape(provider.a
 const runtime = mkdtempSync(join(tmpdir(), 'superego-test-run-'))
 process.on('exit', () => rmSync(runtime, { recursive: true, force: true }))
 
+const SDK_SHIM = fileURLToPath(new URL('./packages/daemon/src/sdk-shim.ts', import.meta.url))
+
 export default defineConfig({
   // Profiles import from 'superego'; under vitest that is the daemon's SDK through a shim (packages/daemon/src/profiles.ts).
-  resolve: { alias: { superego: fileURLToPath(new URL('./packages/daemon/src/sdk-shim.ts', import.meta.url)) } },
+  resolve: { alias: { superego: SDK_SHIM } },
   plugins: [{
-    // What the daemon's Node hook does for a profile's modules (profiles.ts): their own imports at their versions now.
+    // What the daemon's Node hook does for a profile's modules (profiles.ts): their own imports at their versions now,
+    // and nothing else but 'superego' (here the shim) and Node's built-ins.
     name: 'superego-profile-versions',
     enforce: 'pre',
     async resolveId(source, importer) {
-      if (!importer?.includes('superego-v=')) return null
+      // 'superego' comes aliased already.
+      if (!importer?.includes('superego-v=') || source === SDK_SHIM) return null
       const resolved = await this.resolve(source, importer.replace(/[?#].*$/, ''), { skipSelf: true })
-      if (!resolved || resolved.external || !resolved.id.startsWith('/')) return resolved
-      const url = versionedImport(pathToFileURL(resolved.id).href, `file://${importer}`)
-      return url.includes('superego-v=') ? `${resolved.id}?${url.split('?')[1]}` : resolved
+      const url = profileImport(source, `file://${importer}`, () => resolved && !resolved.external && resolved.id.startsWith('/') ? pathToFileURL(resolved.id).href : `unresolved:${source}`)
+      return url.includes('superego-v=') ? `${fileURLToPath(url.replace(/\?.*$/, ''))}?${url.split('?')[1]}` : resolved
     },
   }],
   test: {

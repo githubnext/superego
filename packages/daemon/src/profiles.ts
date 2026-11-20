@@ -31,7 +31,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import type { Extension } from '@earendil-works/pi-durable'
 import type { DaemonExtension } from './extension.ts'
 import { RpcError, type Json } from '@superego/protocol'
-import { CODE, digestOf, graphOf, versionedImport, versionedUrl, versionOf, within } from './module-graph.ts'
+import { CODE, digestOf, graphOf, profileImport, versionedUrl, versionOf, within } from './module-graph.ts'
 import { writeAtomic } from './write-atomic.ts'
 
 /**
@@ -253,8 +253,9 @@ export function relocated(ref: ProfileRef, cwds: string[], roots: UserRoot[]): P
  * A hash of what a profile runs, what allowing it vouches for: every file in its folder (not node_modules, nor
  * dotfiles: what its code reads as it runs, say), and every file its code can run (module-graph.ts): each module in its
  * folder, hidden ones too, and every local file they import, wherever, dotfiles included. Symlinks are followed. Of a
- * file (one a profile lists from outside its folder), it and the local files it imports (`versionOf`). Packages it
- * imports by name aren't in it. Throws for a module whose imports can't be told.
+ * file (one a profile lists from outside its folder), it and the local files it imports (`versionOf`). Packages and
+ * aliases aren't in it: its modules can't import them (module-graph.ts's profileImport). Throws for a module whose
+ * imports can't be told.
  */
 export async function hashProfile(dir: string): Promise<string> {
   if (statSync(dir).isFile()) return versionOf(dir)
@@ -313,14 +314,6 @@ export class Allowances {
 /** What `import … from 'superego'` gives a profile and its extensions. */
 export type ProfileSdk = Record<string, unknown>
 
-// Only the runtime virtual-module API we use; Node builds need no Bun type dependency.
-type BunModuleLoader = {
-  plugin(plugin: {
-    name: string
-    setup(build: { module(name: string, load: () => { exports: ProfileSdk; loader: 'object' }): void }): void
-  }): void
-}
-
 /**
  * Node's own `import()`, out of reach of bundlers and test runners that would rewrite it: profiles must load through
  * Node's loader, where the hook for 'superego' and TypeScript's type stripping are.
@@ -346,24 +339,15 @@ export function provideSdk(sdk: ProfileSdk) {
   ;(globalThis as { __superegoSdk?: ProfileSdk }).__superegoSdk = sdk
   if (hooked) return
   hooked = true
-  // Bun's runtime virtual modules (not its bundler-only onResolve hooks).
-  const bun = (globalThis as typeof globalThis & { Bun?: BunModuleLoader }).Bun
-  if (bun) {
-    // Bun's runtime hooks don't see a module's version (its importer comes without the query): there, an edit to a
-    // helper alone loads with the next edit to the module that imports it.
-    bun.plugin({ name: 'superego-profile-sdk', setup(build) {
-      build.module('superego', () => ({ exports: sdk, loader: 'object' }))
-    } })
-    return
-  }
   const source = `const sdk = globalThis.__superegoSdk;\n${SDK_EXPORTS.map((key) => `export const ${key} = sdk.${key};`).join('\n')}\nexport default sdk;\n`
   nodeModule.registerHooks({
     resolve(specifier, context, next) {
       if (specifier === 'superego') return { url: `data:text/javascript,${encodeURIComponent(source)}`, shortCircuit: true }
-      // A profile's module imports its own files at their versions now, not the copies Node loaded before.
-      // Imports only (profiles are ES modules): a require takes paths, not URLs.
-      const resolved = next(context.conditions?.includes('import') ? realSpecifier(specifier, context.parentURL) : specifier, context)
-      return { ...resolved, url: versionedImport(resolved.url, context.parentURL) }
+      // A profile's module imports its own files at their versions now, not the copies Node loaded before, and nothing
+      // its allowing didn't vouch for (profileImport). Imports only (profiles are ES modules): a require takes paths, not URLs.
+      let resolved: ReturnType<typeof next> | undefined
+      const url = profileImport(specifier, context.parentURL, () => (resolved = next(context.conditions?.includes('import') ? realSpecifier(specifier, context.parentURL) : specifier, context)).url)
+      return { ...resolved!, url }
     },
   })
 }

@@ -36,15 +36,16 @@ Each set-up of an extension, in either half, has one lifetime: everything it reg
 - What a reload runs: a profile's daemon modules load by versions of their own, each the hash of the module and every
   local file it imports, so an edit to a helper alone loads the new code, and that of whatever imports it. A module none
   of whose files changed is the one loaded before, its module-level state with it (keep state in `setup`, which runs
-  again); a helper two extensions import is one module, as ever. Packages (bare imports, `node_modules`) load once:
-  restart the daemon for a new version of one. Imports are read as JavaScript is (comments and strings aren't
+  again); a helper two extensions import is one module, as ever. A file under `node_modules` imported by its path is a
+  file like any other; packages and aliases by name (other than `'superego'` and Node's built-ins) are refused. Imports are read as JavaScript is (comments and strings aren't
   imports), static and `import('./literal.ts')` alike; an `import()` of a path worked out as it runs is refused, as
   what it loads couldn't be versioned or vouched for. The window loads a profile's UI modules afresh, all of them,
   whenever any of the profile's files changed.
 - What allowing a project's profile vouches for is every file its code can run, read from the same imports a reload
   follows: each module in its folder and every local file they import, hidden or outside it, symlinks followed; a file
-  it lists from outside, with what that imports; and its folder's other files (not dotfiles). Not packages, nor files
-  elsewhere its code reads or starts as it runs.
+  it lists from outside, with what that imports; and its folder's other files (not dotfiles). Its modules can't import
+  anything else (a package, an alias), so nothing loads that allowing didn't vouch for. Not in it: files its code reads
+  or starts as it runs.
 - A profile's UI from another machine runs in the window only once allowed on this computer (the thread's notice, or
   `superego profile allow-ui <name> -m <machine>`), for a hash the window takes of the sources it received; any change
   to them asks again, and Revoke (Settings → Machines) takes out what it registered at once. Once running it has the window's full

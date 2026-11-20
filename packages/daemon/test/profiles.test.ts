@@ -1025,6 +1025,62 @@ it("vouches, in allowing a project's profile, for every file its code can run: h
   await expect(loadProfile(ref, [{ dir: join(home, 'profiles') }], allowances)).resolves.toMatchObject({ name: 'support' })
 })
 
+it("loads nothing a project's allowing didn't vouch for: no package, no alias; a file under node_modules by its path, vouched for (Node's own loader)", async () => {
+  const profile = join(project, '.superego', 'profiles', 'support')
+  const extension = (imports: string) => `import { defineDaemonExtension } from 'superego'\nimport { v } from '${imports}'\nexport default defineDaemonExtension({ name: 'x', setup() { return v } })\n`
+  write(project, {
+    // What a repo has around its profile: a package of its own, and an alias in its package.json.
+    'package.json': JSON.stringify({ name: 'acme', type: 'module', imports: { '#lib': './src/lib.js' } }),
+    'src/lib.js': `export const v = 'alias'\n`,
+    'node_modules/helper/package.json': JSON.stringify({ name: 'helper', type: 'module', main: 'index.js' }),
+    'node_modules/helper/index.js': `export const v = 'package'\n`,
+  })
+  write(profile, {
+    'profile.ts': profileTs(['./extension.ts']),
+    'node_modules/helper/package.json': JSON.stringify({ name: 'helper', type: 'module', main: 'index.js' }),
+    'node_modules/helper/index.js': `export const v = 'own package'\n`,
+  })
+  const profiles = new URL('../src/profiles.ts', import.meta.url).href
+  write(dir, { 'probe.ts': `import { writeFileSync } from 'node:fs'
+import { loadProfile, provideSdk, SDK_EXPORTS, Allowances } from '${profiles}'
+provideSdk(Object.fromEntries(SDK_EXPORTS.map((key) => [key, (x) => x])))
+const ref = { scope: 'project', name: 'support', dir: ${JSON.stringify(profile)} }
+const allowances = new Allowances(${JSON.stringify(home)})
+const roots = [{ dir: ${JSON.stringify(join(home, 'profiles'))} }]
+const outcome = (p) => p.then((loaded) => loaded.daemon[0].extension.setup(), (error) => ({ kind: error.kind, message: error.message }))
+const out = {}
+for (const imports of ['helper', '#lib', './node_modules/helper/index.js']) {
+  writeFileSync(${JSON.stringify(join(profile, 'extension.ts'))}, process.argv[2].replace('IMPORTS', imports))
+  await allowances.allow(ref)
+  out[imports] = await outcome(loadProfile(ref, roots, allowances))
+}
+// The file under node_modules it imports by path is part of what it runs: changed, it isn't allowed.
+writeFileSync(${JSON.stringify(join(profile, 'node_modules/helper/index.js'))}, "export const v = 'changed'\\n")
+out.changed = await outcome(loadProfile(ref, roots, allowances))
+console.log(JSON.stringify(out))
+` })
+  const { execFileSync } = await import('node:child_process')
+  const out = execFileSync(process.execPath, [join(dir, 'probe.ts'), extension('IMPORTS')], { encoding: 'utf8', env: { ...process.env, NODE_OPTIONS: '' } })
+  expect(JSON.parse(out.trim().split('\n').at(-1)!)).toEqual({
+    helper: { kind: 'invalid', message: expect.stringContaining("imports 'helper', a package: a profile's modules import 'superego', Node's built-ins and files by their paths, nothing else") },
+    '#lib': { kind: 'invalid', message: expect.stringContaining("imports '#lib', an alias from a package.json's imports") },
+    './node_modules/helper/index.js': 'own package',
+    changed: { kind: 'profile_not_allowed', message: expect.any(String) },
+  })
+})
+
+it('refuses a package or an alias under vitest too, as the daemon does', async () => {
+  write(project, { 'package.json': JSON.stringify({ name: 'acme', type: 'module', imports: { '#lib': './src/lib.js' } }), 'src/lib.js': `export const v = 1\n` })
+  const profile = join(project, '.superego', 'profiles', 'support')
+  const ref: ProfileRef = { scope: 'project', name: 'support', dir: profile }
+  const allowances = new Allowances(home)
+  for (const [imports, why] of [['#lib', 'an alias'], ['vitest', 'a package']]) {
+    write(profile, { 'profile.ts': profileTs(['./extension.ts']), 'extension.ts': `import { defineDaemonExtension } from 'superego'\nimport * as m from '${imports}'\nexport default defineDaemonExtension({ name: 'x', setup() { void m } })\n` })
+    await allowances.allow(ref)
+    await expect(loadProfile(ref, [{ dir: join(home, 'profiles') }], allowances), imports).rejects.toMatchObject({ message: expect.stringContaining(`imports '${imports}', ${why}`) })
+  }
+})
+
 it('hashes a profile the same while it is unchanged, with a UI or without, and differently once edited', async () => {
   for (const [name, files] of [
     ['plain', { 'profile.ts': profileTs(['./vault.ts']), 'vault.ts': `import { a } from './.helper.ts'\nexport default { name: 'vault', a }\n`, '.helper.ts': `export const a: string = 'a'\n` }],
