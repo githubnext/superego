@@ -61,7 +61,7 @@ export default defineDaemonExtension({
         parameters: obj({
           images: arr(obj({
             path: opt(str({ description: 'A file on this machine: relative to the working folder, or absolute.' })),
-            url: opt(str({ description: 'An http(s) address, instead of a path.' })),
+            url: opt(str({ description: 'An http(s) address, instead of a path: it shows once the user clicks to load it.' })),
             caption: opt(str()),
             alt: opt(str({ description: 'What it shows, for those who can’t see it.' })),
           }), { minItems: 1, maxItems: MAX_IMAGES }),

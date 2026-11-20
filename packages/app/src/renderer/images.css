@@ -20,6 +20,11 @@
 /* Light images on the sheet get an edge; the frame's own background shows under a transparent one. */
 .image-frame.is-ready { background: none; }
 .image-frame.is-ready::before { content: ''; position: absolute; inset: 0; border-radius: inherit; box-shadow: inset 0 0 0 .5px var(--superego-line); pointer-events: none; z-index: 1; }
+/* A web image, until it's pressed to load: where it's from. */
+.image-frame.is-held { cursor: pointer; }
+.image-frame.is-held:hover { background: var(--superego-hover); }
+.image-frame.is-held .image-frame__broken { color: var(--superego-muted); }
+.image-frame__host { color: var(--superego-faint); }
 .image-frame__broken { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 8px; font-size: var(--superego-text-sm); color: var(--superego-faint); text-align: center; }
 
 /* In a message or a rendered file (and wherever else an image sits in the text): as wide as the column allows
@@ -31,7 +36,7 @@
 .image-frame--inline .image-frame__img { max-width: var(--image-max-width); max-height: var(--image-max-height); width: auto; height: auto; object-fit: contain; }
 .image-frame--inline.has-size { width: min(var(--image-max-width), var(--image-width), calc(var(--image-max-height) * var(--image-ratio))); aspect-ratio: var(--image-ratio); }
 .image-frame--inline.has-size .image-frame__img { width: 100%; height: 100%; max-width: none; max-height: none; }
-.image-frame--inline.is-broken { display: inline-flex; max-width: 100%; vertical-align: middle; background: none; }
+.image-frame--inline:is(.is-broken, .is-held) { display: inline-flex; max-width: 100%; vertical-align: middle; background: none; }
 .image-frame--inline .image-frame__broken { position: static; flex-direction: row; padding: 3px 8px; gap: 6px; text-align: left; min-width: 0; }
 .image-frame--inline .image-frame__broken span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
@@ -74,6 +79,12 @@
 .lightbox__stage.is-zoomed.is-moving .lightbox__image { cursor: grabbing; }
 .lightbox__loading { position: absolute; width: 28px; height: 28px; border-radius: 50%; border: 2px solid rgb(255 255 255 / .2); border-top-color: rgb(255 255 255 / .8); animation: image-spin .8s linear infinite; }
 .lightbox__broken { display: flex; flex-direction: column; align-items: center; gap: 8px; color: rgb(255 255 255 / .6); font-size: var(--superego-text-ui); }
+.lightbox__load {
+  padding: 5px 14px; border: 0; border-radius: 999px; background: rgb(255 255 255 / .14); color: #fff; font: inherit;
+  box-shadow: inset 0 0 0 .5px rgb(255 255 255 / .2);
+}
+.lightbox__load:hover { background: rgb(255 255 255 / .22); }
+.lightbox__load:focus-visible { outline: none; box-shadow: 0 0 0 2px #fff; }
 .lightbox__why { font-size: var(--superego-text-sm); color: rgb(255 255 255 / .45); }
 .lightbox__bar { position: absolute; top: calc(env(safe-area-inset-top) + 10px); right: calc(env(safe-area-inset-right) + 10px); display: flex; align-items: center; gap: 4px; }
 .lightbox__count { margin-right: 4px; padding: 3px 9px; border-radius: 999px; background: rgb(28 28 30 / .6); font-size: var(--superego-text-sm); color: rgb(255 255 255 / .8); font-variant-numeric: tabular-nums; }

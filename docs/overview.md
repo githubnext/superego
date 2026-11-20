@@ -65,7 +65,9 @@ project    a git repository (its worktrees too) or a folder, on a machine
 - **Images** an agent shows (`show_images`: a screenshot it took, a chart it drew) appear in the thread where it showed
   them: one fits the column, a few sit in a grid, more go one at a time in a carousel (‹ ›, ←/→, a swipe). Click one
   to look closely: zoom by clicking, scrolling or pinching, drag to pan, ←/→ through the set, Esc to close. Each is
-  copied to the thread's files on its machine, so every client sees it, on the web too, as it was when shown.
+  copied to the thread's files on its machine, so every client sees it, on the web too, as it was when shown. An image
+  on the web (one an agent shows by its address, or names in a message, a file or a block) isn't fetched until you
+  click it: it says where it's from until then. Its address could carry what the agent read.
 - **Ego**, Superego's own agent (the lifebuoy in the rail, or in a phone's drawer, or *Ask Ego* in ⌘K; the `ego` extension), answers questions about Superego and
   how this computer has it set up: settings, profiles, skills, machines, projects and threads. It changes setup itself
   (this machine's settings, and the machines this computer reaches); any other work (a profile, a skill, code) it hands

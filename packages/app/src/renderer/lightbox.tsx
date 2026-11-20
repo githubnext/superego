@@ -4,9 +4,9 @@
 // the focus stays inside while it is open and goes back where it was.
 // It reads each image whole, showing its thumbnail (what the thread showed) meanwhile.
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react'
-import { BaseUI, CaretLeftIcon, CaretRightIcon, ImageBrokenIcon, MagnifyingGlassMinusIcon, MagnifyingGlassPlusIcon, usePortalAttributes, XIcon } from '@superego/ui'
+import { BaseUI, CaretLeftIcon, CaretRightIcon, GlobeIcon, ImageBrokenIcon, MagnifyingGlassMinusIcon, MagnifyingGlassPlusIcon, usePortalAttributes, XIcon } from '@superego/ui'
 import type { MachineEntry } from '../shared/bridge.ts'
-import { describeImage, imageReadAlready, imageSourceOf, useImageSource, type ImageItem } from './images.tsx'
+import { describeImage, imageReadAlready, imageSourceOf, loadWebImages, useImageSource, type ImageItem } from './images.tsx'
 import { CLICK_SCALE, clampPan, FIT, toggleAt, zoomAt, type Bounds, type Point, type View } from './zoom.ts'
 
 /** How far a finger or the mouse may move and still be a click; how far a swipe must go to turn the page. */
@@ -42,7 +42,7 @@ export function Lightbox({ machine, thread, images, start, onClose }: {
   const gesture = useRef<Gesture | undefined>(undefined)
   const image = images[index]!
   const whole = useImageSource(machine, thread, image, true, 'whole')
-  const { broken, problem } = whole
+  const { broken, problem, held } = whole
   const src = whole.src ?? imageReadAlready(machine, thread, image, 'thumbnail')
   // Which image was drawn, and whether whole (any version of it: a newer one swaps in without the spinner between).
   const [drawn, setDrawn] = useState<{ which: string | undefined; whole: boolean }>()
@@ -174,7 +174,12 @@ export function Lightbox({ machine, thread, images, start, onClose }: {
             className={`lightbox__stage ${zoomed ? 'is-zoomed' : ''} ${moving ? 'is-moving' : ''}`}
             onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up}
           >
-            {broken ? (
+            {held ? (
+              <div className="lightbox__broken">
+                <GlobeIcon size={32} aria-hidden /><span>{URL.parse(image.url!)?.host || image.url}</span>
+                <button type="button" className="lightbox__load" onClick={() => loadWebImages([image.url!])}>Load image</button>
+              </div>
+            ) : broken ? (
               <div className="lightbox__broken"><ImageBrokenIcon size={32} aria-hidden /><span>{image.name} can’t be shown</span>{problem && <span className="lightbox__why">{problem}</span>}</div>
             ) : src && (
               <img
@@ -188,7 +193,7 @@ export function Lightbox({ machine, thread, images, start, onClose }: {
                 style={{ transform: `translate(${view.x + drag}px, ${view.y}px) scale(${view.scale})` }}
               />
             )}
-            {!broken && !(drawn?.which === which && drawn?.whole) && <div className="lightbox__loading" aria-hidden />}
+            {!broken && !held && !(drawn?.which === which && drawn?.whole) && <div className="lightbox__loading" aria-hidden />}
           </div>
           <div className="lightbox__bar">
             {many && <span className="lightbox__count" aria-hidden>{index + 1} / {images.length}</span>}

@@ -12,7 +12,7 @@ import remarkGfm from 'remark-gfm'
 import { highlight, languageNamed } from './code-highlight.ts'
 import { htmlPlugins, imageSource, mediaMatches, parseSrcset } from './markdown-html.ts'
 import type { MachineEntry } from '../shared/bridge.ts'
-import { ImageFrame, imageSourceOf, onImageChange, type ImageItem } from './images.tsx'
+import { ImageFrame, imageSourceOf, loadWebImages, onImageChange, onWeb, useWebImagesAsked, WebImage, type ImageItem } from './images.tsx'
 import { Lightbox } from './lightbox.tsx'
 import { CheckIcon, CopyIcon } from '@superego/ui'
 import { useOptionalRegistry } from './registry.tsx'
@@ -110,8 +110,11 @@ export function imagesIn(machine: MachineEntry, thread: string, dir = ''): Image
   }
 }
 
-/** The images of one message or file, in order, to go through in the lightbox from the one clicked. */
-const Gallery = createContext<{ add(element: Element, image: ImageItem): () => void; open(element: Element): void } | undefined>(undefined)
+/**
+ * The images of one message or file, in order, to go through in the lightbox from the one clicked; and to load its web
+ * images all at once, as the user asks for one of them.
+ */
+const Gallery = createContext<{ add(element: Element, image: ImageItem): () => void; open(element: Element): void; loadWeb(): void } | undefined>(undefined)
 
 function GalleryOf({ images, children }: { images: ImagesIn; children: ReactNode }) {
   const shown = useRef(new Map<Element, ImageItem>())
@@ -124,7 +127,8 @@ function GalleryOf({ images, children }: { images: ImagesIn; children: ReactNode
     const order = [...shown.current.keys()].sort((a, b) => a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1)
     setOpen({ images: order.map((e) => shown.current.get(e)!), start: Math.max(0, order.indexOf(element)) })
   }, [])
-  const gallery = useMemo(() => ({ add, open: show }), [add, show])
+  const loadWeb = useCallback(() => loadWebImages([...shown.current.values()].filter(onWeb).map((image) => image.url!)), [])
+  const gallery = useMemo(() => ({ add, open: show, loadWeb }), [add, show, loadWeb])
   return (
     <Gallery.Provider value={gallery}>
       {children}
@@ -197,17 +201,21 @@ function InlineImage({ src, srcSet, alt, title, width, height }: ImageProps) {
     <span ref={ref} className="md__image">
       <ImageFrame machine={images.machine} thread={images.thread} image={image} className="image-frame--inline"
         srcSet={sizes} width={width} height={height} brokenLabel={alt || image.name} cropTall
-        onOpen={() => { if (ref.current) gallery?.open(ref.current) }} />
+        onOpen={() => { if (ref.current) gallery?.open(ref.current) }} {...(gallery ? { onLoadWeb: gallery.loadWeb } : {})} />
     </span>
   )
 }
 
-/** A srcset with each of its files read as the window can load them (those that can't be, left out); none for one size. */
+/**
+ * A srcset with each of its files read as the window can load them (those that can't be, and web images not loaded
+ * yet, left out); none for one size.
+ */
 function useSrcset(images: ImagesIn, candidates: { url: string; descriptor: string }[]) {
   const key = candidates.length > 1 ? candidates.map((c) => `${c.url} ${c.descriptor}`).join(',') : ''
   const [set, setSet] = useState<{ key: string; value: string }>()
-  // Read again when one of its files changes (image-cache.ts).
+  // Read again when one of its files changes (image-cache.ts), or web images are loaded.
   const [changed, setChanged] = useState(0)
+  const asked = useWebImagesAsked()
   useEffect(() => {
     if (!key) return
     let alive = true
@@ -217,7 +225,7 @@ function useSrcset(images: ImagesIn, candidates: { url: string; descriptor: stri
       .then((urls) => { if (alive) setSet({ key, value: urls.filter(Boolean).join(', ') }) })
     const offs = files.map((file) => onImageChange(images.machine, images.thread, file, 'thumbnail', () => setChanged((n) => n + 1)))
     return () => { alive = false; for (const off of offs) off() }
-  }, [images.machine.id, images.thread, key, changed])
+  }, [images.machine.id, images.thread, key, changed, asked])
   return set?.key === key && set.value ? set.value : undefined
 }
 
@@ -273,7 +281,10 @@ const components: Components = {
     return <code className={className} {...props}>{children}</code>
   },
   img: ({ node: _node, src, srcSet, alt, title, width, height, ...props }) => {
-    if (!useContext(Images)) return <img src={src} alt={alt} title={title} width={width} height={height} {...props} />
+    if (!useContext(Images)) {
+      const img = <img src={src} alt={alt} title={title} width={width} height={height} {...props} />
+      return src && /^https?:/i.test(src) ? <WebImage url={src} alt={alt}>{img}</WebImage> : img
+    }
     return <InlineImage src={src} srcSet={srcSet} alt={alt} title={title} width={width} height={height} />
   },
   picture: Picture,

@@ -12,7 +12,7 @@ import {
   ArrowRightIcon, BaseUI, Button, CheckIcon, hovering, Select, Slider, StatusGlyph, Switch, TextArea, TextField,
 } from '@superego/ui'
 import type { MachineEntry } from '../../shared/bridge.ts'
-import { useImageSource } from '../images.tsx'
+import { useImageSource, WebImage } from '../images.tsx'
 import { Markdown } from '../Markdown.tsx'
 import { useRegistry } from '../registry.tsx'
 import { ThreadRef } from '../thread-ref.tsx'
@@ -382,15 +382,16 @@ function Open({ block }: { block: Extract<Block, { type: 'open' }> }) {
 /**
  * An image by address (https, data:), or a file in the thread's folder, read from its machine as the window reads any
  * of a thread's images (so it shows on any client, and redraws when the file changes). Blocks of no thread have only
- * addresses (the check refuses paths there).
+ * addresses (the check refuses paths there). One on the web shows where it's from until the user loads it.
  */
 function BlockImage({ src, alt, caption }: { src: string; alt?: string | undefined; caption?: string | undefined }) {
   const { machine, thread } = useForm()
   const image = useMemo(() => /^(data|https?):/.test(src) ? { name: src, url: src } : { name: src, path: src }, [src])
   const loaded = useImageSource(machine, thread?.id ?? '', image, true)
+  const img = loaded.src ? <img src={loaded.src} alt={alt ?? ''} /> : <div className="blocks-image__missing">{loaded.broken ? `Image ${loaded.problem ?? 'not found'}` : 'Loading…'}</div>
   return (
     <figure className="blocks-image">
-      {loaded.src ? <img src={loaded.src} alt={alt ?? ''} /> : <div className="blocks-image__missing">{loaded.broken ? `Image ${loaded.problem ?? 'not found'}` : 'Loading…'}</div>}
+      {loaded.held ? <WebImage url={src} alt={alt}>{img}</WebImage> : img}
       {caption && <figcaption>{caption}</figcaption>}
     </figure>
   )

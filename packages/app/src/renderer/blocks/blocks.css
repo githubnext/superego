@@ -39,6 +39,7 @@
 
 .blocks-image { margin: 0; display: flex; flex-direction: column; gap: 4px; }
 .blocks-image img { max-width: 100%; border-radius: var(--superego-radius); align-self: flex-start; }
+.blocks-image > .image-frame { align-self: flex-start; }
 .blocks-image figcaption { font-size: var(--superego-text-sm); color: var(--superego-muted); }
 .blocks-image__missing { font-size: var(--superego-text-sm); color: var(--superego-faint); }
 

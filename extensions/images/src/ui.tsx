@@ -4,7 +4,7 @@
 // whole in the lightbox), holding its place (its size is known) until then, and says so when its file is gone. One alone
 // and much taller than wide (a whole page's screenshot) shows its top at the column's width, fading out.
 import { useRef, useState, type CSSProperties, type KeyboardEvent } from 'react'
-import { defineUiExtension, describeImage, ImageFrame, Lightbox, TALL, type MachineEntry, type ToolCallProps } from '@superego/app/ui'
+import { defineUiExtension, describeImage, ImageFrame, Lightbox, loadWebImages, TALL, type MachineEntry, type ToolCallProps } from '@superego/app/ui'
 import { CaretLeftIcon, CaretRightIcon, ImageBrokenIcon } from '@superego/ui'
 import { about, TOOL, type ShowDetails, type Shown } from './shared.ts'
 import './styles.css'
@@ -131,8 +131,11 @@ function Carousel(props: Props) {
   )
 }
 
-/** An image as a button that opens the lightbox (the app's own frame: read as it nears the screen, broken when it can't be). */
-function Picture({ machine, thread, image, index, onOpen, fit, className, style, wanted = true, tabIndex, cropTall = false }: Props & {
+/**
+ * An image as a button that opens the lightbox (the app's own frame: read as it nears the screen, broken when it can't
+ * be; on the web, held until it's pressed, which loads all of these).
+ */
+function Picture({ machine, thread, images, image, index, onOpen, fit, className, style, wanted = true, tabIndex, cropTall = false }: Props & {
   image: Shown
   index: number
   fit: 'contain' | 'cover'
@@ -144,7 +147,8 @@ function Picture({ machine, thread, image, index, onOpen, fit, className, style,
 }) {
   return (
     <ImageFrame machine={machine} thread={thread} image={image} onOpen={() => onOpen(index)} className={`images__frame ${className}`}
-      imgClassName={`images__img images__img--${fit}`} style={style} wanted={wanted} tabIndex={tabIndex} near={nearFrom} cropTall={cropTall} />
+      imgClassName={`images__img images__img--${fit}`} style={style} wanted={wanted} tabIndex={tabIndex} near={nearFrom} cropTall={cropTall}
+      onLoadWeb={() => loadWebImages(images.flatMap((shown) => shown.url ? [shown.url] : []))} />
   )
 }
 
