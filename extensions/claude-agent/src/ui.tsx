@@ -1,61 +1,70 @@
-// Claude Agent, UI half: over the composer of a Claude Agent thread whose folder has Claude Code settings of its own
-// not allowed as they are (the thread's facts, the daemon half's), a notice to allow them, with each of their files to
-// open and read first. Put off ("Not now"), it's remembered for those files as they are. Where another user could change
-// them, it says so, with nothing to allow.
-import { useState } from 'react'
-import { defineUiExtension, factsOf, useDispatch, useLocalState, type SlotProps } from '@superego/app/ui'
-import { Button } from '@superego/ui'
+// Claude Agent, UI half: above the composer, a folder's Claude Code settings waiting to be allowed
+// (project-notice.tsx) and what a thread's Claude Code waits on the user for (approval.tsx); and its own tools' rows in
+// the transcript: a subagent's (Agent) with its steps under it, a plan it proposed, a question it asked.
+import { defineUiExtension, has, Markdown, Output, ToolSteps, useValue, type ToolRow, type ToolRowCall } from '@superego/app/ui'
+import { Waiting } from './approval.tsx'
+import { ProjectNotice } from './project-notice.tsx'
+import { about, AGENT_TOOL, KEPT, type Kept, type SubagentSteps } from './shared.ts'
 import './styles.css'
-import { about, ALLOW, type ProjectFacts } from './shared.ts'
+
+/** A subagent's work, as the thread keeps it, by its Agent call. */
+function useWork({ machine, thread, call }: ToolRowCall): SubagentSteps | undefined {
+  const kept = useValue<Kept>(machine, KEPT, { scope: thread.id })
+  return has(machine, `ext:${about.name}`) ? kept?.subagents?.[call.id] : undefined
+}
+
+const VERBS: Record<SubagentSteps['status'], string> = { running: 'Running a subagent', completed: 'Ran a subagent', failed: 'Subagent failed', stopped: 'Subagent stopped' }
+
+/** How a subagent stands: running on after its call returned, if it does (Claude Code runs them in the background). */
+function SubagentVerb({ call }: { call: ToolRowCall }) {
+  const work = useWork(call)
+  if (work) return <>{VERBS[work.status]}</>
+  return <>{call.state === 'error' ? VERBS.failed : call.state === 'done' ? VERBS.completed : 'Starting a subagent'}</>
+}
+
+/** What a subagent did, under its call: its steps, then what it found. */
+function SubagentBody({ call }: { call: ToolRowCall }) {
+  const work = useWork(call)
+  const said = work?.summary ?? call.result?.text
+  return (
+    <div className="claude-agent-subagent">
+      {work && work.steps.length > 0 && <ToolSteps machine={call.machine} thread={call.thread} steps={work.steps} results={work.results} />}
+      {said && <Output text={said} />}
+    </div>
+  )
+}
+
+const agentRow: ToolRow = {
+  verbs: [VERBS.completed, 'Starting a subagent', VERBS.failed],
+  verb: (call) => <SubagentVerb call={call} />,
+  subject: (call) => typeof call.call.arguments.description === 'string' ? call.call.arguments.description : null,
+  body: (call) => <SubagentBody call={call} />,
+  phrase: (count) => count === 1 ? 'ran a subagent' : `ran ${count} subagents`,
+}
+
+const planRow: ToolRow = {
+  verbs: ['Proposed a plan', 'Proposing a plan', 'Plan not approved'],
+  subject: () => null,
+  body: (call) => typeof call.call.arguments.plan === 'string' ? <div className="claude-agent-plan"><Markdown text={call.call.arguments.plan} /></div> : undefined,
+  phrase: () => 'proposed a plan',
+}
+
+const questionRow: ToolRow = {
+  verbs: ['Asked', 'Asking', 'Not answered'],
+  subject: (call) => {
+    const [first] = Array.isArray(call.call.arguments.questions) ? call.call.arguments.questions as { question?: unknown }[] : []
+    return typeof first?.question === 'string' ? first.question : null
+  },
+  phrase: (count) => count === 1 ? 'asked a question' : `asked ${count} questions`,
+}
 
 export default defineUiExtension({
   ...about,
   setup(superego) {
     superego.slot('composer.above', ProjectNotice, { order: 40 })
+    superego.slot('composer.above', Waiting)
+    superego.tool(AGENT_TOOL, agentRow)
+    superego.tool('ExitPlanMode', planRow)
+    superego.tool('AskUserQuestion', questionRow)
   },
 })
-
-function ProjectNotice({ machine, thread }: SlotProps['composer.above']) {
-  const project = factsOf<ProjectFacts>(thread, about)
-  const dispatch = useDispatch()
-  const [dismissed, setDismissed] = useLocalState<string[]>('claude-agent.dismissed', [], { shared: true })
-  const [open, setOpen] = useState(false)
-  const [error, setError] = useState<string>()
-  if (!project || project.allowed || thread.archived) return null
-  const key = `${machine.id}:${project.cwd}:${project.hash}`
-  if (dismissed.includes(key)) return null
-  const allow = () => {
-    setError(undefined)
-    dispatch(ALLOW, { cwd: project.cwd, hash: project.hash }, { machine: machine.id, source: 'claude-agent' }).catch((e: Error) => setError(e.message))
-  }
-  const show = (file: string) => void dispatch('pane.open', {
-    thread: thread.id, kind: 'editor', params: { path: file.startsWith('/') ? file : `${project.cwd}/${file}` },
-  }, { machine: machine.id, source: 'claude-agent' }).catch((e: Error) => setError(e.message))
-  return (
-    <div className="service-notice claude-project" role="status" aria-live="polite">
-      <div className="service-notice__label">
-        {project.changed ? 'This folder’s Claude Code settings changed since you allowed them.' : 'This folder has Claude Code settings of its own.'}
-      </div>
-      <div className="service-notice__note">
-        {project.unsafe
-          ? <>Claude Code also reads settings from <code>{project.unsafe}</code>, which other users on this computer can change,
-            so it runs here with your own settings only (and without the folder’s CLAUDE.md).</>
-          : <>Their hooks, MCP servers and permissions can run commands, so Claude Code runs here without them (and without the
-            folder’s CLAUDE.md) until you allow them.</>}
-      </div>
-      {open && (
-        <ul className="claude-project__files">
-          {project.files.map((file) => <li key={file}><button type="button" className="claude-project__file" onClick={() => show(file)}>{file}</button></li>)}
-        </ul>
-      )}
-      <div className="service-notice__actions">
-        {!project.unsafe && <Button variant="primary" onClick={allow}>Allow</Button>}
-        <Button onClick={() => setDismissed((list) => [...list.filter((k) => !k.startsWith(`${machine.id}:${project.cwd}:`)), key])}>{project.unsafe ? 'Dismiss' : 'Not now'}</Button>
-        <Button variant="ghost" className="claude-project__more" aria-expanded={open} onClick={() => setOpen(!open)}>
-          {project.files.length === 1 ? '1 file' : `${project.files.length} files`}
-        </Button>
-      </div>
-      {error && <div className="service-notice__detail">{error}</div>}
-    </div>
-  )
-}

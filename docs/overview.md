@@ -166,6 +166,7 @@ and left out by a profile (`without`), and its tools, pane kinds and UI are then
 | `SUPEREGO_REPLAY_SPEED` | Replay pace in tokens per second (default 120; 0 is instant) |
 | `SUPEREGO_CWD` | Default working directory for new threads |
 | `SUPEREGO_AGENTS` | The folder agents share, for skills and `AGENTS.md` (default `~/.agents`) |
+| `SUPEREGO_CLAUDE` | The `claude` Claude Agent threads run (default: the one on the login shell's `PATH`) |
 | `SUPEREGO_HEADLESS` | The app shows nothing: no window, Dock icon, notification or focus (tests) |
 
 ## The command

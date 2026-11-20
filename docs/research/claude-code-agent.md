@@ -1,6 +1,6 @@
 # A thread that runs the user's Claude Code: proof and design
 
-2026-11-20. A design; wave 1 (§4) is built. The terms behind it are in
+2026-11-20. A design; waves 1 and 2 (§4) are built. The terms behind it are in
 [claude-subscriptions.md](claude-subscriptions.md), whose §3(a) this builds on. **This is not legal advice.**
 
 The idea: an opt-in second agent kind for threads. The thread runs the user's own installed, unmodified `claude`
@@ -155,7 +155,7 @@ use those, so the transcript's tool rows (Read, Edit, Bash…) render them uncha
 | `user` with `tool_result` | A `ToolResultEntry` per result, matched by `tool_use_id`. |
 | `user` (replayed prompt) | Already there: the user's own message was appended when it was sent. |
 | `system:status`, `tool_progress`, `api_retry` | Live state only: "Retrying (2/10)…", a tool's progress. |
-| `task_started` / `task_progress` / `task_notification` (subagents) | Nested rows under the `Agent` tool call, like a nested tool call (`NestedToolSlot`). |
+| A subagent's `assistant` / `user` (`parent_tool_use_id` set), `task_notification` | Steps under its `Agent` call's row (built in wave 2, §3.4's end). |
 | `compact_boundary` | A row saying Claude Code compacted the conversation. |
 | `rate_limit_event` | `allowed_warning`: a note on the thread. `rejected`: the turn ends as an error saying when the limit resets (`resetsAt`). |
 | `result` `success` | The turn ends: the thread is done. `total_cost_usd`, usage and `num_turns` go into the thread's usage (shown as an estimate, since a plan isn't billed per token). |
@@ -180,6 +180,39 @@ use those, so the transcript's tool rows (Read, Edit, Bash…) render them uncha
 - The waiting items live in a doc, so a restart shows them again. A restarted process can't answer an old request,
   though: after a restart, a waiting approval becomes "Interrupted: send again".
 
+**As built (wave 2, 2026-11-20).**
+- The waiting items are claude-agent's own (`claude-agent.waiting`, a scoped value by thread, oldest first), answered by
+  `claude-agent.answer` (`allow`, `always`, `deny` with a message) from the card above the composer. ⌃1–⌃3 pick, as for
+  agent-ui's questions (its `keyMove`); what's typed denies, saying why or what to do instead. The thread's status is
+  `blocked`, `kind: 'permission'`, `msg` like `Bash: npm test`.
+- Each tool call gets its row (its entry, and a live slot while it runs) as Claude Code makes it, so an approval shows
+  under the call it's for; what asks about a call waits for its row (5 s at most).
+- "Always allow …" is offered when `suggestions` come, labelled from them (`Always allow Bash(npm test *)`), and
+  answered with them as `updatedPermissions`. Claude Code would keep its rules in the folder's own settings
+  (`.claude/settings.local.json`), which load only once the user allowed them as they are (and would change by it): so
+  Superego keeps the tool rules itself, by folder (`always-allowed.json` in its data folder), passes them each turn as
+  `allowedTools`, and has Claude Code apply the folder-bound updates for the session only.
+- `AskUserQuestion` runs the thread's own agent-ui `ask_user` (the same tool as a Superego thread's, through §3.5's
+  tool runner), one question at a time, and answers `{ ...input, answers: { [question]: label } }`. Several picks are
+  typed, comma-separated.
+- `ExitPlanMode`: Claude Code reads the plan from its plan file and puts it in the input it asks about (`plan`); the
+  card shows it, with "Approve plan" (allow, leaving plan mode) and "Keep planning" (deny, with what was typed).
+- Superego's own MCP tools are allowed in `canUseTool` (by `mcpServer.source === 'sdk'`), not by `allowedTools`, which
+  would shadow the callback for them.
+- A profile's `claudeAgent`: `permissionMode` (unset: `default`, passed explicitly, so Claude Code's own
+  `defaultMode` doesn't apply; `bypassPermissions` only when the profile says it, with
+  `allowDangerouslySkipPermissions`), `settingSources` (narrowing what may load: `user`, and the folder's `project` and `local` once allowed),
+  `allowedTools`, `disallowedTools`.
+- Stop withdraws what waits and closes its call ("Stopped"). A restart closes the turn's open calls with
+  "Interrupted: … Send again to go on." **Found while building it:** a clean daemon stop doesn't count in a task's
+  `restarts` (only crashes do), so wave 1 would have run an interrupted turn again; the turn now leaves a memo as it
+  starts, and a turn that finds it is the interrupted one.
+- **Subagents.** Claude Code 2.1.325 runs `Agent` calls in the background: the call's result ("Async agent launched")
+  comes first, the subagent's messages after it, then a `task_notification`. So a subagent's steps (its text, its
+  calls and their results, cut to 2,000 characters each) are kept with the thread, by the `Agent` call
+  (`claude-agent.subagents`, published from the extension's thread state, the newest 20), and its row draws them with
+  the app's own rows (`ToolSteps`, from `superego/unstable`), saying whether it's still running.
+
 ### 3.5 Superego's tools over MCP
 
 - **In-process, bound to the thread.** Instead of spawning `superego mcp`, which works but doesn't know which thread
@@ -198,6 +231,29 @@ use those, so the transcript's tool rows (Read, Edit, Bash…) render them uncha
   servers apply, as in their own Claude Code. A profile can narrow it.
 - **The user's MCP servers.** A Superego profile's `mcpServers` (the `mcp-servers` extension) can be passed along as
   `mcpServers` entries. Secrets stay on the machine, in the child's config, not in the prompt.
+
+**As built (wave 2, 2026-11-20): the thread's own tools, not the outside-action table.** The table `superego mcp`
+serves is for agents outside any thread: `thread.start` from it is gated on a setting and makes no child, `thread.send`
+signs nothing, nothing notes what was read. A Claude Agent thread is a Superego thread, so it gets what a Superego
+thread's agent has: the tools of its agent (`runtime.agent()`'s, as its extensions and profile give them), run by the
+turn through a small tool runner (`tools.ts`: the call's id is Claude Code's `tool_use` id, from
+`_meta['claudecode/toolUseId']`; arguments checked against the tool's schema; `details` kept for the call's row). So
+`thread_start` makes a child of this thread (and its report comes back), `thread_send` signs "From [this thread]",
+`pane_open` opens beside it and checks the kinds, `ask_user`/`ask_ui` wait in agent-ui's queue, and the rows draw as a
+Superego thread's (`mcp__superego__x` is named `x` in the transcript).
+- **Offered:** `thread_start`, `thread_read`, `thread_send`, `thread_list`, `thread_machines`, `thread_archive`,
+  `pane_open`, `ask_user`, `ask_ui`, `show_ui`, `open_ui`, `update_ui`, `show_images`, `task_start`, `task_finish`.
+- **Pi-only, and why:** the coding tools (Claude Code has its own); skills (it reads its own `.claude/skills`);
+  AGENTS.md (it reads `CLAUDE.md`); the MCP servers of Settings and profiles (passing them on is later work); Ego's
+  setup tools (Ego's thread isn't a Claude Agent one); any other extension's tools, which may need what the runner
+  doesn't give (nested calls, tasks, memos: refused, saying so), and every extension's hooks, which don't run in
+  Claude Code's loop.
+- **The appended prompt:** a line saying it's a Superego thread; `<superego_tools>` naming the server, how to load a tool
+  (`select:mcp__superego__<name>`), and each tool's first sentence; then the sections a Superego thread renders, as it
+  renders them: `markdown`, `where`, `panes`, `threads`, `ui_blocks`, `images`, `task_reporting`, and the profile's
+  `instructions` last.
+- **The binary:** `SUPEREGO_CLAUDE` names one; else the login shell's `claude`, as before. (Settings → Claude Agent is
+  wave 3.)
 
 ### 3.6 Remote machines and sign-in
 
@@ -258,7 +314,12 @@ saying, in plain text, that a product "runs Claude Code".
      done and error; Stop; the scrubbed environment; the binary setting.
    - Tested against a mock API like the PoC's, in vitest, with no account.
    - Then **a handful of real turns on a signed-in plan**, to settle §1's "Not proven".
-2. **Approvals and Superego's tools.**
+2. **Built (2026-11-20), still behind a profile's `agent: 'claude-agent'`:** approvals, questions and plans as
+   blocked status with their card (§3.4's "as built"); the thread's own tools over an in-process MCP server and the
+   appended prompt (§3.5's); subagents' steps under their calls. Tested against the mock API with the user's `claude`
+   (`extensions/claude-agent/test`), and `test/look.sh <dir> claude-agent` shoots a permission request. Not yet: real
+   turns on a plan (§1's "Not proven" stands, `AskUserQuestion` and a denied permission now proven against the mock).
+   The plan was:
    - `canUseTool` into permission and question status, with the transcript UI (§3.4).
    - The in-process MCP server with the thread-bound actions and agent-ui's tools (§3.5).
    - The appended prompt.

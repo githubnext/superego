@@ -39,6 +39,18 @@
 - On a phone, the thread's sheet (tap its title) is a plain menu: a row each for its model and other details, Rename
   (the title at its top becomes a field), Pin, Archive or Unarchive, and the panes to open beside it, each with its
   icon, sized for a finger.
+- Claude Agent threads ask before Claude Code does something your Claude Code settings don't allow: the thread
+  shows "Permission" (in the sidebar, the menu bar, notifications and on your phone), with Allow, Deny and, when
+  Claude Code offers it, "Always allow …" above the message box (⌃1–⌃3; type to deny and say what to do instead).
+  What you always allow is remembered for that folder, without changing its own Claude Code settings.
+  Its questions come as question cards, and a plan comes with Approve plan or Keep planning. A profile picks how much
+  it asks with `claudeAgent: { permissionMode }` (`default`, `acceptEdits`, `plan`, `auto`; `bypassPermissions` only
+  when the profile says so), and can narrow `settingSources`, `allowedTools` and `disallowedTools`.
+- Claude Agent threads have Superego's tools: they start threads of their own (whose reports come back), open panes
+  beside themselves, ask you things, show UI and images, and report their work as tasks, as other threads do. A
+  profile's instructions are added to Claude Code's own prompt.
+- A Claude Agent subagent's steps show under its call, while it runs too.
+- A Claude Agent turn cut off by Superego restarting says so ("Interrupted: send again") instead of running again.
 
 ## 0.1.9
 

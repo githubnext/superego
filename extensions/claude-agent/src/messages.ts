@@ -2,7 +2,9 @@
 // assistant and tool-result messages, its tools named as Superego's own where they're the same (Read, Bash, Edit,
 // Write), so the transcript draws their rows as it does for any thread. Its streaming events build the answer as it
 // comes in.
+import type { JsonValue } from '@earendil-works/chord'
 import type { AssistantMessage, ToolCall, ToolResultMessage } from '@earendil-works/pi-ai'
+import { SERVER } from './shared.ts'
 
 /** The provider and API a Claude Agent thread's messages name. */
 export const PROVIDER = 'claude-agent'
@@ -15,8 +17,15 @@ const OURS: Record<string, { name: string; path?: string }> = {
   Write: { name: 'write', path: 'file_path' },
 }
 
-/** A tool call as the transcript has it: Superego's name and argument names where the tool is one of ours. */
+/** Superego's own tools, as Claude Code calls them (on its MCP server): by their own names in the transcript. */
+const MCP = `mcp__${SERVER}__`
+
+/**
+ * A tool call as the transcript has it: Superego's name and argument names where the tool is one of ours, so its row
+ * is drawn as a Superego thread's (a Read, ask_user's question, show_images' images).
+ */
 export function toolCall(name: string, input: ToolCall['arguments']): Pick<ToolCall, 'name' | 'arguments'> {
+  if (name.startsWith(MCP)) return { name: name.slice(MCP.length), arguments: input }
   const ours = OURS[name]
   if (!ours) return { name, arguments: input }
   const args = { ...input }
@@ -70,11 +79,21 @@ export function assistantMessage(content: Content, model: string, usage: Usage =
   }
 }
 
-/** A `tool_result` block of Claude Code's, for the call `name` it answers: its text (images aren't kept yet). */
-export function toolResultMessage(block: { tool_use_id: string; content?: unknown; is_error?: boolean | null }, name: string, timestamp = Date.now()): ToolResultMessage {
+/** A `tool_result` block's text (images aren't kept yet). */
+export function resultText(block: { content?: unknown }) {
   const parts = typeof block.content === 'string' ? [{ type: 'text', text: block.content }] : Array.isArray(block.content) ? block.content as { type: string; text?: string }[] : []
-  const text = parts.flatMap((part) => part.type === 'text' && typeof part.text === 'string' ? [part.text] : []).join('\n')
-  return { role: 'toolResult', toolCallId: block.tool_use_id, toolName: toolCall(name, {}).name, content: [{ type: 'text', text }], isError: Boolean(block.is_error), timestamp }
+  return parts.flatMap((part) => part.type === 'text' && typeof part.text === 'string' ? [part.text] : []).join('\n')
+}
+
+/**
+ * A `tool_result` block of Claude Code's, for the call `name` it answers: its text, and what the call reported for
+ * the transcript to draw it with (`details`: a Superego tool's own, a subagent's steps).
+ */
+export function toolResultMessage(block: { tool_use_id: string; content?: unknown; is_error?: boolean | null }, name: string, details?: JsonValue, timestamp = Date.now()): ToolResultMessage {
+  return {
+    role: 'toolResult', toolCallId: block.tool_use_id, toolName: toolCall(name, {}).name, content: [{ type: 'text', text: resultText(block) }],
+    ...(details !== undefined ? { details } : {}), isError: Boolean(block.is_error), timestamp,
+  }
 }
 
 /** A Messages API streaming event, as much of it as the answer coming in needs. */

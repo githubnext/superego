@@ -336,6 +336,19 @@ const steps = (blocks: Block[], results: Results, running: Slots) => blocks.map(
     ? <div key={index} className="step__note"><Markdown text={block.text ?? ''} /></div>
     : <ToolCall key={block.id ?? index} block={block} result={results.get(block.id!)} slot={running.get(block.id!)} />)
 
+/** No live slots: what `ToolSteps` draws ran elsewhere. */
+const NO_SLOTS: Slots = new Map()
+
+/**
+ * Tool calls (and what was said between them) drawn as a run's steps are, each by its tool's row, in `thread` on
+ * `machine`: for an extension's row of a call whose own steps ran elsewhere (a subagent's, under its call).
+ */
+export function ToolSteps({ machine, thread, steps: blocks, results }: { machine: MachineEntry; thread: ThreadInfo; steps: Block[]; results: Record<string, { text: string; isError: boolean }> }) {
+  const here = useMemo(() => ({ machine, thread }), [machine, thread])
+  const map = useMemo(() => new Map(Object.entries(results)), [results])
+  return <Here.Provider value={here}><div className="run__steps">{steps(blocks, map, NO_SLOTS)}</div></Here.Provider>
+}
+
 /**
  * A run of work. One step shows as itself; more fold into one line saying what was done ("Read 2 files and ran a
  * command"), opened by hand. Its steps are drawn only while it's open: a long run holds thousands.

@@ -1,6 +1,6 @@
 #!/bin/sh
 # The window's layout in the states the design covers, screenshotted:
-# `test/look.sh <dir> [look|focus|panes|panehead|composer|images|mcp|web|terminal|toolbar|titlebar|titlebar-fit|pins|folds|states|cards|dialogs|machines|staff|picker|providers|keptpage|themes]` (look, unless given), each a script of
+# `test/look.sh <dir> [look|focus|panes|panehead|composer|images|mcp|web|terminal|toolbar|titlebar|titlebar-fit|pins|folds|states|cards|dialogs|machines|staff|picker|providers|keptpage|themes|claude-agent]` (look, unless given), each a script of
 # that name here:
 # - `look`: the sidebar shown, dragged and hidden, the thread alone and with panes, details, a phone; the first-launch
 #   page, ⌘N's dialog, Settings and its Keyboard;
@@ -30,6 +30,7 @@
 # - `keptpage`: a Browser pane's page scrolled partly under the thread kept in view (a still of it, under the thread), and
 #   beside it (the page itself).
 # - `providers`: Settings → Providers (signed in, added, searched, the add form), Favourite models, ⌘N's model menu.
+# - `claude-agent`: a Claude Agent thread waiting on a permission (needs `claude` installed; nothing is signed in or spent).
 # - `themes`: code in a message, the editor and the terminal under Superego's theme and three built-in pairs, light and
 #   dark, and Settings → Appearance's theme pickers.
 set -e
@@ -38,7 +39,7 @@ cd "$(dirname "$0")/.."
 # seconds), and builds the app first if its sources changed.
 [ "$SUPEREGO_CHECK_COMMAND" = test/look.sh ] || exec node ../scripts/check.ts --timeout SUPEREGO_SHOWCASE_TIMEOUT=480 test/look.sh "$@"
 node scripts/build.ts
-OUT="$(cd "$(dirname "${1:?usage: look.sh <dir> [look|focus|panes|panehead|composer|images|mcp|web|terminal|toolbar|titlebar|titlebar-fit|pins|folds|states|cards|dialogs|machines|staff|picker|keptpage|themes]}")" && pwd)/$(basename "$1")"
+OUT="$(cd "$(dirname "${1:?usage: look.sh <dir> [look|focus|panes|panehead|composer|images|mcp|web|terminal|toolbar|titlebar|titlebar-fit|pins|folds|states|cards|dialogs|machines|staff|picker|keptpage|themes|claude-agent]}")" && pwd)/$(basename "$1")"
 mkdir -p "$OUT"
 unset ANTHROPIC_API_KEY ANTHROPIC_OAUTH_TOKEN OPENAI_API_KEY
 export SUPEREGO_HOME="$(mktemp -d)" SUPEREGO_HEADLESS=1 SUPEREGO_SHOWCASE_OUT="$OUT" SUPEREGO_REPLAY_SPEED=0 TZ=Europe/Copenhagen
@@ -55,6 +56,17 @@ fi
 if [ "$2" = themes ]; then
   node test/showcase/themes-setup.mjs "$SUPEREGO_HOME/themes-turns.jsonl"
   export SUPEREGO_MODEL="replay:$SUPEREGO_HOME/themes-turns.jsonl"
+fi
+# `claude-agent`: a Claude Agent thread on this machine's own `claude` (a wrapper pointing it at the scene's stand-in
+# for the Messages API, in a config folder of its own), with a profile that picks it.
+if [ "$2" = claude-agent ]; then
+  CLAUDE="$(command -v claude || true)"
+  [ -n "$CLAUDE" ] || { echo "look.sh claude-agent: needs claude (Claude Code) installed" >&2; exit 1; }
+  mkdir -p "$SUPEREGO_HOME/bin" "$SUPEREGO_HOME/profiles/claude"
+  printf '#!/bin/sh\nexec env ANTHROPIC_BASE_URL="$(cat "%s/claude-mock-url")" ANTHROPIC_API_KEY=sk-ant-api03-look CLAUDE_CONFIG_DIR="%s/claude-config" CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1 "%s" "$@"\n' "$SUPEREGO_HOME" "$SUPEREGO_HOME" "$CLAUDE" > "$SUPEREGO_HOME/bin/claude"
+  chmod +x "$SUPEREGO_HOME/bin/claude"
+  echo "export default { agent: 'claude-agent' }" > "$SUPEREGO_HOME/profiles/claude/profile.ts"
+  export SUPEREGO_CLAUDE="$SUPEREGO_HOME/bin/claude"
 fi
 # `staff`: the chief-of-staff profile as one of this home's own (test/showcase/profiles), and its scene's turns.
 if [ "$2" = staff ]; then

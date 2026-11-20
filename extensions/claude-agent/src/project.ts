@@ -18,7 +18,8 @@ import { dirname, join, relative, resolve } from 'node:path'
 import { trusted } from '@superego/daemon'
 import type { ProjectConfig } from './shared.ts'
 
-const real = (path: string) => { try { return realpathSync(path) } catch { return resolve(path) } }
+/** A folder as it really is (symlinks resolved), where it exists. */
+export const real = (path: string) => { try { return realpathSync(path) } catch { return resolve(path) } }
 
 /**
  * The files under `dir`, symlinks followed (a folder once): not a repository's or packages' folders, nor, at the top

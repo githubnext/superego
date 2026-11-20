@@ -10,16 +10,21 @@
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "0.3.323",
+    "@earendil-works/chord": "1.5.0",
     "@earendil-works/pi-ai": "1.5.0",
     "@earendil-works/pi-durable": "1.5.0",
+    "@earendil-works/pi-schema": "1.5.0",
+    "@modelcontextprotocol/sdk": "1.32.2",
+    "@superego/agent-ui": "workspace:*",
     "@superego/app": "workspace:*",
     "@superego/daemon": "workspace:*",
     "@superego/protocol": "workspace:*",
     "@superego/ui": "workspace:*"
   },
   "devDependencies": {
-    "@earendil-works/chord": "1.5.0",
     "@superego/sdk": "workspace:*",
+    "@superego/thread-reports": "workspace:*",
+    "@superego/thread-tools": "workspace:*",
     "@types/react": "^19",
     "react": "^19"
   },

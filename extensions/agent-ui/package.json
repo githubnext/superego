@@ -5,7 +5,8 @@
   "type": "module",
   "exports": {
     "./daemon": "./src/daemon.ts",
-    "./ui": "./src/ui.tsx"
+    "./ui": "./src/ui.tsx",
+    "./question": "./src/question.ts"
   },
   "dependencies": {
     "@earendil-works/pi-durable": "1.5.0",

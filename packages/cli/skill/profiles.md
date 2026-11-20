@@ -183,12 +183,16 @@ superego profile revoke-ui default -m box    # Settings → Machines lists them 
 - `model`, `thinking` and `options` apply where a thread hasn't chosen its own.
 - `agent` picks another kind of agent for the threads that start with the profile, fixed for each thread's life: an
   extension's (`superego.agentKind`). `'claude-agent'` (experimental) runs the user's own Claude Code, signed in with its
-  own `/login`; Superego's model, tools and prompt sections don't apply to those threads. It loads the user's own
-  Claude Code settings, and a folder's (`.claude/`, `.mcp.json`, `CLAUDE.md`) only once the user allowed them as they
-  are: their hooks, MCP servers and permissions run commands. The thread asks (Allow, over its composer), and again
-  after they change; `superego do claude-agent.allow --cwd "$PWD"` allows them from a terminal. Claude Code reads
-  `.mcp.json` from every folder above too, so where another user could put one there (under a shared `/tmp`, say), a
-  folder's settings can't be allowed.
+  own `/login`. Superego's model doesn't apply to those threads; its thread, pane, question, UI, image and task tools
+  reach Claude Code over MCP, and the profile's `prompt` is appended to Claude Code's. It loads the user's own Claude
+  Code settings, and a folder's (`.claude/`, `.mcp.json`, `CLAUDE.md`) only once the user allowed them as they are:
+  their hooks, MCP servers and permissions run commands. The thread asks (Allow, over its composer), and again after
+  they change; `superego do claude-agent.allow --cwd "$PWD"` allows them from a terminal. Claude Code reads `.mcp.json`
+  from every folder above too, so where another user could put one there (under a shared `/tmp`, say), a folder's
+  settings can't be allowed. `claudeAgent: { permissionMode, settingSources, allowedTools, disallowedTools }` says how
+  it runs: `permissionMode` is `default` (ask) unless set to `acceptEdits`, `plan`, `auto` or `bypassPermissions`;
+  `settingSources` (Claude Code's `user`, `project`, `local`) narrows what it loads of those, never adding a folder's
+  not allowed.
 
 ## An example
 

@@ -49,9 +49,12 @@ async function fromPath(): Promise<string | undefined> {
   return undefined
 }
 
-/** Where the user's `claude` is: their login shell's, else the daemon's PATH's. Undefined when it isn't installed. */
-export async function findClaude(): Promise<string | undefined> {
-  return await fromShell() ?? await fromPath()
+/**
+ * Where the user's `claude` is: `given` (`<APPID>_CLAUDE`, a `claude` of their choosing), else their login shell's,
+ * else the daemon's PATH's. Undefined when it isn't installed.
+ */
+export async function findClaude(given?: string): Promise<string | undefined> {
+  return given || (await fromShell() ?? await fromPath())
 }
 
 /** The message for a machine without `claude`. */
