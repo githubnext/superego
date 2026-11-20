@@ -147,6 +147,7 @@
 
 ### Fixes
 
+- The send button stays round when the composer is short of room, as do other icon buttons, instead of being squeezed.
 - The sidebar's Archived list says why when a machine couldn't list its archived threads, rather than looking empty.
 - On a phone, the page no longer zooms in when you tap into a field, so the New thread dialog fits the screen.
 - On a phone, buttons and rows take one tap, not two: controls that showed on hover (the sidebar's +, ··· and fold

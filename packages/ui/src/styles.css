@@ -167,7 +167,8 @@ button, summary { -webkit-user-select: none; user-select: none; }
 /* No background until hovered; for the rare control that sits inside text. */
 .superego-button--ghost { background: transparent; box-shadow: none; font-weight: 400; }
 .superego-button--ghost:hover { background: var(--superego-hover); }
-.superego-icon-button { padding: 0; width: 24px; min-height: 24px; height: 24px; font-size: calc(14px * var(--superego-text-scale)); line-height: 1; }
+/* Square, and never squeezed narrower by a row short of room: a round one stays round. */
+.superego-icon-button { flex: none; aspect-ratio: 1; padding: 0; width: 24px; min-height: 24px; height: 24px; font-size: calc(14px * var(--superego-text-scale)); line-height: 1; }
 
 .superego-textarea {
   font: inherit; color: inherit; width: 100%; resize: none; field-sizing: content; min-height: 1.5em;
