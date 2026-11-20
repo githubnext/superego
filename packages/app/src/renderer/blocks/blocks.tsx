@@ -54,6 +54,8 @@ type Form = {
   press(button: BlockButton): void
   /** The html blocks may answer or message (an agent's); an extension's are display only. */
   replies: boolean
+  /** An agent's blocks: what they open is its choice. */
+  agent: boolean
   /** Nothing can be changed: answered, or only shown. */
   locked: boolean
   answered: boolean
@@ -104,7 +106,7 @@ function BlockForm({ machine, thread, blocks, host, answer, submitLabel = 'Submi
   }
   const form: Form = {
     machine, thread, values, locked, answered: Boolean(answer), busy, done: agent ? answer?.button ?? sent : undefined,
-    picks: agent && picksAnswer(blocks), submits: submits && !locked, replies: agent,
+    picks: agent && picksAnswer(blocks), submits: submits && !locked, replies: agent, agent,
     set: (id, value) => setState((now) => ({ ...now, values: { ...now.values, [id]: value } })),
     act(reply) {
       if (locked || busy || host.by !== 'agent') return
@@ -362,14 +364,15 @@ function List({ items }: { items: ListItem[] }) {
 }
 
 function Open({ block }: { block: Extract<Block, { type: 'open' }> }) {
-  const { machine, thread } = useForm()
+  const { machine, thread, agent } = useForm()
   const dispatch = useRegistry().router.dispatch
   const [error, setError] = useState<string>()
   // Any kind the thread offers, with that kind's params: whether it opens is the core's to say, when it's pressed.
   // Only blocks of a thread have pane links (the check refuses them elsewhere).
   const { kind, title, params } = block
   if (!thread) return null
-  const open = () => dispatch('pane.open', { thread: thread.id, kind, ...(title ? { title } : {}), ...(params ? { params } : {}) }, { machine: machine.id, source: 'blocks' })
+  // An agent's shows what it chose, though the user pressed it: a page elsewhere waits for them all the same (Pane's `by`).
+  const open = () => dispatch('pane.open', { thread: thread.id, kind, ...(title ? { title } : {}), ...(params ? { params } : {}), ...(agent ? { by: 'agent' } : {}) }, { machine: machine.id, source: 'blocks' })
     .then(() => setError(undefined), (e: Error) => { console.error(e); setError(e.message) })
   return (
     <span className="blocks-open">

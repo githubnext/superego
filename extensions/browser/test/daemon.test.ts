@@ -47,5 +47,8 @@ it('marks a page the agent opened as its choice, until the user opens it or send
   expect(second).toMatchObject({ params: { url: 'https://example.org/' }, by: 'agent' })
   await daemon.call('pane.update', { thread: thread.id, pane: second.id, params: second.params })
   expect((await panes())[1]!.by).toBeUndefined()
+  // One an agent's block opened, pressed by the user: still the agent's choice.
+  await daemon.call('pane.open', { thread: thread.id, kind: 'browser', params: { url: 'https://example.net/' }, by: 'agent' })
+  expect((await panes())[2]).toMatchObject({ params: { url: 'https://example.net/' }, by: 'agent' })
   await daemon.close()
 })

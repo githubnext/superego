@@ -108,8 +108,9 @@ export function registerCoreActions(host: Host, { harness, machine, threads, pro
   }))
   router.register(defineAction({
     id: 'pane.open', title: 'Open a pane', expose: ['ui', 'cli', 'outside'], ...thread,
-    params: obj({ thread: str(), kind: str({ minLength: 1 }), title: opt(str()), params: opt(unknown()) }),
-    run: ({ thread: id, kind, title, params }) => threads.openPane(id, { kind, ...(title ? { title } : {}), ...(params !== undefined ? { params: params as Json } : {}) }),
+    // `by: 'agent'`: what it shows is the agent's choice, though the user asked for it (an agent's `open` block).
+    params: obj({ thread: str(), kind: str({ minLength: 1 }), title: opt(str()), params: opt(unknown()), by: opt(lit('agent')) }),
+    run: ({ thread: id, kind, title, params, by }) => threads.openPane(id, { kind, ...(title ? { title } : {}), ...(params !== undefined ? { params: params as Json } : {}), ...(by ? { by } : {}) }),
   }))
   router.register(defineAction({
     id: 'pane.update', title: 'Change what a pane shows', expose: ['ui', 'cli'], ...thread,
