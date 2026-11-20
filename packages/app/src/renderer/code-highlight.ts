@@ -6,24 +6,24 @@ import { highlightTree, tags } from '@lezer/highlight'
 import { StyleModule } from 'style-mod'
 
 /**
- * Quiet: a few hues on the page's own colours, in light and dark. What it doesn't name stays the text's colour.
- * Headings and emphasis are left to the markdown styles.
+ * Quiet: a few hues on the page's own colours, in light and dark (the --superego-syntax-* tokens in @superego/ui's
+ * styles). What it doesn't name stays the text's colour. Headings and emphasis are left to the markdown styles.
  */
-const c = (light: string, dark: string) => `light-dark(${light}, ${dark})`
+const syntax = (role: string) => `var(--superego-syntax-${role})`
 export const codeHighlight = HighlightStyle.define([
-  { tag: [tags.keyword, tags.operatorKeyword, tags.modifier, tags.controlKeyword, tags.definitionKeyword, tags.moduleKeyword], color: c('#a626a4', '#c792ea') },
-  { tag: [tags.string, tags.special(tags.string), tags.regexp, tags.character], color: c('#50a14f', '#a5d68a') },
-  { tag: [tags.number, tags.bool, tags.null, tags.atom, tags.unit], color: c('#b76b01', '#f2b46d') },
-  { tag: [tags.comment, tags.lineComment, tags.blockComment, tags.docComment], color: 'var(--superego-faint)', fontStyle: 'italic' },
-  { tag: [tags.function(tags.variableName), tags.function(tags.propertyName), tags.function(tags.definition(tags.variableName))], color: c('#2f6fdb', '#82aaff') },
-  { tag: [tags.typeName, tags.className, tags.namespace, tags.standard(tags.typeName)], color: c('#c18401', '#ffcb6b') },
-  { tag: [tags.tagName, tags.angleBracket], color: c('#e45649', '#f07178') },
-  { tag: [tags.attributeName, tags.propertyName, tags.labelName], color: c('#986801', '#e0c08a') },
-  { tag: [tags.definition(tags.variableName), tags.definition(tags.propertyName)], color: c('#0f6e8a', '#89ddff') },
-  { tag: [tags.meta, tags.processingInstruction, tags.documentMeta, tags.annotation], color: 'var(--superego-muted)' },
-  { tag: tags.inserted, color: c('#2f7d32', '#a5d68a') },
-  { tag: tags.deleted, color: c('#c0392b', '#f07178') },
-  { tag: [tags.invalid], color: 'var(--superego-status-error)' },
+  { tag: [tags.keyword, tags.operatorKeyword, tags.modifier, tags.controlKeyword, tags.definitionKeyword, tags.moduleKeyword], color: syntax('keyword') },
+  { tag: [tags.string, tags.special(tags.string), tags.regexp, tags.character], color: syntax('string') },
+  { tag: [tags.number, tags.bool, tags.null, tags.atom, tags.unit], color: syntax('number') },
+  { tag: [tags.comment, tags.lineComment, tags.blockComment, tags.docComment], color: syntax('comment'), fontStyle: 'italic' },
+  { tag: [tags.function(tags.variableName), tags.function(tags.propertyName), tags.function(tags.definition(tags.variableName))], color: syntax('function') },
+  { tag: [tags.typeName, tags.className, tags.namespace, tags.standard(tags.typeName)], color: syntax('type') },
+  { tag: [tags.tagName, tags.angleBracket], color: syntax('tag') },
+  { tag: [tags.attributeName, tags.propertyName, tags.labelName], color: syntax('attribute') },
+  { tag: [tags.definition(tags.variableName), tags.definition(tags.propertyName)], color: syntax('definition') },
+  { tag: [tags.meta, tags.processingInstruction, tags.documentMeta, tags.annotation], color: syntax('meta') },
+  { tag: tags.inserted, color: syntax('inserted') },
+  { tag: tags.deleted, color: syntax('deleted') },
+  { tag: [tags.invalid], color: syntax('invalid') },
   { tag: tags.link, textDecoration: 'underline' },
 ])
 

@@ -2,13 +2,13 @@
 // ghostty-web: Ghostty's terminal emulator compiled to WebAssembly, behind xterm.js's API, the same in the desktop app
 // and a browser. The shell is the machine's (the daemon half): this attaches to it on the pane's channel, replays what
 // it printed, and passes keys and sizes back. Native libghostty on the desktop is a later step (docs/design.md, Next).
-import { useEffect, useRef, useState } from 'react'
-import { call, channel as openChannel, defineAction, defineUiExtension, MONO_FONT, PaneButton, StatusGlyph, useAppSetting, useTabNote, useValue, type BridgeChannel, type PaneProps } from '@superego/app/ui'
+import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react'
+import { call, channel as openChannel, defineAction, defineUiExtension, PaneButton, StatusGlyph, useTabNote, useValue, type BridgeChannel, type PaneProps } from '@superego/app/ui'
 import type { Pane } from '@superego/protocol'
 import { autoFocusOnOpen, TerminalIcon } from '@superego/ui'
 import './styles.css'
 import { about, Framing, IO, RESIZE, STATUS, TERMINAL, type TerminalStatuses } from './shared.ts'
-import { lookOf } from './theme.ts'
+import { lookOf, sameLook, type Look } from './theme.ts'
 
 const numberOf = (pane: Pane) => Number((pane.params as { n?: unknown } | undefined)?.n) || 1
 /** ⌃`, the terminal's own shortcut: the window takes it even from inside a terminal. */
@@ -39,17 +39,33 @@ export default defineUiExtension({
   },
 })
 
-/** Light or dark, as the window is now; following it. */
-function useDark() {
-  const query = '(prefers-color-scheme: dark)'
-  const [dark, setDark] = useState(() => matchMedia(query).matches)
-  useEffect(() => {
-    const list = matchMedia(query)
-    const change = () => setDark(list.matches)
-    list.addEventListener('change', change)
-    return () => list.removeEventListener('change', change)
-  }, [])
-  return dark
+/**
+ * The look of the terminal in `host`, as the window draws it now: read when it mounts, and again when light or dark
+ * flips or the root's style or class changes (the accent, the fonts, the text size, a theme). Never per frame; a read
+ * that comes to the same look keeps the one before, so the terminal isn't made again for nothing.
+ */
+function useLook(host: RefObject<HTMLElement | null>): { look?: Look; problem?: string } {
+  const [state, setState] = useState<{ look?: Look; problem?: string }>({})
+  useLayoutEffect(() => {
+    const element = host.current
+    if (!element) return
+    const scheme = matchMedia('(prefers-color-scheme: dark)')
+    const read = () => {
+      try {
+        const look = lookOf(element)
+        setState((before) => before.look && sameLook(before.look, look) ? before : { look })
+      } catch (error) {
+        console.error('Reading the terminal’s look failed:', error)
+        setState({ problem: (error as Error).message })
+      }
+    }
+    read()
+    scheme.addEventListener('change', read)
+    const observer = new MutationObserver(read)
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['style', 'class'] })
+    return () => { scheme.removeEventListener('change', read); observer.disconnect() }
+  }, [host])
+  return state
 }
 
 const mac = typeof navigator !== 'undefined' && navigator.platform.startsWith('Mac')
@@ -66,8 +82,7 @@ function windowTakes(event: KeyboardEvent) {
 /** A shell on the thread's machine, in its folder: attached while the pane is shown, running whether or not it is. */
 function TerminalPane({ machine, thread, pane }: PaneProps) {
   const host = useRef<HTMLDivElement>(null)
-  const dark = useDark()
-  const [font] = useAppSetting<string | null>(MONO_FONT)
+  const { look, problem: lookProblem } = useLook(host)
   const [problem, setProblem] = useState<string>()
   const [attempt, setAttempt] = useState(0)
   const connected = machine.state === 'connected'
@@ -76,7 +91,7 @@ function TerminalPane({ machine, thread, pane }: PaneProps) {
 
   useEffect(() => {
     const element = host.current
-    if (!element || !connected) return
+    if (!element || !connected || !look) return
     setProblem(undefined)
     let disposed = false
     let channel: BridgeChannel | undefined
@@ -85,7 +100,7 @@ function TerminalPane({ machine, thread, pane }: PaneProps) {
       const ghostty = await import('ghostty-web')
       await ghostty.init()
       if (disposed) return
-      const term = new ghostty.Terminal({ ...lookOf(element, dark), cursorBlink: true, scrollback: 10_000 })
+      const term = new ghostty.Terminal({ ...look, cursorBlink: true, scrollback: 10_000 })
       cleanups.push(() => term.dispose())
       term.open(element)
       // Its text, for tests and a look from the devtools: `document.querySelector('.terminal-pane__screen').text()`.
@@ -139,11 +154,12 @@ function TerminalPane({ machine, thread, pane }: PaneProps) {
       for (const cleanup of cleanups.reverse()) cleanup()
       element.replaceChildren()
     }
-  }, [machine.id, connected, thread.id, pane.id, dark, font, attempt])
+  }, [machine.id, connected, thread.id, pane.id, look, attempt])
 
   return (
     <div className="terminal-pane">
       <div ref={host} className="terminal-pane__screen" data-focus />
+      {lookProblem && <div className="terminal-pane__problem"><span>{lookProblem}</span></div>}
       {problem && connected && (
         <div className="terminal-pane__problem">
           <span>{problem}</span>

@@ -9,7 +9,7 @@
 
 .blocks-callout { padding: var(--superego-space-2) var(--superego-space-3); border-radius: var(--superego-radius); border-left: 3px solid var(--tone); background: color-mix(in oklab, var(--tone) 9%, transparent); --tone: var(--superego-accent); }
 .blocks-callout.is-warn { --tone: var(--superego-status-blocked); }
-.blocks-callout.is-success { --tone: light-dark(#248a3d, #30d158); }
+.blocks-callout.is-success { --tone: var(--superego-status-success); }
 .blocks-callout__title { font-weight: 600; margin-bottom: 2px; }
 
 .blocks-code { margin: 0; border-radius: var(--superego-radius); background: var(--superego-surface); overflow: hidden; }

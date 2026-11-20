@@ -139,7 +139,7 @@
 .profile-card dt { color: var(--superego-faint); }
 .profile-card dd { margin: 0; overflow-wrap: anywhere; }
 .profile-card__path { font-family: var(--superego-mono); font-size: var(--superego-text-xs); line-height: inherit; }
-.profile-card__problems { color: var(--superego-warning, #b45309); }
+.profile-card__problems { color: var(--superego-status-blocked-text); }
 .app__beside { width: 280px; flex: none; min-height: 0; overflow: auto; background: var(--superego-bg); box-shadow: inset 1px 0 0 var(--superego-line); }
 /* Hidden while every view in it draws nothing: then each holds only its ···. */
 .app__beside:empty, .app__beside:not(:has(> .placed-view > :not(.view-menu__button, .profile-scope:empty))) { display: none; }
@@ -220,8 +220,8 @@ details[open] > .row > .row__chevron { transform: rotate(90deg); }
 .row__meta { flex: none; font: var(--superego-text-xs) var(--superego-mono); color: var(--superego-faint); }
 .row__failed { color: var(--superego-status-error); font-size: var(--superego-text-sm); }
 .step--error > .row .row__label, .step--error > .row .row__icon { color: var(--superego-status-error); }
-.stat--add { color: light-dark(#248a3d, rgb(48 209 88 / .85)); }
-.stat--del { color: light-dark(#d70015, rgb(255 105 97 / .85)); }
+.stat--add { color: var(--superego-diff-added); }
+.stat--del { color: var(--superego-diff-removed); }
 .run__steps { margin: 0 0 var(--superego-space-1) 21px; }
 /* A task an agent reported: how it went, its title, and its outcome on a line of its own under the title. */
 .task__row { height: auto; min-height: 26px; align-items: flex-start; padding-top: 3px; padding-bottom: 3px; }
@@ -255,8 +255,8 @@ details[open] > .row > .row__chevron { transform: rotate(90deg); }
 .diff__line { display: flex; width: max-content; min-width: 100%; padding-right: var(--superego-space-3); }
 .diff__num { flex: none; width: 2.6em; text-align: right; font-size: calc(11px * var(--superego-text-scale)); color: var(--superego-faint); user-select: none; }
 .diff__sign { flex: none; width: 2em; text-align: center; color: var(--superego-faint); user-select: none; }
-.diff__line--add { background: light-dark(rgb(52 199 89 / .14), rgb(48 209 88 / .15)); }
-.diff__line--del { background: light-dark(rgb(255 59 48 / .11), rgb(255 69 58 / .15)); }
+.diff__line--add { background: var(--superego-diff-edit-added-bg); }
+.diff__line--del { background: var(--superego-diff-edit-removed-bg); }
 .diff__line--gap { color: var(--superego-muted); }
 /* A turn that did work ends on a hairline, with what it did at the right: the boundary between turns. */
 .turn-end { display: flex; gap: 6px; margin-top: -4px; font-size: calc(11.5px * var(--superego-text-scale)); color: var(--superego-faint); font-variant-numeric: tabular-nums; }
@@ -296,8 +296,8 @@ details[open] > .row > .row__chevron { transform: rotate(90deg); }
 /* A diff's added and removed lines, tinted across the block. */
 .md pre code.is-highlighted { display: block; min-width: max-content; }
 .md pre code .md__line--add, .md pre code .md__line--del { display: block; margin: 0 calc(-1 * var(--superego-space-3)); padding: 0 var(--superego-space-3); }
-.md pre code .md__line--add { background: light-dark(rgb(46 160 67 / .12), rgb(46 160 67 / .18)); }
-.md pre code .md__line--del { background: light-dark(rgb(207 34 46 / .1), rgb(248 81 73 / .16)); }
+.md pre code .md__line--add { background: var(--superego-diff-fence-added-bg); }
+.md pre code .md__line--del { background: var(--superego-diff-fence-removed-bg); }
 /* A document's images (HTML or Markdown): no wider than the text. */
 .md img { max-width: 100%; height: auto; vertical-align: middle; }
 .md picture { display: inline; }
@@ -328,11 +328,11 @@ details[open] > .row > .row__chevron { transform: rotate(90deg); }
 /* Apart from the box when something's above it: not a profile's slot that drew nothing (its scope's mark, empty). */
 .dock__above:not(:empty, :has(> .profile-scope:empty):not(:has(> :not(.profile-scope:empty)))) { margin-bottom: 10px; }
 /* The box: the words, what goes with them, and one button at their end. White on the sheet, a hairline and a soft shadow. */
-.dock__box { position: relative; background: light-dark(#ffffff, #252527); border-radius: 12px; box-shadow: 0 0 0 .5px light-dark(rgb(0 0 0 / .16), rgb(255 255 255 / .1)), 0 4px 16px light-dark(rgb(0 0 0 / .08), rgb(0 0 0 / .3)); padding: 9px 9px 9px 16px; }
+.dock__box { position: relative; background: var(--superego-composer); border-radius: 12px; box-shadow: 0 0 0 .5px light-dark(rgb(0 0 0 / .16), rgb(255 255 255 / .1)), 0 4px 16px light-dark(rgb(0 0 0 / .08), rgb(0 0 0 / .3)); padding: 9px 9px 9px 16px; }
 /* Above the box, something can join it (`dock__join`: an agent's question with its options): one card, a hairline between. */
 .dock:has(.dock__join) .dock__above { margin-bottom: 0; }
 .dock:has(.dock__join) .dock__box { border-radius: 0 0 12px 12px; clip-path: inset(0 -32px -32px -32px); }
-.dock__join { position: relative; background: light-dark(#ffffff, #252527); border-radius: 12px 12px 0 0; border-bottom: 1px solid var(--superego-line); box-shadow: 0 0 0 .5px light-dark(rgb(0 0 0 / .16), rgb(255 255 255 / .1)), 0 4px 16px light-dark(rgb(0 0 0 / .08), rgb(0 0 0 / .3)); clip-path: inset(-32px -32px 0 -32px); }
+.dock__join { position: relative; background: var(--superego-composer); border-radius: 12px 12px 0 0; border-bottom: 1px solid var(--superego-line); box-shadow: 0 0 0 .5px light-dark(rgb(0 0 0 / .16), rgb(255 255 255 / .1)), 0 4px 16px light-dark(rgb(0 0 0 / .08), rgb(0 0 0 / .3)); clip-path: inset(-32px -32px 0 -32px); }
 .composer { display: flex; gap: var(--superego-space-2); align-items: flex-end; font-size: var(--superego-text-body); }
 .composer .superego-textarea { line-height: 22px; padding: 3px 0; min-height: 28px; }
 .composer .superego-textarea::placeholder { color: var(--superego-faint); }
@@ -747,8 +747,8 @@ a.pane-header__url:hover { color: var(--superego-accent); }
 .diff-file__body { margin: 0; font: calc(11.5px * var(--superego-text-scale))/20px var(--superego-mono); overflow-x: auto; padding: 8px 0; color: var(--superego-muted); }
 .diff-row { display: block; padding: 0 14px 0 0; white-space: pre; min-width: max-content; }
 .diff-row__num { display: inline-block; width: 42px; padding-right: 10px; text-align: right; color: var(--superego-faint); user-select: none; }
-.diff-row--add { background: light-dark(rgb(52 199 89 / .12), rgb(48 209 88 / .11)); color: light-dark(#1d6e32, #a6f0b8); }
-.diff-row--del { background: light-dark(rgb(255 59 48 / .09), rgb(255 69 58 / .12)); color: light-dark(#b3261e, #ffb3ad); }
+.diff-row--add { background: var(--superego-diff-added-bg); color: var(--superego-diff-added-text); }
+.diff-row--del { background: var(--superego-diff-removed-bg); color: var(--superego-diff-removed-text); }
 :is(.diff-row--add, .diff-row--del) .diff-row__num { color: inherit; opacity: .6; }
 .diff-row--hunk { color: var(--superego-faint); padding-left: 14px; overflow: hidden; text-overflow: ellipsis; }
 .thread-pane { flex: 1; display: flex; flex-direction: column; min-height: 0; }
@@ -774,7 +774,7 @@ a.pane-header__url:hover { color: var(--superego-accent); }
 .file-editor__mode button.is-on { background: color-mix(in srgb, var(--superego-text) 9%, transparent); color: var(--superego-text); }
 .file-editor__conflict { display: flex; align-items: center; gap: var(--superego-space-3); padding: 6px var(--superego-space-3); font-size: var(--superego-text-sm); background: color-mix(in srgb, var(--superego-accent) 10%, transparent); border-bottom: 1px solid var(--superego-border); }
 .file-editor__conflict span { flex: 1; }
-.pane-bar__note.is-error { color: var(--superego-danger, #d70015); }
+.pane-bar__note.is-error { color: var(--superego-status-error-text); }
 
 .cm-editor.is-live { font-size: calc(15px * var(--superego-text-scale)); }
 /* Under a finger, an editor's lines are 16px at least, as fields are (ui's styles.css): iOS zooms into smaller. */
@@ -993,7 +993,7 @@ a.pane-header__url:hover { color: var(--superego-accent); }
 @keyframes machine-drift-pulse { 50% { opacity: .35; } }
 .machine-row__drift { display: flex; align-items: baseline; gap: 6px; }
 .machine-row__log { margin: 6px 0 0; padding: 6px 8px; max-height: 14em; overflow: auto; font-family: var(--superego-mono); font-size: var(--superego-text-xs); line-height: 1.45; white-space: pre-wrap; color: var(--superego-muted); background: color-mix(in srgb, var(--superego-text) 4%, transparent); border-radius: 6px; }
-.machine-row__warning { color: var(--superego-warning, #b45309); }
+.machine-row__warning { color: var(--superego-status-blocked-text); }
 
 /* Data views: a machine's extensions' content, drawn by the core. Quiet rows like the sidebar's; facts as thread details
    lay theirs out. */
@@ -1005,7 +1005,7 @@ a.pane-header__url:hover { color: var(--superego-accent); }
 .data-view__machine + .data-view__machine { margin-top: var(--superego-space-4); }
 .data-view__machine-name { margin: 0 0 6px; padding: 0 6px; font-size: var(--superego-text-xs); font-weight: 500; color: var(--superego-faint); }
 .data-view__empty { color: var(--superego-muted); padding: var(--superego-space-3) 6px; }
-.data-view__error { color: var(--superego-danger, #d70015); font-size: var(--superego-text-sm); margin-bottom: 8px; overflow-wrap: anywhere; }
+.data-view__error { color: var(--superego-status-error-text); font-size: var(--superego-text-sm); margin-bottom: 8px; overflow-wrap: anywhere; }
 .setting__buttons { display: flex; gap: 6px; }
 .layout-editor__text { width: 100%; min-height: 12em; font: var(--superego-text-sm) var(--superego-mono); }
 .layout-editor__actions { display: flex; justify-content: flex-end; margin-top: var(--superego-space-3); }

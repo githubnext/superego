@@ -1,21 +1,20 @@
-/* The terminal: edge to edge in its pane, on the sheet, in the monospace face a little larger than code's. Its colours
-   are read from here (see theme.ts): the text, the sheet, and the accent for the cursor. */
+/* The terminal: edge to edge in its pane, on its background, in the monospace face a little larger than code's. Its
+   colours are the --superego-terminal-* tokens, read in theme.ts; its font is read from here. */
 .terminal-pane {
   position: relative;
   display: flex;
   flex-direction: column;
   height: 100%;
   min-height: 0;
-  background: var(--superego-bg);
+  background: var(--superego-terminal-bg);
 }
 .terminal-pane__screen {
   flex: 1;
   min-height: 0;
   padding: 6px 4px 6px 10px;
   overflow: hidden;
-  color: var(--superego-text);
-  background: var(--superego-bg);
-  text-decoration-color: var(--superego-accent);
+  color: var(--superego-terminal-fg);
+  background: var(--superego-terminal-bg);
   font-family: var(--superego-mono);
   font-size: calc(var(--superego-text-mono) + 1px);
 }

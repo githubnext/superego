@@ -1,4 +1,6 @@
-/* Superego's design tokens and base components. Extensions style against the same variables. */
+/* Superego's design tokens and base components. Extensions style against the same variables.
+   Every colour the app draws comes from a --superego-* token below, in light and dark (light-dark()): the app's, code's
+   (syntax), the terminal's, a diff's and a status's. tokens.ts lists them with their roles: what a theme fills in. */
 :root {
   color-scheme: light dark;
   --superego-font-fallback: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Inter", sans-serif;
@@ -39,6 +41,8 @@
   --superego-control-edge: 0 0 0 .5px light-dark(rgb(0 0 0 / .22), rgb(0 0 0 / .5)), 0 1px 1.5px light-dark(rgb(0 0 0 / .14), rgb(0 0 0 / .35));
   --superego-field-bg: light-dark(#ffffff, #2a2a2c);
   --superego-field-edge: light-dark(#bdbdc2, #545458);
+  --superego-track: light-dark(#d9d9de, #48484a);       /* a switch that's off, a slider's track */
+  --superego-composer: light-dark(#ffffff, #252527);    /* the composer's box */
   --superego-focus: 0 0 0 3px color-mix(in srgb, var(--superego-accent) 45%, transparent);
   --superego-status-working: var(--superego-accent);
   --superego-status-done: var(--superego-accent);
@@ -48,6 +52,57 @@
   /* Words beside a status (Question, Failed): darker than the mark, to read as text. */
   --superego-status-blocked-text: light-dark(#c26a00, #ff9f0a);
   --superego-status-error-text: light-dark(#d70015, #ff6961);
+  --superego-status-success: light-dark(#248a3d, #30d158);
+
+  /* Code (code-highlight.ts): the editor, a message's and a rendered file's fenced blocks. */
+  --superego-syntax-keyword: light-dark(#a626a4, #c792ea);
+  --superego-syntax-string: light-dark(#50a14f, #a5d68a);
+  --superego-syntax-number: light-dark(#b76b01, #f2b46d);       /* numbers, booleans, null, atoms */
+  --superego-syntax-comment: var(--superego-faint);
+  --superego-syntax-function: light-dark(#2f6fdb, #82aaff);     /* a function's name, called or defined */
+  --superego-syntax-type: light-dark(#c18401, #ffcb6b);         /* types, classes, namespaces */
+  --superego-syntax-tag: light-dark(#e45649, #f07178);          /* markup's tags */
+  --superego-syntax-attribute: light-dark(#986801, #e0c08a);    /* attributes, properties, labels */
+  --superego-syntax-definition: light-dark(#0f6e8a, #89ddff);   /* a variable or property where it's defined */
+  --superego-syntax-meta: var(--superego-muted);                /* annotations, processing instructions */
+  --superego-syntax-inserted: light-dark(#2f7d32, #a5d68a);     /* a diff's added lines */
+  --superego-syntax-deleted: light-dark(#c0392b, #f07178);      /* a diff's removed lines */
+  --superego-syntax-invalid: var(--superego-status-error);
+
+  /* The terminal (extensions/terminal): read as drawn when one opens, and again when light/dark or the root's style
+     changes. */
+  --superego-terminal-fg: var(--superego-text);
+  --superego-terminal-bg: var(--superego-bg);
+  --superego-terminal-cursor: var(--superego-accent);
+  --superego-terminal-selection: light-dark(color-mix(in srgb, var(--superego-accent) 25%, var(--superego-bg)), color-mix(in srgb, var(--superego-accent) 45%, var(--superego-bg)));
+  --superego-terminal-black: light-dark(#1d1d1f, #48484a);
+  --superego-terminal-red: light-dark(#c9241b, #ff6961);
+  --superego-terminal-green: light-dark(#1a7f37, #4cd964);
+  --superego-terminal-yellow: light-dark(#946200, #ffd60a);
+  --superego-terminal-blue: light-dark(#0a5fd6, #64a8ff);
+  --superego-terminal-magenta: light-dark(#a23ec4, #da8fff);
+  --superego-terminal-cyan: light-dark(#0a7c8c, #5ac8fa);
+  --superego-terminal-white: light-dark(#8e8e93, #d1d1d6);
+  --superego-terminal-bright-black: light-dark(#636366, #8e8e93);
+  --superego-terminal-bright-red: light-dark(#e0382d, #ff8f88);
+  --superego-terminal-bright-green: light-dark(#24963f, #7ee08f);
+  --superego-terminal-bright-yellow: light-dark(#b07800, #ffe066);
+  --superego-terminal-bright-blue: light-dark(#2f7cf6, #8cc0ff);
+  --superego-terminal-bright-magenta: light-dark(#bf5af2, #e5b0ff);
+  --superego-terminal-bright-cyan: light-dark(#1695a8, #8ad8fb);
+  --superego-terminal-bright-white: light-dark(#c7c7cc, #ffffff);
+
+  /* Diffs: what a change added and removed. */
+  --superego-diff-added: light-dark(#248a3d, rgb(48 209 88 / .85));          /* counts: +12 */
+  --superego-diff-removed: light-dark(#d70015, rgb(255 105 97 / .85));       /* counts: −3 */
+  --superego-diff-added-bg: light-dark(rgb(52 199 89 / .12), rgb(48 209 88 / .11));     /* the Diff pane's lines */
+  --superego-diff-removed-bg: light-dark(rgb(255 59 48 / .09), rgb(255 69 58 / .12));
+  --superego-diff-added-text: light-dark(#1d6e32, #a6f0b8);
+  --superego-diff-removed-text: light-dark(#b3261e, #ffb3ad);
+  --superego-diff-edit-added-bg: light-dark(rgb(52 199 89 / .14), rgb(48 209 88 / .15));  /* an edit's, in a thread */
+  --superego-diff-edit-removed-bg: light-dark(rgb(255 59 48 / .11), rgb(255 69 58 / .15));
+  --superego-diff-fence-added-bg: light-dark(rgb(46 160 67 / .12), rgb(46 160 67 / .18));  /* a diff fence's, in a message */
+  --superego-diff-fence-removed-bg: light-dark(rgb(207 34 46 / .1), rgb(248 81 73 / .16));
   --superego-radius: 6px;
   --superego-radius-lg: 16px;
   --superego-space: 8px;
@@ -167,7 +222,7 @@ button, summary { -webkit-user-select: none; user-select: none; }
   background-repeat: no-repeat; background-position: right 9px center;
 }
 
-.superego-switch { width: 34px; height: 20px; border-radius: 10px; border: 0; padding: 2px; background: light-dark(#d9d9de, #48484a); box-shadow: inset 0 0 0 .5px rgb(0 0 0 / .12); display: inline-flex; transition: background .15s; }
+.superego-switch { width: 34px; height: 20px; border-radius: 10px; border: 0; padding: 2px; background: var(--superego-track); box-shadow: inset 0 0 0 .5px rgb(0 0 0 / .12); display: inline-flex; transition: background .15s; }
 .superego-switch.is-on { background: var(--superego-accent); }
 .superego-switch__thumb { width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgb(0 0 0 / .3), 0 0 0 .5px rgb(0 0 0 / .08); transition: transform .15s; }
 .superego-switch.is-on .superego-switch__thumb { transform: translateX(14px); }
@@ -183,7 +238,7 @@ button, summary { -webkit-user-select: none; user-select: none; }
    control is taller than the track, so a press near it takes; under a finger, tall enough for one, the thumb bigger. */
 .superego-slider { width: 100%; touch-action: pan-y; }
 .superego-slider__control { display: flex; align-items: center; height: 20px; padding: 0 9px; cursor: default; }
-.superego-slider__track { flex: 1; height: 4px; border-radius: 2px; background: light-dark(#d9d9de, #48484a); box-shadow: inset 0 0 0 .5px rgb(0 0 0 / .08); }
+.superego-slider__track { flex: 1; height: 4px; border-radius: 2px; background: var(--superego-track); box-shadow: inset 0 0 0 .5px rgb(0 0 0 / .08); }
 .superego-slider__indicator { height: 100%; border-radius: inherit; background: var(--superego-accent); }
 .superego-slider__tick { position: absolute; top: 50%; width: 4px; height: 4px; border-radius: 50%; translate: -50% -50%; background: light-dark(rgb(0 0 0 / .28), rgb(255 255 255 / .3)); pointer-events: none; }
 .superego-slider__tick[data-filled] { background: rgb(255 255 255 / .7); }
