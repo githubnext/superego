@@ -11,6 +11,8 @@ export const TERMINAL = 'terminal'
  * Opening it starts the shell if it isn't running.
  */
 export const IO = 'terminal.io'
+/** Open a terminal pane beside a thread running a program, for the user (a window's only): `{ thread, command }`, its pane. */
+export const RUN = 'terminal.run'
 /** A terminal's size changed in a window: `{ thread, pane, cols, rows }`. The last window to say so wins. */
 export const RESIZE = 'terminal.resize'
 /** What each thread's terminals report of themselves (OSC 7501), scoped by thread: by pane id. */

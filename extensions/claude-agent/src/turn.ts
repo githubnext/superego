@@ -71,6 +71,11 @@ export type TurnHost = {
   ask(approval: Approval, signal: AbortSignal): Promise<Answer>
   /** Keep a subagent's work as it stands, under its Agent call `call` (the thread's own), for the call's row. */
   subagent(thread: string, call: string, work: SubagentSteps): void
+  /**
+   * A place among the turns running at once on this machine (parallel.ts), once there is one: what gives it back.
+   * Rejects once `signal` aborts while it waits.
+   */
+  place(thread: string, signal: AbortSignal): Promise<() => void>
 }
 
 type Checkpoint = { phase: 'run' }
@@ -132,10 +137,17 @@ export function turnTask(name: string, host: TurnHost) {
         // the rest isn't replayed. What it was waiting on (an approval, a tool) can't be answered by a new process: it
         // ends here, saying so. Known by the memo the turn leaves as it starts.
         if (await runtime.memo<boolean>('ran', context)) return fail(runtime, INTERRUPTED, context, await openOf(runtime, context))
-        await runtime.memo('ran', true, context)
-        const executable = await host.executable()
-        if (!executable) return fail(runtime, NOT_INSTALLED, context)
-        await runTurn(runtime, executable, host, context)
+        // Its place among the turns running at once first: a restart while it waits for one just waits again.
+        const thread = host.threadOf(runtime.conversationId) ?? String(runtime.conversationId)
+        const release = await host.place(thread, runtime.signal)
+        try {
+          await runtime.memo('ran', true, context)
+          const executable = await host.executable()
+          if (!executable) return fail(runtime, NOT_INSTALLED, context)
+          await runTurn(runtime, executable, host, context)
+        } finally {
+          release()
+        }
       },
     },
     abort: async (_task, runtime, context) => {
@@ -369,6 +381,9 @@ async function runTurn(runtime: Runtime, executable: string, host: TurnHost, con
     ...(resume ? { resume } : {}),
     includePartialMessages: true,
     permissionMode: mode,
+    // The thread's model and effort (picked in the model menu), else its profile's, else Claude Code's own.
+    ...(choices.model ? { model: choices.model } : {}),
+    ...(choices.effort ? { effort: choices.effort } : {}),
     // Bypassing every check only when the profile says so; never from Claude Code's own settings.
     ...(mode === 'bypassPermissions' ? { allowDangerouslySkipPermissions: true } : {}),
     canUseTool,

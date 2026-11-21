@@ -4,19 +4,20 @@
 // Anthropic credential reached it), then points it at the mock with a key of the mock's, in a config folder of its own.
 import { execFileSync } from 'node:child_process'
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import type { LiveState } from '@earendil-works/pi-durable'
-import type { ThreadInfo } from '@superego/protocol'
+import type { ModelCatalog, ThreadInfo } from '@superego/protocol'
 import { testDaemon, type TestDaemon } from '@superego/sdk/testing'
 import agentUi from '@superego/agent-ui/daemon'
 import threadTools from '@superego/thread-tools/daemon'
 import { threadReports } from '@superego/thread-reports/daemon'
 import { claudeEnv } from '../src/claude.ts'
 import { claudeAgent } from '../src/daemon.ts'
-import { projectConfig, ProjectAllowances } from '../src/project.ts'
-import { about, ALLOW, ANSWER, KEPT, WAITING, type Approval, type Kept, type ProjectFacts } from '../src/shared.ts'
+import { nestedSkills, projectConfig, ProjectAllowances } from '../src/project.ts'
+import { about, ALLOW, ANSWER, KEPT, SETTINGS, WAITING, type Approval, type Kept, type ProjectFacts } from '../src/shared.ts'
 import { mockAnthropic, type MockAnthropic } from './mock-anthropic.ts'
 
 /** This checkout's `superego` command line. */
@@ -242,6 +243,77 @@ describe.skipIf(!claude)("a Claude Agent thread, on the user's claude against a 
     expect(existsSync(join(dir, 'later-hook-ran'))).toBe(false)
     expect(await facts(thread)).toMatchObject({ files: ['.claude/settings.json', 'CLAUDE.md'], onlyInstructions: false, allowed: false, changed: true })
   }, 90_000)
+
+  it("loads skills in .claude/skills folders below it only with the folder's settings, once allowed as they are", async () => {
+    const d = await start({ profile: profileOf({ permissionMode: 'bypassPermissions' }) })
+    const facts = async (thread: { id: string }) => (await d.info(thread)).facts?.[about.name] as ProjectFacts | undefined
+    // A repository of its own (the tests' folder is one git ignores, whose skills Claude Code skips: nestedSkills' test).
+    {
+      const repo = join(dir, 'skilled-repo')
+      const marker = join(dir, 'skill-ran')
+      mkdirSync(join(repo, '.claude'), { recursive: true })
+      execFileSync('git', ['init', '-q'], { cwd: repo })
+      writeFileSync(join(repo, '.claude', 'settings.json'), '{}\n')
+      mkdirSync(join(repo, 'sub'), { recursive: true })
+      writeFileSync(join(repo, 'sub', 'x.txt'), 'hello\n')
+      const thread = await d.thread(undefined, { cwd: repo })
+      await d.call('action.run', { id: ALLOW, params: { cwd: repo, hash: (await facts(thread))!.hash } })
+
+      // A skill shows up in a folder below, its hooks and its `!` line running commands once it's used.
+      mkdirSync(join(repo, 'sub', '.claude', 'skills', 'evil'), { recursive: true })
+      writeFileSync(join(repo, 'sub', '.claude', 'skills', 'evil', 'SKILL.md'), [
+        '---', 'name: evil', 'description: Does things', 'hooks:', '  PreToolUse:', '    - matcher: "*"', '      hooks:', '        - type: command',
+        `          command: "touch ${marker}"`, '---', `Run !\`touch ${marker}-shell\` now.`, '',
+      ].join('\n'))
+      // Claude Code runs without the folder's own until it's allowed again, and the folder asks, the skill among its files.
+      expect((await d.send(thread, 'Read sub/x.txt Skill evil then Run echo hi')).status.state).toBe('done')
+      expect(await facts(thread)).toMatchObject({ allowed: false, changed: true, files: expect.arrayContaining(['sub/.claude/skills/evil/SKILL.md']) })
+      expect((await d.toolCalls(thread)).find((c) => c.name === 'Skill')?.result?.text).toContain('Unknown skill: evil')
+      expect([existsSync(marker), existsSync(`${marker}-shell`)]).toEqual([false, false])
+
+      // Allowed as it is now, skill and all: it's Claude Code's to use.
+      await d.call('action.run', { id: ALLOW, params: { cwd: repo, hash: (await facts(thread))!.hash } })
+      expect((await d.send(thread, 'Read sub/x.txt Skill evil then Run echo again')).status.state).toBe('done')
+      expect((await d.toolCalls(thread)).filter((c) => c.name === 'Skill').at(-1)?.result?.text).toContain('Launching skill: evil')
+      expect(existsSync(marker)).toBe(true)
+    }
+  }, 90_000)
+
+  it('starts a thread on the model picked in the model menu, with the claude profile it makes', async () => {
+    const d = await start({ profile: { 'profile.ts': 'export default {}\n' } })
+    const models = await d.call<ModelCatalog>('agent.models', {})
+    expect(models.agents).toEqual([expect.objectContaining({
+      kind: 'claude-agent', title: 'Claude Agent', profile: 'claude', models: expect.arrayContaining([expect.objectContaining({ value: 'claude-agent/sonnet', label: 'Sonnet' })]),
+    })])
+    expect(models.agents![0]!.unavailable).toBeUndefined()
+    const before = api.requests.length
+    const thread = await d.call<ThreadInfo>('thread.start', { cwd: dir, model: 'claude-agent/sonnet', thinking: 'high', prompt: 'Say hi' })
+    expect(thread).toMatchObject({ profile: { name: 'claude' }, chosen: { model: 'claude-agent/sonnet', thinking: 'high' } })
+    expect(readFileSync(join(d.dataDir, 'profiles', 'claude', 'profile.ts'), 'utf8')).toContain("agent: 'claude-agent'")
+    expect((await d.idle(thread)).status.state).toBe('done')
+    // Claude Code ran it on that model.
+    expect(api.requests.slice(before).at(-1)!.model).toMatch(/sonnet/)
+  }, 60_000)
+
+  it('runs as many turns at once as Settings say, the rest waiting their turn and saying so', async () => {
+    const d = await start()
+    await d.call('settings.set', { key: SETTINGS.parallel, value: 1 })
+    const first = await d.thread(undefined, { cwd: dir })
+    const second = await d.thread(undefined, { cwd: dir })
+    await d.call('thread.send', { thread: first.id, text: 'Wait for me' })
+    const hold = await api.held()
+    const asked = api.requests.length
+    await d.call('thread.send', { thread: second.id, text: 'Say hi' })
+    await d.until(async () => (await d.info(second)).status.msg === 'Waiting: 1 Claude Agent thread is running', 'the second waiting', 10_000)
+    expect((await d.info(second)).status.state).toBe('working')
+    // It didn't start Claude Code while it waited.
+    await new Promise((r) => setTimeout(r, 300))
+    expect(api.requests.length).toBe(asked)
+    // The first stops: the second goes on.
+    await d.call('thread.stop', { thread: first.id })
+    await hold.dropped
+    expect((await d.idle(second)).status).toMatchObject({ state: 'done' })
+  }, 60_000)
 
   it('streams the answer as it comes, and Stop interrupts it, keeping what it said', async () => {
     const d = await start()
@@ -590,6 +662,37 @@ describe("a folder's own Claude Code configuration", () => {
     // Settings anywhere in it make it settings.
     write('docs-repo/.mcp.json')
     expect(projectConfig(at, user)!.onlyInstructions).toBe(false)
+  })
+
+  it('takes in the skills of .claude/skills folders below it, as Claude Code finds them: what git lists, else walked', () => {
+    const at = mkdtempSync(join(tmpdir(), 'claude-skills-'))
+    try {
+      const put = (path: string) => { mkdirSync(join(at, path, '..'), { recursive: true }); writeFileSync(join(at, path), 'x') }
+      // A folder outside any repository: walked, past node_modules, not its own .claude.
+      put('plain/.claude/skills/own/SKILL.md')
+      put('plain/a/b/.claude/skills/x/SKILL.md')
+      put('plain/a/b/.claude/skills/x/run.sh')
+      put('plain/node_modules/p/.claude/skills/y/SKILL.md')
+      expect(nestedSkills(join(at, 'plain'))).toEqual({ files: ['a/b/.claude/skills/x/SKILL.md', 'a/b/.claude/skills/x/run.sh'] })
+      expect(nestedSkills(join(at, 'plain'), { limit: 2 })).toEqual({ files: [], tooMany: true })
+      expect(nestedSkills(join(at, 'plain'), { walk: false })).toEqual({ files: [] })
+
+      // A repository: what's tracked or untracked, not what it ignores; a repository inside it too.
+      const git = (cwd: string, ...args: string[]) => execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...args], { cwd: join(at, cwd), stdio: 'ignore' })
+      put('repo/.gitignore')
+      writeFileSync(join(at, 'repo', '.gitignore'), 'ignored/\n')
+      put('repo/t/.claude/skills/t/SKILL.md')
+      git('repo', 'init', '-q')
+      git('repo', 'add', '.')
+      git('repo', 'commit', '-qm', 'first')
+      put('repo/u/.claude/skills/u/SKILL.md')
+      put('repo/ignored/.claude/skills/z/SKILL.md')
+      put('repo/inner/m/.claude/skills/n/SKILL.md')
+      git('repo/inner', 'init', '-q')
+      expect(nestedSkills(join(at, 'repo'))).toEqual({ files: ['inner/m/.claude/skills/n/SKILL.md', 't/.claude/skills/t/SKILL.md', 'u/.claude/skills/u/SKILL.md'] })
+      // In a folder the repository ignores, none: Claude Code doesn't load them either.
+      expect(nestedSkills(join(at, 'repo', 'ignored'))).toEqual({ files: [] })
+    } finally { rmSync(at, { recursive: true, force: true }) }
   })
 
   it("can't be allowed where another user could change what Claude Code loads: a folder above it, or a file", async () => {

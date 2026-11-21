@@ -2,7 +2,9 @@
 // thinking; unset, the folder's default profile and that machine's settings), then what to work on, in the composer a
 // thread has (files, skills, mentions). ⌃1–⌃7 go to each field, as labelled; ⏎ in the prompt or ⌘⏎ anywhere starts it.
 // A project's profile that isn't allowed yet (it runs that repo's code) can be allowed here, and started. Extensions
-// add fields of their own (worktrees' checkbox), each sent as `options[<extension>]`.
+// add fields of their own (worktrees' checkbox), each sent as `options[<extension>]`. Another kind of agent's model
+// (Claude Agent's group, where the machine has it) picks the profile that runs on it, and a profile of such a kind
+// offers that kind's models alone: a thread runs on one kind for its whole life.
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import type { Attachment, Json, ModelCatalog, ProfileInfo, ThreadInfo } from '@superego/protocol'
 import { useRegistry, type Registry } from './registry.tsx'
@@ -129,7 +131,7 @@ export function NewThreadDialog({ start: asked, onClose }: { start: NewThreadSta
       if (!live) return
       setCatalog(c)
       // On the machine it started on, the model and thinking it started with, where that machine has them.
-      const from = machine.id === start.machine && c.models.find((m) => m.value === start.model)
+      const from = machine.id === start.machine && [...c.models, ...(c.agents ?? []).flatMap((a) => a.models)].find((m) => m.value === start.model)
       if (from) { setModel(from.value); if (start.thinking && from.thinking.includes(start.thinking)) setThinking(start.thinking) }
     }, (e: Error) => {
       console.error(`Listing ${machine.id}'s models failed`, e)
@@ -161,15 +163,37 @@ export function NewThreadDialog({ start: asked, onClose }: { start: NewThreadSta
     }, wait)
     return () => { live = false; clearTimeout(timer) }
   }, [machine?.id, cwd])
-  const profileList = Array.isArray(profiles) ? profiles : undefined
-  const profilesFailed = profiles && !Array.isArray(profiles) ? profiles : undefined
-  const picked = profileList?.find((p) => p.name === (profile ?? 'default'))
-
   const models = catalog && 'models' in catalog ? catalog : undefined
   const modelsFailed = catalog && !('models' in catalog) ? catalog : undefined
-  const chosen = models?.models.find((m) => m.value === (model ?? models.default.model))
+  /** The kind of agent a model is another's (Claude Agent's), with its group. */
+  const agentOf = (value: string | null) => value ? models?.agents?.find((a) => a.models.some((m) => m.value === value)) : undefined
+  const agentModel = agentOf(model)
+  const found = Array.isArray(profiles) ? profiles : undefined
+  // The profile another kind's model starts with, listed before it's made (starting makes it).
+  const profileList = found && agentModel && !found.some((p) => p.name === agentModel.profile)
+    ? [...found, { name: agentModel.profile, scope: 'user' as const, dir: '', allowed: true, agent: agentModel.kind }]
+    : found
+  const profilesFailed = profiles && !Array.isArray(profiles) ? profiles : undefined
+  const picked = profileList?.find((p) => p.name === (profile ?? 'default'))
+  /** The kind of agent the profile picked runs on, when it's another's: its models alone are offered. */
+  const pickedKind = picked?.agent
+
+  const chosen = agentModel ? agentModel.models.find((m) => m.value === model) : pickedKind ? undefined : models?.models.find((m) => m.value === (model ?? models.default.model))
   const levels = chosen?.thinking ?? []
-  const defaultLabel = models?.default.model ? `Default · ${models.models.find((m) => m.value === models.default.model)?.label ?? models.default.model}` : 'Default'
+  const defaultLabel = !pickedKind && models?.default.model ? `Default · ${models.models.find((m) => m.value === models.default.model)?.label ?? models.default.model}` : 'Default'
+  /** Pick a model; another kind's picks a profile of that kind, unless one is picked. */
+  const pickModel = (value: string | null) => {
+    setModel(value)
+    setThinking(null)
+    const kind = agentOf(value)
+    if (kind && pickedKind !== kind.kind) setProfile(kind.profile)
+  }
+  /** Pick a profile; one on another kind than the model's leaves the model to it. */
+  const pickProfile = (name: string | null) => {
+    setProfile(name)
+    const kind = profileList?.find((p) => p.name === (name ?? 'default'))?.agent
+    if (model && agentOf(model)?.kind !== kind) { setModel(null); setThinking(null) }
+  }
 
   const pickMachine = (id: string) => {
     setMachineId(id)
@@ -247,12 +271,12 @@ export function NewThreadDialog({ start: asked, onClose }: { start: NewThreadSta
           <div className="new-thread__how">
             <Field name="profile" label="Profile">
               {profileList
-                ? <ProfileSelect profiles={profileList} value={profile} onChange={setProfile} />
+                ? <ProfileSelect profiles={profileList} value={profile} onChange={pickProfile} />
                 : <Select aria-label="Profile" options={[]} value={null} nullLabel={profiles ? 'Unavailable' : 'Loading…'} disabled onChange={() => {}} />}
             </Field>
             <Field name="model" label="Model">
               <ModelPicker label="Model" catalog={models} value={model} nullLabel={defaultLabel} placeholder={catalog ? 'Unavailable' : 'Loading…'}
-                onChange={(value) => { setModel(value); setThinking(null) }}
+                agents={pickedKind ? { only: pickedKind } : 'all'} {...machine.id === 'local' ? {} : { where: `on ${machine.label}` }} onChange={pickModel}
                 onStar={(next) => {
                   if (!machine || !models) return
                   setCatalog(withFavourites(models, next))
@@ -263,7 +287,7 @@ export function NewThreadDialog({ start: asked, onClose }: { start: NewThreadSta
             </Field>
             <Field name="thinking" label="Thinking">
               <Select aria-label="Thinking" options={levels.map((l) => ({ value: l, label: l }))} value={thinking} disabled={!levels.length}
-                nullLabel={!models ? (catalog ? 'Unavailable' : 'Loading…') : !levels.length ? 'Not offered' : models.default.thinking ? `Default · ${models.default.thinking}` : 'Default'} onChange={setThinking} />
+                nullLabel={!models ? (catalog ? 'Unavailable' : 'Loading…') : !levels.length ? 'Not offered' : models.default.thinking && !agentModel ? `Default · ${models.default.thinking}` : 'Default'} onChange={setThinking} />
             </Field>
           </div>
           {profilesFailed && <p className="new-thread__problem">Couldn't list the profiles here: {profilesFailed.message}</p>}

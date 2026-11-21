@@ -195,7 +195,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     keepsRunning: kept(),
   }))
   daemonLife.add(() => relay.close())
-  const { outsideMayStart } = registerCoreActions(host, { harness, machine, threads, profiles, files, relay })
+  const { outsideMayStart } = registerCoreActions(host, { harness, machine, threads, files, relay })
 
   // The core's own, then the bundled ones: for the daemon's life, each giving every thread its agent parts unless the
   // thread goes without it.

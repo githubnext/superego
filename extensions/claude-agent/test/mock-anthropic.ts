@@ -2,7 +2,8 @@
 // account and nothing spent: `claude` reaches it through `ANTHROPIC_BASE_URL`. It answers from what the last prompt
 // says, calling tools first where the prompt asks for them, one per request, then answering with the last tool's
 // result ("Done: …"):
-//  - "Read <path>": a `Read` of that path;
+//  - "Read <path>": a `Read` of that path; "Skill <name>": a `Skill` call of that skill (after the Read, given both);
+//    "… then Run <command>" after them: a `Bash` of that command;
 //  - "Run <command>": a `Bash` of that command (to the end of the line);
 //  - "Ask": an `AskUserQuestion` (which colour, Red or Blue);
 //  - "Plan": an `ExitPlanMode` with a plan;
@@ -17,8 +18,8 @@ import type { AddressInfo } from 'node:net'
 
 type Block = { type: string; text?: string; content?: unknown; name?: string; tool_use_id?: string }
 type Message = { role: string; content: string | Block[] }
-/** A request the model was asked: its messages, the tools it was offered and its system prompt. */
-export type MockRequest = { messages: Message[]; tools: string[]; stream: boolean; system: string }
+/** A request the model was asked: its messages, the tools it was offered, its system prompt and the model asked for. */
+export type MockRequest = { messages: Message[]; tools: string[]; stream: boolean; system: string; model?: string }
 
 const textOf = (message: Message | undefined) => !message ? '' : typeof message.content === 'string' ? message.content
   // What Claude Code adds to a prompt (its reminders) isn't what was said.
@@ -36,7 +37,15 @@ function planOf(said: string, everything: string): Call[] {
   const use = /\bUse (\w+) (\{.*\})/.exec(said)
   if (use) return [{ name: `mcp__superego__${use[1]}`, input: JSON.parse(use[2]!) as Record<string, unknown> }]
   const read = /\bRead (\S+)/.exec(said)?.[1]
-  if (read) return [{ name: 'Read', input: { file_path: read } }]
+  const skill = /\bSkill (\S+)/.exec(said)?.[1]
+  const then = /\bthen Run (.+)$/m.exec(said)?.[1]
+  if (read || skill) {
+    return [
+      ...read ? [{ name: 'Read', input: { file_path: read } }] : [],
+      ...skill ? [{ name: 'Skill', input: { skill } }] : [],
+      ...then ? [{ name: 'Bash', input: { command: then.trim(), description: 'Runs what was asked' } }] : [],
+    ]
+  }
   const run = /\bRun (.+)$/m.exec(said)?.[1]
   if (run) return [{ name: 'Bash', input: { command: run.trim(), description: 'Runs what was asked' } }]
   if (/\bAsk\b/.test(said)) {
@@ -81,7 +90,7 @@ export async function mockAnthropic(): Promise<MockAnthropic> {
     const messages = request.messages ?? []
     const tools = (request.tools ?? []).map((t) => t.name)
     const system = typeof request.system === 'string' ? request.system : (request.system ?? []).map((b) => b.text ?? '').join('\n')
-    requests.push({ messages, tools, stream: Boolean(request.stream), system })
+    requests.push({ messages, tools, stream: Boolean(request.stream), system, ...(request.model ? { model: request.model } : {}) })
     const prompt = [...messages].reverse().find((m) => m.role === 'user' && !isToolResult(m))
     const since = messages.slice(prompt ? messages.indexOf(prompt) : 0)
     const said = textOf(prompt)

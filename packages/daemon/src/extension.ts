@@ -10,7 +10,7 @@
 // stops, or (a profile's) when the profile's files change. Torn down, its `signal` aborts, what it registers after is
 // refused, and its live values' `set` and `update` do nothing.
 import type { AnyTask, Conversation, EntryRecord, Extension } from '@earendil-works/pi-durable'
-import type { ActionDef, ActionInfo, AppConfig, Attachment, ChannelAcceptor, BlockedKind, DataView, Exposure, ExtensionAbout, Json, JsonSchema, MachineEntry, MessageOrigin, NewThread, Pane, SettingsSnapshot, Static, ThreadInfo } from '@superego/protocol'
+import type { ActionDef, ActionInfo, AgentKindMenu, AppConfig, Attachment, ChannelAcceptor, BlockedKind, DataView, Exposure, ExtensionAbout, Json, JsonSchema, MachineEntry, MessageOrigin, NewThread, Pane, SettingsSnapshot, Static, ThreadInfo } from '@superego/protocol'
 import type { SectionSpec } from '@superego/settings'
 import type { AuthFlow } from './auth-flows.ts'
 import type { DaemonContext } from './host.ts'
@@ -83,7 +83,11 @@ export type ScopedValue<T extends Json> = {
 }
 
 /** What `status` says of a thread that needs the user: what it waits on, and a line (or a few, Markdown) saying it. */
-export type StatusContribution = { kind: BlockedKind; msg?: string }
+/**
+ * What an extension says of a thread's status: it needs the user (`kind`: it shows as blocked), or, while it works, it
+ * waits on something that isn't the user (`working`: "Waiting: 3 Claude Agent threads are running").
+ */
+export type StatusContribution = { kind: BlockedKind; msg?: string } | { working: string }
 
 /** A block of what a message gives the model: text, or an image (base64). */
 export type MessageBlock = { type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string }
@@ -253,6 +257,29 @@ export type AgentPartsThread = {
   profile?: { ref: ProfileRef; spec: LoadedSpec }
   /** Its agent sets this machine up: an `agentFor` chose it with `setup` (Ego's). */
   setup: boolean
+  /** Its own model and thinking, as it was started with them (`NewThread.model`: another kind's `<kind>/<model>` too). */
+  model?: string
+  thinking?: string
+}
+
+/**
+ * A kind of agent of an extension's (`agentKind`): the task that runs its threads' turns, and what the model menus
+ * offer of it.
+ */
+export type AgentKind = {
+  name: string
+  runner: AnyTask
+  /**
+   * Its group in the model menus (`ModelCatalog.agents`), as it is now (asked each time the models are listed, and
+   * left out of that list when it takes over 3s: keep it quick), or nothing while it isn't offered (not installed here, say). Its models are named `<name>/<model>`.
+   * Offered with a `profile` only.
+   */
+  menu?(): Omit<AgentKindMenu, 'kind' | 'profile'> | undefined | Promise<Omit<AgentKindMenu, 'kind' | 'profile'> | undefined>
+  /**
+   * The profile a thread started on one of its models runs with when it's given none of this kind (`name`), and what
+   * makes it when it isn't there yet (`make`). Without it, such a thread needs a profile of this kind named.
+   */
+  profile?: { name: string; make(): Promise<void> }
 }
 
 /** An extension of the app's here (the core's, a bundled one or a window's; not a profile's), as `extensions()` lists it. */
@@ -294,9 +321,10 @@ export type DaemonApi = {
    * agent `runner`): it reads the thread's conversation, appends the turn's entries (assistant messages, tool results),
    * may publish its answer as it streams (`pi.live.generation.message`), and completes with its answer's entry
    * (`{ entryId }`), or fails with what went wrong. The thread's run, its status, Stop and messages sent meanwhile stay
-   * the daemon's. A thread of a kind that isn't here (its extension off, or done without) can't be sent to.
+   * the daemon's. A thread of a kind that isn't here (its extension off, or done without) can't be sent to. Its `menu`
+   * offers it in the model menus, where picking one of its models starts a thread on it, with its `profile`.
    */
-  agentKind(kind: { name: string; runner: AnyTask }): void
+  agentKind(kind: AgentKind): void
   /**
    * Add to a thread's agent, whatever chose it: asked at every send (before the turn starts), and answering with parts
    * this extension gave with `agent(part, { always: false })` (others are left out, with a warning). They come after the

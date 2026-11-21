@@ -4,6 +4,7 @@ import { execFile } from 'node:child_process'
 import { access, constants } from 'node:fs/promises'
 import { delimiter, join } from 'node:path'
 import { userInfo } from 'node:os'
+import type { ClaudeInstalled } from './shared.ts'
 
 /**
  * Variables that would make Claude Code bill something other than the user's own sign-in: an API key or token, another
@@ -61,22 +62,32 @@ export async function findClaude(given?: string): Promise<string | undefined> {
   return given || (await onPath(await shellPath()) ?? await onPath(process.env.PATH))
 }
 
-/**
- * Whether the `claude` at `executable` is signed in, as `claude auth status` says (its JSON), run as a thread's is:
- * without Anthropic credentials, so it's the user's own sign-in that's told. Nothing of it is read or kept.
- */
-export function authStatus(executable: string, env: Record<string, string>): Promise<{ loggedIn: boolean; how?: string; error?: string }> {
+/** What `executable` prints, run with `args` in `env` (stdout), or why it couldn't be run. */
+function run(executable: string, args: string[], env: Record<string, string>): Promise<{ stdout: string; error?: Error }> {
   return new Promise((done) => {
-    execFile(executable, ['auth', 'status'], { timeout: 15_000, env }, (error, stdout) => {
-      try {
-        const said = JSON.parse(String(stdout)) as { loggedIn?: unknown; authMethod?: unknown }
-        const how = typeof said.authMethod === 'string' && said.authMethod !== 'none' ? said.authMethod : undefined
-        done({ loggedIn: said.loggedIn === true, ...(how ? { how } : {}) })
-      } catch {
-        done({ loggedIn: false, error: error?.message ?? `claude auth status said: ${String(stdout).trim().slice(0, 200)}` })
-      }
-    })
+    execFile(executable, args, { timeout: 15_000, env }, (error, stdout) => done({ stdout: String(stdout ?? ''), ...(error ? { error } : {}) }))
   })
+}
+
+/**
+ * Claude Code on this machine as a thread would run it (`executable`, without Anthropic credentials): its version
+ * (`claude --version`), and whether it's signed in as `claude auth status` says. Of its status only whether it's
+ * signed in, how (`authMethod`: "claude.ai", say) and the plan it reports (`subscriptionType`) are kept: nothing else
+ * it says, and never a credential.
+ */
+export async function checkClaude(executable: string, env: Record<string, string>): Promise<Omit<ClaudeInstalled, 'installed' | 'path'>> {
+  const [version, status] = await Promise.all([run(executable, ['--version'], env), run(executable, ['auth', 'status', '--json'], env)])
+  const number = /\d+\.\d+\.\d+\S*/.exec(version.stdout)?.[0]
+  let said: { loggedIn?: unknown; authMethod?: unknown; subscriptionType?: unknown }
+  try {
+    said = JSON.parse(status.stdout) as typeof said
+  } catch {
+    const why = status.error?.message ?? `claude auth status said: ${status.stdout.trim().slice(0, 200)}`
+    return { ...(number ? { version: number } : {}), loggedIn: false, error: why }
+  }
+  const how = typeof said.authMethod === 'string' && said.authMethod !== 'none' ? said.authMethod : undefined
+  const plan = typeof said.subscriptionType === 'string' && said.subscriptionType ? said.subscriptionType : undefined
+  return { ...(number ? { version: number } : {}), loggedIn: said.loggedIn === true, ...(how ? { how } : {}), ...(plan ? { plan } : {}) }
 }
 
 /** The message for a machine without `claude`. */

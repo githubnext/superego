@@ -1,14 +1,19 @@
 // terminal, daemon half: the PTY host (pty.ts). A terminal pane's shell starts when a window first attaches to it (its
 // channel, `terminal.io`) and runs, attached or not, until the pane closes, its thread is archived or cleared, or the
 // daemon stops. Its shell exiting cleanly closes the pane; otherwise a key starts it again. What its programs report
-// (OSC 7501) is published per thread, and a terminal blocked on a question shows its thread as blocked too.
+// (OSC 7501) is published per thread, and a terminal blocked on a question shows its thread as blocked too. A window
+// may open one running a program instead of a shell (`terminal.run`: Claude Code, to sign in to it), the user's to use.
 import { homedir, userInfo } from 'node:os'
 import { existsSync } from 'node:fs'
-import { int, obj, str } from '@earendil-works/pi-schema'
-import { defineDaemonExtension } from '@superego/daemon'
+import { basename } from 'node:path'
+import { arr, int, obj, str } from '@earendil-works/pi-schema'
+import { defineAction, defineDaemonExtension } from '@superego/daemon'
 import { RpcError } from '@superego/protocol'
 import { spawnPty, Terminal, type Spawn } from './pty.ts'
-import { about, IO, RESIZE, STATUS, TERMINAL, type TerminalStatuses } from './shared.ts'
+import { about, IO, RESIZE, RUN, STATUS, TERMINAL, type TerminalStatuses } from './shared.ts'
+
+/** A word as a shell reads it back: quoted. */
+const quoted = (word: string) => `'${word.replaceAll("'", `'\\''`)}'`
 
 /** What a shell inherits from the daemon, less what is only the daemon's own: Electron run as Node, the dev server. */
 export function shellEnv(env: NodeJS.ProcessEnv = process.env): Record<string, string> {
@@ -33,6 +38,12 @@ export function terminalExtension({ spawn = spawnPty, shell = userShell }: { spa
       /** Every terminal, by `<thread>/<pane>`. */
       const terminals = new Map<string, Terminal>()
       const keyOf = (thread: string, pane: string) => `${thread}/${pane}`
+      /**
+       * What a window asked a pane to run instead of a shell (`terminal.run`), by `<thread>/<pane>`: for this daemon's
+       * life only, so the pane, kept with its thread, opens a shell after a restart. Never from a pane's params, which
+       * agents and outside callers set.
+       */
+      const programs = new Map<string, string[]>()
 
       const publish = (thread: string) => {
         const now: TerminalStatuses = {}
@@ -63,7 +74,10 @@ export function terminalExtension({ spawn = spawnPty, shell = userShell }: { spa
         if (!info.panes?.some((p) => p.id === pane && p.kind === TERMINAL)) throw new RpcError('not_found', `No terminal pane ${pane} beside this thread`)
         // Made while that was asked: the first one made wins.
         if (terminals.has(key)) return terminals.get(key)!
-        const { file, args } = shell()
+        const { file, args: shellArgs } = shell()
+        // A program runs in the user's login shell too, interactive (where mise and the like put it on the PATH).
+        const program = programs.get(key)
+        const args = program ? [...shellArgs, '-i', '-c', `exec ${program.map(quoted).join(' ')}`] : shellArgs
         const terminal = new Terminal({
           file, args, spawn,
           cwd: () => existsSync(info.cwd) ? info.cwd : homedir(),
@@ -88,6 +102,18 @@ export function terminalExtension({ spawn = spawnPty, shell = userShell }: { spa
         channel.onData((bytes) => terminal.input(bytes))
         channel.ended.then(() => { detach(); channel.end() }, detach)
       })
+      superego.action(defineAction({
+        id: RUN, title: 'Run a program in a terminal',
+        description: "Open a terminal pane beside a thread running a program (its whole path, then its arguments) in the user's login shell, for the user to use: its pane closes when it exits cleanly. A window's only.",
+        params: obj({ thread: str(), command: arr(str({ minLength: 1 }), { minItems: 1 }) }),
+        async run({ thread, command }) {
+          const info = await superego.threads.get(thread)
+          const n = Math.max(0, ...(info.panes ?? []).filter((p) => p.kind === TERMINAL).map((p) => Number((p.params as { n?: unknown } | undefined)?.n) || 1)) + 1
+          const pane = await superego.dispatch('pane.open', { thread, kind: TERMINAL, title: basename(command[0]!), params: { n } }) as { id: string }
+          programs.set(keyOf(thread, pane.id), command)
+          return pane
+        },
+      }))
       superego.method(RESIZE, async ({ thread, pane, cols, rows }) => {
         terminals.get(keyOf(thread, pane))?.resize(cols, rows)
         return null
@@ -99,7 +125,7 @@ export function terminalExtension({ spawn = spawnPty, shell = userShell }: { spa
         return blocked ? { kind: blocked.kind ?? 'question', ...(blocked.msg ? { msg: blocked.msg } : {}) } : undefined
       })
       superego.thread({
-        paneClosed: (thread, pane) => { if (pane.kind === TERMINAL) kill(thread.id, pane.id) },
+        paneClosed: (thread, pane) => { if (pane.kind === TERMINAL) { kill(thread.id, pane.id); programs.delete(keyOf(thread.id, pane.id)) } },
         archived: (thread) => { kill(thread.id) },
       })
       return () => {

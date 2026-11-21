@@ -7,19 +7,17 @@ import { arr, bool, consentRefused, int, lit, obj, opt, RpcError, str, union, un
 import { ATTACHMENT } from './attachments.ts'
 import { defineAction } from './extension.ts'
 import type { threadFiles } from './files.ts'
-import { clone, context, shortPath, type DaemonContext, type Host, type ThreadMeta } from './host.ts'
-import type { ProfileHost } from './profile-host.ts'
-import { findProfile } from './profiles.ts'
+import { clone, context, type DaemonContext, type Host, type ThreadMeta } from './host.ts'
 import type { Relay } from './relay.ts'
 import { paneParams, type Threads, type ThreadStart } from './threads.ts'
 
 /** The setting that lets outside agents (`superego mcp`) start threads here. Off unless turned on. */
 export const OUTSIDE_THREADS = 'outside.startThreads'
 
-export function registerCoreActions(host: Host, { harness, machine, threads, profiles, files, relay }: {
-  harness: Harness; machine: MachineInfo; threads: Threads; profiles: ProfileHost; files: ReturnType<typeof threadFiles>; relay: Relay
+export function registerCoreActions(host: Host, { harness, machine, threads, files, relay }: {
+  harness: Harness; machine: MachineInfo; threads: Threads; files: ReturnType<typeof threadFiles>; relay: Relay
 }) {
-  const { options, settings, router, agent, mounted, profileSources } = host
+  const { options, settings, router, agent, mounted } = host
   /** What a thread action takes: the thread it's for, which the window passes as the one it shows. */
   const thread = { thread: true as const }
   // Outside agents (`superego mcp`) start threads only once this machine lets them: the tool isn't listed until then,
@@ -199,22 +197,9 @@ export function registerCoreActions(host: Host, { harness, machine, threads, pro
   }))
   router.register(defineAction({
     id: 'thread.setProfile', title: "Change the thread's profile", expose: ['ui', 'cli'], ...thread,
-    description: "Run the thread with another profile from its next turn: `profile` by name, as profile.list gives them for its folder; none, the default (if there's none of those, plain Superego). Refused while it runs, and for a project's profile not allowed yet (profile.allow).",
+    description: "Run the thread with another profile from its next turn: `profile` by name, as profile.list gives them for its folder; none, the default (if there's none of those, plain Superego). Refused while it runs, for a project's profile not allowed yet (profile.allow), and for one on another kind of agent (Claude Agent's, say) once the thread has a conversation: a thread keeps its kind for its whole life.",
     params: obj({ thread: str(), profile: opt(str()) }),
-    async run({ thread: id, profile: name }) {
-      const m = await threads.get(id)
-      if (m.meta.owner) throw new RpcError('invalid', `This thread is the ${m.meta.owner} extension's: it runs as that extension makes it`)
-      if (m.live?.run) throw new RpcError('busy', 'This thread is working', { hint: 'Change its profile once it finishes.' })
-      const ref = findProfile(m.meta.cwd, profileSources.roots(), name?.trim() || undefined)
-      // Checked (and allowed) now, as a new thread's is: a thread isn't left with one it can't run.
-      if (ref) await profiles.profileOf(ref)
-      const was = m.meta.profile
-      if (was?.dir === ref?.dir) return ref ?? null
-      await threads.updateMeta(id, (meta) => { if (ref) meta.profile = ref; else delete meta.profile })
-      if (was) threads.letGoOf(was)
-      await threads.note(id, ref ? `This thread runs the ${ref.name} profile now (${ref.scope === 'user' ? 'yours' : "the project's"}, at ${shortPath(ref.dir)}).` : 'This thread runs without a profile now.')
-      return ref ?? null
-    },
+    run: ({ thread: id, profile: name }) => threads.setProfile(id, name?.trim() || undefined),
   }))
   router.register(defineAction({
     id: 'thread.seen', title: 'Mark as seen', expose: ['ui', 'cli'], ...thread,

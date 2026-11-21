@@ -53,11 +53,14 @@ import type { ExtensionAbout } from './app.ts'
  * 5.4: the UI half's `addToComposer(where, item)` (a chip in a thread's composer, its files sent with the next message);
  * a `WebView`'s `run(fn, ...args)` (a function run in its page) and `capture(rect)` (a part of it, as an image).
  * 5.5: the UI half's `theme(theme)`: a theme for code and the terminal, offered in Settings → Appearance.
+ * 5.6: an agent kind's `menu` and `profile` (its group in the model menus, `ModelCatalog.agents`, and the profile a
+ * thread picked there starts with); `AgentPartsThread`'s `model` and `thinking` (the thread's own); a status
+ * contribution's `{ working }` (what a working thread waits on, `Status.msg`).
  * Minor: something added (an extension that uses it asks for `^3.<minor>`); major: something an extension could rely
  * on changed or went, from 2.5 on without exception. An extension whose `api` range this doesn't satisfy is refused
  * when it's set up.
  */
-export const EXTENSION_API = '5.5.0'
+export const EXTENSION_API = '5.6.0'
 
 /** What a machine says of an extension set up there: `hello.extensions` and `features.changed` carry one each. */
 export type ExtensionManifest = Pick<ExtensionAbout, 'name' | 'version' | 'api'>

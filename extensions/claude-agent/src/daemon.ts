@@ -1,7 +1,13 @@
 // Claude Agent: a kind of agent whose threads run on the user's own Claude Code. A thread whose profile says
 // `agent: 'claude-agent'` has every turn run by the user's installed `claude`, signed in by the user with its own
 // `/login`, through the Agent SDK; Superego never sees, keeps or passes on a Claude credential (see
-// docs/research/claude-code-agent.md). Off unless a profile picks it.
+// docs/research/claude-code-agent.md). Off unless a thread is started on it: on one of its models in the model menu
+// (offered where `claude` is installed), which starts it with the user's "claude" profile (made then, as first-run
+// setup makes it), or with any profile that picks it.
+//
+// Settings → Claude Agent shows Claude Code on each machine (where it is, its version, whether it's signed in, as
+// `claude auth status` says: never a credential), with a terminal to sign in with Claude Code's own `/login`; the
+// permission mode threads start in, and how many of their turns run at once (others wait: parallel.ts).
 //
 // Claude Code runs with the user's own settings, and a folder's own (`.claude/`, `.mcp.json`, `CLAUDE.md`: project.ts)
 // only once the user allowed them as they are, and never where another user could change them: a thread with some not
@@ -18,12 +24,14 @@ import { isAbsolute, join } from 'node:path'
 import { defineAction, defineDaemonExtension } from '@superego/daemon'
 import { envName, lit, obj, opt, RpcError, str, threadEnv, union, type Json } from '@superego/protocol'
 import { AlwaysAllowed } from './always.ts'
-import { authStatus, claudeEnv, findClaude } from './claude.ts'
+import { checkClaude, claudeEnv, findClaude, NOT_INSTALLED } from './claude.ts'
+import { Parallel } from './parallel.ts'
 import { writePlugin } from './plugin.ts'
 import { projectConfig, ProjectAllowances } from './project.ts'
 import {
-  about, ALLOW, ANSWER, KEPT, MAKE_PROFILE, optionsProblem, PROFILE_KEY, PROFILE_NAME, STATUS, WAITING,
-  type Answer, type ClaudeStatus, type Approval, type ClaudeAgentOptions, type Kept, type ProjectFacts, type SubagentSteps,
+  about, ALLOW, ANSWER, CHECK, CLAUDE, DEFAULT_MODES, EFFORTS, KEPT, MAKE_PROFILE, MODELS, optionsProblem, PARALLEL, PROFILE_KEY, PROFILE_NAME, SECTION,
+  SETTINGS, TERMINAL, WAITING,
+  type Answer, type ClaudeCheck, type Approval, type ClaudeAgentOptions, type Effort, type Kept, type PermissionMode, type ProjectFacts, type SubagentSteps,
 } from './shared.ts'
 import { turnTask, type TurnHost } from './turn.ts'
 
@@ -31,6 +39,10 @@ import { turnTask, type TurnHost } from './turn.ts'
 const SUBAGENTS_KEPT = 20
 /** How often subagents' work is saved while it goes on. */
 const SAVE_MS = 250
+/** How old a look at Claude Code may be when the model menus are listed before it's looked at again (behind them). */
+const CHECK_STALE_MS = 60_000
+/** The terminal extension's action that runs a program in a terminal pane (terminal.run). */
+const TERMINAL_RUN = 'terminal.run'
 
 export type ClaudeAgentSetup = {
   /** Skill folders (each with a SKILL.md) Claude Code gets in every thread: the app's own `superego` skill. */
@@ -71,7 +83,7 @@ export function claudeAgent({ skills = [], executable, env = () => claudeEnv(), 
 
       superego.action(defineAction({
         id: ALLOW, title: "Allow a folder's Claude Code settings", expose: ['ui', 'cli'], consent: true,
-        description: "Load a folder's own Claude Code settings (.claude/, .mcp.json) and instructions (CLAUDE.md, CLAUDE.local.md) in Claude Agent threads there, as they are now: their hooks, MCP servers and permissions run commands, and Claude Code follows the instructions. Again after they change. `hash`: the one shown, refused if they changed since.",
+        description: "Load a folder's own Claude Code settings (.claude/, .mcp.json, and the skills in .claude/skills folders below it) and instructions (CLAUDE.md, CLAUDE.local.md) in Claude Agent threads there, as they are now: their hooks, MCP servers and permissions run commands, and Claude Code follows the instructions. Again after they change. `hash`: the one shown, refused if they changed since.",
         params: obj({ cwd: str(), hash: opt(str()) }),
         async run({ cwd, hash }) {
           if (!isAbsolute(cwd)) throw new RpcError('invalid', `${cwd}: give the folder's whole path`, { hint: 'superego do claude-agent.allow --cwd "$PWD"' })
@@ -79,6 +91,7 @@ export function claudeAgent({ skills = [], executable, env = () => claudeEnv(), 
           if (!project) throw new RpcError('not_found', `${cwd} has no Claude Code settings or CLAUDE.md of its own`)
           if (hash && hash !== project.hash) throw new RpcError('changed', `${cwd}'s Claude Code settings changed since: look at them again`)
           if (project.unsafe) throw new RpcError('unsafe', `Claude Code would also load settings from ${project.unsafe} there, which another user on this computer can change: they can't be allowed`)
+          if (project.tooBig) throw new RpcError('too_big', `${cwd} isn't a git repository and has too many folders below it to look through for the Claude Code skills there: its settings can't be allowed`, { hint: 'Work in a git repository, or a smaller folder.' })
           await allowances.allow(project)
           // Its threads say so now.
           for (const thread of await superego.threads.list()) {
@@ -139,29 +152,81 @@ export function claudeAgent({ skills = [], executable, env = () => claudeEnv(), 
         },
       }))
 
-      // ── Setup: whether Claude Code is here and signed in, and a profile that picks it ─────────────────────────────
+      // ── Claude Code here: whether it's installed and signed in, for setup, Settings and the model menus ────────────
+      const claude = superego.value<ClaudeCheck | null>(CLAUDE, null)
+      let checked = 0
+      let checking: Promise<ClaudeCheck> | undefined
+      /** Look at Claude Code here again (one look at a time): where it is, its version, whether it's signed in. */
+      const check = () => checking ??= (async (): Promise<ClaudeCheck> => {
+        try {
+          const path = await (executable ?? (() => findClaude(given)))()
+          const now: ClaudeCheck = path ? { installed: true, path, ...await checkClaude(path, env()) } : { installed: false }
+          checked = Date.now()
+          // Gone meanwhile (the daemon stopping): nobody to tell.
+          if (!superego.signal.aborted) claude.set(now as ClaudeCheck & Json)
+          return now
+        } finally {
+          checking = undefined
+        }
+      })()
+      // Looked at as the daemon starts, so the model menus have it.
+      void check().catch((error: unknown) => console.error('Claude Agent: looking at Claude Code here failed:', error))
+
       superego.action(defineAction({
-        id: STATUS, title: 'Whether Claude Code is installed and signed in', runs: 'machine', expose: ['ui', 'cli'],
+        id: CHECK, title: 'Look at Claude Code here', runs: 'machine', expose: ['ui', 'cli'],
+        description: "Whether Claude Code is installed on this machine, where, its version, and whether it's signed in (claude auth status: never a credential).",
         params: obj({}),
-        async run(): Promise<ClaudeStatus> {
-          const found = await (executable ?? (() => findClaude(given)))()
-          if (!found) return { installed: false }
-          return { installed: true, ...await authStatus(found, env()) }
-        },
+        run: () => check(),
       }))
+      /** Make the user's "claude" profile, whose threads run on Claude Code, unless there's one by that name. */
+      const makeProfile = async () => {
+        const dir = join(superego.dataDir, 'profiles', PROFILE_NAME)
+        if (existsSync(join(dir, 'profile.ts'))) return
+        await mkdir(dir, { recursive: true })
+        await writeFile(join(dir, 'profile.ts'), `// Threads with this profile run on your Claude Code, signed in with its own /login.\nexport default { agent: 'claude-agent' }\n`)
+      }
       superego.action(defineAction({
         id: MAKE_PROFILE, title: 'Make a profile that runs Claude Code', runs: 'machine', expose: ['ui', 'cli'],
         description: `The user's "${PROFILE_NAME}" profile, whose threads run on Claude Code (agent: 'claude-agent'); one there already is left as it is.`,
         params: obj({}),
         async run() {
-          const dir = join(superego.dataDir, 'profiles', PROFILE_NAME)
-          if (!existsSync(join(dir, 'profile.ts'))) {
-            await mkdir(dir, { recursive: true })
-            await writeFile(join(dir, 'profile.ts'), `// Threads with this profile run on your Claude Code, signed in with its own /login.\nexport default { agent: 'claude-agent' }\n`)
-          }
+          await makeProfile()
           return { name: PROFILE_NAME }
         },
       }))
+      superego.action(defineAction({
+        id: TERMINAL, title: 'Open Claude Code in a terminal', runs: 'machine',
+        description: "A terminal beside a thread running this machine's claude, for the user to sign in with its own /login. A window's only.",
+        params: obj({ thread: str() }),
+        async run({ thread }) {
+          const found = await check()
+          if (!found.installed) throw new RpcError('not_found', NOT_INSTALLED)
+          return await superego.dispatch(TERMINAL_RUN, { thread, command: [found.path] }) as Json
+        },
+      }))
+
+      // ── Settings ─────────────────────────────────────────────────────────────────────────────────────────────────
+      superego.settings.register({
+        id: SECTION, title: 'Claude Agent', order: 27, ui: SECTION, value: CLAUDE,
+        description: 'Threads that run your own Claude Code, on its sign-in and your plan’s limits.',
+        settings: [
+          {
+            key: SETTINGS.permissionMode, title: 'Permission mode', description: "For threads whose profile doesn't pick one.", default: 'default',
+            type: { type: 'choice', options: DEFAULT_MODES.map((m) => ({ ...m })) },
+          },
+          {
+            key: SETTINGS.parallel, title: 'Threads at once', description: 'How many work at the same time on this machine; the rest wait their turn.',
+            default: PARALLEL, type: { type: 'number', min: 1, max: 20, step: 1 },
+          },
+        ],
+      })
+      const parallel = new Parallel(() => superego.settings.get<number>(SETTINGS.parallel), () => superego.invalidate())
+      superego.settings.onChange(() => parallel.pump())
+      // A turn waiting for its place works on, saying so.
+      superego.status((thread) => {
+        const waiting = parallel.waitingFor(thread)
+        return waiting ? { working: waiting } : undefined
+      })
 
       // ── Subagents' work, kept with each thread ───────────────────────────────────────────────────────────────────
       const unsaved = new Map<string, Map<string, SubagentSteps>>()
@@ -186,11 +251,16 @@ export function claudeAgent({ skills = [], executable, env = () => claudeEnv(), 
 
       // ── A profile's choices ───────────────────────────────────────────────────────────────────────────────────────
       superego.profileKey(PROFILE_KEY, { title: 'Claude Agent', check: optionsProblem })
-      // Read from each thread's profile as it sends (a profile edited applies from the next turn), for its turn.
+      // Read from each thread's profile as it sends (a profile edited applies from the next turn), with the thread's own
+      // model and effort (Claude Agent's, `claude-agent/<model>`) over the profile's, for its turn.
       const chosen = new Map<string, ClaudeAgentOptions>()
       superego.agentParts((thread) => {
-        const options = thread.profile?.spec[PROFILE_KEY] as ClaudeAgentOptions | undefined
-        if (options) chosen.set(thread.id, options)
+        const options = { ...thread.profile?.spec[PROFILE_KEY] as ClaudeAgentOptions | undefined }
+        const own = thread.model?.startsWith(`${about.name}/`) ? thread.model.slice(about.name.length + 1) : undefined
+        if (own) options.model = own
+        if (own && (EFFORTS as readonly string[]).includes(thread.thinking ?? '')) options.effort = thread.thinking as Effort
+        else if (own) delete options.effort
+        if (Object.keys(options).length) chosen.set(thread.id, options)
         else chosen.delete(thread.id)
       })
 
@@ -203,7 +273,17 @@ export function claudeAgent({ skills = [], executable, env = () => claudeEnv(), 
       })
 
       superego.agentKind({
-        name: 'claude-agent',
+        name: about.name,
+        // Offered where Claude Code is installed; its models picked only once it's signed in.
+        async menu() {
+          // Looked at once before it's offered; after that, again behind the menu when it's old.
+          const found = claude.get() ?? await check()
+          if (Date.now() - checked > CHECK_STALE_MS) void check().catch((error: unknown) => console.error('Claude Agent: looking at Claude Code here failed:', error))
+          if (!found?.installed) return undefined
+          const unavailable = found.loggedIn ? undefined : found.error ? "Couldn't tell whether Claude Code is signed in" : 'Not signed in: run claude, then /login'
+          return { title: about.title, description: 'Runs your Claude Code', models: MODELS.map((m) => ({ ...m, thinking: [...m.thinking] })), ...(unavailable ? { unavailable } : {}) }
+        },
+        profile: { name: PROFILE_NAME, make: makeProfile },
         runner: turnTask('claude-agent.turn', {
           executable: executable ?? (() => findClaude(given)),
           // Marked with its thread, as a Superego thread's shell is: `superego` run there knows who's calling (see threadEnv).
@@ -215,7 +295,9 @@ export function claudeAgent({ skills = [], executable, env = () => claudeEnv(), 
             const project = thread ? await look(thread, cwd) : projectConfig(cwd, userConfig)
             return project && allowances.allowed(project) ? ['user', 'project', 'local'] : ['user']
           },
-          options: (thread) => chosen.get(thread) ?? {},
+          // The machine's permission mode, unless the profile picks one.
+          options: (thread) => ({ permissionMode: superego.settings.get<PermissionMode>(SETTINGS.permissionMode), ...chosen.get(thread) }),
+          place: (thread, signal) => parallel.take(thread, signal),
           rules: (cwd) => always.rules(cwd),
           remember: (cwd, rules) => always.remember(cwd, rules),
           ask,

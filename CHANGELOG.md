@@ -34,6 +34,16 @@
   only when you click them: until then they say where they're from. One click loads the rest in the same message.
 - A web page an agent opens in a Browser pane waits for you to press Open page, showing its whole address, unless it's a
   dev server on this computer or its network.
+- Claude Agent can be picked in ⌘N's model menu: where Claude Code is installed, its group offers Opus, Sonnet and
+  Haiku, and starts the thread with your `claude` profile (made then if you have none). Profiles can set its `model`
+  and `effort` too. A thread stays on Claude Agent or Superego's own agent for its whole life: changing a profile that
+  would move it is refused once it has a conversation, saying why.
+- Settings → Claude Agent, for each machine, shows its Claude Code (where it is, its version, whether it's signed in and
+  on which plan), with Open a terminal to sign in with Claude Code's own `/login`. It also sets the permission mode
+  threads start in, and how many Claude Agent threads work at once (3); the rest wait their turn, saying so.
+- Claude Agent threads on another machine run that machine's Claude Code, with its sign-in.
+- Skills in `.claude/skills` folders below a Claude Agent thread's folder count as the folder's own settings: they load
+  only once you allow them, and a new or changed one asks again.
 - Claude Agent threads no longer load a folder's own Claude Code settings (`.claude/`, `.mcp.json`), whose hooks and
   MCP servers can run commands, until you allow them: the thread asks over its composer, listing the files, and asks
   again after they change. Until then Claude Code runs with your settings only, without the folder's `CLAUDE.md`.

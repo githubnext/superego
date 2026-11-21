@@ -8,13 +8,21 @@
 // folder the user allowed as it is now: a change to any of it (a file added too, or one an import names showing up)
 // asks again, as a project's profile does. Not in it: a file elsewhere that a hook's command names (the command is, for
 // whoever allows it to read); nor a `CLAUDE.md` in a folder below, which Claude Code reads only as it works on a file
-// there (finding them would mean walking the whole tree, a home folder's say, at every turn), and then as part of what
-// it reads there anyway, unallowed as the rest of it.
+// there, as part of what it reads there anyway, unallowed as the rest of it.
+//
+// Skills in folders below are in it, though: Claude Code finds a `.claude/skills` below its folder as it works on a file
+// there, and loads it with the project's settings (only then), and a skill runs commands of its own (its hooks, and
+// `!` lines) once it's used. So they're fingerprinted with the rest, found as cheaply as Claude Code would find them:
+// in a git repository, what git lists (`git ls-files`: tracked, and untracked but not ignored, which is what Claude Code
+// loads; a repository inside it looked into the same way), else by walking the folder, up to `WALK_LIMIT` folders, when
+// it has configuration of its own. A folder too big to walk can't be allowed: what's below it could carry a skill
+// nobody looked at.
 //
 // What's allowed is what Claude Code loads: the folders above the project's too (Superego's own project files stop at
 // its top: project-files.ts in the daemon). So where another user could put one of those files there (a folder on the
 // way, or a file, that's writable by others or not the user's: /tmp, say), nothing makes the allowing hold: such a
 // folder's settings can't be allowed, and Claude Code runs there with the user's own only.
+import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { readdirSync, readFileSync, realpathSync, statSync } from 'node:fs'
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
@@ -47,6 +55,67 @@ function filesUnder(dir: string, top = true, seen = new Set<string>()): string[]
     } else if (stat.isFile()) files.push(path)
   }
   return files
+}
+
+/** How many folders below a folder that isn't a git repository are walked looking for skills, before giving up. */
+export const WALK_LIMIT = 20_000
+/** A file in a `.claude/skills` folder below the top (`a/.claude/skills/x/SKILL.md`), by its path from the top. */
+const NESTED_SKILL = /(^|\/)[^/]+\/\.claude\/skills\//
+const isNestedSkill = (path: string) => NESTED_SKILL.test(path) && !path.startsWith('.claude/')
+
+/** What git lists in `dir` (its path from there, NUL-separated), or undefined when it isn't in a repository. */
+function gitList(dir: string, args: string[]): string[] | undefined {
+  try {
+    return execFileSync('git', ['-C', dir, 'ls-files', '-z', ...args], { encoding: 'utf8', maxBuffer: 256 * 1024 * 1024, stdio: ['ignore', 'pipe', 'ignore'] }).split('\0').filter(Boolean)
+  } catch {
+    // Not a repository (or no git): walked instead.
+    return undefined
+  }
+}
+
+/**
+ * The files in `.claude/skills` folders below `dir` (not its own `.claude`), as Claude Code would find them while working
+ * there: not those git ignores, nor in `node_modules` (in a folder another repository ignores, none: Claude Code skips
+ * them too). `tooMany` when `dir` isn't in a repository and has more folders than are walked (`limit`); `walk: false`,
+ * not walked at all.
+ */
+export function nestedSkills(dir: string, { walk: walking = true, limit = WALK_LIMIT } = {}): { files: string[]; tooMany?: true } {
+  const files: string[] = []
+  const tracked = gitList(dir, ['--stage'])
+  if (tracked) {
+    // `<mode> <object> <stage>\t<path>`: a submodule (160000) is another repository, looked into the same way.
+    for (const line of tracked) {
+      const [info = '', path = ''] = line.split('\t')
+      if (info.startsWith('160000')) files.push(...nestedSkills(join(dir, path)).files.map((f) => join(path, f)))
+      else if (isNestedSkill(path)) files.push(path)
+    }
+    for (const path of gitList(dir, ['--others', '--exclude-standard']) ?? []) {
+      // A repository of its own inside it, untracked: listed as its folder.
+      if (path.endsWith('/')) files.push(...nestedSkills(join(dir, path)).files.map((f) => join(path, f)))
+      else if (isNestedSkill(path)) files.push(path)
+    }
+    return { files: [...new Set(files)].filter((f) => isFile(join(dir, f))).sort() }
+  }
+  if (!walking) return { files: [] }
+  let folders = 0
+  const walk = (at: string, rel: string): boolean => {
+    let entries
+    try { entries = readdirSync(at, { withFileTypes: true }) } catch { return true }
+    for (const entry of entries) {
+      if (!entry.isDirectory() || entry.name === '.git' || entry.name === 'node_modules') continue
+      const path = rel ? `${rel}/${entry.name}` : entry.name
+      if (entry.name === '.claude' && rel) {
+        const skills = join(at, '.claude', 'skills')
+        if (isDirectory(skills)) files.push(...filesUnder(skills, false).map((f) => relative(dir, f)))
+        continue
+      }
+      if (++folders > limit) return false
+      if (!walk(join(at, entry.name), path)) return false
+    }
+    return true
+  }
+  if (!walk(dir, '')) return { files: [], tooMany: true }
+  return { files: files.sort() }
 }
 
 /** How deep Claude Code follows imports: a file imported by one imported by… up to this many. */
@@ -116,6 +185,10 @@ export function projectConfig(cwd: string, userConfig = process.env.CLAUDE_CONFI
     }
   }
   for (const [file, instructions] of [...found]) if (instructions) follow(file, 0)
+  // Skills below it, which load with the rest once it's allowed. A folder outside git is walked only when it has
+  // configuration of its own: without it, Claude Code loads none of the folder's, those below included.
+  const below = nestedSkills(at, { walk: found.size > 0 })
+  for (const file of below.files) found.set(join(at, file), false)
   if (!found.size) return undefined
 
   const nameOf = (file: string) => file.startsWith(at + '/') ? relative(at, file) : file
@@ -129,7 +202,7 @@ export function projectConfig(cwd: string, userConfig = process.env.CLAUDE_CONFI
   for (const file of absent) hash.update(nameOf(file)).update('\0absent\0')
   return {
     cwd: folder, files, hash: hash.digest('hex').slice(0, 16), onlyInstructions: [...found.values()].every(Boolean),
-    ...(unsafe ? { unsafe } : {}),
+    ...(unsafe ? { unsafe } : {}), ...(below.tooMany ? { tooBig: true as const } : {}),
   }
 }
 
@@ -147,7 +220,7 @@ export class ProjectAllowances {
     this.#allowed = JSON.parse(text) as Record<string, string>
   }
   /** Whether `config` is allowed as it is (never where another user could change it). */
-  allowed(config: ProjectConfig) { return !config.unsafe && this.#allowed[real(config.cwd)] === config.hash }
+  allowed(config: ProjectConfig) { return !config.unsafe && !config.tooBig && this.#allowed[real(config.cwd)] === config.hash }
   /** Whether its folder was allowed as it was before: it changed since. */
   changed(config: ProjectConfig) { const hash = this.#allowed[real(config.cwd)]; return hash !== undefined && hash !== config.hash }
   async allow(config: ProjectConfig) {

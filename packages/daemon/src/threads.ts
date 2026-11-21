@@ -590,16 +590,30 @@ export function createThreads(host: Host, { harness, extensions, profiles }: { h
     // Uploads are inline again by now (see connection.ts).
     const dir = folderOf(cwd)
     if (!(await stat(dir).then((s) => s.isDirectory(), () => false))) throw new RpcError('invalid', `No folder ${dir} on ${hostname()}`)
-    if (ownModel && !agent.catalog().models.some((m) => m.value === ownModel)) throw new RpcError('invalid', `No model ${ownModel} here; sign in to its provider first`)
+    // Another kind of agent's model (Claude Agent's): the thread runs on that kind, with a profile of it.
+    const modelKind = ownModel ? await extensions.kindOfModel(ownModel) : undefined
+    if (ownModel && !modelKind && !agent.catalog().models.some((m) => m.value === ownModel)) throw new RpcError('invalid', `No model ${ownModel} here; sign in to its provider first`)
+    if (modelKind && hidden) throw new RpcError('invalid', `An extension's own thread can't run on ${extensions.kindTitle(modelKind)}`)
     // A parent that's there (`not_found` otherwise).
     if (parent) await get(parent)
     // The project's profile (or the user's) of that name, else the default one there is; checked (and allowed) now.
-    // None for an extension's own thread: it runs as that extension makes it, whatever profiles say.
-    const ref = hidden ? undefined : findProfile(dir, profileSources.roots(), profileName?.trim() || undefined)
+    // None for an extension's own thread: it runs as that extension makes it, whatever profiles say. Started on another
+    // kind's model with no profile named, the kind's own; that one made first if need be.
+    const own = modelKind ? extensions.kindProfile(modelKind) : undefined
+    const named = profileName?.trim() || own?.name
+    if (own && named === own.name) await own.make()
+    const ref = hidden ? undefined : findProfile(dir, profileSources.roots(), named)
     const loaded = ref ? await profiles.profileOf(ref) : undefined
     // Its kind of agent, for its whole life: only one that's here.
     const kind = typeof loaded?.spec.agent === 'string' && loaded.spec.agent ? loaded.spec.agent : undefined
     if (kind && !extensions.runnerOf(kind, new Set())) throw new RpcError('invalid', `Profile ${ref!.name} runs on ${kind}, which isn't here`, { hint: `Turn on the extension that has ${kind} in Settings.` })
+    // A model is its kind's: one of another kind's isn't this thread's to run with.
+    if (ownModel && modelKind !== kind) {
+      const runsOn = ref ? `The ${ref.name} profile runs on ${extensions.kindTitle(kind)}` : `Without a profile, a thread runs on ${extensions.kindTitle(kind)}`
+      throw new RpcError('invalid', `${runsOn}, not ${extensions.kindTitle(modelKind)}: ${ownModel} isn't one of its models`, {
+        hint: modelKind ? `Pick a profile that runs on ${extensions.kindTitle(modelKind)}, or none.` : 'Pick one of its models, or another profile.',
+      })
+    }
     // Its project is the checkout (or folder) it starts in; where in it it works is the folder given, unless a hook moves it.
     const checkout = await checkoutOf(dir)
     const draft: ThreadDraft = {
@@ -798,6 +812,55 @@ export function createThreads(host: Host, { harness, extensions, profiles }: { h
     await (await get(id)).conversation.submit({ type: 'write', entry: { kind: NOTE_ENTRY, data: { text } } }, context)
   }
 
+  /** Whether a thread has a conversation: a message, to or from its agent, since it was last started over. */
+  async function conversed(id: string) {
+    const m = await get(id)
+    let cursor: Cursor | undefined
+    do {
+      const page = await m.conversation.entries({ order: 'descending', minEntryId: (m.meta.cleared ?? 0) as EntryId }, 200, cursor, context)
+      if (page.items.some((entry) => entry.model?.length)) return true
+      cursor = page.next
+    } while (cursor)
+    return false
+  }
+
+  /**
+   * Run a thread with another profile from its next turn (none: the folder's default, else none). Another kind of agent
+   * (one profile's Claude Agent, the other's Superego's own) only while the thread has no conversation: the two keep
+   * different histories. Its own model goes with its kind.
+   */
+  async function setProfile(id: string, name: string | undefined) {
+    const m = await get(id)
+    if (m.meta.owner) throw new RpcError('invalid', `This thread is the ${m.meta.owner} extension's: it runs as that extension makes it`)
+    if (m.live?.run) throw new RpcError('busy', 'This thread is working', { hint: 'Change its profile once it finishes.' })
+    const ref = findProfile(m.meta.cwd, profileSources.roots(), name)
+    // Checked (and allowed) now, as a new thread's is: a thread isn't left with one it can't run.
+    const loaded = ref ? await profiles.profileOf(ref) : undefined
+    const kind = typeof loaded?.spec.agent === 'string' && loaded.spec.agent ? loaded.spec.agent : undefined
+    const was = m.meta.profile
+    if (was?.dir === ref?.dir) return ref ?? null
+    const moving = kind !== m.meta.agent
+    if (moving) {
+      if (kind && !extensions.runnerOf(kind, new Set())) throw new RpcError('invalid', `Profile ${ref!.name} runs on ${kind}, which isn't here`, { hint: `Turn on the extension that has ${kind} in Settings.` })
+      if (await conversed(id)) {
+        throw new RpcError('invalid', `This thread runs on ${extensions.kindTitle(m.meta.agent)}, and ${ref ? `the ${ref.name} profile` : 'no profile'} on ${extensions.kindTitle(kind)}: a thread can't move between them once it has a conversation, as each keeps its own`, {
+          hint: `Start a new thread with ${ref ? `the ${ref.name} profile` : 'no profile'}.`,
+        })
+      }
+    }
+    await updateMeta(id, (meta) => {
+      if (ref) meta.profile = ref; else delete meta.profile
+      if (kind === meta.agent) return
+      if (kind) meta.agent = kind; else delete meta.agent
+      delete meta.model
+      delete meta.thinking
+    })
+    if (was) letGoOf(was)
+    const on = moving ? `, on ${extensions.kindTitle(kind)}` : ''
+    await note(id, ref ? `This thread runs the ${ref.name} profile now (${ref.scope === 'user' ? 'yours' : "the project's"}, at ${shortPath(ref.dir)})${on}.` : `This thread runs without a profile now${on}.`)
+    return ref ?? null
+  }
+
   /** Older entries than a watch's window holds: the page before `before`, oldest first, and whether there are more. */
   async function history(id: string, before: number, limit = 50) {
     const m = await get(id)
@@ -867,7 +930,7 @@ export function createThreads(host: Host, { harness, extensions, profiles }: { h
   }
 
   return {
-    list, get, updateMeta, editState, heedStatus, rebound, letGoOf, note, tellPaneClosed, submit, stop, startThread, archive, unarchive, openPane, history, lastAnswer: answerOf, read,
+    list, get, updateMeta, editState, heedStatus, rebound, letGoOf, note, setProfile, tellPaneClosed, submit, stop, startThread, archive, unarchive, openPane, history, lastAnswer: answerOf, read,
     watchTranscript, imageBlock, apiFor, retrySignIn, rejectedNow, learnConversations, threadOf,
   }
 }

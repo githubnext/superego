@@ -128,7 +128,7 @@ export function Transcript({ machine, thread, view, live }: { machine: MachineEn
             const parts = divideWork(registry, { machine: here.machine.id, thread: here.thread }, { blocks: item.blocks, active: false, result })
             return <TurnEnd key={item.key} blocks={parts.length === 1 ? parts[0]!.blocks : parts.flatMap((part) => part.blocks)} results={results} />
           }
-          case 'working': return <Working key={item.key} steps={item.blocks.filter((b) => b.type === 'toolCall').length} since={item.since} />
+          case 'working': return <Working key={item.key} steps={item.blocks.filter((b) => b.type === 'toolCall').length} since={item.since} waiting={here.thread.status.msg} />
         }
       })}
       {waitingForSignIn(here.thread.status) ? <WaitingForSignIn /> : live?.runFailure && !live.run && live.runFailure.reason !== 'aborted' && (
@@ -268,8 +268,8 @@ function sameItem(a: Item, b: Item): boolean {
   return a.blocks.length === blocksOf.length && a.blocks.every((block, i) => block === blocksOf[i])
 }
 
-/** "Working · 5 steps · 1m 12s" at the end of the turn going on. */
-function Working({ steps, since }: { steps: number; since: number | undefined }) {
+/** "Working · 5 steps · 1m 12s" at the end of the turn going on; what it waits on instead of "Working", when it does. */
+function Working({ steps, since, waiting }: { steps: number; since: number | undefined; waiting?: string | undefined }) {
   const [now, setNow] = useState(Date.now)
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 1000)
@@ -279,7 +279,7 @@ function Working({ steps, since }: { steps: number; since: number | undefined })
   return (
     <div className="transcript__working" role="status">
       <StatusGlyph status={{ state: 'working' }} />
-      <span>Working</span>
+      <span>{waiting ?? 'Working'}</span>
       {steps > 0 && <span>{steps === 1 ? '1 step' : `${steps} steps`}</span>}
       {seconds !== undefined && <span>{seconds < 60 ? `${seconds}s` : `${Math.floor(seconds / 60)}m ${seconds % 60}s`}</span>}
     </div>

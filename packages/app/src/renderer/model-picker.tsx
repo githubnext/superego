@@ -1,6 +1,7 @@
 // The model menu: a button showing the model, and a list to pick another from, with a search field. The user's favourite
 // models first (those that can't be used here greyed, with why), then every other model of the signed-in providers,
-// by provider. A star on each row (shown on the row pointed at or highlighted, and on the favourites) stars or unstars
+// by provider; where asked for (`agents`), other kinds of agent's (Claude Agent's) between the two, a group each, which
+// start a thread on that kind. A star on each row (shown on the row pointed at or highlighted, and on the favourites) stars or unstars
 // it; so does ⌘D (Ctrl+D) on the highlighted row.
 import { useMemo, useRef, useState } from 'react'
 import type { ModelCatalog } from '@superego/protocol'
@@ -18,14 +19,16 @@ export function withFavourites(catalog: ModelCatalog, next: string[]): ModelCata
   return { ...catalog, favourites: next.flatMap((value) => { const m = known.get(value); return m ? [{ value, label: m.label, group: m.group, ...('unavailable' in m && m.unavailable ? { unavailable: m.unavailable } : {}) }] : [] }) }
 }
 
-type Row = { value: string | null; label: string; group: string; unavailable?: string; starred: boolean }
-type Group = { group: string; items: Row[] }
+type Row = { value: string | null; label: string; group: string; unavailable?: string; starred: boolean; kind?: string }
+type Group = { group: string; items: Row[]; about?: string }
 
 /**
  * Pick a model from `catalog`: `value` is `provider/model`, or null for `nullLabel` (the default), listed first when
- * given. `onStar` stars or unstars a model (the new favourites, in order); without it, there are no stars.
+ * given. `onStar` stars or unstars a model (the new favourites, in order); without it, there are no stars. `agents`:
+ * other kinds of agent's models too (`ModelCatalog.agents`, never starred), each kind's group said to run `where`
+ * ("on this Mac"): all of them (`all`), or one kind's alone, without the providers' (a profile of that kind's picked).
  */
-export function ModelPicker({ catalog, value, onChange, onStar, nullLabel, label, disabled, placeholder }: {
+export function ModelPicker({ catalog, value, onChange, onStar, nullLabel, label, disabled, placeholder, agents, where }: {
   catalog: ModelCatalog | undefined
   value: string | null
   onChange(value: string | null): void
@@ -35,6 +38,8 @@ export function ModelPicker({ catalog, value, onChange, onStar, nullLabel, label
   disabled?: boolean
   /** What the button says with no model to show (none chosen and no `nullLabel`, or no catalog yet): "Loading…". */
   placeholder?: string
+  agents?: 'all' | { only: string }
+  where?: string
 }) {
   const marked = usePortalAttributes()
   const popup = useRef<HTMLDivElement>(null)
@@ -47,15 +52,26 @@ export function ModelPicker({ catalog, value, onChange, onStar, nullLabel, label
     const starred = new Set(favourites.map((f) => f.value))
     const out: Group[] = []
     if (nullLabel !== undefined) out.push({ group: '', items: [{ value: null, label: nullLabel, group: '', starred: false }] })
-    if (favourites.length) out.push({ group: 'Favourites', items: favourites.map((f) => ({ ...f, starred: true })) })
-    const byProvider = new Map<string, Row[]>()
-    for (const model of catalog.models) {
-      if (starred.has(model.value)) continue
-      byProvider.set(model.group, [...byProvider.get(model.group) ?? [], { value: model.value, label: model.label, group: model.group, starred: false }])
+    const only = agents && agents !== 'all' ? agents.only : undefined
+    if (!only && favourites.length) out.push({ group: 'Favourites', items: favourites.map((f) => ({ ...f, starred: true })) })
+    // Other kinds of agent next: few, and a choice of their own.
+    for (const menu of agents ? catalog.agents ?? [] : []) {
+      if (only && menu.kind !== only) continue
+      out.push({
+        group: menu.title, about: [menu.description && where ? `${menu.description} ${where}` : menu.description, menu.unavailable].filter(Boolean).join(' · '),
+        items: menu.models.map((m) => ({ value: m.value, label: m.label, group: menu.title, starred: false, kind: menu.kind, ...(menu.unavailable ? { unavailable: menu.unavailable } : {}) })),
+      })
     }
-    for (const [group, items] of byProvider) out.push({ group, items })
+    if (!only) {
+      const byProvider = new Map<string, Row[]>()
+      for (const model of catalog.models) {
+        if (starred.has(model.value)) continue
+        byProvider.set(model.group, [...byProvider.get(model.group) ?? [], { value: model.value, label: model.label, group: model.group, starred: false }])
+      }
+      for (const [group, items] of byProvider) out.push({ group, items })
+    }
     return out
-  }, [catalog, nullLabel])
+  }, [catalog, nullLabel, agents && agents !== 'all' ? agents.only : agents, where])
 
   const shown = useMemo(() => {
     const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean)
@@ -71,7 +87,9 @@ export function ModelPicker({ catalog, value, onChange, onStar, nullLabel, label
   }
 
   const current = groups.flatMap((g) => g.items).find((row) => row.value === value)
-  const shownLabel = (catalog && (current?.label ?? value ?? nullLabel)) ?? placeholder ?? ''
+  // Another kind's model says whose it is: "Claude Agent · Opus".
+  const currentLabel = current && (current.kind ? `${current.group} · ${current.label}` : current.label)
+  const shownLabel = (catalog && (currentLabel ?? value ?? nullLabel)) ?? placeholder ?? ''
   return (
     <Combobox.Root<Row> items={groups} filteredItems={shown} autoHighlight
       value={current ?? null} onValueChange={(row) => { if (row && !row.unavailable) onChange(row.value) }}
@@ -93,17 +111,21 @@ export function ModelPicker({ catalog, value, onChange, onStar, nullLabel, label
             <Combobox.List className="model-picker__list">
               {(group: Group) => (
                 <Combobox.Group key={group.group} items={group.items} className="model-picker__group">
-                  {group.group && <Combobox.GroupLabel className="model-picker__heading">{group.group}</Combobox.GroupLabel>}
+                  {group.group && (
+                    <Combobox.GroupLabel className="model-picker__heading">
+                      {group.group}{group.about && <span className="model-picker__about">{group.about}</span>}
+                    </Combobox.GroupLabel>
+                  )}
                   <Combobox.Collection>
                     {(row: Row) => (
                       <Combobox.Item key={row.value ?? ''} value={row} disabled={Boolean(row.unavailable)}
                         className={`model-picker__item ${row.unavailable ? 'is-unavailable' : ''}`} title={row.unavailable}>
                         <span className="model-picker__label">
                           {row.label}
-                          {row.unavailable ? <span className="model-picker__why">{row.unavailable}</span>
+                          {row.unavailable && !row.kind ? <span className="model-picker__why">{row.unavailable}</span>
                             : row.starred && row.group && <span className="model-picker__why">{row.group}</span>}
                         </span>
-                        {onStar && row.value !== null && (
+                        {onStar && row.value !== null && !row.kind && (
                           <button type="button" tabIndex={-1} className={`model-picker__star ${row.starred ? 'is-on' : ''}`}
                             aria-label={row.starred ? `Unstar ${row.label}` : `Star ${row.label}`} title={`${row.starred ? 'Unstar' : 'Star'} (${keyLabel(STAR_KEYS)})`}
                             onPointerDown={(e) => { e.preventDefault(); e.stopPropagation() }}

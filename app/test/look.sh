@@ -31,7 +31,8 @@
 # - `providers`: Settings → Providers (signed in, added, searched, the add form), Favourite models, ⌘N's model menu.
 # - `setup`: first-run setup on a fresh home with no model: what it finds (a stand-in Ollama and `claude`), a key's
 #   field, a composer's card when sending failed, a model saying hi, Claude Code used.
-# - `claude-agent`: a Claude Agent thread waiting on a permission (needs `claude` installed; nothing is signed in or spent).
+# - `claude-agent`: a Claude Agent thread waiting on a permission, Settings → Claude Agent, and ⌘N's model menu with its
+#   group (needs `claude` installed; nothing is signed in or spent).
 # - `themes`: code in a message, the editor and the terminal under Superego's theme and four built-in pairs, light and
 #   dark, and Settings → Appearance's theme pickers.
 set -e
@@ -64,7 +65,8 @@ if [ "$2" = claude-agent ]; then
   CLAUDE="$(command -v claude || true)"
   [ -n "$CLAUDE" ] || { echo "look.sh claude-agent: needs claude (Claude Code) installed" >&2; exit 1; }
   mkdir -p "$SUPEREGO_HOME/bin" "$SUPEREGO_HOME/profiles/claude"
-  printf '#!/bin/sh\nexec env ANTHROPIC_BASE_URL="$(cat "%s/claude-mock-url")" ANTHROPIC_API_KEY=sk-ant-api03-look CLAUDE_CONFIG_DIR="%s/claude-config" CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1 "%s" "$@"\n' "$SUPEREGO_HOME" "$SUPEREGO_HOME" "$CLAUDE" > "$SUPEREGO_HOME/bin/claude"
+  # Its sign-in, as Settings tells it, a plan's (it's the stand-in's API key that really answers).
+  printf '#!/bin/sh\n[ "$1 $2" = "auth status" ] && { echo %s; exit 0; }\nexec env ANTHROPIC_BASE_URL="$(cat "%s/claude-mock-url")" ANTHROPIC_API_KEY=sk-ant-api03-look CLAUDE_CONFIG_DIR="%s/claude-config" CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1 "%s" "$@"\n' "'{\"loggedIn\":true,\"authMethod\":\"claude.ai\",\"subscriptionType\":\"max\"}'" "$SUPEREGO_HOME" "$SUPEREGO_HOME" "$CLAUDE" > "$SUPEREGO_HOME/bin/claude"
   chmod +x "$SUPEREGO_HOME/bin/claude"
   echo "export default { agent: 'claude-agent' }" > "$SUPEREGO_HOME/profiles/claude/profile.ts"
   export SUPEREGO_CLAUDE="$SUPEREGO_HOME/bin/claude"

@@ -29,7 +29,8 @@ export function ThreadCard({ machine, thread, tucked = [] }: { machine: MachineE
       {word && (
         <div className="thread-card__status">
           <StatusGlyph status={thread.status} quiet={thread.quiet} />
-          <span>{word}{why && `: ${why}`}</span>
+          {/* Working, it says what it waits on, when it waits on something: "Waiting: 3 Claude Agent threads are running". */}
+          <span>{statusShape(thread.status, thread.quiet) === 'working' && thread.status.msg ? thread.status.msg : <>{word}{why && `: ${why}`}</>}</span>
         </div>
       )}
       <div className="thread-card__line">

@@ -3,22 +3,22 @@
 import { useEffect, useState } from 'react'
 import { SetupRow, useDispatch, type MachineEntry, type SetupFound } from '@superego/app/ui'
 import { Button, TerminalIcon } from '@superego/ui'
-import { MAKE_PROFILE, STATUS, type ClaudeStatus } from './shared.ts'
+import { CHECK, MAKE_PROFILE, signedIn, type ClaudeCheck } from './shared.ts'
 
 export function ClaudeFound({ machine, use }: { machine: MachineEntry; use(found: SetupFound): void }) {
   const dispatch = useDispatch()
-  const [status, setStatus] = useState<ClaudeStatus | { failed: string }>()
+  const [status, setStatus] = useState<ClaudeCheck | { failed: string }>()
   const [problem, setProblem] = useState<string>()
   useEffect(() => {
     let live = true
-    dispatch(STATUS, {}, { machine: machine.id, source: 'setup' }).then(
-      (said) => { if (live) setStatus(said as ClaudeStatus) },
+    dispatch(CHECK, {}, { machine: machine.id, source: 'setup' }).then(
+      (said) => { if (live) setStatus(said as ClaudeCheck) },
       (error: Error) => { console.error('Asking whether Claude Code is signed in failed', error); if (live) setStatus({ failed: error.message }) })
     return () => { live = false }
   }, [machine.id])
   if (!status || ('installed' in status && !status.installed)) return null
   if ('failed' in status) return <SetupRow icon={<TerminalIcon size={14} />} title="Claude Code" detail={<span className="setup__error">{status.failed}</span>} />
-  const detail = status.loggedIn ? `Signed in${status.how ? ` with ${status.how}` : ''}` : status.error ?? 'Not signed in. Run claude, then /login.'
+  const detail = status.loggedIn || status.error ? signedIn(status) : 'Not signed in. Run claude, then /login.'
   const take = () => {
     setProblem(undefined)
     dispatch(MAKE_PROFILE, {}, { machine: machine.id, source: 'setup' }).then(

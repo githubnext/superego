@@ -5,7 +5,7 @@ import { expect, it } from 'vitest'
 import { Channels, type Pane, type RpcPeer, type ThreadInfo } from '@superego/protocol'
 import { testDaemon, type TestDaemon } from '@superego/sdk/testing'
 import { terminalExtension } from '../src/daemon.ts'
-import { Framing, IO, RESIZE } from '../src/shared.ts'
+import { Framing, IO, RESIZE, RUN } from '../src/shared.ts'
 
 const alive = (pid: number) => { try { process.kill(pid, 0); return true } catch { return false } }
 
@@ -134,5 +134,25 @@ it("reports what a program in it says (OSC 7501), and a blocked one blocks its t
   expect(await status()).toMatchObject({ state: 'blocked', kind: 'permission', msg: 'Allow rm?' })
   await term.type(`printf '\\033]7501;state=clear\\033\\\\'\n`)
   await until(async () => (await status()).state !== 'blocked', 'the thread to be unblocked')
+  await daemon.close()
+})
+
+it("runs a program a window asks for in a pane of its own, in the user's shell, closing it as the program exits cleanly", async () => {
+  const daemon = await open()
+  const { peer } = daemon
+  const thread = await peer.call<ThreadInfo>('thread.start', { cwd: daemon.dataDir })
+  const pane = await peer.call<Pane>('action.run', { id: RUN, params: { thread: thread.id, command: ['/bin/echo', "it's", 'run-$((1+1))'] } })
+  expect(pane).toMatchObject({ kind: 'terminal', title: 'echo', params: { n: 1 } })
+  const term = await attach(peer, thread.id, pane.id)
+  // Its words as given: quoted, not read by the shell.
+  await term.waitFor("it's run-$((1+1))")
+  await until(async () => !(await peer.call<ThreadInfo[]>('thread.list', {})).find((t) => t.id === thread.id)!.panes?.length, 'the pane to close')
+  // A window's only: not the command line's, nor an outside agent's.
+  expect((await peer.call<{ id: string }[]>('action.list', { exposure: 'cli' })).map((a) => a.id)).not.toContain(RUN)
+  // A terminal pane opened otherwise is a shell, whatever its params say.
+  const shell = await peer.call<Pane>('pane.open', { thread: thread.id, kind: 'terminal', params: { run: ['/bin/echo', 'nope'], command: ['/bin/echo', 'nope'] } })
+  const plain = await attach(peer, thread.id, shell.id)
+  await plain.type('echo "shell-$((2+2))"\n')
+  await plain.waitFor('shell-4')
   await daemon.close()
 })

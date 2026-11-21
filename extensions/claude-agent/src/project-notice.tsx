@@ -34,12 +34,15 @@ export function ProjectNotice({ machine, thread }: SlotProps['composer.above']) 
           : project.changed ? 'This folder’s Claude Code settings changed since you allowed them.' : 'This folder has Claude Code settings of its own.'}
       </div>
       <div className="service-notice__note">
-        {project.unsafe
+        {project.tooBig
+          ? <>There are too many folders below it to look through for the Claude Code skills in them, so Claude Code runs here
+            with your own settings only.</>
+          : project.unsafe
           ? <>Claude Code also reads {only ? 'instructions' : 'settings'} from <code>{project.unsafe}</code>, which other users on this
             computer can change, so it runs here {only ? 'without the folder’s CLAUDE.md' : 'with your own settings only (and without the folder’s CLAUDE.md)'}.</>
           : only
             ? <>Claude Code takes it as instructions, so it runs here without it until you allow it.</>
-            : <>Their hooks, MCP servers and permissions can run commands, so Claude Code runs here without them (and without the
+            : <>Their hooks, skills, MCP servers and permissions can run commands, so Claude Code runs here without them (and without the
               folder’s CLAUDE.md) until you allow them.</>}
       </div>
       {open && (
@@ -48,8 +51,8 @@ export function ProjectNotice({ machine, thread }: SlotProps['composer.above']) 
         </ul>
       )}
       <div className="service-notice__actions">
-        {!project.unsafe && <Button variant="primary" onClick={allow}>Allow</Button>}
-        <Button onClick={() => setDismissed((list) => [...list.filter((k) => !k.startsWith(`${machine.id}:${project.cwd}:`)), key])}>{project.unsafe ? 'Dismiss' : 'Not now'}</Button>
+        {!project.unsafe && !project.tooBig && <Button variant="primary" onClick={allow}>Allow</Button>}
+        <Button onClick={() => setDismissed((list) => [...list.filter((k) => !k.startsWith(`${machine.id}:${project.cwd}:`)), key])}>{project.unsafe || project.tooBig ? 'Dismiss' : 'Not now'}</Button>
         {project.files.length === 1 && file
           ? <Button variant="ghost" className="claude-project__more" onClick={() => show(file)}>{file}</Button>
           : <Button variant="ghost" className="claude-project__more" aria-expanded={open} onClick={() => setOpen(!open)}>{project.files.length} files</Button>}

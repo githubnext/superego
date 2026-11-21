@@ -1,6 +1,7 @@
-// Screenshots of a Claude Agent thread waiting on a permission (run by `test/look.sh <dir> claude-agent`): the user's
-// own `claude` (look.sh's wrapper, `SUPEREGO_CLAUDE`) asks to run a command, and the thread shows it above the
-// composer, with Allow, Deny and Always; light and dark, into $SUPEREGO_SHOWCASE_OUT. `claude` talks to a stand-in for
+// Screenshots of Claude Agent (run by `test/look.sh <dir> claude-agent`): a thread waiting on a permission, the user's
+// own `claude` (look.sh's wrapper, `SUPEREGO_CLAUDE`) asking to run a command, shown above the composer with Allow, Deny
+// and Always; Settings → Claude Agent, saying what Claude Code is on this computer; and ⌘N's model menu with its
+// group. Light and dark, into $SUPEREGO_SHOWCASE_OUT. `claude` talks to a stand-in for
 // the Messages API here, so nothing needs an account or costs anything.
 import { createServer } from 'node:http'
 import { writeFileSync } from 'node:fs'
@@ -59,5 +60,25 @@ await openApp({ name: 'claude-agent', timeout: 180_000, size: [1100, 760] }, asy
   // Answered (denied: the command isn't run), it goes on.
   await t.click('.claude-agent-approval__label', 'Deny')
   await until(`window.superego.call('local', 'thread.list', {}).then((list) => list.find((t) => t.id === '${id}')?.status.state === 'done')`, 'the turn done', 60_000)
+
+  // Settings → Claude Agent: Claude Code on this computer, signed in.
+  await t.click('.app__settings')
+  await until(`[...document.querySelectorAll('.settings__nav button')].some((b) => b.textContent.trim() === 'This computer')`, 'Settings')
+  await t.run(`[...document.querySelectorAll('.settings__nav button')].find((b) => b.textContent.trim() === 'This computer').click()`)
+  await until(`document.querySelector('.claude-agent-settings')?.textContent.includes('Signed in with your Claude Max plan')`, 'Settings → Claude Agent')
+  await t.both('claude-agent-settings', `document.querySelector('.claude-agent-settings').closest('.settings-section').scrollIntoView({ block: 'center' })`)
+  t.key('Escape', [])
+
+  // ⌘N's model menu: Claude Agent's models in a group of their own.
+  await t.click('.app__rail [aria-label="Threads"]')
+  t.key('n')
+  await until(`!!document.querySelector('.new-thread .model-picker__button:not(:disabled)')`, 'the new thread dialog')
+  // With no profile picked, so the providers' models are there too.
+  await t.run(`(() => { const select = document.querySelector('.new-thread select[aria-label="Profile"]'); select.value = ''; select.dispatchEvent(new Event('change', { bubbles: true })) })()`)
+  await until(`document.querySelector('.new-thread select[aria-label="Profile"]').value === ''`, 'no profile')
+  await t.click('.new-thread .model-picker__button')
+  const group = `[...document.querySelectorAll('.model-picker__heading')].find((h) => h.textContent.startsWith('Claude Agent'))`
+  await until(`!!${group}`, 'the Claude Agent group')
+  await t.both('claude-agent-model-menu', `${group}.scrollIntoView({ block: 'start' })`)
   server.close()
 })

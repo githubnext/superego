@@ -5,10 +5,10 @@ import { defineExtension, type Extension, hook, ToolTask } from '@earendil-works
 import {
   type ChannelAcceptor, Channels, compareVersion, contractProblem, dataViewProblem, EXTENSION_API, FEATURES, Lifetime, manifestOf, paramsParser,
   parseVersion, RpcError, UNVERSIONED, DATA_VIEWS, type DataViewInfo, type ExtensionAbout, type ExtensionReport, type ExtensionsReport, type Json,
-  type RpcPeer, type ThreadInfo,
+  type AgentKindMenu, type RpcPeer, type ThreadInfo,
 } from '@superego/protocol'
 import { registerExtensionSettings } from './extension-settings.ts'
-import type { AgentChoice, AgentPartsThread, DaemonApi, DaemonExtension, LiveValue, ScopedValue, SendTransform, StatusContribution, ThreadHooks, ToolCallRecord } from './extension.ts'
+import type { AgentChoice, AgentKind, AgentPartsThread, DaemonApi, DaemonExtension, LiveValue, ScopedValue, SendTransform, StatusContribution, ThreadHooks, ToolCallRecord } from './extension.ts'
 import { clone, stateOf, type Host, type ThreadMeta } from './host.ts'
 import type { ProfileHost } from './profile-host.ts'
 import { CORE_KEYS, type LoadedProfile, type ProfileRef } from './profiles.ts'
@@ -74,6 +74,8 @@ function aboutOf(about: ExtensionAbout): ExtensionAbout {
 export function createExtensionHost(host: Host, later: { profiles(): ProfileHost; threads(): Threads; relay(): Relay }) {
   const { options, settings, router, registry, values, changed } = host
   const partsLimit = options.agentPartsLimit ?? 5_000
+  /** How long an agent kind's group in the model menus may take to say what it is. */
+  const MENU_LIMIT = 3_000
 
   /** Every extension known here, by name, in the order each came. */
   const records = new Map<string, ExtensionRecord>()
@@ -119,7 +121,7 @@ export function createExtensionHost(host: Host, later: { profiles(): ProfileHost
    */
   const chosenParts = new Map<string, Map<string, Extension>>()
   /** The kinds of agent extensions run threads' turns with (`agentKind`): the runner task's name, and whose it is. */
-  const kinds = new Map<string, { runner: string; owner: string }>()
+  const kinds = new Map<string, { runner: string; owner: string; title: string; menu?: AgentKind['menu']; profile?: AgentKind['profile'] }>()
   /**
    * The kinds of pane the agent can open from extensions' data views (a thread view that fits a pane and says what it
    * shows). The others are in what each extension is (`about.panes`).
@@ -237,20 +239,25 @@ export function createExtensionHost(host: Host, later: { profiles(): ProfileHost
   }
   /** Status contributors that threw once: logged then, not on every thread's info after. */
   const failedContributors = new WeakSet<object>()
-  /** What a thread waits on, as the extensions it has say (`status`): the first to say something. */
-  function blockedOf(id: string, without: Set<string>, meta: ThreadMeta) {
+  /**
+   * What a thread waits on, as the extensions it has say (`status`): the first to say it needs the user (`blocked`),
+   * else the first to say what its run waits on (`working`).
+   */
+  function blockedOf(id: string, without: Set<string>, meta: ThreadMeta): { blocked?: Extract<StatusContribution, { kind: unknown }>; working?: string } {
+    let working: string | undefined
     for (const contributor of contributors) {
       if (!appliesTo(contributor, without, meta)) continue
       try {
-        const blocked = contributor.value(id)
-        if (blocked) return { blocked }
+        const said = contributor.value(id)
+        if (said && 'working' in said) working ??= said.working
+        else if (said) return { blocked: said }
       } catch (error) {
         // A throw counts as nothing, as facts' and choosers' do.
         if (!failedContributors.has(contributor)) console.error(`Extension ${contributor.owner}: status of thread ${id} failed:`, error)
         failedContributors.add(contributor)
       }
     }
-    return {}
+    return working ? { working } : {}
   }
 
   /** What an `agentParts` did wrong, said once (not on every turn of every thread). */
@@ -271,6 +278,7 @@ export function createExtensionHost(host: Host, later: { profiles(): ProfileHost
     if (!applying.length) return []
     const thread: AgentPartsThread = {
       id, hidden: Boolean(meta.hidden), ...(meta.owner ? { owner: meta.owner } : {}), setup: choice?.setup === true,
+      ...(meta.model ? { model: meta.model } : {}), ...(meta.thinking ? { thinking: meta.thinking } : {}),
       ...(meta.profile && profile ? { profile: { ref: meta.profile, spec: clone(profile.spec) } } : {}),
     }
     const answers = await Promise.all(applying.map(async (adder) => {
@@ -314,6 +322,37 @@ export function createExtensionHost(host: Host, later: { profiles(): ProfileHost
     const instructions = choice?.instructions ?? (profile?.spec.prompt || null)
     return { model, thinkingLevel, extensions, instructions, without }
   }
+
+  /** The kinds of agent offered here (their extension on), each with its group in the model menus, if it gives one now. */
+  async function agentMenus(): Promise<AgentKindMenu[]> {
+    const on = new Set(offered().map((e) => e.name))
+    const menus = await Promise.all([...kinds].map(async ([kind, found]): Promise<AgentKindMenu | undefined> => {
+      if (!on.has(found.owner) || !found.menu || !found.profile) return undefined
+      let timer: ReturnType<typeof setTimeout> | undefined
+      try {
+        const menu = await Promise.race([
+          Promise.resolve().then(() => found.menu!()),
+          new Promise<'late'>((resolve) => { timer = setTimeout(() => resolve('late'), MENU_LIMIT) }),
+        ])
+        if (menu === 'late') { console.warn(`Extension ${found.owner}: the model menu of ${kind} took over ${MENU_LIMIT / 1000}s; left out`); return undefined }
+        return menu && { ...menu, kind, profile: found.profile.name, models: menu.models.map((m) => ({ ...m, value: `${kind}/${m.value}` })) }
+      } catch (error) {
+        console.error(`Extension ${found.owner}: the model menu of ${kind} failed:`, error)
+        return undefined
+      } finally {
+        clearTimeout(timer)
+      }
+    }))
+    return menus.filter((menu) => menu !== undefined)
+  }
+  /** The kind whose model `model` is (`<kind>/<model>`), if it's one an extension here offers. */
+  async function kindOfModel(model: string) {
+    return (await agentMenus()).find((menu) => menu.models.some((m) => m.value === model))?.kind
+  }
+  /** The profile a thread started on one of `kind`'s models runs with when it's given none of that kind: its name, and what makes it. */
+  const kindProfile = (kind: string) => kinds.get(kind)?.profile
+  /** What a kind of agent is called: its extension's title; Superego's own for none. */
+  const kindTitle = (kind: string | undefined) => kind ? kinds.get(kind)?.title ?? kind : `${options.app.name}'s own agent`
 
   /**
    * The runner task of agent kind `kind` (`agentKind`), for a thread going `without` these extensions: undefined when no
@@ -486,13 +525,13 @@ export function createExtensionHost(host: Host, later: { profiles(): ProfileHost
           remove,
         })
       },
-      agentKind({ name, runner }) {
+      agentKind({ name, runner, menu, profile }) {
         life.live(`the agent kind ${name}`)
         if (name !== extension.name && !name.startsWith(`${extension.name}.`)) throw new Error(`Extension ${extension.name} must name its agent kinds "${extension.name}" or "${extension.name}.<kind>", not "${name}"`)
         if (kinds.has(name)) throw new Error(`Agent kind ${name} is already there`)
         // Installed as a part no thread is given: its task is in the registry, for the threads whose runner it is.
         const part = agentExtension(defineExtension({ name: `${name}:runner`, tasks: [runner] }), false)
-        kinds.set(name, { runner: runner.definition.name, owner: extension.name })
+        kinds.set(name, { runner: runner.definition.name, owner: extension.name, title: extension.title ?? extension.name, ...(menu ? { menu } : {}), ...(profile ? { profile } : {}) })
         undo(() => { kinds.delete(name); part.undo() }, 'an agent kind')
         note('agent kinds', name)
       },
@@ -822,7 +861,7 @@ export function createExtensionHost(host: Host, later: { profiles(): ProfileHost
   return {
     setUp, setUpBuiltin, registerSwitches, declare, inspect, known, offer, offered: (name: string) => offered().some((e) => e.name === name),
     runnerOf,
-    publishViews, agentOf, modelFromOf, partsFor, switchedOff, withoutFor, panesOf, factsOf, quietOf, blockedOf, appliesTo,
+    publishViews, agentOf, agentMenus, kindOfModel, kindProfile, kindTitle, modelFromOf, partsFor, switchedOff, withoutFor, panesOf, factsOf, quietOf, blockedOf, appliesTo,
     /** The daemon closing: switches turned meanwhile change nothing. */
     close: () => unlisten(),
     /** Every teardown so far finished (or given up on): those of extensions torn down earlier too, a profile's reloaded. */

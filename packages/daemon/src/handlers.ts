@@ -113,7 +113,10 @@ export function serveClient(peer: RpcPeer, { via, hangUp }: { via?: Via; hangUp?
     },
     'relay.call': ({ machine: target, method, params }: Methods['relay.call']['params']) => relayed.call(target, method, params),
     'thread.list': ({ archived, hidden }: Methods['thread.list']['params']) => threads.list({ archived: Boolean(archived), hidden: Boolean(hidden) }),
-    'agent.models': async () => host.agent.catalog(),
+    'agent.models': async () => {
+      const agents = await extensions.agentMenus()
+      return { ...host.agent.catalog(), ...(agents.length ? { agents } : {}) }
+    },
     'setup.probe': () => host.agent.probe(),
     'model.test': ({ model }: Methods['model.test']['params']) => host.agent.test(model),
     'file.read': ({ thread: id, path, base64 }: Methods['file.read']['params']) => files.read(id, path, base64),

@@ -26,3 +26,10 @@
 .claude-project__file { font: inherit; font-family: var(--superego-mono); color: var(--superego-text); background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline; text-decoration-color: var(--superego-border); text-underline-offset: 2px; }
 .claude-project__file:hover { text-decoration-color: currentColor; }
 .service-notice__actions .claude-project__more { color: var(--superego-muted); margin-left: auto; }
+
+/* Settings → Claude Agent: Claude Code on the machine, and what to do about it. */
+.claude-agent-settings { display: flex; flex-direction: column; gap: var(--superego-space-2); }
+.claude-agent-settings__path { font: var(--superego-text-sm) var(--superego-mono); color: var(--superego-muted); overflow-wrap: anywhere; }
+.claude-agent-settings__out { color: var(--superego-status-blocked-text, var(--superego-status-blocked)); }
+.claude-agent-settings__buttons { display: flex; gap: var(--superego-space-2); }
+.claude-agent-settings code { font: var(--superego-text-sm) var(--superego-mono); }

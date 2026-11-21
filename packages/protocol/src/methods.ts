@@ -151,6 +151,23 @@ export type ModelCatalog = {
    * default and each signed-in provider's preferred model). One that can't be used here says why (`unavailable`).
    */
   favourites?: { value: string; label: string; group: string; unavailable?: string }[]
+  /**
+   * Other kinds of agent a thread can run on here, an extension's each (Claude Agent), with the models each offers
+   * (`<kind>/<model>`, as `thread.start` takes them). A thread started on one runs with a profile that picks that kind
+   * (`profile`: the one it starts with when it's given none of that kind) for its whole life. `unavailable`: why its
+   * models can't be picked now (not signed in, say).
+   */
+  agents?: AgentKindMenu[]
+}
+
+/** A kind of agent as a model menu offers it: its group's title and description, its models, and the profile it starts with. */
+export type AgentKindMenu = {
+  kind: string
+  title: string
+  description?: string
+  profile: string
+  models: { value: string; label: string; thinking: string[] }[]
+  unavailable?: string
 }
 
 /**
@@ -171,7 +188,11 @@ export type ProfileRef = { name: string; scope: 'user' | 'project'; dir: string;
  * A profile as `profile.list` tells it: once loaded, what it brings (its extensions, and what extensions' keys in it
  * bring, by their titles) and its problems: what's wrong with it that doesn't stop it loading (a key nothing reads).
  */
-export type ProfileInfo = ProfileRef & { description?: string; allowed: boolean; extensions?: string[]; brings?: Record<string, string[]>; problems?: string[] }
+export type ProfileInfo = ProfileRef & {
+  description?: string; allowed: boolean; extensions?: string[]; brings?: Record<string, string[]>; problems?: string[]
+  /** The kind of agent its threads run on (an extension's: `claude-agent`), once loaded; unset, Superego's own. */
+  agent?: string
+}
 
 /**
  * A profile source as `profile.sources` tells it: where the user's profiles beyond `~/.superego/profiles` come from, a
@@ -207,7 +228,10 @@ export type ReturnedMessage = { content: string | { type: string; text?: string;
 export type NewThread = {
   cwd?: string
   title?: string
-  /** `provider/model`, for this thread's turns from now on. */
+  /**
+   * `provider/model`, for this thread's turns from now on; or another kind of agent's model (`<kind>/<model>`, from
+   * `ModelCatalog.agents`), which starts it with a profile of that kind.
+   */
   model?: string
   /** A thinking level, or `off`. */
   thinking?: string

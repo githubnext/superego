@@ -7,7 +7,7 @@ export type StatusState = 'idle' | 'working' | 'done' | 'blocked' | 'error'
 export type BlockedKind = 'permission' | 'question' | 'auth'
 /**
  * A thread's status: its state, what it's blocked on, and `msg`, in a line or a few: blocked, what it waits on (a question, Markdown); error, why it failed; done, what the run
- * did (a recap, plain text, short). Absent when there's nothing to say, and from daemons before recaps for done.
+ * did (a recap, plain text, short); working, what it waits on that isn't the user, when it does. Absent when there's nothing to say, and from daemons before recaps for done.
  */
 export type Status = { state: StatusState; kind?: BlockedKind; msg?: string }
 
@@ -50,6 +50,8 @@ export function statusWord(status: Status, quiet = false): string {
 /** A thread's status in a few words, for tooltips and screen readers: its word, and what it did or why it failed or waits ("Done: <recap>"). */
 export function statusLabel(status: Status, quiet = false): string {
   const shape = statusShape(status, quiet)
+  // A working thread's says what it waits on ("Waiting: 3 Claude Agent threads are running"), whole.
+  if (shape === 'working' && status.msg) return status.msg
   const why = shape === 'done' || shape === 'error' || shape === 'signin' ? status.msg : undefined
   return why ? `${STATUS_WORDS[shape]}: ${why}` : STATUS_WORDS[shape]
 }
@@ -103,12 +105,14 @@ export function deriveStatus(input: {
   lastEntryId: number | undefined
   seen: { entryId?: number; failureTaskId?: number } | undefined
   blocked?: { kind: BlockedKind; msg?: string }
+  /** What a run waits on that isn't the user (a turn queued behind others), said while it works. */
+  working?: string
   signIn?: string
   recap?: string
 }): Status {
-  const { live, lastEntryId, seen, blocked, signIn, recap } = input
+  const { live, lastEntryId, seen, blocked, working, signIn, recap } = input
   if (blocked) return { state: 'blocked', kind: blocked.kind, msg: blocked.msg }
-  if (live?.run) return { state: 'working' }
+  if (live?.run) return working ? { state: 'working', msg: working } : { state: 'working' }
   if (signIn !== undefined) return { state: 'blocked', kind: 'auth', msg: signIn }
   const failure = live?.runFailure
   if (failure && failure.reason !== 'aborted' && failure.taskId !== seen?.failureTaskId) {

@@ -148,9 +148,9 @@ export type LoadedProfile = ProfileRef & {
 
 /**
  * What a loaded profile brings, as profile.list tells it: its extensions by name, and what extensions' keys bring, by
- * their titles (`{ 'MCP servers': ['linear'] }`).
+ * their titles (`{ 'MCP servers': ['linear'] }`), and the kind of agent its threads run on.
  */
-export function broughtBy(profile: LoadedProfile, keys: ProfileKeys): { extensions?: string[]; brings?: Record<string, string[]>; problems?: string[] } {
+export function broughtBy(profile: LoadedProfile, keys: ProfileKeys): { extensions?: string[]; brings?: Record<string, string[]>; problems?: string[]; agent?: string } {
   const extensions = [...new Set([...profile.daemon.map((d) => d.extension.name), ...profile.extensions.map((e) => e.name.split('/').at(-1)!)])]
   const brings: Record<string, string[]> = {}
   for (const [key, spec] of keys) {
@@ -160,7 +160,11 @@ export function broughtBy(profile: LoadedProfile, keys: ProfileKeys): { extensio
     try { items = spec.brings(value) } catch (error) { console.error(`Profile key ${key} (${spec.owner}): brings failed:`, error); continue }
     if (items.length) brings[spec.title ?? key] = items
   }
-  return { ...(extensions.length ? { extensions } : {}), ...(Object.keys(brings).length ? { brings } : {}), ...(profile.problems.length ? { problems: profile.problems } : {}) }
+  const agent = typeof profile.spec.agent === 'string' && profile.spec.agent ? profile.spec.agent : undefined
+  return {
+    ...(extensions.length ? { extensions } : {}), ...(Object.keys(brings).length ? { brings } : {}), ...(profile.problems.length ? { problems: profile.problems } : {}),
+    ...(agent ? { agent } : {}),
+  }
 }
 
 export const DEFAULT_PROFILE = 'default'

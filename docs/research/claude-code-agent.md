@@ -1,6 +1,6 @@
 # A thread that runs the user's Claude Code: proof and design
 
-2026-11-20. A design; waves 1 and 2 (§4) are built. The terms behind it are in
+2026-11-20. A design; waves 1 to 3 (§4) are built. The terms behind it are in
 [claude-subscriptions.md](claude-subscriptions.md), whose §3(a) this builds on. **This is not legal advice.**
 
 The idea: an opt-in second agent kind for threads. The thread runs the user's own installed, unmodified `claude`
@@ -73,6 +73,25 @@ environment without Anthropic credentials (§3.2), and show which one Claude Cod
   could fork a pi thread into a new Claude Agent thread with a summary.
 - **Off by default.** It's a setting, "Claude Agent threads", on each machine, until Anthropic answers §7.
 
+**As built (wave 3, 2026-11-20): one mechanism, the profile.**
+- A profile's `agent: 'claude-agent'` is what makes a thread a Claude Agent thread, as before. The model menu's group
+  is a way to pick such a profile: the extension's `agentKind` gives a `menu()` (its group in `agent.models`, as
+  `ModelCatalog.agents`: `claude-agent/opus`, `sonnet`, `haiku`, with effort levels as thinking) and a `profile`
+  (`claude`, the one first-run setup makes, made then if it isn't there). `thread.start` with one of its models and no
+  profile named starts with that profile; with a profile of another kind it's refused, saying so, and so is a
+  Superego model with a Claude Agent profile. The thread keeps its model (`claude-agent/sonnet`) and thinking as its
+  own, and the turn passes them as `model` and `effort` (a profile's `claudeAgent.model` and `effort` otherwise).
+- The New thread dialog shows the group between the favourites and the providers, "Claude Agent · Runs your Claude
+  Code" ("on <machine>" for another machine); picking one of its models picks its profile (listed before it's made),
+  and a Claude Agent profile picked offers only its models. Signed out, the group says "Not signed in: run claude, then
+  /login" and its models can't be picked.
+- Moving a thread: `thread.setProfile` moves a thread between kinds only while it has no conversation (no entry the
+  agent saw since it was last started over), and drops its own model then; after that it's refused: "This thread runs
+  on Superego's own agent, and the claude profile on Claude Agent: a thread can't move between them once it has a
+  conversation, as each keeps its own." There's no model menu on a thread yet (only the New thread dialog's).
+- The "Claude Agent threads" switch wasn't added: it's off until a thread is started on it (a profile, or its group in
+  the menu), and the extension has Settings → Extensions' switch.
+
 ## 3. Shape
 
 ### 3.1 Where it lives
@@ -137,9 +156,12 @@ needs: a thread's `agent`, and a way for an extension to run a thread's turns. S
   - Stop calls `interrupt()` and then aborts the `AbortController`.
   - Archiving or deleting the thread ends its process.
   - The process runs in its own process group (`process-group.ts`), so nothing outlives the daemon.
-- **How many at once.** A per-machine cap on Claude Agent turns running at once, defaulting to 2. Threads over the cap
-  wait as `working`, saying "Waiting for another Claude Agent thread". This keeps background use nearer the "ordinary,
-  individual usage" the plans assume. It's a setting.
+- **How many at once.** A per-machine cap on Claude Agent turns running at once, defaulting to 3 (Settings → Claude
+  Agent, "Threads at once"). Turns over the cap wait, oldest first, as `working`, their status saying "Waiting: 3
+  Claude Agent threads are running" (a status contribution's `{ working }`, `Status.msg` while working, shown in the
+  transcript's working row and the thread's card). A turn takes its place before it starts `claude` and keeps it to
+  its end (waiting on an approval too); Stop while it waits leaves the queue. This keeps background use nearer the
+  "ordinary, individual usage" the plans assume.
 
 ### 3.3 Events into the transcript
 
@@ -288,6 +310,21 @@ and knows which thread its `superego` calls come from, as a Superego thread does
   - or "Not installed: see code.claude.com". Superego doesn't install it.
 - A turn that fails as not logged in puts the thread in the sign-in state (`kind: 'auth'`), with that same message.
   It goes on once a check passes, as threads waiting on a provider do now.
+- **As built (wave 3).** `claude-agent.check` runs `claude --version` and `claude auth status --json` with the
+  scrubbed environment and keeps `loggedIn`, `authMethod` and `subscriptionType` (shown as "Signed in with your Claude
+  Max plan"), published as the live value `claude-agent.claude` for Settings: looked at as the daemon starts, as
+  Settings shows it ("Check again"), and behind the model menu when it's over a minute old. Settings → Claude Agent
+  shows it under the machine's two settings (permission mode, threads at once); signed out, "Run `claude` and `/login`
+  in a terminal." and **Open a terminal**, which opens a terminal pane beside the thread shown (else the machine's
+  newest) running that machine's `claude`, for the user to sign in in Claude Code's own flow. The terminal extension
+  gained `terminal.run` for it: a window's action only (not the command line's or an outside agent's), the program
+  kept in the daemon's memory, never in the pane's params an agent could set.
+- **Remote machines (wave 3).** Everything above is the machine's daemon's: its `claude`, its check, its plugin, its
+  MCP server and its sessions; the window reaches it as any machine's actions. Tested with a hub daemon reaching a box
+  daemon over a `via` pipe (`extensions/claude-agent/test/remote.test.ts`): the box's thread runs the box's `claude`,
+  Superego's tools answer for the box's thread, the skill plugin is the box's, and the hub's `claude` is only checked.
+  A turn that fails as not logged in still fails with "Not logged in · run `claude` and `/login`"; the `kind: 'auth'`
+  state above is still to do.
 - **Plan limits.** `Query.usage()` (experimental) returns the plan's 5-hour and 7-day utilisation. Showing it is
   tempting, but it's near the SDK note's "offer … rate limits", so leave it out until Anthropic answers (§7). Show
   rate-limit errors when they happen, with Claude Code's reset time.
@@ -343,13 +380,36 @@ saying, in plain text, that a product "runs Claude Code".
    - The in-process MCP server with the thread-bound actions and agent-ui's tools (§3.5).
    - The appended prompt.
    - Subagent rows.
-3. **Picking it, and other machines.**
+3. **Built (2026-11-20): picking it, and other machines.** The model-menu group and the profile as one mechanism
+   (§2's "as built"); `claudeAgent.model` and `effort`; Settings → Claude Agent with `claude-agent.check` and a
+   terminal to sign in (§3.6's); the cap on turns at once (§3.2); remote machines, tested with two daemons; and the
+   subfolder skills gap closed (below). Tested in `extensions/claude-agent/test` (setup, window, remote, parallel and
+   daemon tests, with a fake `claude` or the user's against the mock API), and `test/look.sh <dir> claude-agent` shoots
+   Settings → Claude Agent and the model menu's group, light and dark. Not yet: real turns on a plan, the sign-in
+   state (`kind: 'auth'`), a model menu on a thread. The plan was:
    - The profile field and model-menu group (§2).
    - Settings → Claude Agent with `claude-agent.check` and the terminal-pane sign-in hint (§3.6).
    - The concurrency cap.
    - Remote machines.
    - Docs, and a CHANGELOG entry.
    - Still off by default.
+
+   **The subfolder skills gap, closed.** Claude Code finds `.claude/skills` folders below its folder as it works on
+   files there, and a skill runs commands once it's used (its frontmatter `hooks`, and `!` lines in it). Tried against
+   the mock with 2.1.325: such a skill loads only when the `project` setting source is on (with `settingSources:
+   ['user']` the Skill tool says "Unknown skill"), and Claude Code skips one git ignores, even when the ignoring
+   repository is a folder above. So the gap was only for a folder the user had allowed: the allowance covered its
+   `.claude/` and not the skills below it, which then loaded unseen. Closed by fingerprinting them with the rest
+   (`project.ts`): in a git repository, what `git ls-files` lists (tracked, and untracked but not ignored: what Claude
+   Code loads), looking into repositories inside it the same way; outside git, a walk of the folder (past
+   `node_modules` and `.git`), only when it has configuration of its own, up to 20,000 folders. A skill showing up or
+   changing below asks again; an outside-git folder too big to walk can't be allowed ("too many folders below it to
+   look through for the Claude Code skills in them"). Why this, of the options: limiting skill discovery (`skills:
+   [...]`) needs the names of every skill the user has (theirs, their plugins') and matches by name, so a skill below
+   could take one's name; turning project hooks off (`disableAllHooks`, `allowManagedHooksOnly`) takes the user's own
+   hooks too and leaves `!` lines; the Bash sandbox holds nested skills back only as a side effect. The cost: a `git
+   ls-files` (tens of ms; 150 ms on this repository) or a walk at each turn's start, where the folder's configuration
+   is looked at anyway, and outside git a big folder with configuration of its own can't be allowed at all.
 4. **Polish.**
    - A long-lived process per active thread with streaming input (messages mid-turn).
    - Images and attachments.
