@@ -6,7 +6,7 @@
 // Picking: what the machine already has (a key in its environment or login shell, a local model server answering, and
 // what extensions find: Claude Code, in the `onboarding` slot), or a way in: ChatGPT, GitHub Copilot or OpenRouter's
 // sign-in, an API key (tried before it's kept), or a local server's address. Then, for a provider: its default model,
-// a few starred, and a "Say hi" round trip proving it works. Then the first thread, in ⌘N.
+// a few starred, and a test request showing it works. Then the first thread, in ⌘N.
 import { useEffect, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { ONBOARDED, type ModelCatalog, type ModelTest, type ProviderAuthInfo, type SetupProbe } from '@superego/protocol'
 import { Button, CheckIcon, GlobeIcon, KeyIcon, LaptopIcon, Select, StarIcon, TerminalIcon, TextField } from '@superego/ui'
@@ -104,7 +104,7 @@ export function SetupPage({ machine: machineId }: { machine: string }) {
   const [ready, setReady] = useState<Ready>()
   const [open, setOpen] = useState<Open>()
   const [problem, setProblem] = useState<string>()
-  // Whether the default said hi: then it talks.
+  // Whether the default model answered the test.
   const [talks, setTalks] = useState(false)
   const providers = (snapshot?.sections.find((s) => s.id === 'providers')?.data ?? []) as ProviderAuthInfo[]
   const nameOf = (id: string) => providers.find((p) => p.id === id)?.name ?? id
@@ -160,7 +160,7 @@ export function SetupPage({ machine: machineId }: { machine: string }) {
   if (!has(machine, 'model-setup')) {
     return (
       <div className="setup">
-        <p>{machine.label} runs an older Superego: set up its models in Settings.</p>
+        <p>{machine.label} runs an older version of {app.name}. Set up its models in Settings.</p>
         <div className="setup__foot"><Button onClick={() => finish(() => shell.providers(machineId))}>Open Settings</Button></div>
       </div>
     )
@@ -184,14 +184,14 @@ export function SetupPage({ machine: machineId }: { machine: string }) {
       <div className="setup">
         <header className="setup__hello">
           <span className={`setup__mark ${'profile' in ready || talks ? 'is-awake' : ''}`} aria-hidden />
-          <h1>{'profile' in ready ? 'Ready.' : talks ? 'It talks.' : 'Almost there.'}</h1>
+          <h1>Set up a model</h1>
           {where}
         </header>
         {'profile' in ready ? <>
           <ul className="setup__rows"><SetupRow icon={<TerminalIcon size={14} />} title={ready.label} detail={ready.detail} end={<CheckIcon size={14} className="setup__ok" aria-label="Ready" />} /></ul>
-          <p className="setup__note">New threads with the {ready.profile} profile run on it.</p>
+          <p className="setup__note">Threads started with the {ready.profile} profile run on Claude Code.</p>
         </> : <Chosen machine={machineId} provider={ready.provider} name={nameOf(ready.provider)} detail={ready.detail} catalog={catalog} onCatalog={models} onTalks={setTalks} />}
-        <Button variant="ghost" className="setup__another" onClick={() => setReady(undefined)}>Add another way</Button>
+        <Button variant="ghost" className="setup__another" onClick={() => setReady(undefined)}>Add another provider</Button>
         {foot}
       </div>
     )
@@ -204,8 +204,8 @@ export function SetupPage({ machine: machineId }: { machine: string }) {
     <div className="setup">
       <header className="setup__hello">
         <span className="setup__mark" aria-hidden />
-        <h1>Who does the thinking?</h1>
-        <p>{app.name} runs on a model you bring.</p>
+        <h1>Set up a model</h1>
+        <p>{app.name} needs a model provider to run agents.</p>
         {where}
       </header>
       {probe && 'message' in probe && <p className="setup__error">Couldn't look at what {machine.label} has: {probe.message}</p>}
@@ -226,11 +226,11 @@ export function SetupPage({ machine: machineId }: { machine: string }) {
                 : addLocal(server.name, server.baseUrl, server.models).catch((error: Error) => { console.error(`Adding ${server.name} failed`, error); setProblem(error.message) }))}>Use</Button>} />
           ))}
         </ul>
-        {!probe && <p className="setup__note">Looking…</p>}
+        {!probe && <p className="setup__note">Checking…</p>}
       </section>
 
       <section className="setup__ways" aria-label="Ways in">
-        <h2>Or</h2>
+        <h2>Connect</h2>
         <ul>
           {SIGN_INS.filter((s) => providers.some((p) => p.id === s.provider && p.oauth)).map((s) => (
             <Way key={s.provider} icon={<GlobeIcon size={14} />} title={s.label} open={open?.kind === 'signIn' && open.provider === s.provider}
@@ -243,7 +243,7 @@ export function SetupPage({ machine: machineId }: { machine: string }) {
           <Way icon={<KeyIcon size={14} />} title="Paste an API key" open={open?.kind === 'key'} onToggle={(now) => setOpen(now ? { kind: 'key' } : undefined)}>
             <KeyForm machine={machineId} providers={keyProviders} onDone={(provider) => void useProvider(provider, 'API key')} />
           </Way>
-          <Way icon={<LaptopIcon size={14} />} title="A local model" detail="Ollama, LM Studio, any OpenAI-compatible server" open={open?.kind === 'local'}
+          <Way icon={<LaptopIcon size={14} />} title="Local model" detail="Ollama, LM Studio or another OpenAI-compatible server" open={open?.kind === 'local'}
             onToggle={(now) => setOpen(now ? { kind: 'local' } : undefined)}>
             <LocalForm onAdd={addLocal} />
           </Way>
@@ -308,7 +308,7 @@ function KeyForm({ machine, providers, onDone }: { machine: string; providers: P
       </form>
       {page && <p className="setup__note">Get one at <a href={page} target="_blank" rel="noreferrer">{page.replace(/^https:\/\//, '')}</a></p>}
       {signing && (
-        <SignInFlow key={signing.n} machine={machine} title={`Trying the key with ${name}`}
+        <SignInFlow key={signing.n} machine={machine} title={`Checking the key with ${name}`}
           start={() => dispatch('auth.signIn', { provider, type: 'api_key', key: signing.key, check: true }, { machine, source: 'setup' }) as Promise<{ flow: string }>}
           onClose={() => setSigning(undefined)} onDone={() => onDone(provider)} />
       )}
@@ -389,10 +389,10 @@ function Chosen({ machine, provider, name, detail, catalog, onCatalog, onTalks }
         {error && <p className="setup__error" role="alert">{error}</p>}
       </section>
       <div className="setup__test" aria-live="polite">
-        <Button disabled={test === 'trying' || !value} onClick={tryIt}>Say hi</Button>
+        <Button disabled={test === 'trying' || !value} onClick={tryIt}>Test</Button>
         {test === 'trying' ? <span className="setup__note">…</span>
           : test && 'message' in test ? <span className="setup__error">{test.message}</span>
-          : test && <><span className="setup__bubble">{test.text || '(an empty answer)'}</span><span className="setup__ms">{(test.ms / 1000).toFixed(1)} s</span></>}
+          : test && <><span className="setup__bubble">{test.text || '(empty reply)'}</span><span className="setup__ms">{(test.ms / 1000).toFixed(1)} s</span></>}
       </div>
     </>
   )
@@ -407,7 +407,7 @@ export function NoModel({ machine, back, before }: { machine: MachineEntry; back
   const shell = useShell()
   return (
     <span className="setup-card">
-      No model on {machine.label} yet.{' '}
+      No model is set up on {machine.label}.{' '}
       <Button variant="primary" onClick={() => {
         before?.()
         if (!has(machine, 'model-setup')) return shell.providers(machine.id)

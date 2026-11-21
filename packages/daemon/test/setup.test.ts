@@ -127,7 +127,7 @@ it('tries a key before signing in with it, and takes back one the provider refus
   await expect(peer.call('model.test', { model: 'mock/qwen3:32b' })).rejects.toMatchObject({ kind: 'rejected' })
 
   const taken = await signIn(peer, 'mock', 'good-key')
-  expect(taken).toContainEqual({ type: 'progress', message: 'Trying it on qwen3:32b…' })
+  expect(taken).toContainEqual({ type: 'progress', message: 'Checking the key with qwen3:32b…' })
   expect(taken.at(-1)).toEqual({ type: 'done' })
   expect(stored()).toEqual({ type: 'api_key', key: 'good-key' })
 })

@@ -133,11 +133,11 @@ const value = async (key: string) => (await daemon.settings.snapshot()).values[k
 it('shows on first run with no model, uses the Ollama it finds, says hi, and goes for good once done', async () => {
   await start({ ollama: await mockOllama() })
   await mount()
-  await until(() => text().includes('Who does the thinking?') && Boolean(rowOf('Ollama')), 'the page, with Ollama found')
+  await until(() => text().includes('Set up a model') && Boolean(rowOf('Ollama')), 'the page, with Ollama found')
   expect(rowOf('Ollama')!.textContent).toContain('llama3.1:8b, qwen3:32b')
 
   await click(rowOf('Ollama')!.querySelector('button')!)
-  await until(() => text().includes('It talks.') && text().includes('Hi! Ready when you are.'), 'it saying hi')
+  await until(() => text().includes('Hi! Ready when you are.'), 'it saying hi')
   expect((await peer.call<{ default: { model?: string } }>('agent.models', {})).default.model).toMatch(/^ollama\//)
 
   // A star, as the model menus have it.
@@ -171,7 +171,7 @@ it('comes back on Set up models…, opening on the model that works, and goes wh
   await settle()
   expect(page()).toBeNull()
   await act(async () => { await registry.router.dispatch('app.setup') })
-  await until(() => text().includes('It talks.') && text().includes('echo: Say hi'), 'the page again, the model saying hi')
+  await until(() => text().includes('echo: Say hi'), 'the page again, the model saying hi')
   const thread = await peer.call<{ id: string }>('thread.start', { title: 'picked' })
   await act(async () => { select({ machine: 'local', thread: thread.id }) })
   await until(() => !page(), 'the page gone for a thread')
@@ -186,11 +186,11 @@ it("opens from a composer that couldn't send, and goes back to its thread once d
   const thread = await peer.call<{ id: string }>('thread.start', { title: 'stuck' })
   await mount(thread.id)
   await act(async () => { select({ machine: 'local', thread: thread.id }) })
-  await until(() => text().includes('No model on This computer yet.'), 'the card')
+  await until(() => text().includes('No model is set up on This computer.'), 'the card')
   await click(button('Set up models…'))
   await until(() => Boolean(rowOf('Ollama')), 'the page, for the thread')
   await click(rowOf('Ollama')!.querySelector('button')!)
-  await until(() => text().includes('It talks.'), 'it saying hi')
+  await until(() => Boolean(container.querySelector('.setup__bubble')), 'it answering')
   await click(button('Back to the thread'))
   await until(() => selection?.thread === thread.id && !page(), 'back at the thread')
 })

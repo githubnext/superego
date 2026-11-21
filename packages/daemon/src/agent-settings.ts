@@ -584,13 +584,13 @@ export async function createAgentSettings(settings: SettingsRegistry, dataDir: s
         await refreshAuth()
         const trial = check && type === 'api_key' ? testModelOf(provider) : undefined
         if (trial) {
-          flow.emit({ type: 'progress', message: `Trying it on ${models.getModel(trial.provider, trial.modelId)?.name ?? trial.modelId}…` })
+          flow.emit({ type: 'progress', message: `Checking the key with ${models.getModel(trial.provider, trial.modelId)?.name ?? trial.modelId}…` })
           try {
             await tryModel(trial)
           } catch (error) {
             // Refused: what was there before is put back. Anything else (the network, a model it can't have) isn't the key's fault.
             if ((error as RpcError).kind !== 'rejected') {
-              flow.emit({ type: 'info', message: `Signed in, but trying it failed: ${(error as Error).message}` })
+              flow.emit({ type: 'info', message: `Signed in, but the test request failed: ${(error as Error).message}` })
             } else {
               if (before) await credentials.modify(provider, async () => before)
               else await credentials.delete(provider)
