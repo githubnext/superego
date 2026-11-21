@@ -33,6 +33,8 @@
   browser its address works only for the device that opened it (over Tailscale) or briefly after its page last used it
   (on this computer), so a page that sends its address elsewhere doesn't give the folder away.
 - The public website now uses GitHub Next analytics to track visits.
+- On an iPhone, text in the app is one size again: Safari no longer enlarges some rows (a wave's title on the board, a
+  long line) and not others.
 
 ## 0.1.9
 

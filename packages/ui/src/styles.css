@@ -141,6 +141,8 @@
 
 * { box-sizing: border-box; }
 html, body, #root { height: 100%; margin: 0; }
+/* iOS Safari otherwise inflates the text of blocks it judges to be reading text, so sizes vary from row to row. */
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 body { font: var(--superego-text-ui)/var(--superego-leading-ui) var(--superego-font); background: var(--superego-bg); color: var(--superego-text); -webkit-font-smoothing: antialiased; }
 /* The interface's own words (labels, titles, buttons) aren't text to select, as in a native app; what's written to be
    read or copied (messages, code, output, fields) opts back in. */
