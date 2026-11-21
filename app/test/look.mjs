@@ -183,14 +183,14 @@ await openApp({ name: 'look', timeout: 180_000 }, async (t) => {
   await both('phone-data-view')
   await run(`document.querySelector('.app__drawer-bar [aria-label="Threads"]').click()`)
   await run(`document.querySelector('.app__scrim').click()`)
-  // The thread's sheet: what the title bar holds wide, the panes to open, and (the model pressed) the details.
+  // The thread's sheet: what the title bar holds wide as a menu, the panes to open, and (the model's row pressed) the details.
   await run(`document.querySelector('button.app__mobiletitle').click()`)
   await until(`!!document.querySelector('.thread-sheet')`, 'sheet')
   await both('phone-sheet')
-  await run(`document.querySelector('.thread-sheet .threads-model').click()`)
+  await run(`document.querySelector('.thread-sheet [data-item="view:threads.model"]').click()`)
   await until(`!!document.querySelector('.thread-sheet .threads-details')`, 'details in the sheet')
   await both('phone-sheet-details')
-  await run(`document.querySelector('.thread-sheet .threads-model').click()`)
+  await run(`document.querySelector('.thread-sheet [data-item="view:threads.model"]').click()`)
   await run(`document.querySelector('.app__scrim--sheet').click()`)
   // Wide again: the data view as a space, its button in the rail.
   await t.zoom(1)

@@ -128,7 +128,12 @@ export function usePlacement(view: string, place: Place, where?: Where): [boolea
   return [placed[place].includes(view), toggle]
 }
 
-/** The panes a thread's menu offers: the views the layout puts in `pane` that it has a kind of, in order. */
-export function paneMenu(registry: Registry, placed: Placed, where: Where): { kind: string; title: string }[] {
-  return viewsIn(registry, placed, 'pane', where).filter(({ id }) => paneKind(registry, id, where)).map(({ id, title }) => ({ kind: id, title }))
+/** The panes a thread's menu offers: the views the layout puts in `pane` that it has a kind of, in order; each with an icon, the view's or else its kind's. */
+export function paneMenu(registry: Registry, placed: Placed, where: Where): { kind: string; title: string; icon?: View['icon'] }[] {
+  return viewsIn(registry, placed, 'pane', where).flatMap(({ id, title, icon }) => {
+    const kind = paneKind(registry, id, where)
+    if (!kind) return []
+    const shown = icon ?? kind.icon
+    return [{ kind: id, title, ...(shown ? { icon: shown } : {}) }]
+  })
 }

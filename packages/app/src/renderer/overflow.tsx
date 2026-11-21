@@ -225,7 +225,7 @@ export class Overflow {
 }
 
 /** What a click on an item clicks: the item, if it's a control, else the first inside it. */
-const controlOf = (el: HTMLElement) =>
+export const controlOf = (el: HTMLElement) =>
   el.matches('button, a[href], [role="button"], [role="tab"]') ? el : el.querySelector<HTMLElement>('button, a[href], [role="button"], input, select')
 
 const OverflowContext = createContext<Overflow | null>(null)

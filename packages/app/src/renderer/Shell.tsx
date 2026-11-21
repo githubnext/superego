@@ -29,9 +29,8 @@ import { refreshFontsSoon } from './fonts.ts'
 import { AuthNotice } from './AuthNotice.tsx'
 import { ThreadView } from './ThreadView.tsx'
 import { ThreadTitle, ThreadTools } from './thread-header.tsx'
-import { ProfileBadge } from './profile-card.tsx'
 import { Overflow, OverflowMenu, OverflowProvider } from './overflow.tsx'
-import { ArchiveButton, PinButton, UnarchiveButton } from './thread-actions.tsx'
+import { ThreadSheet } from './thread-sheet.tsx'
 import { StripSlot, SwipeEdgeRef } from './panes.tsx'
 import { useSidebarEdge } from './sidebar-edge.tsx'
 import { SettingsView } from './SettingsView.tsx'
@@ -309,64 +308,6 @@ function SpaceButton({ view, open, sidebarHidden, show, narrow = false }: { view
     <RailButton label={view.title} title={keys ? `${view.title} (${keys})` : view.title} on={shown} onClick={() => show(!shown)}>
       {Icon ? <Icon size={18} aria-hidden /> : view.title.slice(0, 1)}
     </RailButton>
-  )
-}
-
-/**
- * On a phone, the thread's sheet: what the title bar says of it wide (where it runs, the header's views, archiving),
- * the panes to open beside it, and the views the layout puts beside the thread. Over the thread, from the foot: Base
- * UI's Drawer, back down with a swipe, a tap beside it, or Escape (a menu open in it closes first). Drawn into the
- * window (`container`), under its styles.
- */
-function ThreadSheet({ machine, thread, open, onOpenChange, handle, container }: {
-  machine: MachineEntry; thread: ThreadInfo; open: boolean; onOpenChange(open: boolean): void
-  handle: BaseUI.Drawer.Handle<unknown>; container: HTMLElement | null
-}) {
-  const registry = useRegistry()
-  const where = { machine: machine.id, thread }
-  const { placed } = useLayout(where)
-  const kinds = paneMenu(registry, placed, where)
-  const besides = viewsIn(registry, placed, 'beside', where)
-  const popup = useRef<HTMLDivElement>(null)
-  // Closed by a pane opened from it, the focus is the pane's to take, not the title's again.
-  const opened = useRef(false)
-  const openPane = (kind: string) => {
-    opened.current = true
-    onOpenChange(false)
-    void registry.router.dispatch('pane.open', { thread: thread.id, kind }, { machine: machine.id, source: 'sheet' }).catch((error) => console.error(error))
-  }
-  return (
-    <BaseUI.Drawer.Root open={open} onOpenChange={onOpenChange} handle={handle} swipeDirection="down">
-      <BaseUI.Drawer.Portal container={container}>
-        <BaseUI.Drawer.Backdrop className="app__scrim app__scrim--sheet" />
-        <BaseUI.Drawer.Viewport className="app__sheet">
-          {/* Opened by a finger, the sheet holds the focus itself (no keyboard over it); from the keyboard, its first control. */}
-          <BaseUI.Drawer.Popup ref={popup} className="thread-sheet" aria-label={thread.title}
-            initialFocus={popupFocus(popup)}
-            finalFocus={() => { const back = !opened.current; opened.current = false; return back }}>
-            <BaseUI.Drawer.Content className="app__drawer-content">
-              <div className="thread-sheet__head">
-                <span className="thread-sheet__project">{machine.id !== 'local' && `${machine.label} · `}{thread.project.name}</span>
-                <span className="thread-sheet__title"><StatusGlyph status={thread.status} quiet={thread.quiet} />{thread.title}</span>
-                {thread.profile && <ProfileBadge machine={machine} thread={{ ...thread, profile: thread.profile }} />}
-              </div>
-              <div className="thread-sheet__tools">
-                <ThreadTools machine={machine} thread={thread} panes={false} />
-                <PinButton machine={machine} thread={thread} />
-                {thread.hidden ? null : thread.archived ? <UnarchiveButton machine={machine} thread={thread} /> : <ArchiveButton machine={machine} thread={thread} />}
-              </div>
-              {kinds.length > 0 && (
-                <div className="thread-sheet__panes">
-                  <h5>Open beside</h5>
-                  {kinds.map(({ kind, title }) => <Button key={kind} variant="ghost" className="thread-sheet__pane" onClick={() => openPane(kind)}>{title}</Button>)}
-                </div>
-              )}
-              {besides.length > 0 && <div className="thread-sheet__beside"><PlacedViews place="beside" machine={machine} thread={thread} frame={withMenuButton('beside', where)} /></div>}
-            </BaseUI.Drawer.Content>
-          </BaseUI.Drawer.Popup>
-        </BaseUI.Drawer.Viewport>
-      </BaseUI.Drawer.Portal>
-    </BaseUI.Drawer.Root>
   )
 }
 

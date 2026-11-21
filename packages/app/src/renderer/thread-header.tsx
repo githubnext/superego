@@ -98,10 +98,10 @@ function TitleField({ machine, thread }: { machine: MachineEntry; thread: Thread
 
 /**
  * What the title bar says about the thread, at its right: where it runs (the thread that started it, extensions' chips
- * like its worktree's branch), what extensions add to the header, and panes to open. `panes: false` leaves
- * the pane menu to the caller (a phone's thread sheet lists the panes itself).
+ * like its worktree's branch), what extensions add to the header, and panes to open. (On a phone, the thread's sheet
+ * lists the same as rows: thread-sheet.tsx.)
  */
-export function ThreadTools({ machine, thread, panes = true }: { machine: MachineEntry; thread: ThreadInfo; panes?: boolean }) {
+export function ThreadTools({ machine, thread }: { machine: MachineEntry; thread: ThreadInfo }) {
   const where = { machine: machine.id, thread }
   const inMenu = withContextMenu('header', where)
   return (
@@ -122,7 +122,7 @@ export function ThreadTools({ machine, thread, panes = true }: { machine: Machin
         </OverflowBox>
       )} />
       {/* The one way to open a pane, last in the title bar, with panes shown or not. */}
-      {panes && <PaneMenu machine={machine} thread={thread} />}
+      <PaneMenu machine={machine} thread={thread} />
     </span>
   )
 }

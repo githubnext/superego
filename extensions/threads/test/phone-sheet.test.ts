@@ -39,3 +39,26 @@ it('opens from the title over the thread, and closes on Escape or a tap beside i
   for (const type of ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click']) beside.dispatchEvent(new (type.startsWith('pointer') ? PointerEvent : MouseEvent)(type, { bubbles: true, cancelable: true, button: 0, pointerType: 'mouse' } as PointerEventInit))
   await ui.until(() => !sheet(), 'shut by a tap beside it')
 })
+
+it('is a menu: a row for the model, pinning and archiving', async () => {
+  const first = await daemon.thread('hello', { title: 'first' })
+  ui = await mountUi({ window: true, extensions: [threads], machines: [daemon], select: { thread: first.id }, narrow: true })
+  await ui.until(() => $('.app.is-narrow .app__mobiletitle-text')?.textContent === 'first', 'the narrow layout')
+  title().click()
+  const row = (id: string) => sheet()?.querySelector<HTMLButtonElement>(`[data-item="${id}"]`)
+  await ui.until(() => Boolean(row('archive')), 'the rows')
+  expect(row('pin')!.textContent).toBe('Pin')
+  expect(row('archive')!.textContent).toBe('Archive')
+  // The model's row says what its menu item does, split at the colon; choosing it shows the details under the rows.
+  await ui.until(() => row('view:threads.model')?.querySelector('.thread-sheet__words')?.textContent === 'Model', "the model's row")
+  row('view:threads.model')!.click()
+  await ui.until(() => Boolean(sheet()?.querySelector('.threads-details')), 'the details in the sheet')
+  expect(row('view:threads.model')!.getAttribute('aria-pressed')).toBe('true')
+
+  // Archiving from it closes it.
+  row('archive')!.click()
+  await ui.until(() => !sheet(), 'closed by archiving')
+  await ui.until(() => Boolean($('.thread__unarchive')), 'archived, Unarchive in its composer')
+  title().click()
+  await ui.until(() => row('unarchive')?.textContent === 'Unarchive' && !row('pin'), 'Unarchive in its place, and no pinning')
+})

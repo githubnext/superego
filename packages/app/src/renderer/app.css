@@ -653,25 +653,32 @@ button.app__mobiletitle > svg { flex: none; color: var(--superego-faint); }
 .app__scrim--sheet { z-index: 30; opacity: calc(1 - var(--drawer-swipe-progress, 0)); transition: opacity .4s cubic-bezier(.32, .72, 0, 1); }
 .app__scrim--sheet:is([data-starting-style], [data-ending-style]) { opacity: 0; }
 .app__sheet { position: fixed; inset: 0; z-index: 31; display: flex; flex-direction: column; justify-content: flex-end; }
-.thread-sheet { max-height: 85dvh; overflow: auto; overscroll-behavior: contain; outline: none; padding: var(--superego-space-4) var(--superego-space-4) calc(env(safe-area-inset-bottom) + var(--superego-space-4)); background: var(--superego-bg); border-radius: 14px 14px 0 0; box-shadow: var(--superego-shadow-float); display: flex; flex-direction: column; gap: var(--superego-space-4);
+.thread-sheet { max-height: 85dvh; overflow: auto; overscroll-behavior: contain; outline: none; padding: var(--superego-space-2) var(--superego-space-2) calc(env(safe-area-inset-bottom) + var(--superego-space-2)); background: var(--superego-raised); border-radius: 14px 14px 0 0; box-shadow: var(--superego-shadow-float); display: flex; flex-direction: column; font-size: var(--superego-text-ui);
   transform: translate3d(0, var(--drawer-swipe-movement-y, 0px), 0); transition: transform .4s cubic-bezier(.32, .72, 0, 1); will-change: transform; }
 .thread-sheet:is([data-starting-style], [data-ending-style]) { transform: translate3d(0, calc(100% + 24px), 0); }
 .thread-sheet[data-ending-style], .app__scrim--sheet[data-ending-style] { transition-duration: calc(var(--drawer-swipe-strength, 1) * 400ms); }
 .thread-sheet[data-swiping], .app__scrim--sheet[data-swiping] { transition-duration: 0s; }
 @media (prefers-reduced-motion: reduce) { .thread-sheet, .app__scrim--sheet { transition: none; } }
-.thread-sheet__head { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.thread-sheet__project { font-size: var(--superego-text-sm); color: var(--superego-muted); }
-.thread-sheet__title { display: flex; align-items: center; gap: 8px; font-weight: 600; overflow-wrap: anywhere; }
-.thread-sheet__title > .superego-status { flex: none; }
-.thread-sheet__head .thread__profile { align-self: flex-start; }
-.thread-sheet__tools { display: flex; align-items: center; gap: var(--superego-space-2); }
-.thread-sheet__tools .thread__tools { flex: 1; display: flex; flex-wrap: wrap; row-gap: var(--superego-space-2); }
-.thread-sheet__tools .thread__chips { flex: 1 0 100%; display: flex; flex-wrap: wrap; gap: 4px var(--superego-space-3); }
-.thread-sheet__tools .thread__chips:empty { display: none; }
-.thread-sheet h5 { margin: 0 0 6px; font-size: var(--superego-text-xs); font-weight: 500; color: var(--superego-muted); }
-.thread-sheet__panes { display: flex; flex-direction: column; align-items: stretch; }
-.thread-sheet__pane.superego-button { justify-content: flex-start; height: 40px; min-height: 40px; padding: 0 8px; }
-.thread-sheet__beside { margin: 0 calc(-1 * var(--superego-space-4)); border-top: 1px solid var(--superego-line); }
+/* A menu's: its title over a line, then its rows in groups, a line between; a row a finger high, its icon, what it says
+   and a detail at its end (thread-sheet.tsx). */
+.thread-sheet__head { padding: 6px 10px 8px; min-width: 0; }
+.thread-sheet__title { font-weight: 600; overflow: hidden; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.thread-sheet__project { font-size: var(--superego-text-xs); color: var(--superego-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.thread-sheet__group { padding: 4px 0; border-top: 1px solid var(--superego-border); }
+.thread-sheet__group:not(:has(> :not([hidden]))) { display: none; }
+.thread-sheet__group > .superego-menu__label { margin: 4px 10px 2px; }
+.thread-sheet__item { width: 100%; min-height: 44px; padding: 0 10px; border: 0; background: none; color: inherit; font: inherit; text-align: left; -webkit-tap-highlight-color: transparent; }
+.thread-sheet__item:active:not(:disabled), .thread-sheet__item:focus-visible { background: var(--superego-hover); }
+.thread-sheet__label { flex: 1; display: flex; align-items: center; gap: 12px; }
+.thread-sheet__label > svg { flex: none; color: var(--superego-muted); }
+.thread-sheet__blank { flex: none; width: 18px; }
+.thread-sheet__words { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.thread-sheet__hint { min-width: 0; max-width: 55%; font-family: inherit; font-size: var(--superego-text-sm); }
+.thread-sheet__detail { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* What a row stands for, drawn as the title bar draws it, under the row: hidden, there for its popover to open from. */
+.thread-sheet__hosted { position: relative; }
+.thread-sheet__host { position: absolute; inset: 0; display: flex; align-items: center; padding: 0 10px; overflow: hidden; visibility: hidden; pointer-events: none; }
+.thread-sheet__beside { margin: 0 calc(-1 * var(--superego-space-2)); border-top: 1px solid var(--superego-border); }
 .thread-sheet__beside:not(:has(> .placed-view > :not(.view-menu__button, .profile-scope:empty))) { display: none; }
 /* Its buttons are icons on the bar, as a phone's are: no box, a tint while pressed. */
 .app__mobilebar .superego-button { min-width: 36px; min-height: 32px; padding: 0 8px; border-radius: 8px; background: none; box-shadow: none; color: var(--superego-text); }
@@ -731,8 +738,8 @@ button.app__mobiletitle > svg { flex: none; color: var(--superego-faint); }
 
 .thread__tools { display: inline-flex; align-items: center; gap: var(--superego-space-2); flex: 0 1 auto; min-width: 0; }
 .thread__tools > * { flex: none; }
-.thread-sheet .thread__archive, .thread-sheet .thread__pin, .app__titlebar .thread__panes { width: 28px; height: 28px; min-height: 28px; border-radius: 6px; box-shadow: none; background: none; color: var(--superego-muted); }
-.thread-sheet .thread__archive:hover, .thread-sheet .thread__pin:hover, .app__titlebar .thread__panes:hover { background: var(--superego-hover); color: var(--superego-text); }
+.app__titlebar .thread__panes { width: 28px; height: 28px; min-height: 28px; border-radius: 6px; box-shadow: none; background: none; color: var(--superego-muted); }
+.app__titlebar .thread__panes:hover { background: var(--superego-hover); color: var(--superego-text); }
 
 /* Panes: the thread and its panes as a row of columns that scrolls sideways (Dinky's scrolling layout). */
 /* No scrollbar of its own: the strip's map over it shows where you are. */

@@ -1,5 +1,5 @@
-// Pinning a thread, archiving it and bringing it back, as buttons: in the title bar, the composer of an archived
-// thread, and a phone's thread sheet.
+// Pinning a thread, archiving it and bringing it back, as buttons: in the title bar and the composer of an archived
+// thread. (A phone's thread sheet has them as rows: thread-sheet.tsx.)
 import type { ThreadInfo } from '@superego/protocol'
 import { ArchiveIcon, ArrowCounterClockwiseIcon, Button, IconButton, PushPinIcon } from '@superego/ui'
 import type { MachineEntry } from '../shared/bridge.ts'

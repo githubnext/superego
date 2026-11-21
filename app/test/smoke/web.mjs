@@ -58,11 +58,11 @@ export default async function web(t, s) {
   await b.click('.app__footer .ego__button')
   await b.until(`!document.querySelector('.app__sidebar') && Boolean(document.querySelector('button.app__mobiletitle'))`, "Ego's thread shown on a phone")
   await b.click('button.app__mobiletitle')
-  await b.until(`Boolean(document.querySelector('.thread-sheet .ego__clear')) && !document.querySelector('.thread-sheet .thread__archive')`, "Ego's Clear in the thread's sheet")
-  // The model button there shows the details (beside the thread, wide) in the sheet.
-  await b.click('.thread-sheet .threads-model')
+  await b.until(`Boolean(document.querySelector('.thread-sheet .thread-sheet__hosted:not([hidden]) [data-item="view:ego.clear"]')) && !document.querySelector('.thread-sheet [data-item="archive"]')`, "Ego's Clear in the thread's sheet")
+  // The model's row there shows the details (beside the thread, wide) in the sheet.
+  await b.click('.thread-sheet [data-item="view:threads.model"]')
   await b.until(`Boolean(document.querySelector('.thread-sheet .threads-details'))`, 'thread details in the sheet')
-  await b.click('.thread-sheet .threads-model')
+  await b.click('.thread-sheet [data-item="view:threads.model"]')
   await b.click('.app__scrim--sheet')
   await b.until(`!document.querySelector('.thread-sheet')`, 'the sheet closed')
   // No space and no picker on a phone: the bar stays, with the thread's sheet and Settings, and Settings has the layout
