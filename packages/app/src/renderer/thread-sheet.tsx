@@ -1,10 +1,10 @@
 // A phone's thread sheet: what the title bar holds wide, as a menu up from the foot. One row each, an icon and what it
 // says (and a detail after, where there's one): the thread's own (its profile, where it came from, extensions' chips and
-// header views), pinning and archiving, the panes to open beside it; under them, the views the layout puts beside the
+// header views), renaming (the title at its top becomes a field), pinning and archiving, the panes to open beside it; under them, the views the layout puts beside the
 // thread, which are panels, not rows.
 import { useLayoutEffect, useRef, useState, type ComponentType, type ReactNode } from 'react'
 import type { ThreadInfo } from '@superego/protocol'
-import { ArchiveIcon, ArrowCounterClockwiseIcon, ArrowElbowDownRightIcon, BaseUI, IdentificationBadgeIcon, popupFocus, PushPinIcon } from '@superego/ui'
+import { ArchiveIcon, ArrowCounterClockwiseIcon, ArrowElbowDownRightIcon, BaseUI, IdentificationBadgeIcon, PencilSimpleIcon, popupFocus, PushPinIcon } from '@superego/ui'
 import type { MachineEntry } from '../shared/bridge.ts'
 import type { ViewProps } from './extension-api.ts'
 import { useRegistry, type Registry } from './registry.tsx'
@@ -16,6 +16,8 @@ import { ProfileBadge } from './profile-card.tsx'
 import { ThreadRef } from './thread-ref.tsx'
 import { isPinned } from './pins.ts'
 import { useProjects } from './state.tsx'
+import { startRename, useRenaming } from './rename.ts'
+import { TitleField } from './thread-header.tsx'
 
 type Icon = ComponentType<{ size?: number; 'aria-hidden'?: boolean }>
 
@@ -34,6 +36,7 @@ export function ThreadSheet({ machine, thread, open, onOpenChange, handle, conta
   const kinds = paneMenu(registry, placed, where)
   const besides = viewsIn(registry, placed, 'beside', where)
   const pinned = isPinned(useProjects().pins, { machine: machine.id, thread: thread.id })
+  const renaming = useRenaming() === `${machine.id}/${thread.id}`
   const popup = useRef<HTMLDivElement>(null)
   // Closed by a pane opened from it, the focus is the pane's to take, not the title's again.
   const opened = useRef(false)
@@ -57,7 +60,9 @@ export function ThreadSheet({ machine, thread, open, onOpenChange, handle, conta
             finalFocus={() => { const back = !opened.current; opened.current = false; return back }}>
             <BaseUI.Drawer.Content className="app__drawer-content">
               <div className="thread-sheet__head">
-                <div className="thread-sheet__title">{thread.title}</div>
+                {renaming
+                  ? <TitleField machine={machine} thread={thread} className="thread-sheet__field" source="sheet" onEnter={close} />
+                  : <div className="thread-sheet__title">{thread.title}</div>}
                 <div className="thread-sheet__project">{machine.id !== 'local' && `${machine.label} · `}{thread.project.name}</div>
               </div>
               <div className="thread-sheet__group" role="group" aria-label="Thread">
@@ -82,6 +87,7 @@ export function ThreadSheet({ machine, thread, open, onOpenChange, handle, conta
               </div>
               {!thread.hidden && (
                 <div className="thread-sheet__group" role="group" aria-label="Actions">
+                  {!renaming && <SheetItem id="rename" icon={PencilSimpleIcon} onClick={() => startRename(machine.id, thread.id)}>Rename</SheetItem>}
                   {!thread.archived && (
                     <SheetItem id="pin" icon={PushPinIcon} onClick={() => run(pinned ? 'thread.unpin' : 'thread.pin', { machine: machine.id, thread: thread.id }, {})}>
                       {pinned ? 'Unpin' : 'Pin'}

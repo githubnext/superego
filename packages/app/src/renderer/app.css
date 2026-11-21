@@ -652,17 +652,21 @@ button.app__mobiletitle > svg { flex: none; color: var(--superego-faint); }
    as the sidebar's drawer does. */
 .app__scrim--sheet { z-index: 30; opacity: calc(1 - var(--drawer-swipe-progress, 0)); transition: opacity .4s cubic-bezier(.32, .72, 0, 1); }
 .app__scrim--sheet:is([data-starting-style], [data-ending-style]) { opacity: 0; }
-.app__sheet { position: fixed; inset: 0; z-index: 31; display: flex; flex-direction: column; justify-content: flex-end; }
-.thread-sheet { max-height: 85dvh; overflow: auto; overscroll-behavior: contain; outline: none; padding: var(--superego-space-2) var(--superego-space-2) calc(env(safe-area-inset-bottom) + var(--superego-space-2)); background: var(--superego-raised); border-radius: 14px 14px 0 0; box-shadow: var(--superego-shadow-float); display: flex; flex-direction: column; font-size: var(--superego-text-ui);
+/* As tall as what's visible (viewport.ts): above the keyboard while the title is edited in it. */
+.app__sheet { position: fixed; inset: 0 0 auto; height: var(--superego-viewport-height, 100dvh); z-index: 31; display: flex; flex-direction: column; justify-content: flex-end; }
+.thread-sheet { max-height: calc(var(--superego-viewport-height, 100dvh) * .85); overflow: auto; overscroll-behavior: contain; outline: none; padding: var(--superego-space-2) var(--superego-space-2) calc(env(safe-area-inset-bottom) + var(--superego-space-2)); background: var(--superego-raised); border-radius: 14px 14px 0 0; box-shadow: var(--superego-shadow-float); display: flex; flex-direction: column; font-size: var(--superego-text-ui);
   transform: translate3d(0, var(--drawer-swipe-movement-y, 0px), 0); transition: transform .4s cubic-bezier(.32, .72, 0, 1); will-change: transform; }
 .thread-sheet:is([data-starting-style], [data-ending-style]) { transform: translate3d(0, calc(100% + 24px), 0); }
 .thread-sheet[data-ending-style], .app__scrim--sheet[data-ending-style] { transition-duration: calc(var(--drawer-swipe-strength, 1) * 400ms); }
 .thread-sheet[data-swiping], .app__scrim--sheet[data-swiping] { transition-duration: 0s; }
+:root[data-keyboard] .thread-sheet { padding-bottom: var(--superego-space-2); }
 @media (prefers-reduced-motion: reduce) { .thread-sheet, .app__scrim--sheet { transition: none; } }
 /* A menu's: its title over a line, then its rows in groups, a line between; a row a finger high, its icon, what it says
    and a detail at its end (thread-sheet.tsx). */
 .thread-sheet__head { padding: 6px 10px 8px; min-width: 0; }
 .thread-sheet__title { font-weight: 600; overflow: hidden; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.thread-sheet__field { display: block; width: calc(100% + 14px); margin: -3px -7px 2px; padding: 2px 6px; font: inherit; font-weight: 600; color: inherit; border: 1px solid var(--superego-field-edge); border-radius: 6px; background: var(--superego-field-bg); outline: none; }
+.thread-sheet__field:focus { box-shadow: var(--superego-focus); }
 .thread-sheet__project { font-size: var(--superego-text-xs); color: var(--superego-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .thread-sheet__group { padding: 4px 0; border-top: 1px solid var(--superego-border); }
 .thread-sheet__group:not(:has(> :not([hidden]))) { display: none; }

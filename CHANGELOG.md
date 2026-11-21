@@ -36,8 +36,9 @@
 - On an iPhone, text in the app is one size again: Safari no longer enlarges some rows (a wave's title on the board, a
   long line) and not others.
 - On a phone, the page no longer zooms or scrolls as a whole, and the composer stays in view, right on top of the keyboard.
-- On a phone, the thread's sheet (tap its title) is a plain menu: a row each for its model and other details, Pin,
-  Archive or Unarchive, and the panes to open beside it, each with its icon, sized for a finger.
+- On a phone, the thread's sheet (tap its title) is a plain menu: a row each for its model and other details, Rename
+  (the title at its top becomes a field), Pin, Archive or Unarchive, and the panes to open beside it, each with its
+  icon, sized for a finger.
 
 ## 0.1.9
 

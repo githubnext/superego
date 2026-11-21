@@ -75,8 +75,13 @@ export function ThreadTitle({ machine, thread }: { machine: MachineEntry; thread
   )
 }
 
-/** The title, editable: ⏎ (or leaving it) renames the thread, esc leaves it as it was. */
-function TitleField({ machine, thread }: { machine: MachineEntry; thread: ThreadInfo }) {
+/**
+ * The title, editable: ⏎ (or leaving it) renames the thread, esc leaves it as it was. In the title bar, and in a phone's
+ * thread sheet (`className`, `source`, and `onEnter` to close it).
+ */
+export function TitleField({ machine, thread, className = 'titlebar__field', source = 'titlebar', onEnter }: {
+  machine: MachineEntry; thread: ThreadInfo; className?: string; source?: string; onEnter?(): void
+}) {
   const dispatch = useRegistry().router.dispatch
   const done = useRef(false)
   const finish = (title: string | undefined) => {
@@ -84,13 +89,13 @@ function TitleField({ machine, thread }: { machine: MachineEntry; thread: Thread
     done.current = true
     stopRename()
     const next = title?.trim()
-    if (next && next !== thread.title) void dispatch('thread.rename', { thread: thread.id, title: next }, { machine: machine.id, source: 'titlebar' }).catch((error) => console.error(error))
+    if (next && next !== thread.title) void dispatch('thread.rename', { thread: thread.id, title: next }, { machine: machine.id, source }).catch((error) => console.error(error))
   }
   return (
-    <input className="titlebar__field" aria-label="Thread title" defaultValue={thread.title} autoFocus spellCheck={false}
+    <input className={className} aria-label="Thread title" defaultValue={thread.title} autoFocus spellCheck={false}
       onFocus={(e) => e.currentTarget.select()} onBlur={(e) => finish(e.currentTarget.value)}
       onKeyDown={(e) => {
-        if (e.key === 'Enter') { e.preventDefault(); finish(e.currentTarget.value) }
+        if (e.key === 'Enter') { e.preventDefault(); finish(e.currentTarget.value); onEnter?.() }
         if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); finish(undefined) }
       }} />
   )
