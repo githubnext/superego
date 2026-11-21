@@ -7,11 +7,15 @@ has been posted: whether and when is the user's call.
 ## Where it is
 
 - Cached clone: `~/.cache/checkouts/github.com/earendil-works/pi`.
-- **`durable-agent-runner`**: one commit on `origin/main` (as of 780bf31fc), the branch to offer. `npm run check` and
-  pi-durable's suites (`vitest --run`, with `PI_DURABLE_DOCUMENT_RETENTION_MS=0`, the store and workerd configs) pass.
-- **`durable-agent-runner-1.6`**: the same commit on `v1.6.0`. Superego's patch is built from it: `npm run build` in
+- **`durable-agent-runner`**: two commits on `origin/main` (as of 780bf31fc), the branch to offer. `npm run check` and
+  pi-durable's suites (`vitest --run`, with `PI_DURABLE_DOCUMENT_RETENTION_MS=0`, the store and workerd configs) pass
+  on the first. The second (2026-11-21), `placeSteers()`, for a runner to take steers mid-turn, wasn't built or run
+  there (this Mac has no install of pi's dependencies): its `dist/` twin is in Superego's patch, tested by
+  `packages/daemon/test/agent-kind.test.ts`. Build and test it before offering it.
+- **`durable-agent-runner-1.6`**: the same commits on `v1.6.0`. Superego's patch is built from it: `npm run build` in
   `packages/durable`, then the diff of `dist/` against the published 1.6.0 tarball (only `harness/agent.js`,
-  `harness/generation.js`, `harness/generation.d.ts` and `harness/types.d.ts` differ; source maps left out). To
+  `harness/generation.js`, `harness/generation.d.ts`, `harness/types.d.ts`, `index.js` and `index.d.ts` differ; source
+  maps left out). To
   rebuild the patch for a later pi, rebase this branch onto that tag and diff again.
 
 ## Before a PR: an issue

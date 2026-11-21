@@ -469,10 +469,23 @@ const MODEL_FROM: Record<NonNullable<ThreadInfo['modelFrom']>, (thread: ThreadIn
 }
 
 /**
- * What the model's card says: the model, then whose it is, how hard it thinks, whose choice it is, and what the thread
- * has spent.
+ * What the model's card says: the model, then whose it is, how hard it thinks, whose choice it is, how full its context
+ * is, and what the thread has spent. A thread of another kind of agent (Claude Agent) says so in a line under the model
+ * ("high · runs your Claude Code"), and no cost: its agent isn't billed by the token.
  */
-export function modelCard(thread: ThreadInfo): { title: string; rows: [string, string][] } {
+export function modelCard(thread: ThreadInfo): { title: string; line?: string; rows: [string, string][] } {
+  const context: [string, string][] = thread.context ? [['Context', contextSaid(thread.context)]] : []
+  if (thread.agent) {
+    const line = [thread.thinking, thread.agent.about].filter(Boolean).join(' · ')
+    return {
+      title: thread.model ?? thread.agent.title,
+      ...(line ? { line } : {}),
+      rows: [
+        ...thread.modelFrom ? [['Chosen by', MODEL_FROM[thread.modelFrom](thread)] as [string, string]] : [],
+        ...context,
+      ],
+    }
+  }
   if (!thread.model) return { title: 'No model yet', rows: thread.cost ? [['Cost', `$${thread.cost.toFixed(2)}`]] : [] }
   return {
     title: thread.model,
@@ -480,9 +493,16 @@ export function modelCard(thread: ThreadInfo): { title: string; rows: [string, s
       ...thread.provider ? [['Provider', providerOf(thread.provider)] as [string, string]] : [],
       ['Thinking', thread.thinking ?? 'off'],
       ...thread.modelFrom ? [['Chosen by', MODEL_FROM[thread.modelFrom](thread)] as [string, string]] : [],
+      ...context,
       ['Cost', `$${(thread.cost ?? 0).toFixed(2)}`],
     ],
   }
+}
+
+/** How full a context is: "12% · 120k of 1M". */
+export function contextSaid({ tokens, max }: { tokens: number; max: number }) {
+  const short = (n: number) => n >= 1_000_000 ? `${+(n / 1_000_000).toFixed(1)}M` : n >= 1000 ? `${Math.round(n / 1000)}k` : String(n)
+  return `${max ? Math.round((tokens / max) * 100) : 0}% · ${short(tokens)} of ${short(max)}`
 }
 
 /** The model's row in the title bar's ··· menu, when there's no room for its button. */
@@ -502,6 +522,7 @@ export function ModelButton({ thread }: { thread: ThreadInfo }) {
     <HoverCard side="bottom" className="threads-model-card" card={
       <>
         <div className="threads-model-card__name">{card.title}</div>
+        {card.line && <div className="threads-model-card__line">{card.line}</div>}
         {card.rows.length > 0 && <dl>{card.rows.map(([label, value]) => <Fragment key={label}><dt>{label}</dt><dd>{value}</dd></Fragment>)}</dl>}
         {keys && <div className="threads-model-card__keys">Thread details <kbd>{keys}</kbd></div>}
       </>
@@ -550,6 +571,7 @@ function DetailsPane({ machine, thread }: { machine: MachineEntry; thread: Threa
         <dt>Machine</dt><dd>{machine.label}</dd>
         <dt>Folder</dt><dd>{thread.cwd.replace(/^\/(?:Users|home)\/[^/]+(?=\/|$)/, '~')}</dd>
         {thread.model && <><dt>Model</dt><dd>{thread.model}</dd></>}
+        {thread.context && <><dt>Context</dt><dd>{contextSaid(thread.context)}</dd></>}
         <dt>Started</dt><dd>{time(thread.createdAt)}</dd>
         <dt>Active</dt><dd>{ago(thread.activeAt)}</dd>
         {thread.cost !== undefined && <><dt>Cost</dt><dd>${thread.cost.toFixed(2)}</dd></>}

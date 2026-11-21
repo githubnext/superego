@@ -66,6 +66,10 @@ export type MockAnthropic = {
   requests: MockRequest[]
   /** The next "Wait" answer once it has started: `dropped` resolves when `claude` drops it (stopped). */
   held(): Promise<{ dropped: Promise<void> }>
+  /** Headers every answer carries from now on: the plan's rate limits, as Anthropic's API reports them. */
+  headers: Record<string, string>
+  /** Refuse every request from now on, as the API does once a plan's limit is reached (a 429 with these headers). */
+  refuse: false | Record<string, string>
   close(): Promise<void>
 }
 
@@ -77,6 +81,7 @@ export async function mockAnthropic(): Promise<MockAnthropic> {
   let taken = 0
   const sse = (res: ServerResponse, event: string, data: unknown) => res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`)
   const open = new Set<ServerResponse>()
+  const mock = { requests, headers: {}, refuse: false } as unknown as MockAnthropic
 
   async function handle(req: IncomingMessage, res: ServerResponse) {
     let body = ''
@@ -84,6 +89,11 @@ export async function mockAnthropic(): Promise<MockAnthropic> {
     const path = req.url ?? ''
     if (req.method !== 'POST' || !path.startsWith('/v1/messages') || path.includes('count_tokens')) {
       res.writeHead(404, { 'content-type': 'application/json' }).end(JSON.stringify({ type: 'error', error: { type: 'not_found_error', message: 'mock' } }))
+      return
+    }
+    if (mock.refuse) {
+      res.writeHead(429, { 'content-type': 'application/json', ...mock.headers, ...mock.refuse })
+        .end(JSON.stringify({ type: 'error', error: { type: 'rate_limit_error', message: 'Rate limited' } }))
       return
     }
     const request = JSON.parse(body) as { messages?: Message[]; tools?: { name: string }[]; stream?: boolean; model?: string; system?: string | { text?: string }[] }
@@ -109,10 +119,10 @@ export async function mockAnthropic(): Promise<MockAnthropic> {
       : { type: 'text', text: wait ? 'Working on it' : results.length ? `Done: ${resultText(results.at(-1)!)}` : `OK (mock saw ${messages.length} messages)` }
     const message = { id, type: 'message', role: 'assistant', model: request.model, content: [reply], stop_reason: reply.type === 'tool_use' ? 'tool_use' : 'end_turn', stop_sequence: null, usage: { input_tokens: 10, output_tokens: 5 } }
     if (!request.stream) {
-      res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(message))
+      res.writeHead(200, { 'content-type': 'application/json', ...mock.headers }).end(JSON.stringify(message))
       return
     }
-    res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache' })
+    res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache', ...mock.headers })
     sse(res, 'message_start', { type: 'message_start', message: { ...message, content: [], stop_reason: null, usage: { input_tokens: 10, output_tokens: 0 } } })
     if (reply.type === 'text') {
       sse(res, 'content_block_start', { type: 'content_block_start', index: 0, content_block: { type: 'text', text: '' } })
@@ -144,7 +154,7 @@ export async function mockAnthropic(): Promise<MockAnthropic> {
   })
   await new Promise<void>((r) => server.listen(0, '127.0.0.1', r))
   const { port } = server.address() as AddressInfo
-  return {
+  Object.assign(mock, {
     url: `http://127.0.0.1:${port}`,
     requests,
     async held() {
@@ -152,5 +162,6 @@ export async function mockAnthropic(): Promise<MockAnthropic> {
       return holds[taken++]!
     },
     close: () => new Promise<void>((r) => { for (const res of open) res.destroy(); server.close(() => r()) }),
-  }
+  })
+  return mock
 }

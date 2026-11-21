@@ -176,6 +176,8 @@ export function createThreads(host: Host, { harness, extensions, profiles }: { h
     ...(m.meta.hidden ? { hidden: true, ...(m.meta.owner ? { owner: m.meta.owner } : {}) } : {}),
     ...(m.meta.parent ? { parent: m.meta.parent } : {}),
     ...(without.size ? { without: [...without].sort() } : {}),
+    // A thread of another kind of agent: what it runs on, as its kind says.
+    ...extensions.kindInfoOf(id, m.meta, without),
     status: deriveStatus({ live: m.live, lastEntryId: lastAnswer(m), seen: m.meta.seen, ...extensions.blockedOf(id, without, m.meta), ...signInOf(id, m), ...(m.recap ? { recap: m.recap } : {}) }),
   })
   /** What a thread's last run did, in a line: its extensions' recap of it (those it doesn't go without), else its answer's first sentence. */

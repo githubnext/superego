@@ -18,8 +18,22 @@ it("says the model, its provider, thinking, whose choice it is and what it's cos
   expect(own.rows).toEqual([['Provider', 'deepseek'], ['Thinking', 'off'], ['Chosen by', 'This thread'], ['Cost', '$0.00']])
   const profiled = modelCard(testThread({ ...opus, profile: { name: 'reviewer', scope: 'user', dir: '/p' }, modelFrom: 'profile' }))
   expect(profiled.rows).toContainEqual(['Chosen by', 'Profile reviewer'])
+  // How full its context is, when its agent says.
+  expect(modelCard(testThread({ ...opus, context: { tokens: 120_000, max: 1_000_000 } })).rows).toContainEqual(['Context', '12% · 120k of 1M'])
   // Before its first turn, nothing to say but that.
   expect(modelCard(testThread({ id: '2', title: 't' }))).toEqual({ title: 'No model yet', rows: [] })
+})
+
+it('says what a Claude Agent thread runs on: its model and effort, and that it runs your Claude Code, with no cost', async () => {
+  const claude = testThread({
+    id: '4', title: 't', model: 'Claude Opus', provider: 'anthropic', thinking: 'high', modelFrom: 'thread',
+    agent: { kind: 'claude-agent', title: 'Claude Agent', about: 'runs your Claude Code' }, context: { tokens: 48_000, max: 200_000 },
+  })
+  expect(modelCard(claude)).toEqual({ title: 'Claude Opus', line: 'high · runs your Claude Code', rows: [['Chosen by', 'This thread'], ['Context', '24% · 48k of 200k']] })
+  const drawn = await ui.render({ view: 'threads.model', place: 'header', thread: claude })
+  expect(drawn.find('.threads-model svg')?.getAttribute('aria-label')).toBe('Anthropic')
+  expect(drawn.find('.threads-model')?.getAttribute('aria-label')).toBe('Claude Opus: show thread details')
+  await drawn.unmount()
 })
 
 it("shows the provider's mark, not the model's name; a sparkle for a provider without one", async () => {

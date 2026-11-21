@@ -93,7 +93,10 @@ export async function checkClaude(executable: string, env: Record<string, string
 /** The message for a machine without `claude`. */
 export const NOT_INSTALLED = 'Claude Code isn\'t installed on this machine: see code.claude.com'
 
+/** Whether Claude Code's error says it isn't signed in. */
+export const signedOut = (error: string) => /not logged in|please run \/login/i.test(error)
+
 /** Claude Code's own error, said with what to do about it when it's one the user fixes in Claude Code. */
 export function explain(error: string) {
-  return /not logged in/i.test(error) ? 'Not logged in · run `claude` and `/login`' : error
+  return signedOut(error) ? 'Not logged in · run `claude` and `/login`' : error
 }

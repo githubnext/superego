@@ -31,8 +31,9 @@
 # - `providers`: Settings → Providers (signed in, added, searched, the add form), Favourite models, ⌘N's model menu.
 # - `setup`: first-run setup on a fresh home with no model: what it finds (a stand-in Ollama and `claude`), a key's
 #   field, a composer's card when sending failed, a model saying hi, Claude Code used.
-# - `claude-agent`: a Claude Agent thread waiting on a permission, Settings → Claude Agent, and ⌘N's model menu with its
-#   group (needs `claude` installed; nothing is signed in or spent).
+# - `claude-agent`: a Claude Agent thread waiting on a permission, its model card, the plan's limit noted, a thread
+#   waiting for Claude Code to be signed in, Settings → Claude Agent, and ⌘N's model menu with its group (needs `claude`
+#   installed; nothing is signed in or spent).
 # - `themes`: code in a message, the editor and the terminal under Superego's theme and four built-in pairs, light and
 #   dark, and Settings → Appearance's theme pickers.
 set -e
@@ -65,8 +66,18 @@ if [ "$2" = claude-agent ]; then
   CLAUDE="$(command -v claude || true)"
   [ -n "$CLAUDE" ] || { echo "look.sh claude-agent: needs claude (Claude Code) installed" >&2; exit 1; }
   mkdir -p "$SUPEREGO_HOME/bin" "$SUPEREGO_HOME/profiles/claude"
-  # Its sign-in, as Settings tells it, a plan's (it's the stand-in's API key that really answers).
-  printf '#!/bin/sh\n[ "$1 $2" = "auth status" ] && { echo %s; exit 0; }\nexec env ANTHROPIC_BASE_URL="$(cat "%s/claude-mock-url")" ANTHROPIC_API_KEY=sk-ant-api03-look CLAUDE_CONFIG_DIR="%s/claude-config" CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1 "%s" "$@"\n' "'{\"loggedIn\":true,\"authMethod\":\"claude.ai\",\"subscriptionType\":\"max\"}'" "$SUPEREGO_HOME" "$SUPEREGO_HOME" "$CLAUDE" > "$SUPEREGO_HOME/bin/claude"
+  # Its sign-in, as Settings tells it, a plan's (it's the stand-in's API key that really answers); signed out while
+  # $SUPEREGO_HOME/claude-signed-out is there. What $SUPEREGO_HOME/claude-inject holds goes out after Claude Code's next
+  # `system:init` (the plan's limits, which Claude Code reports only on a plan's sign-in).
+  cat > "$SUPEREGO_HOME/bin/claude" <<EOF
+#!/bin/sh
+if [ -f "$SUPEREGO_HOME/claude-signed-out" ]; then
+  [ "\$1 \$2" = "auth status" ] && { echo '{"loggedIn":false,"authMethod":"none"}'; exit 0; }
+  exec env ANTHROPIC_BASE_URL="\$(cat "$SUPEREGO_HOME/claude-mock-url")" CLAUDE_CONFIG_DIR="$SUPEREGO_HOME/claude-config" CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1 "$CLAUDE" "\$@"
+fi
+[ "\$1 \$2" = "auth status" ] && { echo '{"loggedIn":true,"authMethod":"claude.ai","subscriptionType":"max"}'; exit 0; }
+env ANTHROPIC_BASE_URL="\$(cat "$SUPEREGO_HOME/claude-mock-url")" ANTHROPIC_API_KEY=sk-ant-api03-look CLAUDE_CONFIG_DIR="$SUPEREGO_HOME/claude-config" CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1 "$CLAUDE" "\$@" | "$(command -v node)" "$PWD/../extensions/claude-agent/test/inject.mjs" "$SUPEREGO_HOME/claude-inject"
+EOF
   chmod +x "$SUPEREGO_HOME/bin/claude"
   echo "export default { agent: 'claude-agent' }" > "$SUPEREGO_HOME/profiles/claude/profile.ts"
   export SUPEREGO_CLAUDE="$SUPEREGO_HOME/bin/claude"

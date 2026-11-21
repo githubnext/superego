@@ -4,7 +4,7 @@ import { afterEach, expect, it } from 'vitest'
 import { fakeMachine, mountUi, testThread, type TestWindow } from '@superego/sdk/testing'
 import claudeAgent from '../src/ui.tsx'
 import { choicesOf } from '../src/approval.tsx'
-import { about, ALLOW, ANSWER, KEPT, WAITING, type Approval, type ProjectFacts, type SubagentSteps } from '../src/shared.ts'
+import { about, ALLOW, ANSWER, CHECK, KEPT, LIMIT, SIGNED_OUT, TERMINAL, WAITING, type Approval, type ProjectFacts, type SubagentSteps } from '../src/shared.ts'
 
 const thread = testThread({ id: '1' })
 let ui: TestWindow | undefined
@@ -44,6 +44,38 @@ it('offers no "always" where Claude Code offers none, and shows a plan to approv
   expect(choicesOf(plan).map((c) => c.label)).toEqual(['Approve plan', 'Keep planning'])
   await drawn.click('Keep planning')
   expect(machine.calls.find((c) => c.method === 'action.run')?.params).toMatchObject({ id: ANSWER, params: { id: 'toolu_2', choice: 'deny' } })
+})
+
+it("says Claude Code isn't signed in, opening a terminal beside the thread to sign in, and looking again", async () => {
+  const machine = fakeMachine({
+    extensions: ['claude-agent'], threads: [thread], values: { [SIGNED_OUT]: { [thread.id]: true } } as never,
+    methods: { 'action.run': ({ id }: { id: string }) => id === CHECK ? { installed: true, path: '/bin/claude', loggedIn: false } : { id: 'p1' } } as never,
+  })
+  ui = await mountUi({ extensions: [claudeAgent], machines: [machine] })
+  const drawn = await ui.render({ slot: 'composer.above', thread: thread.id })
+  expect(drawn.text()).toContain('Claude Code isn’t signed in.')
+  await drawn.click('Open a terminal')
+  expect(machine.calls.find((c) => c.method === 'action.run')?.params).toMatchObject({ id: TERMINAL, params: { thread: thread.id } })
+  await drawn.click('Check again')
+  await ui.until(() => drawn.text().includes('Still not signed in.'), 'the look')
+})
+
+it('notes the plan\'s limit in a Claude Agent thread while Claude Code says it is near, and not once it reset', async () => {
+  const claude = testThread({ id: '2', agent: { kind: 'claude-agent', title: 'Claude Agent' } })
+  const resetsAt = Date.now() + 3 * 3600_000
+  const limit = { status: 'allowed_warning', type: 'five_hour', utilization: 0.8, resetsAt }
+  const machine = fakeMachine({ extensions: ['claude-agent'], threads: [claude, thread], values: { [LIMIT]: limit } as never })
+  ui = await mountUi({ extensions: [claudeAgent], machines: [machine] })
+  const drawn = await ui.render({ slot: 'composer.above', thread: claude.id })
+  expect(drawn.find('.claude-agent-limit')?.textContent).toMatch(/^5-hour limit 80% used, resets \S+/)
+  // Not in a thread of Superego's own.
+  const other = await ui.render({ slot: 'composer.above', thread: thread.id })
+  expect(other.find('.claude-agent-limit')).toBeNull()
+  await other.unmount()
+  await drawn.unmount()
+  machine.setValue(LIMIT, { ...limit, resetsAt: Date.now() - 1000 })
+  const after = await ui.render({ slot: 'composer.above', thread: claude.id })
+  expect(after.find('.claude-agent-limit')).toBeNull()
 })
 
 it("draws a subagent's steps under its Agent call, and how it stands", async () => {

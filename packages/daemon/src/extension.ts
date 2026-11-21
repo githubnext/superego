@@ -280,6 +280,38 @@ export type AgentKind = {
    * makes it when it isn't there yet (`make`). Without it, such a thread needs a profile of this kind named.
    */
   profile?: { name: string; make(): Promise<void> }
+  /**
+   * What a thread of this kind runs on, where its model shows (the title bar's model card, its card in the sidebar):
+   * asked as its info is made, so quick, from what's at hand (the thread's own choice, its profile's, this extension's
+   * state with it). Nothing: it shows no model.
+   */
+  describe?(thread: AgentKindThread): AgentKindDescription | undefined
+}
+
+/** A thread of an agent kind, as its `describe` sees it. */
+export type AgentKindThread = {
+  id: string
+  /** Its own model and thinking, as picked (`<kind>/<model>`). */
+  model?: string
+  thinking?: string
+  /** Its profile's spec, once loaded. */
+  profile?: Record<string, unknown>
+  /** This extension's state with it. */
+  state?: Json
+}
+
+/** What a thread of an agent kind runs on, as said: see `AgentKind.describe`. */
+export type AgentKindDescription = {
+  /** The model, as said ("Claude Opus"). */
+  model: string
+  /** Whose it is: a pi-ai provider id (`anthropic`), for its mark. */
+  provider?: string
+  /** How hard it thinks (`high`). */
+  thinking?: string
+  /** What the kind says of itself there, in a few words ("runs your Claude Code"). */
+  about?: string
+  /** How full its context is: the tokens in it, of how many fit. */
+  context?: { tokens: number; max: number }
 }
 
 /** An extension of the app's here (the core's, a bundled one or a window's; not a profile's), as `extensions()` lists it. */

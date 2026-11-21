@@ -42,6 +42,16 @@
   on which plan), with Open a terminal to sign in with Claude Code's own `/login`. It also sets the permission mode
   threads start in, and how many Claude Agent threads work at once (3); the rest wait their turn, saying so.
 - Claude Agent threads on another machine run that machine's Claude Code, with its sign-in.
+- A Claude Agent thread keeps its Claude Code running while you use it, so turns start sooner, and a message you send
+  now (Send now) reaches Claude Code mid-turn. After a few idle minutes it stops, and the next turn picks up the
+  session again.
+- Files and images you attach reach a Claude Agent thread's Claude Code: images as images, other files by their path.
+- A Claude Agent thread's model card shows its model and effort ("Claude Opus · high · runs your Claude Code") and
+  how full its context is; the thread says when Claude Code compacts the conversation.
+- When your Claude Code warns that a plan limit is near, its threads say so above the message box ("5-hour limit 80%
+  used, resets 2:10 PM"); a turn refused for a limit fails saying which limit and when it resets.
+- A Claude Agent thread whose Claude Code isn't signed in waits for it, with Open a terminal and Check again above the
+  message box, and goes on once Claude Code is signed in.
 - Skills in `.claude/skills` folders below a Claude Agent thread's folder count as the folder's own settings: they load
   only once you allow them, and a new or changed one asks again.
 - Claude Agent threads no longer load a folder's own Claude Code settings (`.claude/`, `.mcp.json`), whose hooks and

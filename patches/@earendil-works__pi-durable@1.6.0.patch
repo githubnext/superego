@@ -22,10 +22,20 @@ index 524ff50a1c555fdbc4e2dbf6a56de11b5b74b67b..97a7f30e1e8df87b1dd01250859aaa60
      return agent;
  }
 diff --git a/dist/harness/generation.d.ts b/dist/harness/generation.d.ts
-index ed1f22bfb64bbecaafed01395467919530ca54af..66c64ab7e30330d8f559bf665cc71a9fd495a639 100644
+index ed1f22bfb64bbecaafed01395467919530ca54af..c1761f002e0ef91c32a74e40185d402583c9a3db 100644
 --- a/dist/harness/generation.d.ts
 +++ b/dist/harness/generation.d.ts
-@@ -65,6 +65,10 @@ export type GenerationCheckpoint = {
+@@ -3,7 +3,8 @@ import type { DeferredHandle, ModelThinkingLevel } from "@earendil-works/pi-ai";
+ import type { ConversationId, EntryId, SubmissionId, Task, TaskId, Tx } from "../types.ts";
+ import { type LiveState } from "./live.ts";
+ import { type ToolTaskResult } from "./tool.ts";
+-import type { CompactionResult, ConversationStreamOptions, GenerationHooks, ModelRef, RunSummary } from "./types.ts";
++import type { CompactionResult, ConversationStreamOptions, GenerationHooks, ModelRef, RunSummary, UserInput } from "./types.ts";
++import type { QueueModes } from "./inbox.ts";
+ export type GenerationInput = Record<string, never>;
+ export type GenerationCheckpoint = {
+     phase: "prepare";
+@@ -65,6 +66,10 @@ export type GenerationCheckpoint = {
       */
      phase: "finish";
      run: RunSummary;
@@ -36,7 +46,7 @@ index ed1f22bfb64bbecaafed01395467919530ca54af..66c64ab7e30330d8f559bf665cc71a9f
  } | {
      /** Waiting on the tasks `afterRun` hooks asked for, which the generation owns; then the run ends. */
      phase: "drain";
-@@ -93,7 +97,8 @@ export type GenerationResult = {
+@@ -93,7 +98,8 @@ export type GenerationResult = {
  };
  /**
   * Built-in generation task: prepares the positional system prompt and tool loadout, requests or polls the model,
@@ -46,8 +56,28 @@ index ed1f22bfb64bbecaafed01395467919530ca54af..66c64ab7e30330d8f559bf665cc71a9f
   */
  export declare const GenerationTask: Task<GenerationInput, GenerationCheckpoint, GenerationResult, GenerationHooks>;
  /**
+@@ -114,4 +120,18 @@ export declare function startRun(tx: Tx, conversationId: ConversationId, live: D
+ }): Promise<void>;
+ /** Hand run control from `from` to `to`; the run's inputs move with it. */
+ export declare function handOver(live: Draft<LiveState>, from: TaskId, to: TaskId): void;
++/** A steer `placeSteers()` placed: its submission and the input it carries. */
++export type PlacedSteer = {
++    readonly submission: SubmissionId;
++    readonly content: UserInput;
++};
++/**
++ * Place the steers queued for the conversation's run now, from its runner (`AgentState.runner`): a boundary inside the
++ * runner's turn, as between a model's tool rounds. It places every queued write and the first or all steers
++ * (`steeringMode`), which join the run's inputs and settle with its answer. Follow-ups wait for the run's end; so does
++ * everything while a reset is queued (it would end the run's context) or the conversation has no run. Returns the steers
++ * placed, in order, for the runner to pass on to the agent it drives. Call it first in the commit: a boundary's reads
++ * precede the commit's first table write.
++ */
++export declare function placeSteers(tx: Tx, conversationId: ConversationId, modes: QueueModes, now: number): Promise<PlacedSteer[]>;
+ //# sourceMappingURL=generation.d.ts.map
+\ No newline at end of file
 diff --git a/dist/harness/generation.js b/dist/harness/generation.js
-index 56f3055ab58e51d429f91c90c9286531f3086106..3d998586b4a527e66ae75487284be6e22f09a78d 100644
+index 56f3055ab58e51d429f91c90c9286531f3086106..98c0d0b26b490be094bd19c3eb8cc0a877190cf4 100644
 --- a/dist/harness/generation.js
 +++ b/dist/harness/generation.js
 @@ -18,15 +18,17 @@ import { optionalExtension } from "./util.js";
@@ -108,7 +138,7 @@ index 56f3055ab58e51d429f91c90c9286531f3086106..3d998586b4a527e66ae75487284be6e2
      await runtime.commit(async (tx) => {
          const failure = await prepareFailure(tx, runtime);
          const live = await tx.doc(LiveDoc, runtime.conversationId);
-@@ -487,6 +505,72 @@ async function failNoModel(runtime, ref, context) {
+@@ -487,6 +505,94 @@ async function failNoModel(runtime, ref, context) {
          return { status: "terminal", outcome: { status: "failed", error: { message, detail: { reason: "no_model" } } } };
      }, context);
  }
@@ -178,6 +208,28 @@ index 56f3055ab58e51d429f91c90c9286531f3086106..3d998586b4a527e66ae75487284be6e2
 +        };
 +    }, context);
 +}
++/**
++ * Place the steers queued for the conversation's run now, from its runner (`AgentState.runner`): a boundary inside the
++ * runner's turn, as between a model's tool rounds. It places every queued write and the first or all steers
++ * (`steeringMode`), which join the run's inputs and settle with its answer. Follow-ups wait for the run's end; so does
++ * everything while a reset is queued (it would end the run's context) or the conversation has no run. Returns the steers
++ * placed, in order, for the runner to pass on to the agent it drives. Call it first in the commit: a boundary's reads
++ * precede the commit's first table write.
++ */
++export async function placeSteers(tx, conversationId, modes, now) {
++    const boundary = await prepareBoundary(tx, conversationId, modes);
++    const live = await tx.doc(LiveDoc, conversationId);
++    const items = boundary.inbox.items;
++    if (live.run === undefined || hasQueuedReset(items) || !items.some((item) => item.mode === "steer"))
++        return [];
++    const steers = new Map();
++    for (const item of items)
++        if (item.mode === "steer")
++            steers.set(item.id, copyJson(item.content));
++    const { users } = await applyBoundary(tx, boundary, "postTools", now);
++    live.run.inputs.push(...users);
++    return users.map((submission) => ({ submission, content: steers.get(submission) }));
++}
  /** End the run without a request: its context has nothing the model would answer. */
  async function failNothingToAnswer(runtime, context) {
      const message = "The conversation has nothing to answer";
@@ -217,3 +269,29 @@ index 7ba2571ffb2594913c2dea1cc809f70da912b947..bff9073835b10f1eea94b1a29cd696cf
  };
  /**
   * Runs inside the creating commit, after the creation hook and the `agent` change. The conversation creation is already
+diff --git a/dist/index.d.ts b/dist/index.d.ts
+index 01315042a755c9225fd17cf5d31442e51c8afe81..588bdeb74593aeda01de912ea84ffa1d4f3057db 100644
+--- a/dist/index.d.ts
++++ b/dist/index.d.ts
+@@ -5,7 +5,7 @@ export { ConversationBusy, ConversationIdle, ReadAfterWrite, ReadOnlySession, Se
+ export { AgentDoc, configure, DEFAULT_COMPACTION_POLICY, DEFAULT_PROGRESS_POLICY, DEFAULT_RESTART_LIMIT, DEFAULT_RETRY_POLICY, } from "./harness/agent.ts";
+ export { type CompactionCheckpoint, type CompactionInput, CompactionTask, type SummaryRequest, } from "./harness/compaction.ts";
+ export { defineExtension, defineTool, hook, hookTask, section, wrapSection, wrapTool } from "./harness/define.ts";
+-export { type GenerationCheckpoint, type GenerationInput, type GenerationResult, GenerationTask, } from "./harness/generation.ts";
++export { type GenerationCheckpoint, type GenerationInput, type GenerationResult, GenerationTask, type PlacedSteer, placeSteers, } from "./harness/generation.ts";
+ export { DEFAULT_HARNESS_IDENTITY, Harness } from "./harness/harness.ts";
+ export { InboxDoc, type InboxItem, type InboxState } from "./harness/inbox.ts";
+ export { type CompactionFailure, type CompactionStatus, LiveDoc, type LiveRun, type LiveState, type NestedToolSlot, type NestedToolSummary, type RunFailure, type RunFailureReason, type ToolSlot, } from "./harness/live.ts";
+diff --git a/dist/index.js b/dist/index.js
+index 44f61dbb91df94b18dfffd7180be7be6aa185971..e8a4eb9c319c8a4828417499928c4f6186e4ea17 100644
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -4,7 +4,7 @@ export { ConversationBusy, ConversationIdle, ReadAfterWrite, ReadOnlySession, Se
+ export { AgentDoc, configure, DEFAULT_COMPACTION_POLICY, DEFAULT_PROGRESS_POLICY, DEFAULT_RESTART_LIMIT, DEFAULT_RETRY_POLICY, } from "./harness/agent.js";
+ export { CompactionTask, } from "./harness/compaction.js";
+ export { defineExtension, defineTool, hook, hookTask, section, wrapSection, wrapTool } from "./harness/define.js";
+-export { GenerationTask, } from "./harness/generation.js";
++export { GenerationTask, placeSteers, } from "./harness/generation.js";
+ export { DEFAULT_HARNESS_IDENTITY, Harness } from "./harness/harness.js";
+ export { InboxDoc } from "./harness/inbox.js";
+ export { LiveDoc, } from "./harness/live.js";

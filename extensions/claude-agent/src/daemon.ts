@@ -21,17 +21,19 @@
 import { existsSync } from 'node:fs'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { isAbsolute, join } from 'node:path'
+import { BACKGROUND_CONTEXT } from '@earendil-works/chord/context'
 import { defineAction, defineDaemonExtension } from '@superego/daemon'
 import { envName, lit, obj, opt, RpcError, str, threadEnv, union, type Json } from '@superego/protocol'
 import { AlwaysAllowed } from './always.ts'
 import { checkClaude, claudeEnv, findClaude, NOT_INSTALLED } from './claude.ts'
 import { Parallel } from './parallel.ts'
+import { ClaudeProcesses } from './session.ts'
 import { writePlugin } from './plugin.ts'
 import { projectConfig, ProjectAllowances } from './project.ts'
 import {
-  about, ALLOW, ANSWER, CHECK, CLAUDE, DEFAULT_MODES, EFFORTS, KEPT, MAKE_PROFILE, MODELS, optionsProblem, PARALLEL, PROFILE_KEY, PROFILE_NAME, SECTION,
-  SETTINGS, TERMINAL, WAITING,
-  type Answer, type ClaudeCheck, type Approval, type ClaudeAgentOptions, type Effort, type Kept, type PermissionMode, type ProjectFacts, type SubagentSteps,
+  about, ALLOW, ANSWER, CHECK, CLAUDE, modelLabel, DEFAULT_MODES, EFFORTS, KEPT, LIMIT, limitOf, MAKE_PROFILE, MODELS, optionsProblem, PARALLEL, PROFILE_KEY, PROFILE_NAME, SECTION,
+  SETTINGS, SIGN_IN, SIGNED_OUT, TERMINAL, WAITING,
+  type Answer, type ClaudeCheck, type Approval, type ClaudeAgentOptions, type Effort, type Kept, type Limit, type PermissionMode, type ProjectFacts, type SubagentSteps,
 } from './shared.ts'
 import { turnTask, type TurnHost } from './turn.ts'
 
@@ -43,6 +45,10 @@ const SAVE_MS = 250
 const CHECK_STALE_MS = 60_000
 /** The terminal extension's action that runs a program in a terminal pane (terminal.run). */
 const TERMINAL_RUN = 'terminal.run'
+/** How long a thread's Claude Code waits for its next turn before it goes. */
+const IDLE_MS = 5 * 60_000
+/** How often Claude Code is looked at again while threads wait for it to be signed in. */
+const SIGN_IN_POLL_MS = 30_000
 
 export type ClaudeAgentSetup = {
   /** Skill folders (each with a SKILL.md) Claude Code gets in every thread: the app's own `superego` skill. */
@@ -53,10 +59,12 @@ export type ClaudeAgentSetup = {
   env?: () => Record<string, string>
   /** For tests: the user's own Claude Code folder (otherwise `CLAUDE_CONFIG_DIR`, else `~/.claude`). */
   userConfig?: string
+  /** For tests: how long a thread's Claude Code waits for its next turn (otherwise 5 minutes). */
+  idleMs?: number
 }
 
 /** The daemon half. */
-export function claudeAgent({ skills = [], executable, env = () => claudeEnv(), userConfig }: ClaudeAgentSetup = {}) {
+export function claudeAgent({ skills = [], executable, env = () => claudeEnv(), userConfig, idleMs = IDLE_MS }: ClaudeAgentSetup = {}) {
   return defineDaemonExtension({
     ...about,
     async setup(superego) {
@@ -156,14 +164,25 @@ export function claudeAgent({ skills = [], executable, env = () => claudeEnv(), 
       const claude = superego.value<ClaudeCheck | null>(CLAUDE, null)
       let checked = 0
       let checking: Promise<ClaudeCheck> | undefined
-      /** Look at Claude Code here again (one look at a time): where it is, its version, whether it's signed in. */
-      const check = () => checking ??= (async (): Promise<ClaudeCheck> => {
+      let again: Promise<ClaudeCheck> | undefined
+      /**
+       * Look at Claude Code here again: where it is, its version, whether it's signed in. One look at a time: asked
+       * while one goes on, the next starts after it (it may have started before what's asked about, a sign-in).
+       */
+      const check = (): Promise<ClaudeCheck> => {
+        if (!checking) return lookNow()
+        return again ??= checking.catch(() => undefined).then(() => { again = undefined; return check() })
+      }
+      const lookNow = () => checking = (async (): Promise<ClaudeCheck> => {
         try {
           const path = await (executable ?? (() => findClaude(given)))()
           const now: ClaudeCheck = path ? { installed: true, path, ...await checkClaude(path, env()) } : { installed: false }
           checked = Date.now()
           // Gone meanwhile (the daemon stopping): nobody to tell.
-          if (!superego.signal.aborted) claude.set(now as ClaudeCheck & Json)
+          if (!superego.signal.aborted) {
+            claude.set(now as ClaudeCheck & Json)
+            if (now.installed && now.loggedIn) void signedIn()
+          }
           return now
         } finally {
           checking = undefined
@@ -171,6 +190,49 @@ export function claudeAgent({ skills = [], executable, env = () => claudeEnv(), 
       })()
       // Looked at as the daemon starts, so the model menus have it.
       void check().catch((error: unknown) => console.error('Claude Agent: looking at Claude Code here failed:', error))
+
+      // ── Threads waiting for Claude Code to be signed in ─────────────────────────────────────────────────────────
+      // A turn that failed as Claude Code isn't signed in leaves its thread waiting for it (`kind: 'auth'`), with the
+      // way to sign in above its composer. Once a look finds it signed in (Settings, the card's "Check again", or every
+      // half minute while threads wait), each goes on where it failed. Kept in memory: after a restart, such a thread
+      // shows the turn's error instead.
+      const signedOut = superego.scopedValue<boolean>(SIGNED_OUT, false)
+      let polling: ReturnType<typeof setInterval> | undefined
+      const poll = () => {
+        if (signedOut.scopes().length && !polling) {
+          polling = setInterval(() => void check().catch((error: unknown) => console.error('Claude Agent: looking at Claude Code here failed:', error)), SIGN_IN_POLL_MS)
+          polling.unref?.()
+        } else if (!signedOut.scopes().length && polling) { clearInterval(polling); polling = undefined }
+      }
+      const waitForSignIn = (thread: string) => {
+        signedOut.set(thread, true)
+        superego.invalidate()
+        poll()
+      }
+      const stopWaiting = (thread: string) => {
+        if (!signedOut.get(thread)) return
+        signedOut.delete(thread)
+        superego.invalidate()
+        poll()
+      }
+      /** Claude Code is signed in now: the threads waiting for it go on. */
+      async function signedIn() {
+        for (const thread of signedOut.scopes()) {
+          stopWaiting(thread)
+          try {
+            await (await superego.threads.conversation(thread)).submit({ type: 'continue' }, BACKGROUND_CONTEXT)
+          } catch (error) {
+            console.error(`Claude Agent: going on with thread ${thread} once Claude Code was signed in failed:`, error)
+          }
+        }
+      }
+      superego.status((thread) => signedOut.get(thread) ? { kind: 'auth', msg: SIGN_IN } : undefined)
+
+      // ── The plan's limits, as the user's Claude Code reports them ────────────────────────────────────────────────
+      const limit = superego.value<Limit | null>(LIMIT, null)
+
+      // ── Each thread's Claude Code, kept running while it's in use ────────────────────────────────────────────────
+      const processes = new ClaudeProcesses()
 
       superego.action(defineAction({
         id: CHECK, title: 'Look at Claude Code here', runs: 'machine', expose: ['ui', 'cli'],
@@ -269,7 +331,9 @@ export function claudeAgent({ skills = [], executable, env = () => claudeEnv(), 
         // to say before its first turn what that turn would go without.
         starting(draft) { if (draft.profile?.spec.agent === 'claude-agent') return { state: {} } },
         async started(thread) { if (await kept.get(thread.id)) await look(thread.id, thread.cwd) },
-        archived(thread) { chosen.delete(thread.id) },
+        archived(thread) { chosen.delete(thread.id); processes.close(thread.id); stopWaiting(thread.id) },
+        // Sent to again (or going on): it no longer waits.
+        turnStart(thread) { stopWaiting(thread.id) },
       })
 
       superego.agentKind({
@@ -284,6 +348,21 @@ export function claudeAgent({ skills = [], executable, env = () => claudeEnv(), 
           return { title: about.title, description: 'Runs your Claude Code', models: MODELS.map((m) => ({ ...m, thinking: [...m.thinking] })), ...(unavailable ? { unavailable } : {}) }
         },
         profile: { name: PROFILE_NAME, make: makeProfile },
+        // Where its model shows: the model and effort it runs with, as picked, else its profile's, else Claude Code's own.
+        describe(thread) {
+          const own = thread.model?.startsWith(`${about.name}/`) ? thread.model.slice(about.name.length + 1) : undefined
+          const profile = thread.profile?.[PROFILE_KEY] as ClaudeAgentOptions | undefined
+          const state = thread.state as Kept | undefined
+          const picked = own ?? profile?.model
+          const effort = own ? thread.thinking : profile?.effort
+          return {
+            model: picked ? modelLabel(picked) : state?.model ?? "Claude Code's default",
+            provider: 'anthropic',
+            ...(effort ? { thinking: effort } : {}),
+            about: 'runs your Claude Code',
+            ...(state?.context ? { context: state.context } : {}),
+          }
+        },
         runner: turnTask('claude-agent.turn', {
           executable: executable ?? (() => findClaude(given)),
           // Marked with its thread, as a Superego thread's shell is: `superego` run there knows who's calling (see threadEnv).
@@ -302,12 +381,21 @@ export function claudeAgent({ skills = [], executable, env = () => claudeEnv(), 
           remember: (cwd, rules) => always.remember(cwd, rules),
           ask,
           subagent,
+          processes,
+          idleMs,
+          ran: (thread, { context, model }) => {
+            void kept.update(thread, (current) => ({ ...current, context, model }))
+              .then(() => superego.invalidate(), (error: unknown) => console.error(`Claude Agent: keeping thread ${thread}'s context usage failed:`, error))
+          },
+          limit: (info) => limit.set(limitOf(info) as Limit & Json),
+          signedOut: waitForSignIn,
         }),
       })
       // What's still to be saved is, before the daemon goes.
       return async () => {
         if (timer) clearTimeout(timer)
-        await save()
+        if (polling) clearInterval(polling)
+        await Promise.all([save(), processes.closeAll()])
       }
     },
   })

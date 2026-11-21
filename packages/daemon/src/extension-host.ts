@@ -8,7 +8,7 @@ import {
   type AgentKindMenu, type RpcPeer, type ThreadInfo,
 } from '@superego/protocol'
 import { registerExtensionSettings } from './extension-settings.ts'
-import type { AgentChoice, AgentKind, AgentPartsThread, DaemonApi, DaemonExtension, LiveValue, ScopedValue, SendTransform, StatusContribution, ThreadHooks, ToolCallRecord } from './extension.ts'
+import type { AgentChoice, AgentKind, AgentKindDescription, AgentPartsThread, DaemonApi, DaemonExtension, LiveValue, ScopedValue, SendTransform, StatusContribution, ThreadHooks, ToolCallRecord } from './extension.ts'
 import { clone, stateOf, type Host, type ThreadMeta } from './host.ts'
 import type { ProfileHost } from './profile-host.ts'
 import { CORE_KEYS, type LoadedProfile, type ProfileRef } from './profiles.ts'
@@ -121,7 +121,7 @@ export function createExtensionHost(host: Host, later: { profiles(): ProfileHost
    */
   const chosenParts = new Map<string, Map<string, Extension>>()
   /** The kinds of agent extensions run threads' turns with (`agentKind`): the runner task's name, and whose it is. */
-  const kinds = new Map<string, { runner: string; owner: string; title: string; menu?: AgentKind['menu']; profile?: AgentKind['profile'] }>()
+  const kinds = new Map<string, { runner: string; owner: string; title: string; menu?: AgentKind['menu']; profile?: AgentKind['profile']; describe?: AgentKind['describe'] }>()
   /**
    * The kinds of pane the agent can open from extensions' data views (a thread view that fits a pane and says what it
    * shows). The others are in what each extension is (`about.panes`).
@@ -209,6 +209,32 @@ export function createExtensionHost(host: Host, later: { profiles(): ProfileHost
     for (const { value, profiles } of described) if (profiles) kinds.set(value.kind, value.about)
     for (const [kind, about] of Object.entries(profile?.spec.panes ?? {})) kinds.set(kind, about)
     return [...kinds].map(([kind, about]) => ({ kind, about }))
+  }
+
+  /**
+   * What a thread of another kind of agent runs on, as its kind says (`describe`): its model, provider and thinking, the
+   * kind, and how full its context is. Nothing for Superego's own threads, or a kind that isn't here for it.
+   */
+  function kindInfoOf(id: string, meta: ThreadMeta, without: Set<string>): Pick<ThreadInfo, 'model' | 'provider' | 'thinking' | 'agent' | 'context'> {
+    const found = meta.agent ? kinds.get(meta.agent) : undefined
+    if (!meta.agent || !found || without.has(found.owner) || !offered().some((e) => e.name === found.owner)) return {}
+    const agent = { kind: meta.agent, title: found.title }
+    let said: AgentKindDescription | undefined
+    try {
+      said = found.describe?.({
+        id, ...(meta.model ? { model: meta.model } : {}), ...(meta.thinking ? { thinking: meta.thinking } : {}),
+        ...(later.profiles().loaded(meta) ? { profile: later.profiles().loaded(meta)!.spec as Record<string, unknown> } : {}),
+        ...(stateOf(meta, found.owner) !== undefined ? { state: stateOf(meta, found.owner) as Json } : {}),
+      })
+    } catch (error) {
+      console.error(`Extension ${found.owner}: describing thread ${id} failed:`, error)
+    }
+    if (!said) return { agent }
+    return {
+      agent: { ...agent, ...(said.about ? { about: said.about } : {}) },
+      model: said.model, ...(said.provider ? { provider: said.provider } : {}), ...(said.thinking ? { thinking: said.thinking } : {}),
+      ...(said.context ? { context: said.context } : {}),
+    }
   }
 
   /** What extensions say about a thread (`facts`), by extension: those it doesn't go without, as for hooks. */
@@ -525,13 +551,13 @@ export function createExtensionHost(host: Host, later: { profiles(): ProfileHost
           remove,
         })
       },
-      agentKind({ name, runner, menu, profile }) {
+      agentKind({ name, runner, menu, profile, describe }) {
         life.live(`the agent kind ${name}`)
         if (name !== extension.name && !name.startsWith(`${extension.name}.`)) throw new Error(`Extension ${extension.name} must name its agent kinds "${extension.name}" or "${extension.name}.<kind>", not "${name}"`)
         if (kinds.has(name)) throw new Error(`Agent kind ${name} is already there`)
         // Installed as a part no thread is given: its task is in the registry, for the threads whose runner it is.
         const part = agentExtension(defineExtension({ name: `${name}:runner`, tasks: [runner] }), false)
-        kinds.set(name, { runner: runner.definition.name, owner: extension.name, title: extension.title ?? extension.name, ...(menu ? { menu } : {}), ...(profile ? { profile } : {}) })
+        kinds.set(name, { runner: runner.definition.name, owner: extension.name, title: extension.title ?? extension.name, ...(menu ? { menu } : {}), ...(profile ? { profile } : {}), ...(describe ? { describe } : {}) })
         undo(() => { kinds.delete(name); part.undo() }, 'an agent kind')
         note('agent kinds', name)
       },
@@ -861,7 +887,7 @@ export function createExtensionHost(host: Host, later: { profiles(): ProfileHost
   return {
     setUp, setUpBuiltin, registerSwitches, declare, inspect, known, offer, offered: (name: string) => offered().some((e) => e.name === name),
     runnerOf,
-    publishViews, agentOf, agentMenus, kindOfModel, kindProfile, kindTitle, modelFromOf, partsFor, switchedOff, withoutFor, panesOf, factsOf, quietOf, blockedOf, appliesTo,
+    publishViews, agentOf, agentMenus, kindInfoOf, kindOfModel, kindProfile, kindTitle, modelFromOf, partsFor, switchedOff, withoutFor, panesOf, factsOf, quietOf, blockedOf, appliesTo,
     /** The daemon closing: switches turned meanwhile change nothing. */
     close: () => unlisten(),
     /** Every teardown so far finished (or given up on): those of extensions torn down earlier too, a profile's reloaded. */

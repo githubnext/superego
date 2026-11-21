@@ -99,6 +99,7 @@
 .threads-model.is-on { background: var(--superego-selected); color: var(--superego-text); }
 /* Pointed at: the model, and a few facts about it (as the profile's card has them). */
 .threads-model-card__name { font-weight: 500; overflow-wrap: anywhere; }
+.threads-model-card__line { margin-top: 2px; font-size: var(--superego-text-sm); color: var(--superego-muted); }
 .threads-model-card dl { display: grid; grid-template-columns: auto 1fr; gap: 3px 12px; margin: 8px 0 0; font-size: var(--superego-text-sm); }
 .threads-model-card dt { color: var(--superego-faint); }
 .threads-model-card dd { margin: 0; }

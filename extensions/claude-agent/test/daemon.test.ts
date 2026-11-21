@@ -17,11 +17,13 @@ import { threadReports } from '@superego/thread-reports/daemon'
 import { claudeEnv } from '../src/claude.ts'
 import { claudeAgent } from '../src/daemon.ts'
 import { nestedSkills, projectConfig, ProjectAllowances } from '../src/project.ts'
-import { about, ALLOW, ANSWER, KEPT, SETTINGS, WAITING, type Approval, type Kept, type ProjectFacts } from '../src/shared.ts'
+import { about, ALLOW, ANSWER, CHECK, KEPT, LIMIT, limitNote, SETTINGS, SIGN_IN, SIGNED_OUT, WAITING, type Approval, type Kept, type Limit, type ProjectFacts } from '../src/shared.ts'
 import { mockAnthropic, type MockAnthropic } from './mock-anthropic.ts'
 
 /** This checkout's `superego` command line. */
 const CLI = fileURLToPath(new URL('../../../app/bin/superego.ts', import.meta.url))
+/** What stands between a test's `claude` and the SDK, to add what Claude Code would say (inject.mjs). */
+const INJECT = fileURLToPath(new URL('./inject.mjs', import.meta.url))
 /** Its `superego` skill, as the app's daemon gives it. */
 const SKILL_DIR = fileURLToPath(new URL('../../../packages/cli/skill/', import.meta.url))
 
@@ -46,25 +48,33 @@ describe.skipIf(!claude)("a Claude Agent thread, on the user's claude against a 
   const saved = { ...process.env }
 
   /**
-   * A wrapper standing in for the user's `claude`: signed in to the mock (`signedIn`), or to nothing. Its config is a
-   * folder of the test's own, or, given a `home`, that home's `~/.claude` (Claude Code's default), as the user's is.
+   * A wrapper standing in for the user's `claude`: signed in to the mock (`signedIn`), to nothing, or to the mock once a
+   * file says so (`'file'`: `signed-in` in the test's folder). Its config is a folder of the test's own, or, given a
+   * `home`, that home's `~/.claude` (Claude Code's default), as the user's is. `inject`: what's in the test's `inject`
+   * file goes out after Claude Code's next `system:init` (inject.mjs), and the API isn't retried.
    */
-  function wrapper(name: string, signedIn: boolean, home?: string) {
+  function wrapper(name: string, signedIn: boolean | 'file', home?: string, inject = false) {
     const file = join(dir, name)
-    const key = signedIn ? 'ANTHROPIC_API_KEY=sk-ant-api03-mock ' : ''
+    const key = signedIn === true ? 'ANTHROPIC_API_KEY=sk-ant-api03-mock ' : ''
+    const toggle = signedIn === 'file' ? `[ -f "${dir}/signed-in" ] && export ANTHROPIC_API_KEY=sk-ant-api03-mock\n` : ''
     const config = home ? `HOME="${home}" ` : `CLAUDE_CONFIG_DIR="${dir}/config" `
-    writeFileSync(file, `#!/bin/sh\nenv > "${dir}/env.$$"\nexec env ANTHROPIC_BASE_URL=${api.url} ${key}${config}CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1 "${claude}" "$@"\n`)
+    const run = `env ANTHROPIC_BASE_URL=${api.url} ${key}${config}CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1${inject ? ' CLAUDE_CODE_MAX_RETRIES=0' : ''} "${claude}" "$@"`
+    writeFileSync(file, `#!/bin/sh\nenv > "${dir}/env.$$"\necho "$*" >> "${dir}/runs"\n${toggle}${inject ? `${run} | "${process.execPath}" "${INJECT}" "${dir}/inject"` : `exec ${run}`}\n`)
     chmodSync(file, 0o755)
     return file
   }
+  /** How many times Claude Code was started for turns (not to be looked at). */
+  const spawns = () => existsSync(join(dir, 'runs')) ? readFileSync(join(dir, 'runs'), 'utf8').split('\n').filter((l) => l.includes('stream-json')).length : 0
   const envs = () => readdirSync(dir).filter((f) => f.startsWith('env.')).map((f) => readFileSync(join(dir, f), 'utf8'))
 
   /**
    * A daemon with Claude Agent on the wrapper. `cli`: as the app's (its id `superego`, with its `superego` skill), and
    * this checkout's `superego` command line on the PATH Claude Code's Bash gets, pointed at this daemon.
    */
-  async function start({ signedIn = true, profile = profileOf(), cli = false, home }: { signedIn?: boolean; profile?: Record<string, string>; cli?: boolean; home?: string } = {}) {
-    const executable = wrapper(home ? 'claude-at-home' : signedIn ? 'claude' : 'claude-signed-out', signedIn, home)
+  async function start({ signedIn = true, profile = profileOf(), cli = false, home, inject = false, idleMs }: {
+    signedIn?: boolean | 'file'; profile?: Record<string, string>; cli?: boolean; home?: string; inject?: boolean; idleMs?: number
+  } = {}) {
+    const executable = wrapper(home ? 'claude-at-home' : inject ? 'claude-injecting' : signedIn === 'file' ? 'claude-signing-in' : signedIn ? 'claude' : 'claude-signed-out', signedIn, home, inject)
     const bin = join(dir, 'bin')
     if (cli) {
       mkdirSync(bin, { recursive: true })
@@ -76,7 +86,7 @@ describe.skipIf(!claude)("a Claude Agent thread, on the user's claude against a 
       ...claudeEnv(),
       ...(cli && made ? { PATH: `${bin}:${process.env.PATH}`, SUPEREGO_SOCKET: made.socket, SUPEREGO_HOME: made.dataDir, SUPEREGO_APP: made.dataDir } : {}),
     })
-    const extension = claudeAgent({ executable: async () => executable, env, ...(cli ? { skills: [SKILL_DIR] } : {}) })
+    const extension = claudeAgent({ executable: async () => executable, env, ...(cli ? { skills: [SKILL_DIR] } : {}), ...(idleMs !== undefined ? { idleMs } : {}) })
     made = daemon = await testDaemon({
       extensions: [extension, agentUi, threadTools, threadReports({ quietMs: 50, maxMs: 200 })], profile,
       ...(cli ? { appId: 'superego' } : {}),
@@ -116,7 +126,9 @@ describe.skipIf(!claude)("a Claude Agent thread, on the user's claude against a 
   afterEach(async () => {
     await daemon?.close()
     daemon = undefined
-    rmSync(join(dir, 'config', 'settings.json'), { force: true })
+    api.headers = {}
+    api.refuse = false
+    for (const file of ['config/settings.json', 'runs', 'inject', 'signed-in']) rmSync(join(dir, file), { force: true })
   })
 
   it('runs a turn: the answer streamed in and kept, the thread done; the next turn resumes its session', async () => {
@@ -157,11 +169,19 @@ describe.skipIf(!claude)("a Claude Agent thread, on the user's claude against a 
     }
   }, 60_000)
 
-  it("fails with Claude Code's word when it isn't signed in", async () => {
-    const d = await start({ signedIn: false })
-    const failed = await d.thread('Say hi', { cwd: dir })
-    expect(failed.status.state).toBe('error')
-    expect(JSON.stringify(failed.status)).toContain('Not logged in · run `claude` and `/login`')
+  it("waits for Claude Code to be signed in when it isn't, and goes on once it is", async () => {
+    const d = await start({ signedIn: 'file' })
+    const thread = await d.thread(undefined, { cwd: dir })
+    await d.call('thread.send', { thread: thread.id, text: 'Say hi' })
+    await d.until(async () => (await d.info(thread)).status.state === 'blocked', 'the thread waiting for sign-in', 30_000)
+    expect((await d.info(thread)).status).toEqual({ state: 'blocked', kind: 'auth', msg: SIGN_IN })
+    expect((await d.watch<boolean>(SIGNED_OUT, { scope: thread.id })).value).toBe(true)
+    // Signed in (in Claude Code's own way), and looked at again: it goes on where it failed.
+    writeFileSync(join(dir, 'signed-in'), '')
+    expect(await d.dispatch(CHECK)).toMatchObject({ loggedIn: true })
+    await d.until(async () => (await d.info(thread)).status.state === 'done', 'the thread going on', 30_000)
+    expect((await d.info(thread)).status.msg).toMatch(/^OK \(mock saw \d+ messages\)$/)
+    expect(JSON.stringify(api.requests.at(-1)!.messages)).toContain('Say hi')
   }, 60_000)
 
   it("runs a folder's own Claude Code settings (hooks, MCP servers) only once allowed as they are, and says so", async () => {
@@ -289,6 +309,8 @@ describe.skipIf(!claude)("a Claude Agent thread, on the user's claude against a 
     const before = api.requests.length
     const thread = await d.call<ThreadInfo>('thread.start', { cwd: dir, model: 'claude-agent/sonnet', thinking: 'high', prompt: 'Say hi' })
     expect(thread).toMatchObject({ profile: { name: 'claude' }, chosen: { model: 'claude-agent/sonnet', thinking: 'high' } })
+    // Its model card's: the model and effort, Anthropic's, run by the user's Claude Code.
+    expect(thread).toMatchObject({ model: 'Claude Sonnet', thinking: 'high', provider: 'anthropic', modelFrom: 'thread', agent: { kind: 'claude-agent', title: 'Claude Agent', about: 'runs your Claude Code' } })
     expect(readFileSync(join(d.dataDir, 'profiles', 'claude', 'profile.ts'), 'utf8')).toContain("agent: 'claude-agent'")
     expect((await d.idle(thread)).status.state).toBe('done')
     // Claude Code ran it on that model.
@@ -330,6 +352,126 @@ describe.skipIf(!claude)("a Claude Agent thread, on the user's claude against a 
     // It goes on afterwards.
     expect((await d.send(thread, 'Say hi')).status.state).toBe('done')
   }, 60_000)
+
+  describe('one Claude Code per thread', () => {
+    it('keeps Claude Code running between turns, and starts another, resuming, once it went idle', async () => {
+      const d = await start({ idleMs: 1500 })
+      const thread = await d.thread(undefined, { cwd: dir })
+      const saw = (msg: string | undefined) => Number(/^OK \(mock saw (\d+) messages\)$/.exec(msg ?? '')?.[1])
+      const first = saw((await d.send(thread, 'Say hi')).status.msg)
+      const second = saw((await d.send(thread, 'Again')).status.msg)
+      expect(spawns()).toBe(1)
+      expect(second).toBeGreaterThan(first + 1)
+      // Idle for longer than it waits: it went, and the next turn's resumes the session.
+      await new Promise((r) => setTimeout(r, 2500))
+      const third = saw((await d.send(thread, 'Once more')).status.msg)
+      expect(spawns()).toBe(2)
+      expect(third).toBeGreaterThan(second + 1)
+    }, 60_000)
+
+    it('gives Claude Code a message sent mid-turn at once, answering it in the same turn', async () => {
+      const d = await start({ profile: profileOf({ permissionMode: 'bypassPermissions' }) })
+      const thread = await d.thread(undefined, { cwd: dir })
+      await d.call('thread.send', { thread: thread.id, text: 'Run sleep 2' })
+      await d.until(async () => (await d.toolCalls(thread)).length === 1, 'the call running', 20_000)
+      await d.call('thread.send', { thread: thread.id, text: 'Also say hi', whenBusy: 'steer' })
+      const done = await d.idle(thread)
+      expect(done.status.state).toBe('done')
+      // In the request after the call, as Claude Code puts what's said mid-turn; one Claude Code, one run.
+      const asked = api.requests.findIndex((r) => JSON.stringify(r.messages).includes('Also say hi'))
+      expect(asked).toBeGreaterThan(0)
+      expect(JSON.stringify(api.requests[asked]!.messages)).toContain('tool_result')
+      expect(spawns()).toBe(1)
+      const transcript = await d.transcript(thread)
+      expect(transcript.indexOf('Also say hi')).toBeLessThan(transcript.lastIndexOf(done.status.msg!))
+    }, 60_000)
+
+    it('Stop interrupts the turn and keeps Claude Code for the next', async () => {
+      const d = await start()
+      const thread = await d.thread(undefined, { cwd: dir })
+      await d.call('thread.send', { thread: thread.id, text: 'Wait for me' })
+      const hold = await api.held()
+      await d.call('thread.stop', { thread: thread.id })
+      await hold.dropped
+      expect((await d.idle(thread)).status.state).not.toBe('working')
+      expect((await d.send(thread, 'Say hi')).status.state).toBe('done')
+      expect((await d.send(thread, 'Again')).status.state).toBe('done')
+      expect(spawns()).toBe(1)
+    }, 60_000)
+
+    it('ends Claude Code with its thread archived', async () => {
+      const d = await start()
+      const thread = await d.thread('Say hi', { cwd: dir })
+      expect(thread.status.state).toBe('done')
+      await d.call('thread.archive', { thread: thread.id })
+      await d.call('thread.unarchive', { thread: thread.id })
+      expect((await d.send(thread, 'Again')).status.state).toBe('done')
+      expect(spawns()).toBe(2)
+    }, 60_000)
+  })
+
+  it("gives Claude Code the images sent with a message as image blocks, and other files by their path", async () => {
+    const d = await start()
+    const thread = await d.thread(undefined, { cwd: dir })
+    const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
+    await d.call('thread.send', {
+      thread: thread.id, text: 'Look at these',
+      attachments: [{ name: 'dot.png', mimeType: 'image/png', data: png }, { name: 'data.bin', mimeType: 'application/octet-stream', data: Buffer.from([0, 1, 2]).toString('base64') }],
+    })
+    expect((await d.idle(thread)).status.state).toBe('done')
+    const said = api.requests.at(-1)!.messages.findLast((m) => m.role === 'user' && JSON.stringify(m).includes('Look at these'))!
+    const blocks = said.content as { type: string; source?: { type: string; media_type: string; data: string }; text?: string }[]
+    expect(blocks.find((b) => b.type === 'image')?.source).toEqual({ type: 'base64', media_type: 'image/png', data: png })
+    expect(blocks.some((b) => b.type === 'text' && /<attachment name="data.bin" type="application\/octet-stream" path="[^"]+data.bin" \/>/.test(b.text ?? ''))).toBe(true)
+  }, 60_000)
+
+  it("says how full the context is, and what it runs on, from Claude Code's own count", async () => {
+    const d = await start()
+    const thread = await d.thread(undefined, { cwd: dir })
+    expect(await d.info(thread)).toMatchObject({ agent: { kind: 'claude-agent', title: 'Claude Agent', about: 'runs your Claude Code' }, model: "Claude Code's default", provider: 'anthropic' })
+    expect((await d.info(thread)).context).toBeUndefined()
+    await d.send(thread, 'Say hi')
+    await d.until(async () => (await d.info(thread)).context !== undefined, 'the context', 10_000)
+    const { context, model } = await d.info(thread)
+    expect(context!.tokens).toBeGreaterThan(0)
+    expect(context!.max).toBeGreaterThan(context!.tokens)
+    expect(model).toMatch(/^claude-/)
+  }, 60_000)
+
+  it('says Claude Code compacted the conversation, as asked with /compact', async () => {
+    const d = await start()
+    const thread = await d.thread(undefined, { cwd: dir })
+    await d.send(thread, 'Say hi')
+    await d.call('thread.send', { thread: thread.id, text: '/compact' })
+    expect((await d.idle(thread)).status.state).toBe('done')
+    expect(await d.transcript(thread)).toMatch(/Claude Code compacted the conversation as asked \(it was [\dk.M]+ tokens\)\./)
+  }, 60_000)
+
+  describe("the plan's limits, as Claude Code reports them", () => {
+    const inject = (info: object) => writeFileSync(join(dir, 'inject'), `${JSON.stringify({ type: 'rate_limit_event', rate_limit_info: info, uuid: '00000000-0000-4000-8000-000000000000', session_id: 'mock' })}\n`)
+    const resetsAt = Math.floor(Date.now() / 1000) + 3 * 3600
+
+    it('notes a limit Claude Code warns of, for the threads on its machine', async () => {
+      const d = await start({ inject: true })
+      const thread = await d.thread(undefined, { cwd: dir })
+      const limit = await d.watch<Limit | null>(LIMIT)
+      inject({ status: 'allowed_warning', rateLimitType: 'five_hour', utilization: 0.8, resetsAt })
+      expect((await d.send(thread, 'Say hi')).status.state).toBe('done')
+      const said = await limit.until((value) => value !== null, 'the limit')
+      expect(said).toEqual({ status: 'allowed_warning', type: 'five_hour', utilization: 0.8, resetsAt: resetsAt * 1000 })
+      expect(limitNote(said, Date.now(), () => '14:20')).toBe('5-hour limit 80% used, resets 14:20')
+    }, 60_000)
+
+    it('fails a turn refused for a limit, saying which and when it resets', async () => {
+      const d = await start({ inject: true })
+      const thread = await d.thread(undefined, { cwd: dir })
+      inject({ status: 'rejected', rateLimitType: 'five_hour', utilization: 1, resetsAt })
+      api.refuse = { 'anthropic-ratelimit-unified-status': 'rejected' }
+      const failed = await d.send(thread, 'Say hi')
+      expect(failed.status.state).toBe('error')
+      expect(failed.status.msg).toMatch(/^5-hour limit reached, resets \S+/)
+    }, 60_000)
+  })
 
   describe('approvals', () => {
     it('blocks the thread on a permission while Claude Code asks, and Allow lets the call run', async () => {

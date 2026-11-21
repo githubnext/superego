@@ -3,7 +3,7 @@
 import type { ExtensionAbout, Json } from '@superego/protocol'
 
 export const about = {
-  name: 'claude-agent', version: '0.3.0', api: '^5.6', title: 'Claude Agent',
+  name: 'claude-agent', version: '0.4.0', api: '^5.7', title: 'Claude Agent',
   description: 'Runs your Claude Code, in threads started on its models or with a profile that picks it (agent: \'claude-agent\').',
 } satisfies ExtensionAbout
 
@@ -41,6 +41,11 @@ export const MODELS = [
   { value: 'sonnet', label: 'Sonnet', thinking: ['low', 'medium', 'high', 'max'] },
   { value: 'haiku', label: 'Haiku', thinking: [] },
 ] as const
+/** A model as said: one of Claude Code's aliases by its name ("Claude Opus"), another by its id. */
+export function modelLabel(model: string) {
+  const alias = MODELS.find((m) => m.value === model)
+  return alias ? `Claude ${alias.label}` : model
+}
 /** Effort levels Claude Code takes (`effort`). */
 export const EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'] as const
 export type Effort = (typeof EFFORTS)[number]
@@ -135,7 +140,14 @@ export function optionsProblem(value: unknown): string | undefined {
  * folder's Claude Code settings as last looked at, and its subagents' work by their Agent call.
  */
 export const KEPT = 'claude-agent.kept'
-export type Kept = { project?: ProjectConfig; subagents?: Record<string, SubagentSteps> }
+export type Kept = {
+  project?: ProjectConfig
+  subagents?: Record<string, SubagentSteps>
+  /** How full its context was at its last turn's end, as Claude Code estimated it: tokens, of how many fit. */
+  context?: { tokens: number; max: number }
+  /** The model its last turn ran on, as Claude Code said ("claude-opus-4-5"). */
+  model?: string
+}
 
 /** A subagent's work, as its Agent call shows it: how it stands, what it said and the tools it called, with their results. */
 export type SubagentSteps = {
@@ -174,3 +186,60 @@ export function signedIn(check: ClaudeInstalled): string {
   if (check.plan) return `Signed in with your Claude ${check.plan[0]!.toUpperCase()}${check.plan.slice(1)} plan`
   return check.how === 'api_key' ? 'Signed in with an API key' : check.how ? `Signed in with ${check.how}` : 'Signed in'
 }
+
+/**
+ * What the user's own Claude Code last reported of their plan's limits on this machine (its `rate_limit_event`), a live
+ * value: a quiet note in its Claude Agent threads while one is near or reached. Only what Claude Code reports to the
+ * user, in their own threads: never asked for otherwise.
+ */
+export const LIMIT = 'claude-agent.limit'
+export type Limit = {
+  status: 'allowed' | 'allowed_warning' | 'rejected'
+  /** Which limit: `five_hour`, `seven_day`, … */
+  type?: string
+  /** How much of it is used, 0–1. */
+  utilization?: number
+  /** When it resets, ms since the epoch. */
+  resetsAt?: number
+}
+
+/** Each limit, as said. */
+const LIMITS: Record<string, string> = {
+  five_hour: '5-hour limit', seven_day: 'Weekly limit', seven_day_opus: 'Weekly Opus limit', seven_day_sonnet: 'Weekly Sonnet limit',
+  seven_day_overage_included: 'Weekly limit', overage: 'Extra usage limit',
+}
+
+/** Claude Code's report (`rate_limit_info`: `resetsAt` in seconds) as kept. */
+export function limitOf(info: { status: Limit['status']; rateLimitType?: string; utilization?: number; resetsAt?: number }): Limit {
+  return {
+    status: info.status,
+    ...(info.rateLimitType ? { type: info.rateLimitType } : {}),
+    ...(typeof info.utilization === 'number' ? { utilization: info.utilization > 1 ? info.utilization / 100 : info.utilization } : {}),
+    ...(typeof info.resetsAt === 'number' ? { resetsAt: info.resetsAt * 1000 } : {}),
+  }
+}
+
+/**
+ * A limit in a line: "5-hour limit 80% used, resets 14:20", or reached ("5-hour limit reached, resets 14:20"); nothing
+ * while it's far (`allowed`), or once it reset. `now` and the time's format, for tests.
+ */
+export function limitNote(limit: Limit | null | undefined, now = Date.now(), time = (at: number) => new Date(at).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })): string | undefined {
+  if (!limit || limit.status === 'allowed') return undefined
+  if (limit.resetsAt !== undefined && limit.resetsAt <= now) return undefined
+  const name = LIMITS[limit.type ?? ''] ?? 'Usage limit'
+  const how = limit.status === 'rejected' ? 'reached' : limit.utilization !== undefined ? `${Math.round(limit.utilization * 100)}% used` : 'nearly reached'
+  const day = limit.resetsAt !== undefined && limit.resetsAt - now > 20 * 3600_000
+    ? new Date(limit.resetsAt).toLocaleDateString(undefined, { weekday: 'short' }) + ' ' : ''
+  return `${name} ${how}${limit.resetsAt !== undefined ? `, resets ${day}${time(limit.resetsAt)}` : ''}`
+}
+
+/** A turn refused for a limit, as its error says it: "5-hour limit reached, resets 14:20". */
+export function limitSaid(info: Parameters<typeof limitOf>[0], reached = false) {
+  const limit = limitOf(info)
+  return limitNote(reached ? { ...limit, status: 'rejected' } : limit) ?? 'Usage limit reached'
+}
+
+/** A Claude Agent thread waiting for Claude Code to be signed in on its machine: a scoped value by thread (`true`). */
+export const SIGNED_OUT = 'claude-agent.signedOut'
+/** What such a thread's status says. */
+export const SIGN_IN = "Claude Code isn't signed in: run claude, then /login"

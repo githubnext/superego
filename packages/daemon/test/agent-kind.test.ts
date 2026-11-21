@@ -8,7 +8,7 @@ import { join } from 'node:path'
 import { expect, it } from 'vitest'
 import { createModels } from '@earendil-works/pi-ai'
 import { BACKGROUND_CONTEXT as ctx } from '@earendil-works/chord/context'
-import { AssistantEntry, createRegistry, defineExtension, defineTask, Harness, LiveDoc, MemoryStorage, ToolResultEntry, type ConversationId, type EntryId } from '@earendil-works/pi-durable'
+import { AssistantEntry, createRegistry, defineExtension, defineTask, Harness, InboxDoc, LiveDoc, MemoryStorage, placeSteers, ToolResultEntry, type ConversationId, type EntryId, type PlacedSteer } from '@earendil-works/pi-durable'
 import { defineApp, PROTOCOL_VERSION, type Hello, type ThreadInfo } from '@superego/protocol'
 import { connectSocket, defineDaemonExtension, listen, openDaemon } from '../src/index.ts'
 import { until } from './until.ts'
@@ -62,6 +62,59 @@ it('pi-durable: a runner runs a turn, and Stop ends it keeping what it streamed'
   expect(after).toMatchObject({ runFailure: { reason: 'aborted' } })
   const all = await c.entries({}, 20, undefined, ctx)
   expect(all.items[0]!.model).toMatchObject([{ content: [{ type: 'text', text: 'Thinking' }], stopReason: 'aborted' }])
+  await harness.close(ctx)
+})
+
+/** A runner that takes the steers sent while it works (`placeSteers`), and answers with what they said, once told to. */
+let steered: PlacedSteer[] = []
+let finish: () => void = () => {}
+/** Answer at once, from the next run on. */
+let atOnce = false
+const Steered = defineTask({
+  name: 'steered.turn', version: 1, initial: () => ({ phase: 'run' as const }),
+  phases: {
+    run: async (_task, runtime, context) => {
+      const id = runtime.conversationId
+      const watch = await runtime.watchDoc(InboxDoc, id, context)
+      const done = new Promise<void>((r) => { finish = r })
+      if (atOnce) finish()
+      watch?.start(async () => {
+        await runtime.commit(async (tx) => { steered.push(...await placeSteers(tx, id, runtime.settings, runtime.now())); return undefined }, context)
+      })
+      await done
+      watch?.stop()
+      await runtime.commit(async (tx) => {
+        const answer = await tx.appendEntry(AssistantEntry, id, { model: [msg([{ type: 'text', text: `Took ${steered.map((s) => s.content).join(', ')}` }])] as never })
+        return { status: 'terminal', outcome: { status: 'completed', result: { entryId: answer.id } } }
+      }, context)
+    },
+  },
+  abort: async (_task, runtime, context) => { await runtime.commit(async () => ({ status: 'terminal', outcome: { status: 'aborted' } }), context) },
+})
+
+it('pi-durable: a runner places the steers sent mid-turn (placeSteers); follow-ups wait for the next run', async () => {
+  const registry = createRegistry()
+  registry.install(defineExtension({ name: 'steered', tasks: [Steered] }))
+  const harness = await Harness.open(new MemoryStorage(), { registry, models: createModels({ credentials: { get: async () => undefined } as never }) }, ctx)
+  harness.resume()
+  const c = await harness.createConversation({ ownership: { kind: 'ownerless' }, agent: { runner: 'steered.turn' } }, ctx)
+  const first = await c.submit({ type: 'input', content: 'start' }, ctx)
+  await new Promise((r) => setTimeout(r, 100))
+  const steer = await c.submit({ type: 'input', content: 'now this', whenBusy: 'steer' }, ctx)
+  const later = await c.submit({ type: 'input', content: 'after', whenBusy: 'followUp' }, ctx)
+  await until(async () => steered.length === 1)
+  expect(steered.map((s) => s.content)).toEqual(['now this'])
+  // It joined the run: placed in the conversation, the follow-up still queued.
+  expect((await harness.snapshot(InboxDoc, c.id as ConversationId, ctx))?.items.map((i) => 'content' in i ? i.content : i.mode)).toEqual(['after'])
+  const live = await harness.snapshot(LiveDoc, c.id as ConversationId, ctx)
+  expect(live?.run?.inputs).toEqual([first.id, steer.id])
+  steered = []
+  atOnce = true
+  // The run answers both; the follow-up starts the next.
+  finish()
+  await until(async () => (await c.entries({}, 10, undefined, ctx)).items.length === 5 && !(await harness.snapshot(LiveDoc, c.id as ConversationId, ctx))?.run)
+  const { items } = await c.entries({ order: 'descending' }, 10, undefined, ctx)
+  expect(items.map((e) => e.kind)).toEqual(['pi.assistant', 'pi.user', 'pi.assistant', 'pi.user', 'pi.user'])
   await harness.close(ctx)
 })
 

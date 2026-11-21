@@ -1,6 +1,6 @@
 # A thread that runs the user's Claude Code: proof and design
 
-2026-11-20. A design; waves 1 to 3 (§4) are built. The terms behind it are in
+2026-11-20. A design; waves 1 to 4 (§4) are built (wave 4 on 2026-11-21). The terms behind it are in
 [claude-subscriptions.md](claude-subscriptions.md), whose §3(a) this builds on. **This is not legal advice.**
 
 The idea: an opt-in second agent kind for threads. The thread runs the user's own installed, unmodified `claude`
@@ -51,7 +51,10 @@ Everything on Superego's side of the process boundary is the same either way. Wh
   on it;
 - the real model's behaviour with deferred MCP tools: whether it finds Superego's tools without being told;
 - `rate_limit_event` messages, and what plan rate limits and errors look like;
-- `interrupt()`, a denied permission, `AskUserQuestion`, and a long-lived process fed by streaming input.
+- `interrupt()`, a denied permission, `AskUserQuestion`, and a long-lived process fed by streaming input (all since
+  proven against the mock, waves 2 and 4);
+- `rate_limit_event`: Claude Code sends it only on a plan's sign-in, not on an API key, so wave 4's tests add it to
+  the real `claude`'s output (`test/inject.mjs`).
 
 **One finding to act on:** Claude Code takes `ANTHROPIC_API_KEY` from its environment ahead of the plan sign-in. A
 daemon started from a shell that has one would silently bill the API, not the plan. Superego has to give the child an
@@ -130,6 +133,24 @@ needs: a thread's `agent`, and a way for an extension to run a thread's turns. S
   for each user message, which is simple and survives restarts, at ~250 ms per turn. Wave 4 keeps one `query()` per
   active thread, fed by an `AsyncIterable` of user messages (streaming input), so a message sent mid-turn reaches
   Claude Code as it does in its own TUI. That process closes after a few idle minutes.
+  - **As built (wave 4).** `session.ts` keeps each thread's `query()` (streaming input) running between turns, by a key
+    of what it was started with (the folder, the context's head, model, effort, permission mode, tool lists, setting
+    sources, the appended prompt, Superego's tools): a turn reuses it when its key is the same, else closes it and
+    starts one resuming the session. The turn attaches to it for its length (what Claude Code says and asks, and
+    Superego's MCP tools, go to the turn attached), and detaches; five idle minutes later (`idleMs`) it goes. Not kept:
+    one with a subagent still running in the background at its turn's end, one that failed a turn (its sign-in is read
+    as it starts), one that starts work of its own between turns, and an archived thread's. A daemon restart loses
+    them, and the next turn resumes as before.
+  - **Messages mid-turn.** A message sent now (a steer: Send now, `whenBusy: 'steer'`) waits in pi-durable's inbox;
+    the turn watches it and places it at once with the seam's new `placeSteers()` (a boundary inside the runner's turn:
+    the steer joins the run's inputs and the transcript), then gives it to Claude Code, which folds it into the turn
+    ("The user sent a new message while you were working…") or, given too late, answers it in a turn of its own right
+    after. Each message carries a uuid, and Claude Code's `command_lifecycle` messages say when each was taken up and
+    answered: the turn ends at the result after which all it gave are answered. Follow-ups wait for the run's end, as
+    for any thread.
+  - **Stop** asks Claude Code to `interrupt()` its turn and keeps the process for the next once its result comes; one
+    that doesn't answer within 2 s, or would still run a message it was given (`still_queued`), is closed.
+  - **The cap** counts turns, as before: an idle process holds no place.
 - **Restarts.** The thread keeps Claude Code's `session_id`, in a doc of the extension's own. A turn cut off by a
   restart or crash is resumed from it. The turn's lost partial text isn't replayed: the turn shows as interrupted,
   saying so, and the user sends again. Claude Code's own `.jsonl` is the source of truth for the conversation;
@@ -178,8 +199,8 @@ use those, so the transcript's tool rows (Read, Edit, Bash…) render them uncha
 | `user` (replayed prompt) | Already there: the user's own message was appended when it was sent. |
 | `system:status`, `tool_progress`, `api_retry` | Live state only: "Retrying (2/10)…", a tool's progress. |
 | A subagent's `assistant` / `user` (`parent_tool_use_id` set), `task_notification` | Steps under its `Agent` call's row (built in wave 2, §3.4's end). |
-| `compact_boundary` | A row saying Claude Code compacted the conversation. |
-| `rate_limit_event` | `allowed_warning`: a note on the thread. `rejected`: the turn ends as an error saying when the limit resets (`resetsAt`). |
+| `compact_boundary` | A row saying Claude Code compacted the conversation (a note entry; built in wave 4). `/compact` asked for is the turn's answer. |
+| `rate_limit_event` | The machine's latest (`claude-agent.limit`); `allowed_warning`: a quiet line over its threads' composer, "5-hour limit 80% used, resets 2:10 PM". `rejected`: the turn ends as an error saying which limit and when it resets (built in wave 4). |
 | `result` `success` | The turn ends: the thread is done. `total_cost_usd`, usage and `num_turns` go into the thread's usage (shown as an estimate, since a plan isn't billed per token). |
 | `result` with `is_error: true`, or another `error_*` subtype | The turn fails with Claude Code's text. "Not logged in · Please run /login" maps to the sign-in state (§3.6), not a plain error. |
 | The SDK iterator throws, or the process exits | The turn fails with the message and the process's last stderr lines. |
@@ -323,11 +344,20 @@ and knows which thread its `superego` calls come from, as a Superego thread does
   MCP server and its sessions; the window reaches it as any machine's actions. Tested with a hub daemon reaching a box
   daemon over a `via` pipe (`extensions/claude-agent/test/remote.test.ts`): the box's thread runs the box's `claude`,
   Superego's tools answer for the box's thread, the skill plugin is the box's, and the hub's `claude` is only checked.
-  A turn that fails as not logged in still fails with "Not logged in · run `claude` and `/login`"; the `kind: 'auth'`
-  state above is still to do.
+  A turn that fails as not logged in puts its thread in the sign-in state (wave 4, below).
+- **The sign-in state (wave 4).** A turn Claude Code fails as not signed in (its result's "Not logged in", or an
+  assistant message's `authentication_failed`) leaves its thread `blocked`, `kind: 'auth'`, "Claude Code isn't signed
+  in: run claude, then /login", with a notice over the composer: Open a terminal (Settings' action, beside this thread)
+  and Check again. Once a look finds Claude Code signed in (that button, Settings, or every 30 s while a thread waits),
+  each waiting thread goes on where it failed (a `continue`, as threads waiting on a provider do). Kept in memory: after
+  a restart such a thread shows the turn's error. Looks at Claude Code are one at a time, and one asked for while one
+  goes on runs after it, so Check again never answers with a look begun before the sign-in.
 - **Plan limits.** `Query.usage()` (experimental) returns the plan's 5-hour and 7-day utilisation. Showing it is
   tempting, but it's near the SDK note's "offer … rate limits", so leave it out until Anthropic answers (§7). Show
   rate-limit errors when they happen, with Claude Code's reset time.
+  - **As built (wave 4):** only what the user's own Claude Code reports to them on its own (`rate_limit_event`, which
+    its TUI shows as a warning), in their own threads: never asked for (`usage()` isn't called). Question 8 of
+    claude-subscriptions.md §6 still stands; dropping the note is one slot (`LimitNote`).
 
 ### 3.7 What a Claude Agent thread loses next to a pi thread
 
@@ -335,10 +365,10 @@ and knows which thread its `superego` calls come from, as a Superego thread does
 |---|---|
 | Transcript, streaming, recaps, unread, notifications, phone and web, worktrees, panes, forking the Superego thread (not the Claude session) | **Extensions' agent parts**: tools, prompt sections and hooks from pi-durable extensions don't run in Claude Code's loop. Only what's offered over MCP or appended to the prompt reaches it. Skills come from Claude Code's own `.claude/skills`, not Superego's. |
 | Superego's actions as MCP tools; approvals and questions as blocked status | **Model choice**: Claude models only, through Claude Code; no GPT. Thinking is Claude Code's `effort`. No fast mode. |
-| Profiles: instructions (appended), permission mode, tool lists, MCP servers | **Compaction and context** are Claude Code's own. Superego's compaction policy, prompt sections and context meter don't apply (`getContextUsage()` could feed the meter later). |
+| Profiles: instructions (appended), permission mode, tool lists, MCP servers | **Compaction and context** are Claude Code's own. Superego's compaction policy and prompt sections don't apply. The context meter is Claude Code's count (`getContextUsage()` at each turn's end), in the model card and details. |
 | `CLAUDE.md`, hooks and skills from `.claude/`, a plus for Claude Code users | **Durability**: Claude Code's `.jsonl` on that machine is the conversation. Superego's entries mirror it. A crash mid-tool is resumed by Claude Code, not replayed by pi-durable. Moving or archiving a thread to another machine doesn't carry the session. |
 | Remote machines, where `claude` is installed and signed in there | **Editing history** (rewind, edit a message) works only as Claude Code's `forkSession`/`resumeSessionAt` allow; ship without it. |
-| | **Cost display**: an estimate, not a bill. Plan usage isn't shown (§3.6). |
+| | **Cost display**: none (a plan isn't billed per token). Plan usage only as Claude Code warns of it (§3.6). |
 | | **Headless rate**: a user-measured bug says headless use counts ~1.8× against the 5-hour window (claude-subscriptions.md §0). Unconfirmed, but users may notice. |
 
 ### 3.8 Naming
@@ -410,12 +440,26 @@ saying, in plain text, that a product "runs Claude Code".
    hooks too and leaves `!` lines; the Bash sandbox holds nested skills back only as a side effect. The cost: a `git
    ls-files` (tens of ms; 150 ms on this repository) or a walk at each turn's start, where the folder's configuration
    is looked at anyway, and outside git a big folder with configuration of its own can't be allowed at all.
-4. **Polish.**
-   - A long-lived process per active thread with streaming input (messages mid-turn).
-   - Images and attachments.
-   - The context meter from `getContextUsage()`.
-   - Rate-limit notes.
-   - Forking a pi thread into a Claude Agent thread.
+4. **Built (2026-11-21): one process per thread, and what was left of wave 3.**
+   - A long-lived process per active thread with streaming input, messages mid-turn, Stop (§3.2's "as built").
+   - Images and attachments: images as Messages API image blocks, other files by their path in the message (as a
+     Superego thread's `<attachment … path>`), for Claude Code to read.
+   - The context meter: `getContextUsage({ detail: 'summary' })` at each turn's end, kept with the thread, shown as
+     `ThreadInfo.context` in the title bar's model card and the details ("2% · 16k of 1M"). Superego's own threads have
+     no meter yet; the field is the kind's or any thread's to fill.
+   - Rate-limit notes and refusals (§3.3, §3.6).
+   - The sign-in state (§3.6).
+   - The model card: an agent kind describes its threads (`agentKind({ describe })`: model, provider, effort, a line
+     about it, context), shown as `ThreadInfo.agent` and the model: "Claude Opus · high · runs your Claude Code", with
+     Anthropic's provider mark (the same as Anthropic API threads'; §3.8 asks for no Anthropic logo as branding, which
+     a provider's mark beside its model isn't meant as, but say so to Anthropic with §7's questions).
+   - Tested in `extensions/claude-agent/test` with the user's `claude` against the mock (a steer reaching the API in
+     the same turn, one process over turns, idle release then resume, Stop then more turns, archiving, an image block
+     and a file's path, the context and model card facts, `/compact`, a limit warned of and a limit refusal through an
+     injected `rate_limit_event`, sign-in then going on), the UI's notices and model card, and the seam's
+     `placeSteers()` (`packages/daemon/test/agent-kind.test.ts`). `test/look.sh <dir> claude-agent` adds the model
+     card, the limit note and the sign-in notice, light and dark.
+   - Still to do: forking a pi thread into a Claude Agent thread; real turns on a plan.
 
    **Turn it on by default only after §7's answers**, or keep it an opt-in labelled as such.
 

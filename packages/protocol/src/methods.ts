@@ -89,6 +89,14 @@ export type ThreadInfo = {
    * settings. Absent while its profile hasn't loaded.
    */
   modelFrom?: 'thread' | 'extension' | 'profile' | 'machine'
+  /**
+   * For a thread of another kind of agent than Superego's own (an extension's: Claude Agent): which kind, its title, and
+   * what it says of itself where the model shows ("runs your Claude Code"). Its `model`, `provider` and `thinking` are
+   * then as that kind says them ("Claude Opus").
+   */
+  agent?: { kind: string; title: string; about?: string }
+  /** How full its context is, as its agent last said: the tokens in it, of how many fit. */
+  context?: { tokens: number; max: number }
   /** What it has spent so far, in dollars, as the providers price it. */
   cost?: number
   /** The panes open beside it, and the one in front (none: the thread itself). */

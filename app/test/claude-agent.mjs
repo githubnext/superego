@@ -1,10 +1,11 @@
 // Screenshots of Claude Agent (run by `test/look.sh <dir> claude-agent`): a thread waiting on a permission, the user's
 // own `claude` (look.sh's wrapper, `SUPEREGO_CLAUDE`) asking to run a command, shown above the composer with Allow, Deny
-// and Always; Settings → Claude Agent, saying what Claude Code is on this computer; and ⌘N's model menu with its
-// group. Light and dark, into $SUPEREGO_SHOWCASE_OUT. `claude` talks to a stand-in for
+// and Always; the title bar's model card; the plan's limit as Claude Code reports it, noted over the composer; a thread
+// waiting for Claude Code to be signed in; Settings → Claude Agent, saying what Claude Code is on this computer; and
+// ⌘N's model menu with its group. Light and dark, into $SUPEREGO_SHOWCASE_OUT. `claude` talks to a stand-in for
 // the Messages API here, so nothing needs an account or costs anything.
 import { createServer } from 'node:http'
-import { writeFileSync } from 'node:fs'
+import { rmSync, writeFileSync } from 'node:fs'
 import { openApp } from './harness.mjs'
 
 const home = process.env.SUPEREGO_HOME
@@ -44,7 +45,7 @@ writeFileSync(`${home}/claude-mock-url`, `http://127.0.0.1:${server.address().po
 
 await openApp({ name: 'claude-agent', timeout: 180_000, size: [1100, 760] }, async (t) => {
   const { until } = t
-  const { id } = await t.call('thread.start', { cwd: process.env.SUPEREGO_SHOWCASE_PROJECT, title: 'Fix the flaky ledger test', profile: 'claude' })
+  const { id } = await t.call('thread.start', { cwd: process.env.SUPEREGO_SHOWCASE_PROJECT, title: 'Fix the flaky ledger test', profile: 'claude', model: 'claude-agent/opus', thinking: 'high' })
   await t.call('thread.send', { thread: id, text: 'Run the tests and fix whatever fails.' })
   // Asked within a minute, or what the thread did instead is said.
   const status = async () => (await t.call('thread.list', {})).find((thread) => thread.id === id)?.status
@@ -59,7 +60,36 @@ await openApp({ name: 'claude-agent', timeout: 180_000, size: [1100, 760] }, asy
   await t.both('claude-agent-permission')
   // Answered (denied: the command isn't run), it goes on.
   await t.click('.claude-agent-approval__label', 'Deny')
-  await until(`window.superego.call('local', 'thread.list', {}).then((list) => list.find((t) => t.id === '${id}')?.status.state === 'done')`, 'the turn done', 60_000)
+  const done = (thread) => `window.superego.call('local', 'thread.list', {}).then((list) => list.find((t) => t.id === '${thread}')?.status.state === 'done')`
+  await until(done(id), 'the turn done', 60_000)
+
+  // The title bar's model card: the model and effort, run by the user's Claude Code, and how full its context is.
+  await until(`window.superego.call('local', 'thread.list', {}).then((list) => !!list.find((t) => t.id === '${id}')?.context)`, 'the context counted')
+  await t.hover('.threads-model')
+  await until(`!!document.querySelector('.threads-model-card')`, 'the model card')
+  await t.both('claude-agent-model-card')
+  await t.hover('.composer')
+
+  // The plan's limit, as Claude Code reports it after a turn: a line over the composer.
+  const resetsAt = Math.ceil((Date.now() + 2 * 3600_000) / 600_000) * 600
+  writeFileSync(`${home}/claude-inject`, `${JSON.stringify({ type: 'rate_limit_event', rate_limit_info: { status: 'allowed_warning', rateLimitType: 'five_hour', utilization: 0.8, resetsAt }, uuid: '00000000-0000-4000-8000-000000000000', session_id: 'look' })}\n`)
+  await t.call('thread.send', { thread: id, text: 'Thanks. Is the suite green now?' })
+  await until(done(id), 'the second turn done', 60_000)
+  await until(`!!document.querySelector('.claude-agent-limit')`, 'the limit noted')
+  await t.both('claude-agent-limit')
+
+  // Claude Code signed out: a thread whose turn failed for it waits, saying how to sign in; it goes on once it is.
+  writeFileSync(`${home}/claude-signed-out`, '')
+  const out = await t.call('thread.start', { cwd: process.env.SUPEREGO_SHOWCASE_PROJECT, title: 'Tidy the changelog', profile: 'claude', prompt: 'Tidy the changelog' })
+  await until(`window.superego.call('local', 'thread.list', {}).then((list) => list.find((t) => t.id === '${out.id}')?.status.kind === 'auth')`, 'the thread waiting for sign-in', 60_000)
+  const outRow = `[...document.querySelectorAll('.superego-list-item')].find((li) => li.querySelector('.threads__title')?.textContent === 'Tidy the changelog')`
+  await until(`Boolean(${outRow})`, 'the second thread listed')
+  await t.run(`${outRow}.click()`)
+  await until(`!!document.querySelector('.claude-agent-signin')`, 'the sign-in notice')
+  await t.both('claude-agent-signin')
+  rmSync(`${home}/claude-signed-out`)
+  await t.click('.claude-agent-signin button', 'Check again')
+  await until(done(out.id), 'the thread going on once signed in', 60_000)
 
   // Settings → Claude Agent: Claude Code on this computer, signed in.
   await t.click('.app__settings')
