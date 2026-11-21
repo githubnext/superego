@@ -170,7 +170,7 @@ describe('daemon', () => {
     peer.on('auth.event', ({ event }: Notifications['auth.event']) => events.push(event))
     await peer.call('auth.signIn', { provider: 'anthropic', type: 'api_key', key: 'sk-ant-oat01-not-a-real-token' })
     await until(() => events.some((e) => e.type === 'done' || e.type === 'failed'))
-    expect(events.at(-1)).toEqual({ type: 'failed', message: expect.stringMatching(/Claude subscription tokens .* only work in Claude Code itself.*API credits/) })
+    expect(events.at(-1)).toEqual({ type: 'failed', message: expect.stringMatching(/Claude subscription tokens .* as API keys.*API credits/) })
     expect(existsSync(join(dir, 'auth.json')) ? JSON.parse(readFileSync(join(dir, 'auth.json'), 'utf8')).anthropic : undefined).toBeUndefined()
     // Nor is Claude sign-in offered.
     await expect(peer.call('auth.signIn', { provider: 'anthropic', type: 'oauth' })).rejects.toMatchObject({ kind: 'unsupported' })

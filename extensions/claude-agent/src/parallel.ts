@@ -1,6 +1,6 @@
 // How many Claude Agent turns run at once on a machine: a turn takes a place before it starts `claude`, and gives it
 // back as it ends. Over the limit (Settings), turns wait their turn, oldest first, and their threads say so while they
-// wait. It keeps background use of one plan nearer the "ordinary, individual usage" it's sold for.
+// wait. It keeps many background threads from using up one plan's rate limits together.
 
 /** One plan's turns: those running, and those waiting for a place, oldest first. */
 export class Parallel {

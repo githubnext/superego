@@ -1,7 +1,6 @@
 # A thread that runs the user's Claude Code: proof and design
 
-2026-11-20. A design; waves 1 to 4 (§4) are built (wave 4 on 2026-11-21). The terms behind it are in
-[claude-subscriptions.md](claude-subscriptions.md), whose §3(a) this builds on. **This is not legal advice.**
+2026-11-20. A design; waves 1 to 4 (§4) are built (wave 4 on 2026-11-21).
 
 The idea: an opt-in second agent kind for threads. The thread runs the user's own installed, unmodified `claude`
 through the TypeScript Agent SDK, signed in by the user with Claude Code's own `/login`. Superego never sees, stores
@@ -47,8 +46,7 @@ Everything on Superego's side of the process boundary is the same either way. Wh
 | **Start-up cost** | About 250 ms from `query()` to `init` for each turn, because each `query()` spawns a new `claude` process, plus the MCP server's start. |
 
 **Not proven** (each needs a signed-in `claude` and a few real turns on the plan):
-- that a plan sign-in drives the SDK. Anthropic's support article says it does, and T3 Code, Conductor and Cline rely
-  on it;
+- that a plan sign-in drives the SDK;
 - the real model's behaviour with deferred MCP tools: whether it finds Superego's tools without being told;
 - `rate_limit_event` messages, and what plan rate limits and errors look like;
 - `interrupt()`, a denied permission, `AskUserQuestion`, and a long-lived process fed by streaming input (all since
@@ -66,7 +64,7 @@ environment without Anthropic credentials (§3.2), and show which one Claude Cod
 ## 2. Picking it
 
 - **On a profile:** `agent: 'claude-agent'`. A thread started with that profile is a Claude Agent thread for its whole
-  life, as Amp does it. Profiles can also set its options (§3.4, §3.5): `claudeAgent: { permissionMode, allowedTools,
+  life. Profiles can also set its options (§3.4, §3.5): `claudeAgent: { permissionMode, allowedTools,
   disallowedTools, settingSources, model, effort }`.
 - **In the model menu:** a group named "Claude Agent", showing Claude Code's own model aliases (`opus`, `sonnet`,
   `haiku`) and effort levels. Its description: "Runs your Claude Code on <machine>". The group appears only when
@@ -74,7 +72,7 @@ environment without Anthropic credentials (§3.2), and show which one Claude Cod
 - **Fixed per thread.** Changing a thread's model within the group is fine, through `setModel()` or the next turn's
   `model`. Moving a thread between pi and Claude Agent isn't offered: the two keep different histories. A later wave
   could fork a pi thread into a new Claude Agent thread with a summary.
-- **Off by default.** It's a setting, "Claude Agent threads", on each machine, until Anthropic answers §7.
+- **Off by default.** It's a setting, "Claude Agent threads", on each machine.
 
 **As built (wave 3, 2026-11-20): one mechanism, the profile.**
 - A profile's `agent: 'claude-agent'` is what makes a thread a Claude Agent thread, as before. The model menu's group
@@ -158,9 +156,12 @@ needs: a thread's `agent`, and a way for an extension to run a thread's turns. S
 - **The binary.**
   - `pathToClaudeCodeExecutable` comes from a setting, by default `claude` found on the machine's login shell's
     `PATH` (mise, Homebrew and npm installs differ).
-  - The SDK's bundled binaries aren't installed: `pnpm.overrides` remove them, as T3 Code does, so Superego never
-    ships Claude Code.
-  - Superego doesn't install or update `claude`.
+  - The SDK's bundled binaries aren't installed: `pnpm.overrides` remove them, so a thread runs the user's own install
+    (its version, its sign-in, its settings) and Superego never ships Claude Code.
+  - Superego doesn't install, update, patch or wrap `claude`: it runs the binary as installed, so Claude Code's own
+    sign-in, auth methods and updates work as they do in its TUI.
+  - Superego never reads Claude Code's credentials (its keychain entry, `~/.claude`): Claude Code reads its own.
+    Only `claude auth status`'s `loggedIn`, `authMethod` and `subscriptionType` are kept (§3.6).
 - **The environment.**
   - The child gets the daemon's environment minus every Anthropic and Claude Code credential:
     - `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN` and `ANTHROPIC_OAUTH_TOKEN`;
@@ -171,8 +172,7 @@ needs: a thread's `agent`, and a way for an extension to run a thread's turns. S
   - A profile may opt in to passing them (`claudeAgent: { env: 'inherit' }`), for API-key or plan-credit users.
   - The transcript's first row says which auth Claude Code reported (`init.apiKeySource`).
 - **Identity.** Superego doesn't set `CLAUDE_CODE_ENTRYPOINT`, a user agent or anything else that changes how
-  Claude Code describes itself. T3 Code sets `CLAUDE_CODE_ENTRYPOINT=t3-code`, which reportedly changes how headless
-  use is counted (claude-subscriptions.md §0). Ask Anthropic before doing the same (§7).
+  Claude Code describes itself (§7), so its requests are those of the Agent SDK's headless Claude Code.
 - **Stopping.**
   - Stop calls `interrupt()` and then aborts the `AbortController`.
   - Archiving or deleting the thread ends its process.
@@ -181,8 +181,8 @@ needs: a thread's `agent`, and a way for an extension to run a thread's turns. S
   Agent, "Threads at once"). Turns over the cap wait, oldest first, as `working`, their status saying "Waiting: 3
   Claude Agent threads are running" (a status contribution's `{ working }`, `Status.msg` while working, shown in the
   transcript's working row and the thread's card). A turn takes its place before it starts `claude` and keeps it to
-  its end (waiting on an approval too); Stop while it waits leaves the queue. This keeps background use nearer the
-  "ordinary, individual usage" the plans assume.
+  its end (waiting on an approval too); Stop while it waits leaves the queue. This keeps many background threads from
+  using up the plan's rate limits together.
 
 ### 3.3 Events into the transcript
 
@@ -268,8 +268,8 @@ use those, so the transcript's tool rows (Read, Edit, Bash…) render them uncha
 - **Deferred loading.** MCP tools reach the model through `ToolSearch`. The appended prompt names Superego's tools in
   a line each, so the model knows to load them.
 - **The prompt.** `systemPrompt: { type: 'preset', preset: 'claude_code', append }`, where `append` holds what Superego
-  says about itself: panes, threads, blocks, and the profile's instructions. This keeps Claude Code's own prompt (and
-  its safety instructions), as T3 Code does; Cline instead drops the preset.
+  says about itself: panes, threads, blocks, and the profile's instructions. Appending rather than replacing keeps
+  Claude Code's own system prompt (how it uses its tools, its safety instructions), so it works as in its own TUI.
 - **Settings sources.** By default `['user', 'project', 'local']`, so the user's `CLAUDE.md`, skills, hooks and MCP
   servers apply, as in their own Claude Code. A profile can narrow it.
 - **The user's MCP servers.** A Superego profile's `mcpServers` (the `mcp-servers` extension) can be passed along as
@@ -352,12 +352,11 @@ and knows which thread its `superego` calls come from, as a Superego thread does
   each waiting thread goes on where it failed (a `continue`, as threads waiting on a provider do). Kept in memory: after
   a restart such a thread shows the turn's error. Looks at Claude Code are one at a time, and one asked for while one
   goes on runs after it, so Check again never answers with a look begun before the sign-in.
-- **Plan limits.** `Query.usage()` (experimental) returns the plan's 5-hour and 7-day utilisation. Showing it is
-  tempting, but it's near the SDK note's "offer … rate limits", so leave it out until Anthropic answers (§7). Show
-  rate-limit errors when they happen, with Claude Code's reset time.
-  - **As built (wave 4):** only what the user's own Claude Code reports to them on its own (`rate_limit_event`, which
-    its TUI shows as a warning), in their own threads: never asked for (`usage()` isn't called). Question 8 of
-    claude-subscriptions.md §6 still stands; dropping the note is one slot (`LimitNote`).
+- **Plan limits.** `Query.usage()` (experimental) returns the plan's 5-hour and 7-day utilisation; it isn't used.
+  Rate-limit errors show when they happen, with Claude Code's reset time.
+  - **As built (wave 4):** only what the user's own Claude Code reports on its own (`rate_limit_event`, which its TUI
+    shows as a warning), in their own threads: never asked for (`usage()` isn't called). The note is one slot
+    (`LimitNote`).
 
 ### 3.7 What a Claude Agent thread loses next to a pi thread
 
@@ -365,28 +364,23 @@ and knows which thread its `superego` calls come from, as a Superego thread does
 |---|---|
 | Transcript, streaming, recaps, unread, notifications, phone and web, worktrees, panes, forking the Superego thread (not the Claude session) | **Extensions' agent parts**: tools, prompt sections and hooks from pi-durable extensions don't run in Claude Code's loop. Only what's offered over MCP or appended to the prompt reaches it. Skills come from Claude Code's own `.claude/skills`, not Superego's. |
 | Superego's actions as MCP tools; approvals and questions as blocked status | **Model choice**: Claude models only, through Claude Code; no GPT. Thinking is Claude Code's `effort`. No fast mode. |
-| Profiles: instructions (appended), permission mode, tool lists, MCP servers | **Compaction and context** are Claude Code's own. Superego's compaction policy and prompt sections don't apply. The context meter is Claude Code's count (`getContextUsage()` at each turn's end), in the model card and details. |
+| Profiles: instructions (appended), permission mode, tool lists, MCP servers | **Compaction and context** are Claude Code's own. Superego's compaction and prompt sections don't apply. The context meter is Claude Code's count (`getContextUsage()` at each turn's end), in the model card and details. |
 | `CLAUDE.md`, hooks and skills from `.claude/`, a plus for Claude Code users | **Durability**: Claude Code's `.jsonl` on that machine is the conversation. Superego's entries mirror it. A crash mid-tool is resumed by Claude Code, not replayed by pi-durable. Moving or archiving a thread to another machine doesn't carry the session. |
 | Remote machines, where `claude` is installed and signed in there | **Editing history** (rewind, edit a message) works only as Claude Code's `forkSession`/`resumeSessionAt` allow; ship without it. |
 | | **Cost display**: none (a plan isn't billed per token). Plan usage only as Claude Code warns of it (§3.6). |
-| | **Headless rate**: a user-measured bug says headless use counts ~1.8× against the 5-hour window (claude-subscriptions.md §0). Unconfirmed, but users may notice. |
+| | **Headless rate**: an open Claude Code issue ([anthropics/claude-code#97074](https://github.com/anthropics/claude-code/issues/97074)) measures headless use (entrypoint `sdk-cli`) at ~1.8× more of the 5-hour window per token than interactive `cli`. User-measured, unconfirmed. |
 
 ### 3.8 Naming
 
-The Agent SDK's branding rules allow "Claude Agent", or "Claude" in a menu labelled "Agents". The legal page allows
-saying, in plain text, that a product "runs Claude Code".
-
-- **Use:** "Claude Agent" for the agent kind, the model-menu group, the Settings section and the profile value
+- "Claude Agent" for the agent kind, the model-menu group, the Settings section and the profile value
   (`agent: 'claude-agent'`). In descriptions, "Runs your Claude Code".
-- **Don't use:** "Claude Code" as the name of a Superego feature, setting or thread kind; Claude or Anthropic logos;
-  Claude Code's ASCII art or look; anything suggesting Anthropic built, endorses or partners with Superego.
-- **No sign-in button labelled for Claude.** The only sign-in path is "run `claude` and `/login`", in the user's own
-  terminal.
+- **No sign-in in Superego.** The only sign-in path is "run `claude` and `/login`", in the user's own terminal, so
+  the credential stays Claude Code's (§3.2).
 
 ## 4. Waves
 
 0. **Done (2026-11-20).**
-   - §4b closed: Superego refuses Claude subscription tokens in pi-ai's path, and ignores `ANTHROPIC_OAUTH_TOKEN`.
+   - Superego refuses Claude subscription tokens in pi-ai's path, and ignores `ANTHROPIC_OAUTH_TOKEN` (§7).
    - The proof of concept above.
 1. **Built (2026-11-20), behind a profile's `agent: 'claude-agent'`:** the seam above; `extensions/claude-agent`, one
    `query()` per turn with `resume`, text and tool rows, working/done/error, Stop, the scrubbed environment, `claude`
@@ -451,8 +445,7 @@ saying, in plain text, that a product "runs Claude Code".
    - The sign-in state (§3.6).
    - The model card: an agent kind describes its threads (`agentKind({ describe })`: model, provider, effort, a line
      about it, context), shown as `ThreadInfo.agent` and the model: "Claude Opus · high · runs your Claude Code", with
-     Anthropic's provider mark (the same as Anthropic API threads'; §3.8 asks for no Anthropic logo as branding, which
-     a provider's mark beside its model isn't meant as, but say so to Anthropic with §7's questions).
+     Anthropic's provider mark (the same as Anthropic API threads').
    - Tested in `extensions/claude-agent/test` with the user's `claude` against the mock (a steer reaching the API in
      the same turn, one process over turns, idle release then resume, Stop then more turns, archiving, an image block
      and a file's path, the context and model card facts, `/compact`, a limit warned of and a limit refusal through an
@@ -461,41 +454,57 @@ saying, in plain text, that a product "runs Claude Code".
      card, the limit note and the sign-in notice, light and dark.
    - Still to do: forking a pi thread into a Claude Agent thread; real turns on a plan.
 
-   **Turn it on by default only after §7's answers**, or keep it an opt-in labelled as such.
-
 ## 5. Risks
 
-- **Terms move.** Billing for exactly this path changed three times in 2026, and Anthropic launched linked billing on
-  2026-11-17. Keep the kind opt-in and easy to switch off; re-check the terms at every release.
 - **The SDK moves fast** (0.3.323 is pre-1.0; experimental APIs such as `usage()`). Pin it, and test against the mock.
 - **The user's `claude` updates itself** under us. Read `init.claude_code_version`, and keep the event mapping
   tolerant of unknown message types: log them, never fail on them.
-- **Heavy background use** could get a user's account limited. The cap (§3.2) and the plan's own limits are the brakes;
-  say so in the Settings description.
+- **Heavy background use** reaches the plan's rate limits sooner. The cap (§3.2) and the plan's own limits are the
+  brakes; say so in the Settings description.
 
 ## 6. Why not the alternatives
 
 - **`claude -p` raw stream-json** gives the same events (§1). But the SDK adds `canUseTool` without an MCP permission
   tool, in-process MCP servers, `interrupt()`, `setModel()`, `setPermissionMode()`, typed messages and session
   helpers. The daemon is Node, so the SDK costs nothing extra.
-- **Claude Code as a model behind pi's loop** (what Cline did until mid-2026: `--max-turns 1`, every tool
-  disallowed) would keep pi's extensions. But it's exactly the "third-party harness" on a subscription that Anthropic
-  objects to. Don't.
-- **An interactive `claude` in a terminal pane** is plainly fine and already possible with the terminal extension,
-  which reads Claude Code's OSC 7501 status. It just isn't a Superego thread: no transcript, approvals or MCP binding.
-  It's a useful fallback to point users at.
+- **Claude Code as a model behind pi's loop** (`claude -p --system-prompt … --disallowedTools <every tool> --max-turns
+  1`) would keep pi's extensions. But it throws away what Claude Code is: its own tools, loop, permissions, skills,
+  hooks and session, leaving a model endpoint that starts a process for every model call. Don't.
+- **An interactive `claude` in a terminal pane** is already possible with the terminal extension, which reads Claude
+  Code's OSC 7501 status. It just isn't a Superego thread: no transcript, approvals or MCP binding. It's a useful
+  fallback to point users at.
 
-## 7. Questions for Anthropic before turning it on by default
+## 7. Claude Code, the Agent SDK and pi-ai: mechanics
 
-See claude-subscriptions.md §6 for the full list. The ones this design depends on:
+**Driving Claude Code.**
+- Agent SDK (TypeScript): `query()` with `pathToClaudeCodeExecutable` runs that binary instead of the SDK's bundled
+  one. It gives `canUseTool`, `resume` and `forkSession`, `includePartialMessages` for streaming, in-process MCP servers
+  (`createSdkMcpServer`), `interrupt()` and typed messages.
+- Raw CLI: `claude -p --input-format stream-json --output-format stream-json --verbose --include-partial-messages`,
+  with `--session-id <uuid>` for the first turn and `--resume <id>` after. Stream-json input takes later user
+  messages, so one process can serve a thread. `--permission-prompt-tool mcp__<server>__<tool>` routes permission
+  prompts to an MCP tool, `--mcp-config` adds MCP servers, `--append-system-prompt` appends to the system prompt,
+  `--permission-mode`, `--allowedTools` and `--disallowedTools` set permissions.
+- **`--bare` never reads OAuth credentials**, so a Claude Code started with it can't use a plan's sign-in. Superego
+  doesn't pass it.
+- `claude setup-token` makes a long-lived plan token for running Claude Code without a sign-in (CI); Claude Code reads
+  it from `CLAUDE_CODE_OAUTH_TOKEN`. The scrubbed environment (§3.2) removes it.
+- `CLAUDE_CODE_ENTRYPOINT=<name>` makes Claude Code's requests carry `User-Agent: claude-cli/<version> (external,
+  <name>)` and `cc_entrypoint=<name>`. Superego leaves it unset.
+- When signed in to a plan, the SDK and `claude -p` draw on that plan's limits; with an API key in its environment,
+  on that key (§1).
 
-1. Is a free, local, open-source app that runs the user's **own installed, unmodified** Claude Code through the Agent
-   SDK (`pathToClaudeCodeExecutable`), signed in by the user with `/login`, within the carve-out for "an end user …
-   signing in to the unmodified Claude Code binary"? Is it outside the SDK note's "offer claude.ai login or rate
-   limits"?
-2. Several such sessions in parallel and in the background (subagents, threads started from a phone): is that within
-   "ordinary, individual usage"? Is there a concurrency guideline?
-3. May Superego set `CLAUDE_CODE_ENTRYPOINT` (or similar) to identify itself honestly, as T3 Code does, and does
-   that change how usage counts?
-4. May Superego show the plan's utilisation that Claude Code itself reports (`usage()`, `rate_limit_event`)?
-5. Is "Claude Agent", with "Runs your Claude Code" in the description, acceptable naming?
+**pi-ai and Claude subscription tokens.** Superego doesn't use Claude subscription tokens as API keys. pi-ai would
+send them as Claude Code does:
+- It treats any Anthropic key containing `sk-ant-oat` as a subscription (OAuth) token, and sends it with
+  `user-agent: claude-cli/…`, `x-app: cli` and `anthropic-beta: claude-code-20250219,oauth-2025-04-20`.
+- Its default auth context reads `process.env`, so it uses `ANTHROPIC_OAUTH_TOKEN` from the daemon's environment, or
+  such a token in any of its Anthropic variables.
+- It ships a "Claude Pro/Max" OAuth sign-in using Claude Code's OAuth client ID (`auth/oauth/anthropic.js`).
+
+So `packages/daemon/src/claude-subscription.ts` (2026-11-20), with pi-ai itself unpatched:
+- The auth context pi-ai is given hides `ANTHROPIC_OAUTH_TOKEN`, and any variable holding a `sk-ant-oat` token,
+  saying so on the console.
+- The Anthropic provider loses its OAuth sign-in.
+- It refuses such a token entered as a key (Settings, `superego providers key`), saying what to use instead.
+- It refuses one stored in `auth.json`, as a key or a sign-in, before any request.

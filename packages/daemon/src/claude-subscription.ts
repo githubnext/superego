@@ -1,9 +1,9 @@
-// Superego never uses a Claude subscription's own token (docs/research/claude-subscriptions.md, §4b). pi-ai treats any
-// Anthropic key containing "sk-ant-oat" as one, and then sends it as Claude Code would (its user agent, `x-app: cli`,
-// Claude Code's beta header): impersonating Claude Code, which Anthropic forbids. pi-ai finds such a token in the
-// environment (ANTHROPIC_OAUTH_TOKEN, or any of its Anthropic variables holding one), in a stored key, or in a stored
-// OAuth sign-in. Here the auth context hides the first, and the Anthropic provider refuses the rest, so no request
-// pi-ai builds ever carries one.
+// Superego doesn't use Claude subscription tokens as API keys: pi-ai would send them as Claude Code does. It treats
+// any Anthropic key containing "sk-ant-oat" as one, and sends it with Claude Code's user agent, `x-app: cli` and Claude
+// Code's beta header (docs/research/claude-code-agent.md, §7). pi-ai finds such a token in the environment
+// (ANTHROPIC_OAUTH_TOKEN, or any of its Anthropic variables holding one), in a stored key, or in a stored OAuth
+// sign-in. Here the auth context hides the first, and the Anthropic provider refuses the rest, so no request pi-ai
+// builds ever carries one.
 import { defaultProviderAuthContext, type AuthContext, type AuthResult } from '@earendil-works/pi-ai'
 import type { Provider } from '@earendil-works/pi-ai/models'
 
@@ -11,7 +11,7 @@ import type { Provider } from '@earendil-works/pi-ai/models'
 const SUBSCRIPTION_TOKEN = 'sk-ant-oat'
 
 /** Why a subscription token is refused, and what to use instead. */
-export const SUBSCRIPTION_REFUSED = 'Claude subscription tokens (sk-ant-oat…) only work in Claude Code itself. Use an API key from console.anthropic.com: Claude Max, Team and Ultra plans include monthly API credits for one.'
+export const SUBSCRIPTION_REFUSED = "Superego doesn't use Claude subscription tokens (sk-ant-oat…) as API keys. Use an API key from console.anthropic.com (Claude Max, Team and Ultra plans include monthly API credits), or a Claude Agent thread, which runs your own Claude Code."
 
 const isSubscriptionToken = (value: string | null | undefined) => value?.includes(SUBSCRIPTION_TOKEN) ?? false
 
