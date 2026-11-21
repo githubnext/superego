@@ -1,15 +1,13 @@
-// A fresh home: the first-launch page, a first thread with the user's profile UI, typing, skills, a web link in a pane,
+// A fresh home: no setup page with a model that works, a first thread with the user's profile UI, typing, skills, a web link in a pane,
 // and a replayed agent that asks, with follow-ups queued meanwhile.
 import { createServer } from 'node:http'
 import { openRow, pageAt, row } from './common.mjs'
 
 export default async function threads(t, s) {
-  // The first-launch page (its switches and Get started: onboarding.test.ts), with Ego's word on it; put away for good
-  // (see the reopen).
-  await t.until(`document.querySelectorAll('.onboarding .onboarding__extension').length > 1`, 'onboarding on a fresh home')
-  await t.until(`document.querySelector('.onboarding .ego__welcome')?.textContent.includes('Ego')`, "Ego's word on the onboarding page")
-  await t.click('.onboarding button', 'Get started')
-  await t.until(`!document.querySelector('.onboarding') && Boolean(document.querySelector('.app__empty'))`, 'onboarding put away')
+  // A model works (the scripted one): first-run setup (setup.test.ts) doesn't show, and counts as done for good (see
+  // the reopen).
+  await t.until(`window.superego.call('local', 'settings.watch', {}).then((r) => r.value.values['onboarding.seen'] === true)`, 'setup done on a fresh home with a model')
+  await t.until(`!document.querySelector('.setup') && Boolean(document.querySelector('.app__empty'))`, 'no setup page')
 
   s.hello = (await t.call('thread.start', { title: '' })).id
   await t.call('thread.send', { thread: s.hello, text: 'hello from smoke' })

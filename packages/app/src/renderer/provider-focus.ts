@@ -3,7 +3,7 @@
 
 let focus: { machine: string; provider: string } | undefined
 
-/** Open Providers on `machine` at `provider` next time it shows. */
+/** Open Providers on `machine` at `provider` (its top, given '') next time it shows. */
 export function focusProvider(machine: string, provider: string) { focus = { machine, provider } }
 
 /** The provider to sign in to on `machine`, once. */

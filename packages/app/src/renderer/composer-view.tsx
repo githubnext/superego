@@ -9,7 +9,7 @@ import type { MachineEntry } from '../shared/bridge.ts'
 import { useRegistry } from './registry.tsx'
 import { sentWithIn } from './lookups.ts'
 import { Slot } from './placement.tsx'
-import { useShell } from './state.tsx'
+import { NoModel } from './Setup.tsx'
 import { ctrlDigit } from '../shared/shortcuts.ts'
 import { useLocalState } from './local-state.ts'
 import { splitMessage } from './attachments.ts'
@@ -106,7 +106,6 @@ function Queued({ machine, thread, inbox }: { machine: MachineEntry; thread: Thr
 
 /** A thread's composer, docked under its transcript; `onJump`, offered while scrolled away from the end, goes back down. */
 export function ComposerView({ machine, thread, busy, inbox, onJump }: { machine: MachineEntry; thread: ThreadInfo; busy: boolean; inbox: InboxState | undefined; onJump?: () => void }) {
-  const { openSettings: onOpenSettings } = useShell()
   const dispatch = useRegistry().router.dispatch
   const [claims, setClaims] = useState<ComposerClaim[]>([])
   const register = useMemo(() => (claim: ComposerClaim) => {
@@ -252,7 +251,7 @@ export function ComposerView({ machine, thread, busy, inbox, onJump }: { machine
       onError={(message) => setError({ message })}
       placeholder={archived ? 'Archived: read only' : disabled ? `${machine.label} is ${machine.state}` : claim ? claim.placeholder : busy ? 'Steer the agent…' : suggested ? `${suggested}  ⏎` : 'Reply…'}
       error={error && (
-        error.kind === 'no_model' ? <>No model is set up on {machine.label}. <Button onClick={onOpenSettings}>Open Settings</Button></>
+        error.kind === 'no_model' ? <NoModel machine={machine} back={{ machine: machine.id, thread: thread.id }} />
           // Its profile gone from under it: another picked for it.
           : error.kind === 'profile_missing' ? <ProfileSwitch machine={machine.id} thread={thread} onSwitched={() => void send()} />
           : error.kind === 'profile_not_allowed' && thread.profile ? <>{error.message} <Button onClick={() => void allowAndSend(thread.profile!.name)}>Allow and send</Button></>

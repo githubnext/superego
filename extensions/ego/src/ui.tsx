@@ -2,12 +2,11 @@
 // in ⌘K, which open its thread on the machine last chosen (this computer to start with; made the first time); and in
 // its thread's title bar, Clear instead of archiving and, where more than one machine has an Ego, which one's this is,
 // to switch to another's. Its thread is a hidden one: the window shows it while it's selected, as any. A message an
-// outside agent sent it shows a chip saying so. On the first-launch page, a word on what to ask it for, and where it is.
-import { Chip, defineAction, defineUiExtension, factsOf, has, RailButton, useApp, useDispatch, useMachines, useNarrow, useRailShortcut, useSelection, type Store, type ViewProps } from '@superego/app/ui'
+// outside agent sent it shows a chip saying so.
+import { Chip, defineAction, defineUiExtension, factsOf, has, RailButton, useApp, useDispatch, useMachines, useRailShortcut, useSelection, type ViewProps } from '@superego/app/ui'
 import { obj, opt, str } from '@earendil-works/pi-schema'
 import { agentName, type ThreadInfo } from '@superego/protocol'
-import { useEffect } from 'react'
-import { BroomIcon, Button, IconButton, LifebuoyIcon, PlugsConnectedIcon, Select } from '@superego/ui'
+import { BroomIcon, IconButton, LifebuoyIcon, PlugsConnectedIcon, Select } from '@superego/ui'
 import type { MachineEntry } from '@superego/app/ui'
 import './styles.css'
 import { about, ASK, CLEAR, outsideBlocks } from './shared.ts'
@@ -27,16 +26,13 @@ export default defineUiExtension({
   ...about,
   setup(superego) {
     const chosen = superego.store<string>('machine', 'local', { persist: true })
-    // Whether the first-launch page shows, its word on Ego with it: meanwhile the button in the rail breathes.
-    const welcoming = superego.store<boolean>('welcoming', false)
     // A button, not a space: it shows a thread, and the sidebar keeps what it shows. First in the rail, its tab ⌘1.
     superego.view('ego.button', {
       title: `Ask ${agentName(superego.app)}`, icon: LifebuoyIcon, context: 'window', fits: ['rail', 'drawer'], default: 'rail', narrow: 'drawer', order: 10, action: OPEN,
-      component: (props) => <EgoButton {...props} chosen={chosen.use()} beckon={welcoming.use()} />,
+      component: (props) => <EgoButton {...props} chosen={chosen.use()} />,
     })
     superego.view('ego.machine', { title: 'Machine', context: 'thread', fits: ['header'], default: 'header', component: MachineSwitch })
     superego.view('ego.clear', { title: 'Clear', icon: BroomIcon, context: 'thread', fits: ['header'], default: 'header', component: ClearButton })
-    superego.slot('onboarding', () => <Welcome welcoming={welcoming} />)
     superego.composer.sentWith({
       read: (blocks) => { const at = outsideBlocks(blocks); return at.length ? { items: [true], blocks: at } : undefined },
       component: OutsideChip,
@@ -57,7 +53,7 @@ export default defineUiExtension({
   },
 })
 
-function EgoButton({ place, chosen, beckon }: ViewProps<'window'> & { chosen: string; beckon: boolean }) {
+function EgoButton({ place, chosen }: ViewProps<'window'> & { chosen: string }) {
   const app = useApp()
   const dispatch = useDispatch()
   const machines = useMachines()
@@ -68,35 +64,10 @@ function EgoButton({ place, chosen, beckon }: ViewProps<'window'> & { chosen: st
   const elsewhere = at !== 'local' && withEgo(machines).length > 1 ? machines.find((m) => m.id === at)?.label : undefined
   const label = `Ask ${agentName(app)}${elsewhere ? ` on ${elsewhere}` : ''}`
   return (
-    <RailButton label={label} title={keys ? `${label} (${keys})` : label} on={isEgo(thread)} className={`ego__button ${beckon && place === 'rail' ? 'ego__button--beckon' : ''}`}
+    <RailButton label={label} title={keys ? `${label} (${keys})` : label} on={isEgo(thread)} className="ego__button"
       onClick={() => void dispatch(OPEN, {}, { source: place }).catch((error) => console.error(error))}>
       <span className="ego__dot" aria-hidden />
     </RailButton>
-  )
-}
-
-/** On the first-launch page: what to ask Ego for, where its button is (lit up there meanwhile), and a way in. */
-function Welcome({ welcoming }: { welcoming: Store<boolean> }) {
-  const app = useApp()
-  const dispatch = useDispatch()
-  const narrow = useNarrow()
-  const shown = withEgo(useMachines()).length > 0
-  useEffect(() => {
-    if (!shown) return
-    welcoming.set(true)
-    return () => welcoming.set(false)
-  }, [shown, welcoming])
-  if (!shown) return null
-  const name = agentName(app)
-  return (
-    <div className="ego__welcome">
-      <span className="ego__welcome-mark" aria-hidden><span className="ego__dot" /></span>
-      <p>
-        Tell <strong>{name}</strong> what you want — a tool, a pane, a board — and it builds it for you.
-        {' '}It lives {narrow ? 'at the foot of the side menu' : 'at the top of the rail'}.
-      </p>
-      <Button onClick={() => void dispatch(OPEN, {}, { source: 'onboarding' }).catch((error) => console.error(error))}>Open {name}</Button>
-    </div>
   )
 }
 

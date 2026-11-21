@@ -1,7 +1,9 @@
 // @vitest-environment happy-dom
+// @vitest-environment-options {"settings":{"fetch":{"disableSameOriginPolicy":true}}}
 // Settings in the window drawn whole (superego/testing's mountUi) over a real daemon: a shortcut recorded for an action
 // (the old one stops, the new one runs it, a clash shows, Reset all), the accent colour and fonts applied, and a provider
-// signed in with an API key and out again.
+// signed in with an API key (a wrong one refused, as it's tried first) and out again.
+import { createServer } from 'node:http'
 import { afterEach, beforeEach, expect, it } from 'vitest'
 import { mountUi, testDaemon, type TestDaemon, type TestWindow } from '../../sdk/src/testing.ts'
 
@@ -55,20 +57,44 @@ it('applies the accent colour and the fonts, and resets the accent', async () =>
   await ui.until(() => css('--superego-mono').includes('Menlo'), 'the mono font applied')
 })
 
-it('signs a provider in with an API key, puts the flow away, and signs it out', async () => {
-  $$('.settings__nav button').find((b) => b.textContent?.includes('local'))!.click()
-  const anthropic = () => $$('.provider').find((p) => p.textContent?.includes('Anthropic'))!
-  const button = (label: string) => [...anthropic().querySelectorAll('button')].find((b) => b.textContent === label)
-  await ui.until(() => Boolean($$('.provider').length && button('API key…')), 'the providers')
-  button('API key…')!.click()
-  await ui.until(() => Boolean(anthropic().querySelector('input[name="key"]')), "a provider's API key field")
-  await ui.type('.provider input[name="key"]', 'sk-ant-test')
-  ;(anthropic().querySelector('input[name="key"]') as HTMLInputElement).form!.requestSubmit()
-  await ui.until(() => Boolean($('.auth-flow')?.textContent?.includes('Signed in.')) && Boolean(button('Sign out')), 'signed in with an API key')
-  $$('.auth-flow button').find((b) => b.textContent === 'Close')!.click()
-  await ui.until(() => !$('.auth-flow'), 'the sign-in put away')
-  button('Sign out')!.click()
-  await ui.until(() => !button('Sign out'), 'signed out again')
+it('signs a provider in with an API key, tried first, puts the flow away, and signs it out', async () => {
+  // An OpenAI-compatible provider that takes one key: a chat with any other is refused as OpenAI does.
+  const server = createServer((request, response) => {
+    request.resume()
+    request.on('end', () => {
+      if (request.headers.authorization !== 'Bearer good-key') {
+        response.writeHead(401, { 'content-type': 'application/json' })
+        return response.end(JSON.stringify({ error: { message: 'Incorrect API key provided', type: 'invalid_request_error', code: 'invalid_api_key' } }))
+      }
+      response.writeHead(200, { 'content-type': 'text/event-stream' })
+      response.write(`data: ${JSON.stringify({ id: 'c1', object: 'chat.completion.chunk', created: 0, model: 'm', choices: [{ index: 0, delta: { role: 'assistant', content: 'hi' }, finish_reason: 'stop' }] })}\n\n`)
+      response.end('data: [DONE]\n\n')
+    })
+  })
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+  try {
+    await daemon.call('providers.save', { name: 'Mock', baseUrl: `http://127.0.0.1:${(server.address() as { port: number }).port}/v1`, models: ['m'] })
+    $$('.settings__nav button').find((b) => b.textContent?.includes('local'))!.click()
+    const mock = () => $$('.provider').find((p) => p.textContent?.startsWith('Mock'))!
+    const button = (label: string) => [...mock().querySelectorAll('button')].find((b) => b.textContent === label)
+    const signIn = async (key: string) => {
+      button('API key…')!.click()
+      await ui.until(() => Boolean(mock().querySelector('input[name="key"]')), "a provider's API key field")
+      await ui.type('.provider input[name="key"]', key)
+      ;(mock().querySelector('input[name="key"]') as HTMLInputElement).form!.requestSubmit()
+    }
+    await ui.until(() => Boolean($$('.provider').length && button('API key…')), 'the providers')
+    await signIn('wrong-key')
+    await ui.until(() => Boolean($('.auth-flow')?.textContent?.includes('Mock rejected the API key')), 'a wrong key refused')
+    expect(button('Sign out')).toBeUndefined()
+    $$('.auth-flow button').find((b) => b.textContent === 'Close')!.click()
+    await signIn('good-key')
+    await ui.until(() => Boolean($('.auth-flow')?.textContent?.includes('Signed in.')) && Boolean(button('Sign out')), 'signed in with an API key')
+    $$('.auth-flow button').find((b) => b.textContent === 'Close')!.click()
+    await ui.until(() => !$('.auth-flow'), 'the sign-in put away')
+    button('Sign out')!.click()
+    await ui.until(() => !button('Sign out'), 'signed out again')
+  } finally { server.close() }
 })
 
 it('goes through its sections as tabs: the arrow keys move down the list, a click opens one', async () => {

@@ -16,7 +16,7 @@ import { startRename } from './rename.ts'
 import { setLocalState, windowState } from './local-state.ts'
 import { giveBack } from './returned.ts'
 import { clearProblem, reportProblem } from './machine-problems.ts'
-import { showOnboarding } from './Onboarding.tsx'
+import { openSetup } from './Setup.tsx'
 import { maximizedStore, THREAD_COLUMN, toggleMaximized } from './maximized.ts'
 import { NARROW } from './media.ts'
 import { RAIL_TABS, tabAction, type RailTab } from './rail-tabs.ts'
@@ -252,8 +252,8 @@ export const coreActions = (app: AppConfig): WindowAction[] => [
     },
   }),
   defineWindowAction({ id: 'app.log', title: 'Show action log', run: (_p, c) => c.showLog() }),
-  // The first-launch page again, where it shows: with nothing selected.
-  defineWindowAction({ id: 'app.onboarding', title: 'Show onboarding', run: (_p, c) => { c.select(undefined); showOnboarding() } }),
+  // First-run setup again, where it shows: with nothing selected.
+  defineWindowAction({ id: 'app.setup', title: 'Set up models…', run: (_p, c) => { c.select(undefined); openSetup() } }),
   // Panes of the selected thread.
   defineWindowAction({
     // The pane with the focus; the focus moves left, to the pane before it or the thread. The thread itself stays.

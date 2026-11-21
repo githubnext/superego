@@ -20,10 +20,12 @@ export type SignInFlowProps = {
   start(): Promise<{ flow: string }>
   /** Close was pressed, once it ended. */
   onClose(): void
+  /** It ended signed in. */
+  onDone?(): void
 }
 
 /** A sign-in flow, from start to its end: mount it to start one, and take it away on `onClose`. */
-export function SignInFlow({ machine, title, start, onClose }: SignInFlowProps) {
+export function SignInFlow({ machine, title, start, onClose, onDone }: SignInFlowProps) {
   const dispatch = useRegistry().router.dispatch
   const [flow, setFlow] = useState<string>()
   const [events, setEvents] = useState<AuthEvent[]>([])
@@ -56,6 +58,7 @@ export function SignInFlow({ machine, title, start, onClose }: SignInFlowProps) 
 
   const last = events.at(-1)
   const finished = last?.type === 'done' || last?.type === 'failed'
+  useEffect(() => { if (last?.type === 'done') onDone?.() }, [last?.type])
   return (
     <div className="auth-flow">
       <div className="auth-flow__head">

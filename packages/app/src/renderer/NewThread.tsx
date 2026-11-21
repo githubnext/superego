@@ -11,12 +11,13 @@ import { autoFocusOnOpen, Button, Dialog, Select, TextField } from '@superego/ui
 import { has, machine as client } from './client.ts'
 import { ProfileSelect } from './profile-pick.tsx'
 import { useLocalState } from './local-state.ts'
-import { useAllThreads, useMachines, useSelection, useShell, type NewThreadStart } from './state.tsx'
+import { useAllThreads, useMachines, useSelection, type NewThreadStart } from './state.tsx'
 import { APP } from '../shared/app-settings.ts'
 import { ctrlDigit, keyLabel } from './keys.ts'
 import { ComposerBox } from './composer-box.tsx'
 import { ModelPicker, withFavourites } from './model-picker.tsx'
 import { FolderField, recentFolders, type FolderFieldHandle } from './folder-field.tsx'
+import { NoModel } from './Setup.tsx'
 
 /** The machine the last thread started from here was on. Every window's. */
 type Last = { machine?: string }
@@ -59,7 +60,6 @@ export function NewThreadDialog({ start: asked, onClose }: { start: NewThreadSta
   const machines = useMachines().filter((m) => m.state === 'connected')
   const threads = useAllThreads()
   const { select, selection, thread: shown } = useSelection()
-  const { openSettings } = useShell()
   const registry = useRegistry()
   const dispatch = registry.router.dispatch
   const [last, setLast] = useLocalState<Last>('newThread', {}, { shared: true })
@@ -292,9 +292,8 @@ export function NewThreadDialog({ start: asked, onClose }: { start: NewThreadSta
         )}
         {error && (
           <div className="new-thread__error" role="alert">
-            <p>{error.kind === 'no_model' && machine ? `No model is set up on ${machine.label}.` : error.message}</p>
+            {error.kind === 'no_model' && machine ? <NoModel machine={machine} before={onClose} /> : <p>{error.message}</p>}
             {error.kind === 'profile_not_allowed' && <Button onClick={() => void create({ allow: true })}>Allow and start</Button>}
-            {error.kind === 'no_model' && <Button onClick={() => { onClose(); openSettings() }}>Open Settings</Button>}
           </div>
         )}
       </div>

@@ -131,6 +131,12 @@ export function useShell() {
       focusProvider(machine, provider)
       openSettings(true)
     },
+    /** Settings, on a machine's Providers. */
+    providers: (machine: string) => {
+      setLocalState('settings.target', machine, APP)
+      focusProvider(machine, '')
+      openSettings(true)
+    },
     /** The New thread dialog, optionally starting on a machine or folder. */
     newThread: (start: NewThreadStart = {}) => openNewThread(start),
   }

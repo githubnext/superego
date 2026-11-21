@@ -10,6 +10,7 @@ import type { AnchorHTMLAttributes, ComponentType, ReactNode } from 'react'
 import type { AppConfig, DeclaredSection, ExtensionAbout, Json, Pane, ProviderRejection, SectionInfo, Status, ThreadInfo } from '@superego/protocol'
 import type { MachineEntry } from '../shared/bridge.ts'
 import type { Selection } from './state.tsx'
+import type { SetupFound } from './Setup.tsx'
 import type { Dispatch, WindowAction } from './actions.tsx'
 import type { Store } from './local-state.ts'
 import type { Place, Placement } from '../shared/layout.ts'
@@ -39,7 +40,10 @@ export type BehaviourSlot =
   | 'editor.bar'
   /** Always there, over everything: an extension's own dialogs (a quick open), drawn while it wants them. */
   | 'overlay'
-  /** On the first-launch page, under its title: a short word on what yours offers, and a way to it. */
+  /**
+   * On first-run setup, among what was found on the machine: a `SetupRow` for what yours offers to run models with,
+   * and `use` once it's ready (a profile new threads start with).
+   */
   | 'onboarding'
 
 /** What a slot beside a file editor gets: the file, and a way to show another. */
@@ -54,7 +58,7 @@ export type SlotProps = {
   'editor.side': EditorSlotProps
   'editor.bar': EditorSlotProps
   'overlay': Record<string, never>
-  'onboarding': Record<string, never>
+  'onboarding': { machine: MachineEntry; use(found: SetupFound): void }
 }
 
 /** What a view needs to be drawn: nothing but the window, or a thread. */

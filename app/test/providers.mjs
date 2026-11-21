@@ -6,7 +6,7 @@ import { openApp } from './harness.mjs'
 await openApp({ name: 'providers', timeout: 180_000 }, async (t) => {
   const { run, until } = t
   await t.resize(1100, 760)
-  await until(`!!document.querySelector('.onboarding')`, 'the first-launch page')
+  await until(`!!document.querySelector('.app__empty')`, 'the window')
   const signIn = (provider, key) => run(`new Promise((done, fail) => {
     window.superego.call('local', 'auth.signIn', { provider: '${provider}', type: 'api_key', key: '${key}' }).then(() => setTimeout(done, 300), fail)
   })`)

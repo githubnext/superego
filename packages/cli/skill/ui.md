@@ -99,7 +99,7 @@ Slots a profile can fill, each given `{ machine, thread }` (and for the editor o
 | `details.section` | in thread details (⌘I), after what the core says: an `<h5>` and what you know of the thread. |
 | `editor.side`, `editor.bar` | beside a file in the editor, and in its bar |
 | `overlay` | over everything: a dialog of your own, drawn while you want it. Mark its surface `data-superego-overlay` (Base UI popovers and dialogs from `superego/ui` are already known) so a web page in a pane, drawn above the window, steps aside while it's open |
-| `onboarding` | on the first-launch page, under its title: a word on what yours offers, and a way to it |
+| `onboarding` | on first-run setup (Set up models…), among what was found on the machine: `{ machine, use }`, drawing a `SetupRow` for what yours offers to run models with, and calling `use({ label, detail, profile })` once it's ready (the profile new threads start with). Claude Agent's finds Claude Code |
 
 ### A mark in the sidebar
 

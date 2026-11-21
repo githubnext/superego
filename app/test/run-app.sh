@@ -7,6 +7,8 @@
 # of them are stopped with SIGTERM, then SIGKILL if they're still there 10s later.
 set -m
 APP_GROUPS=
+# The app's own environment only, not the login shell's (where the user's API keys are): runs start without keys.
+export SUPEREGO_LOGIN_ENV=off
 CHECKOUT=$(cd .. && pwd)
 
 # The processes of the app's runs (`app`), or those and the daemons (no argument).

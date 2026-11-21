@@ -8,8 +8,8 @@ import { home, openNotice, openRow, restartOntoNewCode, row, STRAY } from './com
 
 export default async function reopen(t) {
   await t.until(`Boolean(${row('hello from smoke')})`, 'thread after reopen')
-  // Seen in the first run (Get started): the onboarding page, for good, no more.
-  if (!await t.run(`window.superego.call('local', 'settings.watch', {}).then((r) => r.value.values['onboarding.seen'] === true)`) || await t.run(`Boolean(document.querySelector('.onboarding'))`)) t.fail('onboarding not put away for good')
+  // Done in the first run (a model worked): setup, for good, no more.
+  if (!await t.run(`window.superego.call('local', 'settings.watch', {}).then((r) => r.value.values['onboarding.seen'] === true)`) || await t.run(`Boolean(document.querySelector('.setup'))`)) t.fail('setup not done for good')
   // The one window left open reopened, and the state of the one closed is gone.
   if (BrowserWindow.getAllWindows().length !== 1) t.fail('not the one window left open, reopened')
   await t.until(`(() => { const id = new URLSearchParams(location.search).get('window'); return Object.keys(localStorage).filter((k) => k.startsWith('superego.window.')).every((k) => k.startsWith('superego.window.' + id + '.')) })()`, "the closed window's state dropped")

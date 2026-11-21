@@ -1,0 +1,76 @@
+/* First-run setup (Setup.tsx): one calm column in the middle of the main area, scrolling when it's taller, its
+   buttons kept in view at its foot. Rows a line apart; a way in opens under its row, on a quiet fill. */
+.setup {
+  flex: 1; min-height: 0; overflow-y: auto;
+  display: flex; flex-direction: column; gap: var(--superego-space-5);
+  padding: var(--superego-space-7) max(var(--superego-space-5), calc((100% - 460px) / 2)) 0;
+  font-size: var(--superego-text-ui); line-height: var(--superego-leading-ui);
+}
+.setup h1 { margin: 0; font-size: var(--superego-text-title); font-weight: 600; letter-spacing: -.01em; }
+.setup h2 { margin: 0 0 var(--superego-space-1); font-size: var(--superego-text-ui); font-weight: 600; }
+.setup ul { list-style: none; margin: 0; padding: 0; }
+.setup p { margin: 0; }
+
+.setup__hello { display: flex; flex-direction: column; align-items: center; gap: var(--superego-space-2); text-align: center; }
+.setup__hello p { color: var(--superego-muted); }
+.setup__machine { margin-top: var(--superego-space-1); }
+/* Ego's dot, in a well: it closes, content, once a model says hi. */
+.setup__mark { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: var(--superego-fill); }
+.setup__mark::after { content: ''; width: 14px; height: 14px; border-radius: 7px; background: var(--superego-text); transition: height .25s ease, width .25s ease; }
+.setup__mark.is-awake::after { width: 16px; height: 3px; }
+@media (prefers-reduced-motion: reduce) { .setup__mark::after { transition: none; } }
+
+/* Found: hidden until something is (an extension's row, a key, a server). */
+.setup__found:not(:has(.setup__row)) h2 { display: none; }
+.setup__row { border-top: 1px solid var(--superego-line); }
+.setup__row:last-child { border-bottom: 1px solid var(--superego-line); }
+.setup__line { display: flex; align-items: center; gap: var(--superego-space-3); width: 100%; padding: 7px 0; min-height: 44px; text-align: left; font: inherit; color: inherit; background: none; border: 0; }
+button.setup__line { cursor: pointer; border-radius: var(--superego-radius); }
+button.setup__line:hover { background: var(--superego-hover); }
+.setup__icon { flex: none; display: grid; place-items: center; width: 24px; height: 24px; border-radius: 6px; background: var(--superego-fill); color: var(--superego-muted); }
+.setup__what { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.setup__detail { color: var(--superego-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.setup__caret { color: var(--superego-faint); width: 16px; text-align: center; }
+.setup__way.is-open { border-color: transparent; }
+.setup__way.is-open + .setup__row { border-top-color: transparent; }
+.setup__way.is-open .setup__line { background: var(--superego-fill); padding-inline: var(--superego-space-2); }
+.setup__open { padding: var(--superego-space-2) 0 var(--superego-space-3) 36px; display: flex; flex-direction: column; gap: var(--superego-space-2); }
+.setup__key, .setup__local { display: flex; flex-wrap: wrap; gap: var(--superego-space-1); }
+.setup__key .superego-field[type=password], .setup__local .superego-field:nth-child(2) { flex: 1; min-width: 140px; }
+.setup__local .superego-field:first-child { width: 110px; }
+.setup__local .setup__error { flex-basis: 100%; }
+
+.setup__note { color: var(--superego-muted); }
+.setup__note a, .setup__link { color: var(--superego-accent); }
+.setup__link { font: inherit; padding: 0; border: 0; background: none; cursor: pointer; }
+.setup__error { color: var(--superego-status-error-text); }
+.setup__ok { color: var(--superego-status-success); }
+.setup__another { align-self: center; color: var(--superego-muted); }
+
+.setup__model { display: flex; align-items: center; gap: var(--superego-space-1); border-radius: var(--superego-radius); }
+.setup__model.is-default { background: var(--superego-fill); }
+.setup__star, .setup__pick { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+.setup__star { display: grid; place-items: center; width: 28px; height: 28px; color: var(--superego-faint); border-radius: 6px; }
+.setup__star:hover { color: var(--superego-text); }
+.setup__star.is-on { color: var(--superego-status-blocked); }
+.setup__pick { flex: 1; display: flex; justify-content: space-between; gap: var(--superego-space-2); padding: 5px var(--superego-space-2) 5px 0; text-align: left; }
+.setup__pick .setup__detail { color: var(--superego-faint); }
+.setup__model:not(.is-default):not(:hover) .setup__pick .setup__detail { visibility: hidden; }
+.setup__models .model-picker__button { margin-top: var(--superego-space-1); }
+.setup__models > .setup__note { margin-top: var(--superego-space-1); }
+
+.setup__test { display: flex; align-items: center; gap: var(--superego-space-2); flex-wrap: wrap; min-height: 32px; }
+.setup__bubble { background: var(--superego-surface); border-radius: 12px; padding: 4px 11px; }
+.setup__ms { font-family: var(--superego-mono); font-size: var(--superego-text-sm); color: var(--superego-faint); }
+
+.setup__foot {
+  position: sticky; bottom: 0; margin-top: auto;
+  display: flex; justify-content: center; gap: var(--superego-space-2);
+  padding: var(--superego-space-5) 0 var(--superego-space-6);
+  background: linear-gradient(transparent, var(--superego-bg) var(--superego-space-5));
+}
+.setup__foot .superego-button[data-variant=primary], .setup__foot .superego-button:first-child { padding: 6px 22px; }
+
+/* Where sending failed for lack of a model: a line and a way to set one up. */
+.setup-card { display: inline-flex; align-items: center; gap: var(--superego-space-2); flex-wrap: wrap; }
+.providers__setup { display: flex; justify-content: flex-end; margin-bottom: var(--superego-space-2); }

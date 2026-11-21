@@ -1,7 +1,7 @@
 // Screenshots of the window's layout (run by test/look.sh): the sidebar shown and hidden (the threads as dots); the thread
 // alone (and dragged narrower) and with Changes beside it (and a file past it); a long title, parent and branch; thread
 // details, their menu and the layout's file beside the thread; ⌘U's unread list; a phone, its drawer open, a data view in it, the thread's sheet; a data view
-// as a space; the first-launch page, ⌘N's dialog, Settings and its Keyboard; light and dark. Into $SUPEREGO_SHOWCASE_OUT.
+// as a space; ⌘N's dialog, Settings and its Keyboard; light and dark. Into $SUPEREGO_SHOWCASE_OUT.
 import { openApp } from './harness.mjs'
 import { threads } from './showcase/threads.mjs'
 
@@ -9,9 +9,8 @@ await openApp({ name: 'look', timeout: 180_000 }, async (t) => {
   const { run, until } = t
   const [width, height] = (process.env.LOOK_SIZE ?? '1100x760').split('x').map(Number)
   await t.resize(width, height)
-  // A fresh home: the first-launch page, before any thread.
-  await until(`document.querySelectorAll('.onboarding .onboarding__extension').length > 1`, 'the first-launch page')
-  await t.both('onboarding')
+  // A fresh home whose model works: no setup page (test/look.sh <dir> setup has it).
+  await until(`Boolean(document.querySelector('.app__empty'))`, 'the window')
   const project = process.env.SUPEREGO_SHOWCASE_PROJECT
   const state = (id) => `window.superego.call('local', 'thread.list', {}).then((list) => list.find((s) => s.id === '${id}')?.status.state)`
   const turnOn = async (id, text) => {

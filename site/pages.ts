@@ -18,6 +18,7 @@ export const sections: Section[] = [
     title: 'Using Superego',
     pages: [
       { slug: '', title: 'Overview', src: 'docs/overview.md', intro: false, drop: ['Layout', 'A registry mirror'] },
+      { slug: 'getting-started', title: 'Getting started', src: 'docs/getting-started.md' },
       { slug: 'cli', title: 'The command', src: 'packages/cli/skill/cli.md' },
       { slug: 'profiles', title: 'Profiles', src: 'packages/cli/skill/profiles.md' },
       { slug: 'thread-tools', title: 'Thread tools', src: 'packages/cli/skill/thread-tools.md' },

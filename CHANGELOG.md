@@ -15,6 +15,16 @@
   another user on the computer could have written (in `/tmp`, or a folder writable by others).
 - **Upgrade:** a profile's modules can import only `'superego'`, Node's built-ins and files by their paths. One that
   imports a package by name or a `#` alias no longer loads, and says why: import the file by its path instead.
+- A first run starts with a model: **Who does the thinking?** shows what's already on the computer (an API key in your
+  shell, Ollama or LM Studio running, Claude Code signed in) and the other ways in (ChatGPT, GitHub Copilot or
+  OpenRouter sign-in, an API key, a local server), then the default model, a few favourites and a "Say hi" to prove it
+  works, then your first thread. It replaces the welcome page and its extension switches (they stay in Settings), and
+  opens again from Settings → Providers or ⌘K (**Set up models…**), for this computer or another machine.
+- A message that can't be sent for lack of a model says so with **Set up models…**, and comes back to the thread once
+  one works. ⌘N no longer leaves an empty thread behind when it can't start one.
+- An API key is tried before it's kept: a wrong one says so right away, instead of at the first message.
+- API keys exported in your shell's startup files (`~/.zshrc`) are found when Superego is opened from the Dock.
+- Choosing Claude Code in setup makes a `claude` profile whose threads run on it.
 - Allowing a project's profile now covers everything it can load: a change to any file it runs asks to allow it again.
 - A page an agent draws (an `html` block) can't reach the network (no fetching, nothing loaded from the web, no
   navigating away), and no longer answers or messages for you by itself: what it would say shows under it, and goes
