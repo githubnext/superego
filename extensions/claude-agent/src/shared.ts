@@ -11,6 +11,15 @@ export const about = {
 export const WAITING = 'claude-agent.waiting'
 /** Answer an approval, by its id: `{ id, choice, message? }`. */
 export const ANSWER = 'claude-agent.answer'
+/** Whether Claude Code is installed here and signed in (`ClaudeStatus`), as `claude auth status` says: for setup. */
+export const STATUS = 'claude-agent.status'
+/** Make the user's "claude" profile, which picks Claude Agent, unless there's one: `{ name }`. */
+export const MAKE_PROFILE = 'claude-agent.makeProfile'
+/** The profile setup makes. */
+export const PROFILE_NAME = 'claude'
+/** Claude Code here: not installed, or installed and signed in or not (`how`: its auth method, "claude.ai" say). */
+export type ClaudeStatus = { installed: false } | { installed: true; loggedIn: boolean; how?: string; error?: string }
+
 /** A profile's choices for its Claude Agent threads (`ClaudeAgentOptions`), its key in profiles. */
 export const PROFILE_KEY = 'claudeAgent'
 /** The MCP server Superego's tools are on, in Claude Code: its tools are `mcp__superego__<name>`. */

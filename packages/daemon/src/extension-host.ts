@@ -22,7 +22,7 @@ import type { Threads } from './threads.ts'
  */
 export const RESERVED = new Set([
   'action', 'agent', 'app', 'artifact', 'auth', 'core', 'daemon', 'extension', 'extensions', 'file', 'hello', 'image', 'model', 'pane', 'profile', 'profiles',
-  'providers', 'settings', 'thread', 'threads', 'unwatch', 'value', 'view', 'watch', 'web',
+  'providers', 'settings', 'setup', 'thread', 'threads', 'unwatch', 'value', 'view', 'watch', 'web',
   // Its own settings sections besides.
   'outside', 'onboarding',
   // A connection's own (heartbeat, channels), who is connected, and the machines this one reaches.

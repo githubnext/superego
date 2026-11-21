@@ -240,9 +240,9 @@ export function registerCoreActions(host: Host, { harness, machine, threads, pro
   }))
   router.register(defineAction({
     id: 'auth.signIn', title: 'Sign in to a provider', expose: ['ui', 'cli'],
-    params: obj({ provider: str(), type: union([lit('api_key'), lit('oauth')]), key: opt(str()) }),
-    run({ provider, type, key }, ctx: DaemonContext) {
-      const flow: string = agent.login(provider, type, key, (event) => ctx.notify('auth.event', { flow, event }))
+    params: obj({ provider: str(), type: union([lit('api_key'), lit('oauth')]), key: opt(str()), check: opt(bool()) }),
+    run({ provider, type, key, check }, ctx: DaemonContext) {
+      const flow: string = agent.login(provider, type, key, (event) => ctx.notify('auth.event', { flow, event }), check)
       return { flow }
     },
   }))

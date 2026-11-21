@@ -15,7 +15,7 @@ import { AUTH_REJECTED, Lifetime, ONBOARDED, createRouter, threadEnv, type AppCo
 import { SettingsRegistry, type SettingsStore } from '@superego/settings'
 import { FileSettingsStore } from '@superego/settings/file'
 import { registerCoreActions } from './actions.ts'
-import { createAgentSettings } from './agent-settings.ts'
+import { createAgentSettings, type LocalServer } from './agent-settings.ts'
 import { createAuthFlows } from './auth-flows.ts'
 import { readCommit } from './build.ts'
 import { Clients, type Via } from './clients.ts'
@@ -74,6 +74,10 @@ export type DaemonOptions = {
    * builds it from @superego/client (the app's daemon: `machineHub`); without it, this daemon reaches only itself.
    */
   reach?: (self: MachineInfo) => MachineReach
+  /** The user's login shell's environment, for keys the daemon's own lacks (login-env.ts); unset, its own only. */
+  loginEnv?: () => Promise<Record<string, string>>
+  /** The local model servers first-run setup looks for (Ollama's and LM Studio's usual addresses unset). */
+  localServers?: LocalServer[]
 }
 
 export type Daemon = {
@@ -111,7 +115,9 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   await mkdir(options.dataDir, { recursive: true, mode: 0o700 })
   const settings = new SettingsRegistry(options.settingsStore ?? new FileSettingsStore(join(options.dataDir, 'settings.json')))
   const flows = createAuthFlows()
-  const agent = await createAgentSettings(settings, options.dataDir, options.app, flows)
+  const agent = await createAgentSettings(settings, options.dataDir, options.app, flows, {
+    ...(options.loginEnv ? { loginEnv: options.loginEnv } : {}), ...(options.localServers ? { localServers: options.localServers } : {}),
+  })
   // Profiles and their extensions import from 'superego'; this is what they get.
   provideSdk({ ...sdk })
   const defaultCwd = options.defaultCwd ?? process.cwd()
@@ -271,10 +277,10 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   }
 
   settings.register({ id: 'clients', title: 'Connected', order: 85, ui: 'clients', settings: [], description: 'Who is using this machine right now.' })
-  // Whether the window's first-launch page was seen here.
+  // Whether first-run setup was done (or skipped) here.
   settings.register({
     id: 'onboarding', title: 'Onboarding',
-    settings: [{ key: ONBOARDED, title: 'Onboarding seen', default: false, type: { type: 'boolean' }, hidden: () => true }],
+    settings: [{ key: ONBOARDED, title: 'Setup done', default: false, type: { type: 'boolean' }, hidden: () => true }],
   })
   const webAccess = await openWebAccess({
     options, settings, router: host.router, clients, relay, serve: daemon.serve, cwdOf: async (id) => (await threads.get(id)).meta.cwd,

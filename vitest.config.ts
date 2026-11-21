@@ -37,6 +37,7 @@ export default defineConfig({
   test: {
     include: ['packages/*/test/**/*.test.ts', 'extensions/*/test/**/*.test.ts'], testTimeout: 20_000,
     // The author types tests share (packages/cli/test/author-types.ts): a data dir to install them in, once a run.
-    env: { ...providerEnv, XDG_RUNTIME_DIR: runtime, SUPEREGO_TEST_AUTHOR_TYPES: join(runtime, 'author') },
+    // Nor from the login shell's, which a daemon the tests start as the app's would read (login-env.ts).
+    env: { ...providerEnv, SUPEREGO_LOGIN_ENV: 'off', XDG_RUNTIME_DIR: runtime, SUPEREGO_TEST_AUTHOR_TYPES: join(runtime, 'author') },
   },
 })

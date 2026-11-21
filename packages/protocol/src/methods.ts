@@ -43,9 +43,10 @@ export const linkTo = (thread: Pick<ThreadInfo, 'id' | 'title'>) => `[${thread.t
  * round) for whatever both know. `thread-read`: the `thread.read` method. `forward`: `forward` channels, a TCP
  * connection to a port on its loopback (forward.ts). `image-read`: the `image.read` method, and transcripts whose images
  * come without their pixels (`ImageStub`). `file-locate`: the `file.locate` method. `pane-move`: the `pane.move` action.
- * `artifact-read`: the `artifact.read` method.
+ * `artifact-read`: the `artifact.read` method. `model-setup`: the `setup.probe` and `model.test` methods, and
+ * `auth.signIn`'s `check`.
  */
-export const FEATURES = ['thread-read', 'forward', 'image-read', 'file-locate', 'pane-move', 'artifact-read'] as const
+export const FEATURES = ['thread-read', 'forward', 'image-read', 'file-locate', 'pane-move', 'artifact-read', 'model-setup'] as const
 export type Feature = (typeof FEATURES)[number]
 
 export type ThreadId = string
@@ -127,6 +128,21 @@ export type ThreadInfo = {
 }
 
 /** The models a machine can run, and the default a new thread gets there. */
+/**
+ * What a machine has for running models, as its first-run setup shows it (`setup.probe`): whether a model works here
+ * now (`usable`: the default model's provider is signed in), the providers signed in by a key in the environment (the
+ * daemon's own, or its user's login shell's: `shell`), and the local model servers answering at their usual address,
+ * with the models they list (`provider`: the provider already added for it).
+ */
+export type SetupProbe = {
+  usable: boolean
+  fromEnv: { provider: string; name: string; variable: string; shell: boolean }[]
+  local: { id: string; name: string; baseUrl: string; models: string[]; provider?: string }[]
+}
+
+/** A model's answer to "Say hi" (`model.test`): which it was (`provider/model`, and its name), what it said, how long it took. */
+export type ModelTest = { model: string; label: string; text: string; ms: number }
+
 export type ModelCatalog = {
   models: { value: string; label: string; group: string; thinking: string[] }[]
   default: { model?: string; thinking: string | null }
@@ -399,8 +415,12 @@ export type Methods = {
   /** Snapshot of every section and value, then `settings.changed` with the whole snapshot. */
   'settings.watch': { params: {}; result: { sub: string; value: SettingsSnapshot } }
   'settings.set': { params: { key: string; value: Json }; result: null }
-  /** Start a sign-in. It reports through `auth.event`; prompts are answered with `auth.respond`. */
-  'auth.signIn': { params: { provider: string; type: 'api_key' | 'oauth'; key?: string }; result: { flow: string } }
+  /**
+   * Start a sign-in. It reports through `auth.event`; prompts are answered with `auth.respond`. `check` (with the
+   * `model-setup` feature): a key is tried on one of the provider's models before the flow is done, and taken back
+   * if the provider refuses it.
+   */
+  'auth.signIn': { params: { provider: string; type: 'api_key' | 'oauth'; key?: string; check?: boolean }; result: { flow: string } }
   'auth.respond': { params: { flow: string; prompt: string; value: string }; result: null }
   'auth.cancel': { params: { flow: string }; result: null }
   'auth.signOut': { params: { provider: string }; result: null }
@@ -409,6 +429,13 @@ export type Methods = {
   'providers.remove': { params: { provider: string }; result: null }
   /** The models an OpenAI-compatible endpoint lists (`provider`: with that provider's stored key, without `key`). */
   'providers.models': { params: { baseUrl: string; key?: string; provider?: string }; result: { models: string[] } }
+  /** What this machine has for running models: for its first-run setup. With the `model-setup` feature. */
+  'setup.probe': { params: {}; result: SetupProbe }
+  /**
+   * Ask a model (`provider/model`; the default unset) to say hi, once: proof it works. Fails with what its provider
+   * said (`rejected` when it refused the credentials). With the `model-setup` feature.
+   */
+  'model.test': { params: { model?: string }; result: ModelTest }
 
   /**
    * Snapshot of an extension's live value, then `value.changed` with each new one. Watched by name: null until an

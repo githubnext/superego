@@ -61,6 +61,24 @@ export async function findClaude(given?: string): Promise<string | undefined> {
   return given || (await onPath(await shellPath()) ?? await onPath(process.env.PATH))
 }
 
+/**
+ * Whether the `claude` at `executable` is signed in, as `claude auth status` says (its JSON), run as a thread's is:
+ * without Anthropic credentials, so it's the user's own sign-in that's told. Nothing of it is read or kept.
+ */
+export function authStatus(executable: string, env: Record<string, string>): Promise<{ loggedIn: boolean; how?: string; error?: string }> {
+  return new Promise((done) => {
+    execFile(executable, ['auth', 'status'], { timeout: 15_000, env }, (error, stdout) => {
+      try {
+        const said = JSON.parse(String(stdout)) as { loggedIn?: unknown; authMethod?: unknown }
+        const how = typeof said.authMethod === 'string' && said.authMethod !== 'none' ? said.authMethod : undefined
+        done({ loggedIn: said.loggedIn === true, ...(how ? { how } : {}) })
+      } catch {
+        done({ loggedIn: false, error: error?.message ?? `claude auth status said: ${String(stdout).trim().slice(0, 200)}` })
+      }
+    })
+  })
+}
+
 /** The message for a machine without `claude`. */
 export const NOT_INSTALLED = 'Claude Code isn\'t installed on this machine: see code.claude.com'
 

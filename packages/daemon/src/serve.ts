@@ -6,6 +6,8 @@ import { RESTART_EXIT, restartVia, saveRestartEnv, takeRestartEnv } from './serv
 import { listen } from './server.ts'
 import { sweepSnapshots } from './snapshot.ts'
 import { appEnv, defaultDataDir, pidPath, socketPath } from './paths.ts'
+import { readLoginEnv } from './login-env.ts'
+import { LOCAL_SERVERS } from './agent-settings.ts'
 import type { AppConfig, MachineInfo } from '@superego/protocol'
 import type { DaemonExtension } from './extension.ts'
 import type { MachineReach } from './relay.ts'
@@ -27,7 +29,11 @@ export async function serveDaemon({ app, dataDir = defaultDataDir(app), socket =
   Object.assign(process.env, carried)
   let restart = async (_env: Record<string, string>) => {}
   const agentsDir = appEnv(app)('AGENTS')
-  const daemon = await openDaemon({ app, dataDir, defaultCwd: appEnv(app)('CWD') ?? defaultCwd ?? process.cwd(), build, extensions, ...(webRoot ? { webRoot } : {}), ...(agentsDir ? { agentsDir } : {}), ...(reach ? { reach: (self: MachineInfo) => reach(dataDir, self) } : {}), onRestart: (env) => void restart(env) })
+  // <ID>_LOGIN_ENV=off: only the daemon's own environment (the app's tests, which start without keys). <ID>_OLLAMA and
+  // <ID>_LMSTUDIO: where setup looks for them instead of their usual address.
+  const loginEnv = appEnv(app)('LOGIN_ENV') === 'off' ? undefined : () => readLoginEnv()
+  const localServers = LOCAL_SERVERS.map((server) => ({ ...server, baseUrl: appEnv(app)(server.id.toUpperCase()) ?? server.baseUrl }))
+  const daemon = await openDaemon({ app, dataDir, localServers, ...(loginEnv ? { loginEnv } : {}), defaultCwd: appEnv(app)('CWD') ?? defaultCwd ?? process.cwd(), build, extensions, ...(webRoot ? { webRoot } : {}), ...(agentsDir ? { agentsDir } : {}), ...(reach ? { reach: (self: MachineInfo) => reach(dataDir, self) } : {}), onRestart: (env) => void restart(env) })
   const server = await listen(daemon, socket)
   const pidFile = pidPath(dataDir)
   await writeFile(pidFile, String(process.pid))

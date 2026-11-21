@@ -12,16 +12,18 @@
 // the thread shows as blocked on a permission. Its questions go through agent-ui's question card instead (turn.ts).
 // What the user says to always allow is kept here, by folder (always.ts), not in the folder's own settings.
 // What its subagents do is kept with the thread, by their Agent call, for those calls' rows.
+import { existsSync } from 'node:fs'
+import { mkdir, writeFile } from 'node:fs/promises'
 import { isAbsolute, join } from 'node:path'
 import { defineAction, defineDaemonExtension } from '@superego/daemon'
 import { envName, lit, obj, opt, RpcError, str, threadEnv, union, type Json } from '@superego/protocol'
 import { AlwaysAllowed } from './always.ts'
-import { claudeEnv, findClaude } from './claude.ts'
+import { authStatus, claudeEnv, findClaude } from './claude.ts'
 import { writePlugin } from './plugin.ts'
 import { projectConfig, ProjectAllowances } from './project.ts'
 import {
-  about, ALLOW, ANSWER, KEPT, optionsProblem, PROFILE_KEY, WAITING,
-  type Answer, type Approval, type ClaudeAgentOptions, type Kept, type ProjectFacts, type SubagentSteps,
+  about, ALLOW, ANSWER, KEPT, MAKE_PROFILE, optionsProblem, PROFILE_KEY, PROFILE_NAME, STATUS, WAITING,
+  type Answer, type ClaudeStatus, type Approval, type ClaudeAgentOptions, type Kept, type ProjectFacts, type SubagentSteps,
 } from './shared.ts'
 import { turnTask, type TurnHost } from './turn.ts'
 
@@ -134,6 +136,30 @@ export function claudeAgent({ skills = [], executable, env = () => claudeEnv(), 
           answers.delete(id)
           answer({ choice, ...(message?.trim() ? { message: message.trim() } : {}) })
           return null
+        },
+      }))
+
+      // ── Setup: whether Claude Code is here and signed in, and a profile that picks it ─────────────────────────────
+      superego.action(defineAction({
+        id: STATUS, title: 'Whether Claude Code is installed and signed in', runs: 'machine', expose: ['ui', 'cli'],
+        params: obj({}),
+        async run(): Promise<ClaudeStatus> {
+          const found = await (executable ?? (() => findClaude(given)))()
+          if (!found) return { installed: false }
+          return { installed: true, ...await authStatus(found, env()) }
+        },
+      }))
+      superego.action(defineAction({
+        id: MAKE_PROFILE, title: 'Make a profile that runs Claude Code', runs: 'machine', expose: ['ui', 'cli'],
+        description: `The user's "${PROFILE_NAME}" profile, whose threads run on Claude Code (agent: 'claude-agent'); one there already is left as it is.`,
+        params: obj({}),
+        async run() {
+          const dir = join(superego.dataDir, 'profiles', PROFILE_NAME)
+          if (!existsSync(join(dir, 'profile.ts'))) {
+            await mkdir(dir, { recursive: true })
+            await writeFile(join(dir, 'profile.ts'), `// Threads with this profile run on your Claude Code, signed in with its own /login.\nexport default { agent: 'claude-agent' }\n`)
+          }
+          return { name: PROFILE_NAME }
         },
       }))
 

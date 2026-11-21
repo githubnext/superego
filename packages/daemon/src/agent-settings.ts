@@ -6,12 +6,12 @@ import { readFileSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { Api, AuthPrompt as PiAuthPrompt, Model, Credential, CredentialStore, ModelThinkingLevel } from '@earendil-works/pi-ai'
-import { createAssistantMessageEventStream, fauxAssistantMessage, fauxProvider, type FauxResponseStep } from '@earendil-works/pi-ai'
+import { createAssistantMessageEventStream, defaultProviderAuthContext, fauxAssistantMessage, fauxProvider, type AuthContext, type FauxResponseStep } from '@earendil-works/pi-ai'
 import { createModels, getSupportedThinkingLevels, clampThinkingLevel, type Models, type Provider } from '@earendil-works/pi-ai/models'
 import { registerBunOAuthFlows } from '@earendil-works/pi-ai/bun-oauth'
 import type { ModelRef } from '@earendil-works/pi-durable'
 import { createNodePhotonImages } from '@earendil-works/pi-durable/images/node'
-import { RpcError, type AppConfig, type AuthEvent, type CustomProviderInput, type ModelCatalog, type AuthPrompt, type ProviderAuthInfo, type SettingOption } from '@superego/protocol'
+import { RpcError, type AppConfig, type AuthEvent, type CustomProviderInput, type ModelCatalog, type ModelTest, type AuthPrompt, type ProviderAuthInfo, type SettingOption, type SetupProbe } from '@superego/protocol'
 import type { SettingsRegistry } from '@superego/settings'
 import { appEnv } from './paths.ts'
 import { sniff } from './image-kind.ts'
@@ -24,6 +24,29 @@ import { withoutSubscriptionAuth, withoutSubscriptionEnv } from './claude-subscr
 import { writeAtomic } from './write-atomic.ts'
 import type { AuthFlowEvent, AuthFlows } from './auth-flows.ts'
 import { builtins, checkBaseUrl, customProvider, fetchModelIds, idFor, keyOf, keyShape, modelsFile, OAUTH, type CustomProviderConfig } from './providers.ts'
+
+/** A local model server, as setup looks for one: at its usual address, unless told otherwise (tests). */
+export type LocalServer = { id: string; name: string; baseUrl: string }
+/** Ollama and LM Studio, where they listen by default. */
+export const LOCAL_SERVERS: LocalServer[] = [
+  { id: 'ollama', name: 'Ollama', baseUrl: 'http://127.0.0.1:11434/v1' },
+  { id: 'lmstudio', name: 'LM Studio', baseUrl: 'http://127.0.0.1:1234/v1' },
+]
+/** How long a local server may take to list its models before setup takes it as not there. */
+const LOCAL_TIMEOUT = 1500
+/** What a model is asked to prove it works (`model.test`), and how long it may take. */
+const SAY_HI = 'Say hi in a few words.'
+const TEST_TIMEOUT = 60_000
+
+export type AgentSettingsOptions = {
+  /**
+   * The user's login shell's environment (login-env.ts), read once: keys the daemon's own environment lacks are taken
+   * from it. Unset, only the daemon's own.
+   */
+  loginEnv?: () => Promise<Record<string, string>>
+  /** The local model servers setup looks for (`LOCAL_SERVERS` unset). */
+  localServers?: LocalServer[]
+}
 
 // pi loads a provider's OAuth flow (to sign in, and to renew a sign-in) with an import() of a path worked out as it runs,
 // beside its own file, which a bundle can't follow: the built app has no such file. These are its flows imported
@@ -179,8 +202,15 @@ export type AgentSettings = {
   resolve(override?: { model?: string; thinking?: string }): { model?: ModelRef; thinkingLevel?: ModelThinkingLevel }
   /** The models a thread can choose from here, with their thinking levels, and what a thread gets by default. */
   catalog(): ModelCatalog
-  /** Sign in to a provider, as a flow of `flows` (auth-flows.ts): its id. */
-  login(provider: string, type: 'api_key' | 'oauth', key: string | undefined, emit: (event: AuthEvent) => void): string
+  /**
+   * Sign in to a provider, as a flow of `flows` (auth-flows.ts): its id. `check`: a key is tried on one of its models
+   * before the flow is done, and the credentials it had before are put back if the provider refuses it.
+   */
+  login(provider: string, type: 'api_key' | 'oauth', key: string | undefined, emit: (event: AuthEvent) => void, check?: boolean): string
+  /** Ask a model (`provider/model`; the default unset) to say hi, once. */
+  test(model?: string): Promise<ModelTest>
+  /** What this machine has for running models (`setup.probe`). */
+  probe(): Promise<SetupProbe>
   logout(provider: string): Promise<void>
   /**
    * Add an OpenAI-compatible provider, or change one added before (`id`): kept in models.json, its key (when given;
@@ -209,19 +239,28 @@ export type AgentSettings = {
   close(): Promise<void>
 }
 
-export async function createAgentSettings(settings: SettingsRegistry, dataDir: string, app: AppConfig, flows: AuthFlows): Promise<AgentSettings> {
+export async function createAgentSettings(settings: SettingsRegistry, dataDir: string, app: AppConfig, flows: AuthFlows, options: AgentSettingsOptions = {}): Promise<AgentSettings> {
   const env = appEnv(app)
   const credentials = new FileCredentialStore(join(dataDir, 'auth.json'))
+  // The login shell's environment, once read: what a provider looks for that the daemon's own environment hasn't.
+  let shellEnv: Record<string, string> = {}
+  const base = defaultProviderAuthContext()
+  const withLoginEnv: AuthContext = {
+    env: async (name) => (await base.env(name)) || shellEnv[name] || undefined,
+    fileExists: (path) => base.fileExists(path),
+  }
   // No Claude subscription token reaches pi-ai, from the environment or stored (claude-subscription.ts).
-  const models = createModels({ credentials, authContext: withoutSubscriptionEnv() })
+  const models = createModels({ credentials, authContext: withoutSubscriptionEnv(withLoginEnv) })
   const credentialListeners = new Set<(provider: string) => void>()
   const rejections = new Rejections(join(dataDir, 'auth-rejected.json'))
   const images = createModelImages(dataDir, await createNodePhotonImages())
   // <ID>_RECORD keeps every answer for replaying later; see replay.ts. Every provider is refused while rejected, and is
   // sent only images its model takes (model-images.ts).
   const record = env('RECORD')
+  // The providers being tried (`test`): asked even while rejected, as the trying is what tells.
+  const trying = new Map<string, number>()
   const recorded = <T extends Provider>(provider: T) => {
-    const blocks = () => rejections.blocks(provider.id) ? rejections.get(provider.id)!.summary : undefined
+    const blocks = () => !trying.get(provider.id) && rejections.blocks(provider.id) ? rejections.get(provider.id)!.summary : undefined
     return images.wrap(gated(record ? withRecording(provider, record) : provider, blocks))
   }
   /** How each provider takes a key (providers.ts), as worked out when it was set. */
@@ -415,6 +454,43 @@ export async function createAgentSettings(settings: SettingsRegistry, dataDir: s
   })
 
   await refreshAuth()
+  // Read once, after the daemon is up: a slow shell doesn't hold it back. Signed in from it once it's read.
+  const loginEnvRead = options.loginEnv?.().then((read) => { shellEnv = read; return refreshAuth() })
+    .catch((error: Error) => console.error(`Reading the login shell's environment: ${error.message}`)) ?? Promise.resolve()
+
+  /** Ask a model to say hi: what it said and how long it took, else what its provider said, as an RpcError. */
+  async function tryModel(ref: ModelRef): Promise<ModelTest> {
+    const model = models.getModel(ref.provider, ref.modelId)
+    const provider = models.getProvider(ref.provider)
+    if (!model || !provider) throw new RpcError('invalid', `No model ${ref.provider}/${ref.modelId} here`)
+    const started = Date.now()
+    trying.set(ref.provider, (trying.get(ref.provider) ?? 0) + 1)
+    let answer: Awaited<ReturnType<Models['completeSimple']>>
+    try {
+      answer = await models.completeSimple(model, { messages: [{ role: 'user', content: SAY_HI, timestamp: started }] }, { maxTokens: 256, signal: AbortSignal.timeout(TEST_TIMEOUT) })
+    } catch (error) {
+      answer = { ...fauxAssistantMessage('', { stopReason: 'error', errorMessage: (error as Error).message }) } as typeof answer
+    } finally {
+      trying.set(ref.provider, trying.get(ref.provider)! - 1)
+    }
+    if (answer.stopReason === 'error' || answer.stopReason === 'aborted') {
+      const said = answer.errorMessage ?? (answer.stopReason === 'aborted' ? `No answer in ${TEST_TIMEOUT / 1000}s` : 'It failed without saying why')
+      if (authFailure(said)) throw new RpcError('rejected', `${rejectionSummary(provider.name, authed.get(provider.id)?.type, said)}: ${said}`)
+      throw new RpcError('model_failed', `${provider.name}: ${said}`)
+    }
+    const text = answer.content.flatMap((part) => part.type === 'text' ? [part.text] : []).join('').trim()
+    return { model: `${ref.provider}/${ref.modelId}`, label: model.name, text, ms: Date.now() - started }
+  }
+  /** The model a provider is tried on: the default when it's this provider's, else what it'd start on. */
+  const testModelOf = (provider: string): ModelRef | undefined => {
+    const ref = chosen()
+    if (ref?.provider === provider && usable(provider).some((m) => m.id === ref.modelId)) return ref
+    const list = usable(provider)
+    const model = list.find((m) => m.id === PREFERRED[provider]) ?? list[0]
+    return model && { provider, modelId: model.id }
+  }
+  /** Whether the default model can be used now: its provider signed in, and offering it. */
+  const works = () => { const ref = chosen(); return Boolean(ref && usable(ref.provider).some((m) => m.id === ref.modelId)) }
 
   // Each provider's credentials as last seen (a hash), to tell which ones a change to auth.json changed.
   const hashOf = (credential: Credential | undefined) => credential ? createHash('sha256').update(JSON.stringify(credential)).digest('hex').slice(0, 16) : ''
@@ -491,7 +567,7 @@ export async function createAgentSettings(settings: SettingsRegistry, dataDir: s
         default: { ...(ref ? { model: `${ref.provider}/${ref.modelId}` } : {}), thinking: settings.get<string | null>(KEYS.thinking) },
       }
     },
-    login(provider, type, key, emit) {
+    login(provider, type, key, emit, check) {
       if (!models.getProviders().some((p) => p.id === provider)) throw new RpcError('unknown_provider', `No provider ${provider}`)
       if (type === 'oauth' && !OAUTH.has(provider)) throw new RpcError('unsupported', `Sign-in is not offered for ${provider}; use an API key`)
       return flows.start(emit, async (flow) => {
@@ -499,16 +575,60 @@ export async function createAgentSettings(settings: SettingsRegistry, dataDir: s
           if (key !== undefined && type === 'api_key' && prompt.type === 'secret') return Promise.resolve(key)
           return flow.prompt(prompt as AuthPrompt, signal ? { signal } : {})
         }
+        const before = check && type === 'api_key' ? await credentials.read(provider) : undefined
         await models.login(provider, type, {
           signal: flow.signal,
           prompt,
           notify: (event) => flow.emit(event.type === 'device_code' ? { type: 'device_code', userCode: event.userCode, verificationUri: event.verificationUri } : event as AuthFlowEvent),
         }, { agentName: app.id, getDeviceId })
         await refreshAuth()
+        const trial = check && type === 'api_key' ? testModelOf(provider) : undefined
+        if (trial) {
+          flow.emit({ type: 'progress', message: `Trying it on ${models.getModel(trial.provider, trial.modelId)?.name ?? trial.modelId}…` })
+          try {
+            await tryModel(trial)
+          } catch (error) {
+            // Refused: what was there before is put back. Anything else (the network, a model it can't have) isn't the key's fault.
+            if ((error as RpcError).kind !== 'rejected') {
+              flow.emit({ type: 'info', message: `Signed in, but trying it failed: ${(error as Error).message}` })
+            } else {
+              if (before) await credentials.modify(provider, async () => before)
+              else await credentials.delete(provider)
+              await refreshAuth()
+              throw error
+            }
+          }
+        }
         // Signed in again, even with the same key (fixed at the provider, say): what waited on it goes on.
         seen.set(provider, hashOf(await credentials.read(provider).catch(() => undefined)))
         credentialsChanged(provider)
       })
+    },
+    test(value) {
+      const ref = value ? parse(value) : chosen()
+      if (!ref) throw new RpcError('no_model', 'No model is available', { hint: 'Sign in to a provider in Settings.' })
+      return tryModel(ref)
+    },
+    async probe() {
+      await loginEnvRead
+      const fromEnv: SetupProbe['fromEnv'] = []
+      for (const provider of models.getProviders()) {
+        const source = authed.get(provider.id)?.source
+        if (authed.get(provider.id)?.type !== 'api_key' || !source || !shapes.get(provider.id)?.env.includes(source)) continue
+        fromEnv.push({ provider: provider.id, name: provider.name, variable: source, shell: !process.env[source] })
+      }
+      const same = (a: string, b: string) => a.replace('//localhost:', '//127.0.0.1:').replace(/\/$/, '') === b.replace('//localhost:', '//127.0.0.1:').replace(/\/$/, '')
+      const local = (await Promise.all((options.localServers ?? LOCAL_SERVERS).map(async (server) => {
+        try {
+          const listed = await fetchModelIds(server.baseUrl, undefined, AbortSignal.timeout(LOCAL_TIMEOUT))
+          const added = Object.entries(custom).find(([, config]) => same(config.baseUrl, server.baseUrl))?.[0]
+          return [{ ...server, models: listed, ...(added ? { provider: added } : {}) }]
+        } catch {
+          // Nothing listening there, or not answering as OpenAI's API does: not found, which is what setup says.
+          return []
+        }
+      }))).flat()
+      return { usable: works(), fromEnv, local }
     },
     async logout(provider) {
       await models.logout(provider)
@@ -575,7 +695,7 @@ export async function createAgentSettings(settings: SettingsRegistry, dataDir: s
       clearTimeout(reread)
       clearTimeout(rereadModels)
       watcher?.close()
-      await Promise.all([credentials.settled(), keepingDeviceId, images.settled()])
+      await Promise.all([credentials.settled(), keepingDeviceId, images.settled(), loginEnvRead])
     },
   }
 }

@@ -1,9 +1,11 @@
 // Claude Agent, UI half: above the composer, a folder's Claude Code settings waiting to be allowed
 // (project-notice.tsx) and what a thread's Claude Code waits on the user for (approval.tsx); and its own tools' rows in
-// the transcript: a subagent's (Agent) with its steps under it, a plan it proposed, a question it asked.
+// the transcript: a subagent's (Agent) with its steps under it, a plan it proposed, a question it asked; on first-run
+// setup, Claude Code when it's there (setup.tsx).
 import { defineUiExtension, has, Markdown, Output, ToolSteps, useValue, type ToolRow, type ToolRowCall } from '@superego/app/ui'
 import { Waiting } from './approval.tsx'
 import { ProjectNotice } from './project-notice.tsx'
+import { ClaudeFound } from './setup.tsx'
 import { about, AGENT_TOOL, KEPT, type Kept, type SubagentSteps } from './shared.ts'
 import './styles.css'
 
@@ -63,6 +65,7 @@ export default defineUiExtension({
   setup(superego) {
     superego.slot('composer.above', ProjectNotice, { order: 40 })
     superego.slot('composer.above', Waiting)
+    superego.slot('onboarding', ClaudeFound)
     superego.tool(AGENT_TOOL, agentRow)
     superego.tool('ExitPlanMode', planRow)
     superego.tool('AskUserQuestion', questionRow)

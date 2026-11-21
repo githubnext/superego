@@ -114,6 +114,8 @@ export function serveClient(peer: RpcPeer, { via, hangUp }: { via?: Via; hangUp?
     'relay.call': ({ machine: target, method, params }: Methods['relay.call']['params']) => relayed.call(target, method, params),
     'thread.list': ({ archived, hidden }: Methods['thread.list']['params']) => threads.list({ archived: Boolean(archived), hidden: Boolean(hidden) }),
     'agent.models': async () => host.agent.catalog(),
+    'setup.probe': () => host.agent.probe(),
+    'model.test': ({ model }: Methods['model.test']['params']) => host.agent.test(model),
     'file.read': ({ thread: id, path, base64 }: Methods['file.read']['params']) => files.read(id, path, base64),
     'artifact.read': async ({ thread: id, path }: Methods['artifact.read']['params']) => ({ content: (await files.artifact(id, path)).toString('base64') }),
     // Which version of each file there is, without its bytes: what the window checks its images against.

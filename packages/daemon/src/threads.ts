@@ -610,6 +610,10 @@ export function createThreads(host: Host, { harness, extensions, profiles }: { h
     }
     const ext: Record<string, Json> = {}
     const meta = { ...(ref ? { profile: ref } : {}) } as ThreadMeta
+    // A first message no model could answer: refused before anything is made, rather than leaving an empty thread.
+    if ((prompt?.trim() || attachments?.length) && !kind && !(await extensions.agentOf(undefined, { ...meta, ...(ownModel ? { model: ownModel } : {}) })).model) {
+      throw new RpcError('no_model', 'No model is available', { hint: 'Sign in to a provider in Settings.' })
+    }
     const off = extensions.switchedOff(loaded)
     // The hooks that took part, to undo what they did (`abandoned`, in reverse) if the thread isn't made after all.
     const took: ReturnType<typeof extensions.hooksFor> = []
@@ -642,7 +646,6 @@ export function createThreads(host: Host, { harness, extensions, profiles }: { h
       }
       throw error
     }
-    // Made: a first message that fails (no model yet) leaves it made, and says why.
     // From its parent, when one starts it, or the thread whose agent's shell asked.
     const sender = parent ?? from
     if (prompt?.trim() || attachments?.length) await submit(id, prompt ?? '', randomUUID(), undefined, attachments, { by, exposure, ...(sender ? { from: sender } : {}) })
