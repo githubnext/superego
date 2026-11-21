@@ -701,6 +701,8 @@ button.app__mobiletitle > svg { flex: none; color: var(--superego-faint); }
 @media (pointer: coarse) { .app__swipe-edge { display: block; } }
 .app.is-narrow .thread__column { width: auto; max-width: none; padding: var(--superego-space-4) var(--superego-space-4) calc(var(--dock, 100px) + 50px); }
 .app.is-narrow .dock { left: var(--superego-space-2); right: var(--superego-space-2); bottom: calc(env(safe-area-inset-bottom) + var(--superego-space-1)); width: auto; max-width: none; transform: none; }
+/* Over the keyboard (viewport.ts), the home indicator is under it: the composer sits on the keyboard. */
+:root[data-keyboard] .app.is-narrow .dock { bottom: var(--superego-space-1); }
 /* On a phone: the status bar's actions and the queued rows' buttons get room for a finger. */
 @media (pointer: coarse) {
   .app.is-narrow .dock__footer { margin-top: 2px; }
@@ -715,6 +717,7 @@ button.app__mobiletitle > svg { flex: none; color: var(--superego-faint); }
   .superego-dialog { width: 100vw !important; max-width: 100vw; height: var(--superego-viewport-height, 100dvh) !important; max-height: var(--superego-viewport-height, 100dvh); border-radius: 0; }
   /* Filling a phone's screen: clear of the status bar, the notch at its side and the home indicator. */
   .superego-dialog__frame { max-height: var(--superego-viewport-height, 100dvh); padding-bottom: env(safe-area-inset-bottom); }
+  :root[data-keyboard] .superego-dialog__frame { padding-bottom: 0; }
   .superego-dialog__header { padding-top: calc(env(safe-area-inset-top) + 10px); padding-right: max(10px, env(safe-area-inset-right)); padding-left: max(16px, env(safe-area-inset-left)); }
   /* Filling the desktop app's window, a dialog's header is its title bar: past the traffic lights, and it drags. */
   :root:has(.app:not(.is-web)) .superego-dialog__header { min-height: var(--superego-titlebar); padding-left: 84px; -webkit-app-region: drag; }
