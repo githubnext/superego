@@ -173,10 +173,11 @@ through Gatekeeper's check, which a local build skips).
 ## What an author's checks need from the package
 
 `superego extension test` type-checks and tests a profile's extensions with only what the app carries: TypeScript's
-compiler and a small test runner (vitest's `expect` and `vi`, its own `describe` and `it`), bundled as
-`out/main/author-test.js` and its chunks (about 16 MB, 3.5 MB zipped), and the author types in `out/types`, with
-TypeScript's `lib.*.d.ts` (about 4 MB). electron-builder drops every `*.d.ts` from an app's files, so `out/types` goes
-in as a file set of its own ([packages/app/src/package.ts](../packages/app/src/package.ts)).
+native compiler for this Mac's architecture, with its `lib.*.d.ts`, in `out/node_modules/@typescript` (about 26 MB,
+beside `typescript`, its package), a small test runner (vitest's `expect` and `vi`, its own `describe` and `it`),
+bundled as `out/main/author-test.js` and its chunks, and the author types in `out/types`. electron-builder drops every
+`*.d.ts` from an app's files, so `out/types` and `out/node_modules/@typescript` go in as a file set of their own
+([packages/app/src/package.ts](../packages/app/src/package.ts)).
 
 `pnpm smoke` checks it on the build: [app/test/author-test.sh](../app/test/author-test.sh) copies `out/` out of the repo
 and runs `extension new` and `extension test` on Electron as Node, for a data-only extension and one with a UI half.

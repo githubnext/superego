@@ -2,7 +2,7 @@
 // with everything of ours they reach (rollup-plugin-dts), so nothing points into Superego's own packages. What the
 // entry exports comes first, in the order its source exports it, each marked `export` where it's declared; what those
 // refer to follows. Outside packages (React, pi-durable, …) stay imports: their types are installed beside it.
-import type * as TS from 'typescript'
+import type * as TS from '@typescript/typescript6'
 
 export type FlattenOptions = {
   /** The entry's emitted declarations, in a node_modules where ours are installed as declarations too. */
@@ -25,7 +25,7 @@ export type FlattenOptions = {
 export async function flatten(options: FlattenOptions): Promise<string> {
   const { rollup } = await import('rollup')
   const { dts } = await import('rollup-plugin-dts')
-  const ts = (await import('typescript')).default
+  const ts = (await import('@typescript/typescript6')).default
   const standIn = '/stand-in/'
   const bundle = await rollup({
     input: options.input,
@@ -47,7 +47,7 @@ export async function flatten(options: FlattenOptions): Promise<string> {
 }
 
 /** A top-level statement's name, if it declares one. */
-function nameOf(ts: typeof import('typescript'), statement: TS.Statement): string | undefined {
+function nameOf(ts: typeof import('@typescript/typescript6'), statement: TS.Statement): string | undefined {
   if (ts.isVariableStatement(statement)) {
     const [declaration, ...more] = statement.declarationList.declarations
     return declaration && !more.length && ts.isIdentifier(declaration.name) ? declaration.name.text : undefined
@@ -60,7 +60,7 @@ function nameOf(ts: typeof import('typescript'), statement: TS.Statement): strin
  * Rollup's bundle laid out to be read: the header; outside imports; each export where it's declared, in `order`;
  * then the rest, as rollup had it. A declaration exported under another name takes that name when nothing else has it.
  */
-export function arrange(ts: typeof import('typescript'), code: string, order: string[], header: string): string {
+export function arrange(ts: typeof import('@typescript/typescript6'), code: string, order: string[], header: string): string {
   // Paths to hand-written declarations are gone (they're inlined); `types` ones stay.
   const references = [...code.matchAll(/^\/\/\/ <reference types=.*$/gm)].map(([line]) => line)
   let source = ts.createSourceFile('bundle.d.ts', code.replace(/^\/\/\/ <reference .*\n/gm, ''), ts.ScriptTarget.Latest, true)

@@ -22,7 +22,7 @@ async function run(name: string, files: Record<string, string>, args: string[] =
   await mkdir(profile, { recursive: true })
   for (const [file, source] of Object.entries(files)) await writeFile(join(profile, file), source)
   return new Promise((resolve) => {
-    execFile(process.execPath, [MAIN, '--types', join(dir, 'none'), ...args, profile], { timeout: 50_000, env: { ...process.env, NO_COLOR: '1', FORCE_COLOR: '' } }, (error, stdout, stderr) => {
+    execFile(process.execPath, [MAIN, ...args, profile], { timeout: 50_000, env: { ...process.env, NO_COLOR: '1', FORCE_COLOR: '' } }, (error, stdout, stderr) => {
       resolve({ code: error ? (typeof error.code === 'number' ? error.code : 1) : 0, out: stdout + stderr })
     })
   })
@@ -81,7 +81,7 @@ it('stops its worker when it is stopped itself, even in a loop that never ends',
 import { it } from 'vitest'
 it('spins', () => { writeFileSync(${JSON.stringify(pidFile)}, String(process.pid)); for (;;) {} })
 `)
-  const runner = spawn(process.execPath, [MAIN, '--types', join(dir, 'none'), profile], { stdio: 'ignore' })
+  const runner = spawn(process.execPath, [MAIN, profile], { stdio: 'ignore' })
   const exited = new Promise((done) => runner.on('exit', done))
   // The worker's pid, once its test has started.
   let pid = 0

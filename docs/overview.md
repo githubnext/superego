@@ -8,7 +8,7 @@ needs. The design behind it: [design.md](design.md).
 ```sh
 pnpm install
 pnpm test               # unit + daemon/CLI e2e (scripted models)
-pnpm typecheck          # tsc -b, incremental
+pnpm typecheck          # tsc -b (TypeScript 7, native), incremental
 pnpm dev                # the app; its daemon lives in ~/.superego
 pnpm dev --fresh        # the app as it comes: a new, empty data dir (or --home <dir> for one of your own)
 pnpm smoke              # e2e of the app, headless: nothing reaches the screen

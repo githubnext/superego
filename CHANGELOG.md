@@ -81,6 +81,8 @@
   cursor and selection were left out.
 - The public website now uses GitHub Next analytics to track visits.
 - Electron 45.3.2 (Chromium 156.0.8078.100), with its security fixes.
+- `superego extension test` checks a profile's types with TypeScript 7, the native compiler: faster, and the same
+  compiler an editor on TypeScript 7 checks with.
 
 ## 0.1.9
 

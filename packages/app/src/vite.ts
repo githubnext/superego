@@ -5,7 +5,7 @@
 // the app depends on (NATIVE) stay out of it and are copied into out/node_modules, with the build for this platform.
 import { cpSync, existsSync, readFileSync, realpathSync, rmSync } from 'node:fs'
 import { createRequire } from 'node:module'
-import { dirname, resolve } from 'node:path'
+import { dirname, relative, resolve, sep } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import react from '@vitejs/plugin-react'
 import { defineConfig } from 'electron-vite'
@@ -36,7 +36,7 @@ export function superegoConfig(root: string) {
         { name: 'superego-app-config', resolveId: (id) => id === 'superego:app-config' ? resolve(root, 'superego.config.ts') : undefined },
         // The commit it's built from, written in: a packaged app has no checkout to ask.
         { name: 'superego-commit', writeBundle: (options) => writeCommit(root, options.dir!) },
-        { name: 'superego-native', writeBundle: (options) => copyNative(root, resolve(options.dir!, '../node_modules')) },
+        { name: 'superego-native', writeBundle: (options) => copyNative(root, resolve(options.dir!, '../node_modules'), existsSync(cli)) },
         // The `superego` skill (the CLI prints it, the daemon offers it to threads), where both look for it: out/skill.
         { name: 'superego-cli-skill', writeBundle: (options) => { if (existsSync(cli)) cpSync(skill(root), resolve(options.dir!, '../skill'), { recursive: true }) } },
         // Types for profile authors (out/types), which the app keeps current in <dataDir>/types and `<id> profile types`
@@ -86,28 +86,38 @@ const imagesOf = (root: string) => createRequire(createRequire(createRequire(res
 /**
  * Each native module the app at `root` depends on, and those of its optional dependencies installed here (the build for
  * this platform), copied into `into` as packages, so the bundle resolves them beside itself. Photon too, whose
- * WebAssembly the daemon's image worker reads from its package as it runs.
+ * WebAssembly the daemon's image worker reads from its package as it runs. With a command line (`cli`), TypeScript's
+ * native compiler too, the SDK's, that `<id> extension test` checks an author's types with (the SDK's runner/check.ts).
  */
-function copyNative(root: string, into: string) {
+function copyNative(root: string, into: string, cli: boolean) {
   rmSync(into, { recursive: true, force: true })
   const photon = dirname(realpathSync(imagesOf(root).resolve('@silvia-odwyer/photon/photon_rs_bg.wasm')))
   cpSync(photon, resolve(into, '@silvia-odwyer/photon'), { recursive: true, dereference: true })
   const from = createRequire(resolve(root, 'package.json'))
-  for (const name of NATIVE) {
-    const dir = packageDir(from, name)
-    if (!dir) continue
-    cpSync(dir, resolve(into, name), { recursive: true, dereference: true })
-    const pkg = JSON.parse(readFileSync(resolve(dir, 'package.json'), 'utf8')) as { optionalDependencies?: Record<string, string> }
-    const own = createRequire(resolve(dir, 'package.json'))
-    for (const dependency of Object.keys(pkg.optionalDependencies ?? {})) {
-      const found = packageDir(own, dependency)
-      if (found) cpSync(found, resolve(into, dependency), { recursive: true, dereference: true })
-    }
+  for (const name of NATIVE) copyPackage(from, name, into)
+  if (cli && !copyPackage(createRequire(authorTest(root)), 'typescript', into)) throw new Error("No TypeScript beside the SDK's runner, to check an author's types with")
+}
+
+/** Package `name` as `require` finds it, and those of its optional dependencies installed, copied into `into`; whether it was there. */
+function copyPackage(require: NodeJS.Require, name: string, into: string): boolean {
+  const dir = packageDir(require, name)
+  if (!dir) return false
+  // Not what a package manager put inside it (pnpm's node_modules/.bin).
+  cpSync(dir, resolve(into, name), { recursive: true, dereference: true, filter: (path) => !relative(dir, path).split(sep).includes('node_modules') })
+  const pkg = JSON.parse(readFileSync(resolve(dir, 'package.json'), 'utf8')) as { optionalDependencies?: Record<string, string> }
+  const own = createRequire(resolve(dir, 'package.json'))
+  for (const dependency of Object.keys(pkg.optionalDependencies ?? {})) {
+    const found = packageDir(own, dependency)
+    if (found) cpSync(found, resolve(into, dependency), { recursive: true, dereference: true })
   }
+  return true
 }
 
 /** Where package `name` is installed, as `require` finds it; nothing when it isn't (another platform's build). */
 function packageDir(require: NodeJS.Require, name: string): string | undefined {
+  // By its package.json, when it exports that: some (TypeScript's compiler for a platform) export nothing else. One that
+  // doesn't export it is found by its entry, below.
+  try { return dirname(realpathSync(require.resolve(`${name}/package.json`))) } catch {}
   let entry: string
   try { entry = realpathSync(require.resolve(name)) } catch { return undefined }
   for (let dir = dirname(entry); dir !== dirname(dir); dir = dirname(dir)) {

@@ -2,7 +2,7 @@
 // file of it), as the daemon and the window load its files. Run by the command line, on this Superego's runtime (the
 // app's Electron as Node, or a checkout's Node):
 //
-//   <runtime> main.ts --types <author types> [--timeout <seconds>] <profile dir> [file or folder in it]
+//   <runtime> main.ts [--timeout <seconds>] <profile dir> [file or folder in it]
 //
 // The tests run in a worker process of their own (this file again, with --worker), which this one stops when a file
 // runs longer than the time limit (a loop that never ends: no test's own timeout fires through one), saying which test
@@ -14,10 +14,10 @@ import { parseArgs } from 'node:util'
 import { hook, provide } from './hooks.ts'
 import type { Progress, Tally } from './run.ts'
 
-const { values, positionals } = parseArgs({ options: { types: { type: 'string' }, timeout: { type: 'string' }, worker: { type: 'boolean' } }, allowPositionals: true })
+const { values, positionals } = parseArgs({ options: { timeout: { type: 'string' }, worker: { type: 'boolean' } }, allowPositionals: true })
 const [given, target] = positionals
-if (!given || (!values.types && !values.worker)) {
-  console.error('Usage: main.ts --types <author types> [--timeout <seconds>] <profile dir> [file or folder in it]')
+if (!given) {
+  console.error('Usage: main.ts [--timeout <seconds>] <profile dir> [file or folder in it]')
   process.exit(2)
 }
 // By its real path, as Node names the modules in it.
@@ -52,7 +52,7 @@ async function main(): Promise<number> {
   if (existsSync(tsconfig)) {
     console.log(`Checking types in ${dir}…`)
     const { checkTypes } = await import('./check.ts')
-    const errors = await checkTypes(tsconfig, values.types!)
+    const errors = await checkTypes(tsconfig)
     if (errors) { console.log(`\n${errors} type error${errors === 1 ? '' : 's'}: no tests run`); return 1 }
   }
   const where = target ? resolve(dir, target) : dir

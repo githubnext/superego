@@ -49,7 +49,7 @@ export async function testExtension(profileDir: string, target: string | undefin
   // Its types, linked again if they aren't (a fresh clone of a project's).
   if (existsSync(join(profileDir, 'tsconfig.json'))) linkProfileTypes(profileDir, typesDir)
   return new Promise((done) => {
-    const child = spawn(process.execPath, [runner(built), '--types', typesDir, ...(timeout ? ['--timeout', String(timeout)] : []), profileDir, ...(target ? [target] : [])], { cwd: profileDir, stdio: 'inherit' })
+    const child = spawn(process.execPath, [runner(built), ...(timeout ? ['--timeout', String(timeout)] : []), profileDir, ...(target ? [target] : [])], { cwd: profileDir, stdio: 'inherit' })
     child.on('exit', (code) => done(code ?? 1))
   })
 }

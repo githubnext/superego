@@ -6,13 +6,16 @@
 //                                         what they reach of the workspace's packages (flatten.ts), to be read
 //   <dir>/node_modules/<package>/         every outside package they reach (pi-durable, React's types, Node's, …):
 //                                         its declaration files and package.json, copied as installed
-//   <dir>/lib/                            TypeScript's own lib.*.d.ts, for `superego extension test` to check with
 //   <dir>/stamp.json                      a hash of all of it, to tell an old copy from this one, and of the sources
 //                                         it was made from, to tell when it's out of date
 //
 // The app's build puts them in out/types; a checkout's command line builds them into .types here (`builtTypes`). A
 // profile's folder links its node_modules to a copy of them (@superego/client's author-types.ts), so 'superego' and
 // 'react' resolve as any package would, with no paths in its tsconfig.
+//
+// Made with TypeScript 6's compiler API (@typescript/typescript6), as is flatten.ts: TypeScript 7, the native compiler
+// everything else checks with, has none yet to emit through a host of ours, ask a checker or read a syntax tree with.
+// Its declarations are TypeScript's either way; what an author's files are checked with is 7 (runner/check.ts).
 import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, utimesSync, writeFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
@@ -73,7 +76,7 @@ function dedent(text: string): string {
 }
 
 /** An entry's opening doc comment, what its flattened file opens with: what the entry is for, to an author. */
-function headerOf(ts: typeof import('typescript'), file: import('typescript').SourceFile): string {
+function headerOf(ts: typeof import('@typescript/typescript6'), file: import('@typescript/typescript6').SourceFile): string {
   const range = ts.getLeadingCommentRanges(file.text, 0)?.find((comment) => file.text.startsWith('/**', comment.pos))
   if (!range) throw new Error(`${file.fileName} opens with no doc comment, to say what it's for`)
   return file.text.slice(range.pos + 3, range.end - 2).split('\n').map((line) => line.replace(/^\s*\* ?/, '')).join('\n').trim()
@@ -91,9 +94,9 @@ function typesExports(exports: unknown): unknown {
  * (a type an export uses that can't be named outside, say).
  */
 export async function buildTypes(dir: string): Promise<Stamp> {
-  const ts = (await import('typescript')).default
+  const ts = (await import('@typescript/typescript6')).default
   const config = ts.getParsedCommandLineOfConfigFile(join(sdk, 'tsconfig.json'), {}, { ...ts.sys, onUnRecoverableConfigFileDiagnostic: (d) => { throw new Error(ts.flattenDiagnosticMessageText(d.messageText, '\n')) } })!
-  const options: import('typescript').CompilerOptions = {
+  const options: import('@typescript/typescript6').CompilerOptions = {
     ...config.options, noEmit: false, declaration: true, emitDeclarationOnly: true, declarationMap: false, incremental: false,
     composite: false, tsBuildInfoFile: undefined, outDir: join(repo, '.types-out'), rootDir: repo, skipLibCheck: true,
   }
@@ -202,10 +205,9 @@ export async function buildTypes(dir: string): Promise<Stamp> {
     else if (had.files !== 'all') had.files.add(file)
     theirs.set(name, had)
   }
-  const typescript = realpathSync(dirname(require.resolve('typescript/package.json')))
   for (const file of reached.getSourceFiles()) {
     const path = realpathSync(file.fileName)
-    if (path.startsWith(temp + sep) || path.startsWith(typescript + sep) || !inNodeModules(path)) continue
+    if (reached.isSourceFileDefaultLibrary(file) || path.startsWith(temp + sep) || !inNodeModules(path)) continue
     add(installedPackage(path), path)
   }
   rmSync(probe)
@@ -223,10 +225,6 @@ export async function buildTypes(dir: string): Promise<Stamp> {
       }
     }
     walk(from)
-  }
-  // The standard library's declarations, for the compiler `superego extension test` checks with (runner/check.ts).
-  for (const entry of readdirSync(join(typescript, 'lib'))) {
-    if (/^lib\..*\.d\.ts$/.test(entry)) write(join(temp, 'lib', entry), readFileSync(join(typescript, 'lib', entry), 'utf8'))
   }
 
   const hash = createHash('sha256')

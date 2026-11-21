@@ -1,5 +1,5 @@
-// `pnpm typecheck` (tsc -b): every package, extension and the app, each checked incrementally (its tsconfig.tsbuildinfo
-// remembers what passed). A new package or extension goes here too.
+// `pnpm typecheck` (tsc -b, TypeScript 7's native compiler): every package, extension and the app, each checked
+// incrementally (its tsconfig.tsbuildinfo remembers what passed). A new package or extension goes here too.
 {
   "files": [],
   "references": [

@@ -1,10 +1,12 @@
 // The author types' 'superego', 'superego/ui' and 'superego/testing', as an author (or their agent) reads them in
 // node_modules: one file each, nothing in it pointing into Superego's own packages, and the API documented.
+import { spawnSync } from 'node:child_process'
 import { mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import ts from 'typescript'
+import ts from '@typescript/typescript6'
 import { beforeAll, expect, it } from 'vitest'
+import { compiler } from '../src/runner/check.ts'
 import { builtTypes } from '../types.ts'
 
 let dir: string
@@ -80,12 +82,11 @@ export const daemon = await testDaemon({ extensions: [extension] })
 const ui = await mountUi()
 export const kind = fileKind(ui.registry, { machine: 'local', thread: testThread() }, 'a.md')
 `)
-    const program = ts.createProgram([join(profile, 'a.test.ts')], {
-      module: ts.ModuleKind.ESNext, moduleResolution: ts.ModuleResolutionKind.Bundler, target: ts.ScriptTarget.ES2023, strict: true, noEmit: true,
-      types: [], lib: ['lib.es2023.d.ts', 'lib.dom.d.ts'], skipLibCheck: true,
-    })
-    const errors = ts.getPreEmitDiagnostics(program).map((d) => ts.flattenDiagnosticMessageText(d.messageText, '\n'))
-    expect(errors).toEqual([])
+    const options = { module: 'esnext', moduleResolution: 'bundler', target: 'es2023', strict: true, noEmit: true, types: [], lib: ['es2023', 'dom'], skipLibCheck: true }
+    writeFileSync(join(profile, 'tsconfig.json'), JSON.stringify({ compilerOptions: options, files: ['a.test.ts'] }))
+    const run = spawnSync(compiler(), ['-p', join(profile, 'tsconfig.json'), '--pretty', 'false'], { cwd: profile, encoding: 'utf8' })
+    expect(run.stdout + run.stderr).toBe('')
+    expect(run.status).toBe(0)
   } finally {
     rmSync(profile, { recursive: true, force: true })
   }
