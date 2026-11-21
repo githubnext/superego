@@ -141,6 +141,9 @@
 
 * { box-sizing: border-box; }
 html, body, #root { height: 100%; margin: 0; }
+/* The page is as tall as what's visible of the window (the app's viewport.ts): on a phone, the part above the keyboard.
+   It never scrolls or bounces as a whole; what's in it scrolls. */
+html, body { height: var(--superego-viewport-height, 100%); overflow: hidden; overscroll-behavior: none; }
 /* iOS Safari otherwise inflates the text of blocks it judges to be reading text, so sizes vary from row to row. */
 html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
 body { font: var(--superego-text-ui)/var(--superego-leading-ui) var(--superego-font); background: var(--superego-bg); color: var(--superego-text); -webkit-font-smoothing: antialiased; }

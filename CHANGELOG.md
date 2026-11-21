@@ -35,6 +35,7 @@
 - The public website now uses GitHub Next analytics to track visits.
 - On an iPhone, text in the app is one size again: Safari no longer enlarges some rows (a wave's title on the board, a
   long line) and not others.
+- On a phone, the page no longer zooms or scrolls as a whole, and the composer stays in view above the keyboard.
 
 ## 0.1.9
 

@@ -34,10 +34,12 @@ import { registerLinks } from './links.tsx'
 import { registerSeen } from './seen.ts'
 import { registerProfileUi } from './profile-ui-notice.tsx'
 import { registerNotifications } from './notifications.tsx'
+import { followViewport } from './viewport.ts'
 
 export function mountApp(app: AppConfig, { extensions = [], root = document.getElementById('root')! }: { extensions?: UiExtension[]; root?: HTMLElement } = {}) {
   // In a browser there is no preload: the bridge is a WebSocket to the daemon that served the page.
   if (!window.superego) window.superego = webBridge()
+  followViewport()
   const registry = windowRegistry(app, extensions)
   window.superegoRegistered = () => registeredIn(registry)
   void registry.router.load(APP)
