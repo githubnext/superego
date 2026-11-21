@@ -4,114 +4,25 @@
 
 ## 0.1.10
 
-- **Upgrade:** `AGENTS.md` files and a project's profiles (`.superego/profiles`) are read only from the thread's
-  project: its folder up to the repository's top, or the folder alone outside a repository. One above that (say
-  `~/dev/AGENTS.md`) no longer applies: move it into `~/.agents/AGENTS.md` or the repository. Nor is one read that
-  another user on the computer could have written (in `/tmp`, or a folder writable by others).
-- **Upgrade:** a profile's modules can import only `'superego'`, Node's built-ins and files by their paths. One that
-  imports a package by name or a `#` alias no longer loads, and says why: import the file by its path instead.
-- **Upgrade:** Web access over Tailscale needs Tailscale 1.94 or later on the machine that serves it (Settings → Web
-  access says so when it's older). Where Tailscale lets only an administrator set it up (Linux, unless you may run
-  `sudo tailscale` without a password), Settings → Web access shows a `sudo tailscale serve …` command to run once. It
-  no longer lets in every device logged in to Tailscale as you, such as the machines your agents run on: the first
-  time one of your devices opens the page, it waits in Settings → Web access (or `superego web devices`) until you
-  approve it from the app or a device that's already in. Pairing with a code still works. The "Require pairing for my
-  Tailscale login too" setting is gone.
+- **Upgrade:** `AGENTS.md` and project profiles are read only from the thread's project (up to its repository's top).
+  Move one from above it, like `~/dev/AGENTS.md`, into `~/.agents/AGENTS.md` or the repository.
+- **Upgrade:** a profile's modules can import only `'superego'`, Node's built-ins and files by path. Import packages
+  and `#` aliases by their file path instead.
+- **Upgrade:** Web access over Tailscale needs Tailscale 1.94 or later, and each new device now waits for your approval
+  in Settings → Web access. On Linux, Settings shows a `sudo tailscale serve …` command to run once.
 
-### Getting started
-
-- On first run, with no model set up, the main window opens on model setup. It lists what it found on the computer:
-  API keys in your environment or shell, Ollama or LM Studio, and Claude Code if you're signed in. It also offers
-  ChatGPT, GitHub Copilot and OpenRouter sign-in, an API key, or a local server's address. Once a provider works, you
-  pick the default model, star favourites, send a test request, and start a thread. This replaces the welcome page and
-  its extension switches, which are still in Settings. Open it again with Set up models… in Settings → Providers or ⌘K,
-  for this computer or another machine.
-- When a message can't be sent because no model is set up, the message box offers Set up models… and returns to the
-  thread afterwards. ⌘N no longer leaves an empty thread behind when it can't start one.
-- Superego tests an API key before saving it, so a wrong key fails at once instead of on the first message.
-- Superego finds API keys exported in your shell's startup files (`~/.zshrc`) when you open it from the Dock.
-
-### Safer by default
-
-- Allowing a project's profile now covers everything it can load: a change to any file it runs asks to allow it again.
-- A page an agent draws (an `html` block) can't reach the network (no fetching, nothing loaded from the web, no
-  navigating away), and no longer answers or messages for you by itself: what it would say shows under it, and goes
-  only when you press Send there.
-- Images on the web in a thread (in a message, a rendered file, an image an agent shows or a block it draws) load
-  only when you click them: until then they say where they're from. One click loads the rest in the same message.
-- A web page an agent opens in a Browser pane waits for you to press Open page, showing its whole address, unless it's a
-  dev server on this computer or its network.
-- Another user account on the same computer can no longer pass as you through Web access over Tailscale.
-- A malformed request to Web access, or to a sign-in page's callback, no longer stops the daemon and every agent with
-  it.
-- An HTML artifact is served only files really in its thread's folder (a symlink leading outside is refused), and in a
-  browser its address works only for the device that opened it (over Tailscale) or briefly after its page last used it
-  (on this computer), so a page that sends its address elsewhere doesn't give the folder away.
-
-### Claude Agent (experimental)
-
-Threads that run on your own Claude Code, signed in with its own `/login`. Superego never sees your Claude sign-in.
-
-- Pick it in ⌘N's model menu: where Claude Code is installed, its group offers Opus, Sonnet and Haiku, and starts the
-  thread with your `claude` profile (made then if you have none; choosing Claude Code in setup makes it too). Profiles
-  can set its `model` and `effort`. A thread stays on Claude Agent or Superego's own agent for its whole life: changing
-  a profile that would move it is refused once it has a conversation, saying why.
-- Settings → Claude Agent, for each machine, shows its Claude Code (where it is, its version, whether it's signed in and
-  on which plan), with Open a terminal to sign in. It also sets the permission mode threads start in, and how many
-  Claude Agent threads work at once (3); the rest wait their turn, saying so. On another machine, threads run that
-  machine's Claude Code, with its sign-in.
-- Threads ask before Claude Code does something your Claude Code settings don't allow: the thread shows "Permission"
-  (in the sidebar, the menu bar, notifications and on your phone), with Allow, Deny and, when Claude Code offers it,
-  "Always allow …" above the message box (⌃1–⌃3; type to deny and say what to do instead). What you always allow is
-  remembered for that folder, without changing its own Claude Code settings. Its questions come as question cards, and
-  a plan comes with Approve plan or Keep planning. A profile picks how much it asks with
-  `claudeAgent: { permissionMode }` (`default`, `acceptEdits`, `plan`, `auto`; `bypassPermissions` only when the
-  profile says so), and can narrow `settingSources`, `allowedTools` and `disallowedTools`.
-- Threads have Superego's tools: they start threads of their own (whose reports come back), open panes beside
-  themselves, ask you things, show UI and images, and report their work as tasks. They also have Superego's skill, and
-  the `superego` command works from their Bash as that thread. A profile's instructions are added to Claude Code's own
-  prompt. Nothing is added to your `~/.claude`.
-- A folder's own Claude Code settings (`.claude/`, `.mcp.json`, skills in `.claude/skills` below it) and its
-  instructions (`CLAUDE.md`, `CLAUDE.local.md` and the files they import) load only once you allow them: the thread
-  asks over its composer, listing the files, and asks again after any of them changes. Until then Claude Code runs with
-  your own settings only. Where another user on the computer could change those files, there's nothing to allow.
-- A thread keeps its Claude Code running while you use it, so turns start sooner, and a message you send now (Send now)
-  reaches it mid-turn. After a few idle minutes it stops, and the next turn picks up the session again.
-- Files and images you attach reach Claude Code: images as images, other files by their path.
-- Its model card shows the model and effort ("Claude Opus · high · runs your Claude Code") and how full its context
-  is; the thread says when Claude Code compacts the conversation. A subagent's steps show under its call, while it runs
-  too.
-- When your Claude Code warns that a plan limit is near, its threads say so above the message box ("5-hour limit 80%
-  used, resets 2:10 PM"); a turn refused for a limit fails saying which limit and when it resets.
-- A thread whose Claude Code isn't signed in waits for it, with Open a terminal and Check again above the message box,
-  and goes on once Claude Code is signed in. A turn cut off by Superego restarting says so ("Interrupted: send again")
-  instead of running again.
-- Finds your `claude` when your shell has it as an alias (such as `claude --dangerously-skip-permissions`): it runs the
-  `claude` on your shell's PATH, without the alias's flags.
-
-### On a phone
-
-- Text in the app is one size again on an iPhone: Safari no longer enlarges some rows and not others.
-- The page no longer zooms or scrolls as a whole, and the composer stays in view, right on top of the keyboard.
-- The thread's sheet (tap its title) is a plain menu: a row each for its model and other details, Rename (the title at
-  its top becomes a field), Pin, Archive or Unarchive, and the panes to open beside it, each with its icon, sized for a
-  finger.
-
-### Everything else
-
-- A new built-in theme: Zenbones, light and dark (Settings → Appearance). Importing a Ghostty theme reads its quoted
-  colours (`foreground = "#2c363c"`), where its foreground, background, cursor and selection were left out.
-- An image file opens as the picture in the editor pane (from a link in a message, the file tree or `pane_open`),
-  fitted to the pane with its size in pixels, instead of "is a binary file". SVG still opens as its source.
-- New models with pi 1.6: GPT-6.2 Astra and Sol (OpenAI, Azure, ChatGPT sign-in), Qwen Token Plan Individual CN and
-  newer Qwen models. Dropped connections (`ECONNRESET`, "Connection closed") are retried instead of failing the turn,
-  and ChatGPT sign-in keeps its prompt cache across turns and thinking-level changes on GPT-6.2.
-- Electron 45.3.2 (Chromium 156.0.8078.100), with its security fixes.
-- `superego extension test` checks a profile's types with TypeScript 7, the native compiler.
-- Extensions (API 5.6, nothing removed): an agent kind can offer a model-menu group, a profile and a "working" status
-  message; extensions get a thread's model and thinking, and `ProfileInfo.agent`; tools may park (pi 1.6), with
-  `sleeping` and `waiting` call states.
-- The public website counts visits with GitHub Next analytics.
+- Improved onboarding: setting up a model on first run, and whenever a message can't be sent for lack of one.
+- API keys are tested before they're saved, and keys exported in `~/.zshrc` are found.
+- Safer by default: pages agents draw can't reach the network or send for you, web images and pages agents open wait
+  for a click, and allowing a profile covers every file it loads.
+- Claude Agent (experimental): threads that run on your own Claude Code. Pick it in ⌘N's model menu; it asks before
+  acting, has Superego's tools, and asks before loading a folder's Claude Code settings or `CLAUDE.md`. Set it up in
+  Settings → Claude Agent.
+- On a phone: no more zooming, the composer stays on the keyboard, and the thread's sheet is a simple menu.
+- New theme: Zenbones, light and dark.
+- Image files open as pictures in the editor pane.
+- New models: GPT-6.2 Astra and Sol, and newer Qwen models. Dropped connections are retried.
+- Electron 45.3.2, with its security fixes.
 
 ## 0.1.9
 
