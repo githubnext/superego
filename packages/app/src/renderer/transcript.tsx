@@ -472,7 +472,8 @@ function callOf(here: { machine: MachineEntry; thread: ThreadInfo }, block: Bloc
     call: { id: block.id ?? '', name: block.name ?? '', arguments: (block.arguments ?? {}) as Record<string, unknown> },
     ...(result ? { result } : {}),
     ...(slot ? { live: { status: slot.status, ...(slot.output !== undefined ? { output: slot.output } : {}), details: slot.details } } : {}),
-    state: result ? (result.isError ? 'error' : 'done') : slot?.status === 'running' ? 'working' : 'idle',
+    // A parked call (sleeping, waiting) is still under way.
+    state: result ? (result.isError ? 'error' : 'done') : slot && slot.status !== 'pending' && slot.status !== 'done' ? 'working' : 'idle',
   }
 }
 

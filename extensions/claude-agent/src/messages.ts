@@ -2,7 +2,7 @@
 // assistant and tool-result messages, its tools named as Superego's own where they're the same (Read, Bash, Edit,
 // Write), so the transcript draws their rows as it does for any thread. Its streaming events build the answer as it
 // comes in.
-import type { JsonValue } from '@earendil-works/chord'
+import type { JsonValue } from '@earendil-works/chord/json'
 import type { AssistantMessage, ToolCall, ToolResultMessage } from '@earendil-works/pi-ai'
 import { SERVER } from './shared.ts'
 

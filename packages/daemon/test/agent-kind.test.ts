@@ -1,5 +1,5 @@
 // Another kind of agent: an extension's task runs a thread's turns in place of a model (`agentKind`, on pi-durable's
-// agent `runner`, patches/@earendil-works__pi-durable@1.5.0.patch). pi-durable keeps the run: streaming, entries, the
+// agent `runner`, patches/@earendil-works__pi-durable@1.6.0.patch). pi-durable keeps the run: streaming, entries, the
 // answer, and Stop; the daemon picks the kind from the thread's profile, for its whole life.
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { mkdtemp, rm } from 'node:fs/promises'

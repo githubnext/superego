@@ -12,9 +12,9 @@
     "./snapshot": "./src/snapshot.ts"
   },
   "dependencies": {
-    "@earendil-works/chord": "1.5.0",
-    "@earendil-works/pi-ai": "1.5.0",
-    "@earendil-works/pi-durable": "1.5.0",
+    "@earendil-works/chord": "1.6.0",
+    "@earendil-works/pi-ai": "1.6.0",
+    "@earendil-works/pi-durable": "1.6.0",
     "@superego/protocol": "workspace:*",
     "@superego/settings": "workspace:*",
     "sucrase": "^3.35.1",

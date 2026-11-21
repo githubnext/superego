@@ -16,17 +16,18 @@ allowBuilds:
 minimumReleaseAge: 10080
 minimumReleaseAgeExclude:
   - '@earendil-works/*'
-# The six @earendil-works packages Superego is built on aren't on the approved package feed at 1.5.0 (npmjs.org is
-# blocked here): they come from vendor/, packed from the published 1.5.0 tarballs.
+# The six @earendil-works packages Superego is built on aren't on the approved package feed at 1.6.0 (npmjs.org is
+# blocked here): they come from vendor/, the published 1.6.0 tarballs as npm serves them (`npm pack`).
 overrides:
-  '@earendil-works/chord': file:vendor/earendil-works-chord-1.5.0.tgz
-  '@earendil-works/pi-ai': file:vendor/earendil-works-pi-ai-1.5.0.tgz
-  '@earendil-works/pi-codemode': file:vendor/earendil-works-pi-codemode-1.5.0.tgz
-  '@earendil-works/pi-durable': file:vendor/earendil-works-pi-durable-1.5.0.tgz
-  '@earendil-works/pi-schema': file:vendor/earendil-works-pi-schema-1.5.0.tgz
-  '@earendil-works/pi-telemetry': file:vendor/earendil-works-pi-telemetry-1.5.0.tgz
-  # Chord 1.5.0 asks for exactly ws 8.21.0 as a peer: one ws for it and the daemon (packages/daemon's own pin).
-  'ws': 8.23.0
+  '@earendil-works/chord': file:vendor/earendil-works-chord-1.6.0.tgz
+  '@earendil-works/pi-ai': file:vendor/earendil-works-pi-ai-1.6.0.tgz
+  '@earendil-works/pi-codemode': file:vendor/earendil-works-pi-codemode-1.6.0.tgz
+  '@earendil-works/pi-durable': file:vendor/earendil-works-pi-durable-1.6.0.tgz
+  '@earendil-works/pi-schema': file:vendor/earendil-works-pi-schema-1.6.0.tgz
+  '@earendil-works/pi-telemetry': file:vendor/earendil-works-pi-telemetry-1.6.0.tgz
+  # pi-ai 1.6.0 asks for openai 7.59.0, which the feed doesn't carry yet; it took it for the types of a response field
+  # it reads defensively. The newest the feed has. Drop this once it has 7.59.0.
+  'openai': 7.57.0
   # The Claude Agent SDK's per-platform packages each hold a `claude` of their own: removed, so Superego never ships
   # Claude Code. A Claude Agent thread runs the user's own install (extensions/claude-agent).
   '@anthropic-ai/claude-agent-sdk-darwin-arm64': '-'
@@ -38,5 +39,5 @@ overrides:
   '@anthropic-ai/claude-agent-sdk-win32-arm64': '-'
   '@anthropic-ai/claude-agent-sdk-win32-x64': '-'
 patchedDependencies:
-  '@earendil-works/pi-durable@1.5.0': patches/@earendil-works__pi-durable@1.5.0.patch
+  '@earendil-works/pi-durable@1.6.0': patches/@earendil-works__pi-durable@1.6.0.patch
   ghostty-web@0.4.0: patches/ghostty-web@0.4.0.patch

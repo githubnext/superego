@@ -165,7 +165,8 @@ export type ToolCallProps = {
   thread: ThreadInfo
   call: { id: string; name: string; arguments: Record<string, unknown> }
   result?: { text: string; isError: boolean; details?: unknown; notes?: ToolNote[]; images?: ImageItem[] }
-  live?: { status: 'pending' | 'running' | 'done'; output?: string; details?: unknown }
+  /** `sleeping` or `waiting`: the call is parked, waiting on something outside it (a time, a signal, other tasks). */
+  live?: { status: 'pending' | 'running' | 'sleeping' | 'waiting' | 'done'; output?: string; details?: unknown }
 }
 
 /** What the harness said of a tool call besides its output and errors (it was cut short, say). */

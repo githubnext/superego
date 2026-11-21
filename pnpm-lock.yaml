@@ -163,13 +163,13 @@ settings:
   excludeLinksFromLockfile: false
 
 overrides:
-  '@earendil-works/chord': file:vendor/earendil-works-chord-1.5.0.tgz
-  '@earendil-works/pi-ai': file:vendor/earendil-works-pi-ai-1.5.0.tgz
-  '@earendil-works/pi-codemode': file:vendor/earendil-works-pi-codemode-1.5.0.tgz
-  '@earendil-works/pi-durable': file:vendor/earendil-works-pi-durable-1.5.0.tgz
-  '@earendil-works/pi-schema': file:vendor/earendil-works-pi-schema-1.5.0.tgz
-  '@earendil-works/pi-telemetry': file:vendor/earendil-works-pi-telemetry-1.5.0.tgz
-  ws: 8.23.0
+  '@earendil-works/chord': file:vendor/earendil-works-chord-1.6.0.tgz
+  '@earendil-works/pi-ai': file:vendor/earendil-works-pi-ai-1.6.0.tgz
+  '@earendil-works/pi-codemode': file:vendor/earendil-works-pi-codemode-1.6.0.tgz
+  '@earendil-works/pi-durable': file:vendor/earendil-works-pi-durable-1.6.0.tgz
+  '@earendil-works/pi-schema': file:vendor/earendil-works-pi-schema-1.6.0.tgz
+  '@earendil-works/pi-telemetry': file:vendor/earendil-works-pi-telemetry-1.6.0.tgz
+  openai: 7.57.0
   '@anthropic-ai/claude-agent-sdk-darwin-arm64': '-'
   '@anthropic-ai/claude-agent-sdk-darwin-x64': '-'
   '@anthropic-ai/claude-agent-sdk-linux-arm64': '-'
@@ -182,7 +182,7 @@ overrides:
 pnpmfileChecksum: sha256-8RoD5CkWTubjdo8qG3mRkX7fEgwSEWupGaaz+qEClz4=
 
 patchedDependencies:
-  '@earendil-works/pi-durable@1.5.0': d071c462b7d72b75fdec1cc6ad4c27a24848f99901fa613fdd1ac6c1240dd6af
+  '@earendil-works/pi-durable@1.6.0': a018c3dae8d28aa56b9723ef1322688656c48639ce9edb82f6e1f8083b68a8d5
   ghostty-web@0.4.0: fef2236870cb562d7c7419513ae06c0fc86a4b58069bd53043e3f9d9af56cb2e
 
 importers:
@@ -302,11 +302,11 @@ importers:
   extensions/agent-ui:
     dependencies:
       '@earendil-works/pi-durable':
-        specifier: file:../../vendor/earendil-works-pi-durable-1.5.0.tgz
-        version: file:vendor/earendil-works-pi-durable-1.5.0.tgz(patch_hash=d071c462b7d72b75fdec1cc6ad4c27a24848f99901fa613fdd1ac6c1240dd6af)(@aws-sdk/credential-provider-node@3.972.97)(@modelcontextprotocol/sdk@1.32.2(zod@4.6.7))(@smithy/signature-v4@5.7.5)(undici@7.30.2)(ws@8.23.0)(zod@4.6.7)
+        specifier: file:../../vendor/earendil-works-pi-durable-1.6.0.tgz
+        version: file:vendor/earendil-works-pi-durable-1.6.0.tgz(patch_hash=a018c3dae8d28aa56b9723ef1322688656c48639ce9edb82f6e1f8083b68a8d5)(@aws-sdk/credential-provider-node@3.972.97)(@modelcontextprotocol/sdk@1.32.2(zod@4.6.7))(@smithy/signature-v4@5.7.5)(google-auth-library@10.9.1)(react@19.3.1)(undici@7.30.2)(ws@8.23.0)(zod@4.6.7)
       '@earendil-works/pi-schema':
-        specifier: file:../../vendor/earendil-works-pi-schema-1.5.0.tgz
-        version: file:vendor/earendil-works-pi-schema-1.5.0.tgz
+        specifier: file:../../vendor/earendil-works-pi-schema-1.6.0.tgz
+        version: file:vendor/earendil-works-pi-schema-1.6.0.tgz
       '@superego/app':
         specifier: workspace:*
         version: link:../../packages/app
@@ -355,17 +355,17 @@ importers:
         specifier: 0.3.325
         version: 0.3.325(@anthropic-ai/sdk@0.129.0(zod@4.6.7))(@modelcontextprotocol/sdk@1.32.2(zod@4.6.7))(zod@4.6.7)
       '@earendil-works/chord':
-        specifier: file:../../vendor/earendil-works-chord-1.5.0.tgz
-        version: file:vendor/earendil-works-chord-1.5.0.tgz(ws@8.23.0)
+        specifier: file:../../vendor/earendil-works-chord-1.6.0.tgz
+        version: file:vendor/earendil-works-chord-1.6.0.tgz(react@19.3.1)(ws@8.23.0)
       '@earendil-works/pi-ai':
-        specifier: file:../../vendor/earendil-works-pi-ai-1.5.0.tgz
-        version: file:vendor/earendil-works-pi-ai-1.5.0.tgz(@aws-sdk/credential-provider-node@3.972.97)(@modelcontextprotocol/sdk@1.32.2(zod@4.6.7))(@smithy/signature-v4@5.7.5)(undici@7.30.2)(ws@8.23.0)(zod@4.6.7)
+        specifier: file:../../vendor/earendil-works-pi-ai-1.6.0.tgz
+        version: file:vendor/earendil-works-pi-ai-1.6.0.tgz(@aws-sdk/credential-provider-node@3.972.97)(@modelcontextprotocol/sdk@1.32.2(zod@4.6.7))(@smithy/signature-v4@5.7.5)(google-auth-library@10.9.1)(undici@7.30.2)(ws@8.23.0)(zod@4.6.7)
       '@earendil-works/pi-durable':
-        specifier: file:../../vendor/earendil-works-pi-durable-1.5.0.tgz
-        version: file:vendor/earendil-works-pi-durable-1.5.0.tgz(patch_hash=d071c462b7d72b75fdec1cc6ad4c27a24848f99901fa613fdd1ac6c1240dd6af)(@aws-sdk/credential-provider-node@3.972.97)(@modelcontextprotocol/sdk@1.32.2(zod@4.6.7))(@smithy/signature-v4@5.7.5)(undici@7.30.2)(ws@8.23.0)(zod@4.6.7)
+        specifier: file:../../vendor/earendil-works-pi-durable-1.6.0.tgz
+        version: file:vendor/earendil-works-pi-durable-1.6.0.tgz(patch_hash=a018c3dae8d28aa56b9723ef1322688656c48639ce9edb82f6e1f8083b68a8d5)(@aws-sdk/credential-provider-node@3.972.97)(@modelcontextprotocol/sdk@1.32.2(zod@4.6.7))(@smithy/signature-v4@5.7.5)(google-auth-library@10.9.1)(react@19.3.1)(undici@7.30.2)(ws@8.23.0)(zod@4.6.7)
       '@earendil-works/pi-schema':
-        specifier: file:../../vendor/earendil-works-pi-schema-1.5.0.tgz
-        version: file:vendor/earendil-works-pi-schema-1.5.0.tgz
+        specifier: file:../../vendor/earendil-works-pi-schema-1.6.0.tgz
+        version: file:vendor/earendil-works-pi-schema-1.6.0.tgz
       '@modelcontextprotocol/sdk':
         specifier: 1.32.2
         version: 1.32.2(zod@4.6.7)
@@ -404,11 +404,11 @@ importers:
   extensions/ego:
     dependencies:
       '@earendil-works/pi-durable':
-        specifier: file:../../vendor/earendil-works-pi-durable-1.5.0.tgz
-        version: file:vendor/earendil-works-pi-durable-1.5.0.tgz(patch_hash=d071c462b7d72b75fdec1cc6ad4c27a24848f99901fa613fdd1ac6c1240dd6af)(@aws-sdk/credential-provider-node@3.972.97)(@modelcontextprotocol/sdk@1.32.2(zod@4.6.7))(@smithy/signature-v4@5.7.5)(undici@7.30.2)(ws@8.23.0)(zod@4.6.7)
+        specifier: file:../../vendor/earendil-works-pi-durable-1.6.0.tgz
+        version: file:vendor/earendil-works-pi-durable-1.6.0.tgz(patch_hash=a018c3dae8d28aa56b9723ef1322688656c48639ce9edb82f6e1f8083b68a8d5)(@aws-sdk/credential-provider-node@3.972.97)(@modelcontextprotocol/sdk@1.32.2(zod@4.6.7))(@smithy/signature-v4@5.7.5)(google-auth-library@10.9.1)(react@19.3.1)(undici@7.30.2)(ws@8.23.0)(zod@4.6.7)
       '@earendil-works/pi-schema':
-        specifier: file:../../vendor/earendil-works-pi-schema-1.5.0.tgz
-        version: file:vendor/earendil-works-pi-schema-1.5.0.tgz
+        specifier: file:../../vendor/earendil-works-pi-schema-1.6.0.tgz
+        version: file:vendor/earendil-works-pi-schema-1.6.0.tgz
       '@superego/app':
         specifier: workspace:*
         version: link:../../packages/app
@@ -441,8 +441,8 @@ importers:
   extensions/files:
     dependencies:
       '@earendil-works/pi-schema':
-        specifier: file:../../vendor/earendil-works-pi-schema-1.5.0.tgz
-        version: file:vendor/earendil-works-pi-schema-1.5.0.tgz
+        specifier: file:../../vendor/earendil-works-pi-schema-1.6.0.tgz
+        version: file:vendor/earendil-works-pi-schema-1.6.0.tgz
       '@superego/app':
         specifier: workspace:*
         version: link:../../packages/app
@@ -469,8 +469,8 @@ importers:
   extensions/git:
     dependencies:
       '@earendil-works/pi-schema':
-        specifier: file:../../vendor/earendil-works-pi-schema-1.5.0.tgz
-        version: file:vendor/earendil-works-pi-schema-1.5.0.tgz
+        specifier: file:../../vendor/earendil-works-pi-schema-1.6.0.tgz
+        version: file:vendor/earendil-works-pi-schema-1.6.0.tgz
       '@superego/app':
         specifier: workspace:*
         version: link:../../packages/app
@@ -497,11 +497,11 @@ importers:
   extensions/images:
     dependencies:
       '@earendil-works/pi-durable':
-        specifier: file:../../vendor/earendil-works-pi-durable-1.5.0.tgz
-        version: file:vendor/earendil-works-pi-durable-1.5.0.tgz(patch_hash=d071c462b7d72b75fdec1cc6ad4c27a24848f99901fa613fdd1ac6c1240dd6af)(@aws-sdk/credential-provider-node@3.972.97)(@modelcontextprotocol/sdk@1.32.2(zod@4.6.7))(@smithy/signature-v4@5.7.5)(undici@7.30.2)(ws@8.23.0)(zod@4.6.7)
+        specifier: file:../../vendor/earendil-works-pi-durable-1.6.0.tgz
+        version: file:vendor/earendil-works-pi-durable-1.6.0.tgz(patch_hash=a018c3dae8d28aa56b9723ef1322688656c48639ce9edb82f6e1f8083b68a8d5)(@aws-sdk/credential-provider-node@3.972.97)(@modelcontextprotocol/sdk@1.32.2(zod@4.6.7))(@smithy/signature-v4@5.7.5)(google-auth-library@10.9.1)(react@19.3.1)(undici@7.30.2)(ws@8.23.0)(zod@4.6.7)
       '@earendil-works/pi-schema':
-        specifier: file:../../vendor/earendil-works-pi-schema-1.5.0.tgz
-        version: file:vendor/earendil-works-pi-schema-1.5.0.tgz
+        specifier: file:../../vendor/earendil-works-pi-schema-1.6.0.tgz
+        version: file:vendor/earendil-works-pi-schema-1.6.0.tgz
       '@superego/app':
         specifier: workspace:*
         version: link:../../packages/app
@@ -550,11 +550,11 @@ importers:
   extensions/mcp-servers:
     dependencies:
       '@earendil-works/pi-durable':
-        specifier: file:../../vendor/earendil-works-pi-durable-1.5.0.tgz
-        version: file:vendor/earendil-works-pi-durable-1.5.0.tgz(patch_hash=d071c462b7d72b75fdec1cc6ad4c27a24848f99901fa613fdd1ac6c1240dd6af)(@aws-sdk/credential-provider-node@3.972.97)(@modelcontextprotocol/sdk@1.32.2(zod@4.6.7))(@smithy/signature-v4@5.7.5)(undici@7.30.2)(ws@8.23.0)(zod@4.6.7)
+        specifier: file:../../vendor/earendil-works-pi-durable-1.6.0.tgz
+        version: file:vendor/earendil-works-pi-durable-1.6.0.tgz(patch_hash=a018c3dae8d28aa56b9723ef1322688656c48639ce9edb82f6e1f8083b68a8d5)(@aws-sdk/credential-provider-node@3.972.97)(@modelcontextprotocol/sdk@1.32.2(zod@4.6.7))(@smithy/signature-v4@5.7.5)(google-auth-library@10.9.1)(react@19.3.1)(undici@7.30.2)(ws@8.23.0)(zod@4.6.7)
       '@earendil-works/pi-schema':
-        specifier: file:../../vendor/earendil-works-pi-schema-1.5.0.tgz
-        version: file:vendor/earendil-works-pi-schema-1.5.0.tgz
+        specifier: file:../../vendor/earendil-works-pi-schema-1.6.0.tgz
+        version: file:vendor/earendil-works-pi-schema-1.6.0.tgz
       '@modelcontextprotocol/sdk':
         specifier: 1.32.2
         version: 1.32.2(zod@4.6.7)
@@ -636,8 +636,8 @@ importers:
   extensions/skills:
     dependencies:
       '@earendil-works/pi-durable':
-        specifier: file:../../vendor/earendil-works-pi-durable-1.5.0.tgz
-        version: file:vendor/earendil-works-pi-durable-1.5.0.tgz(patch_hash=d071c462b7d72b75fdec1cc6ad4c27a24848f99901fa613fdd1ac6c1240dd6af)(@aws-sdk/credential-provider-node@3.972.97)(@modelcontextprotocol/sdk@1.32.2(zod@4.6.7))(@smithy/signature-v4@5.7.5)(undici@7.30.2)(ws@8.23.0)(zod@4.6.7)
+        specifier: file:../../vendor/earendil-works-pi-durable-1.6.0.tgz
+        version: file:vendor/earendil-works-pi-durable-1.6.0.tgz(patch_hash=a018c3dae8d28aa56b9723ef1322688656c48639ce9edb82f6e1f8083b68a8d5)(@aws-sdk/credential-provider-node@3.972.97)(@modelcontextprotocol/sdk@1.32.2(zod@4.6.7))(@smithy/signature-v4@5.7.5)(google-auth-library@10.9.1)(react@19.3.1)(undici@7.30.2)(ws@8.23.0)(zod@4.6.7)
       '@superego/app':
         specifier: workspace:*
         version: link:../../packages/app
@@ -664,8 +664,8 @@ importers:
   extensions/suggestions:
     dependencies:
       '@earendil-works/pi-durable':
-        specifier: file:../../vendor/earendil-works-pi-durable-1.5.0.tgz
-        version: file:vendor/earendil-works-pi-durable-1.5.0.tgz(patch_hash=d071c462b7d72b75fdec1cc6ad4c27a24848f99901fa613fdd1ac6c1240dd6af)(@aws-sdk/credential-provider-node@3.972.97)(@modelcontextprotocol/sdk@1.32.2(zod@4.6.7))(@smithy/signature-v4@5.7.5)(undici@7.30.2)(ws@8.23.0)(zod@4.6.7)
+        specifier: file:../../vendor/earendil-works-pi-durable-1.6.0.tgz
+        version: file:vendor/earendil-works-pi-durable-1.6.0.tgz(patch_hash=a018c3dae8d28aa56b9723ef1322688656c48639ce9edb82f6e1f8083b68a8d5)(@aws-sdk/credential-provider-node@3.972.97)(@modelcontextprotocol/sdk@1.32.2(zod@4.6.7))(@smithy/signature-v4@5.7.5)(google-auth-library@10.9.1)(react@19.3.1)(undici@7.30.2)(ws@8.23.0)(zod@4.6.7)
       '@superego/app':
         specifier: workspace:*
         version: link:../../packages/app
@@ -695,11 +695,11 @@ importers:
   extensions/tasks:
     dependencies:
       '@earendil-works/pi-durable':
-        specifier: file:../../vendor/earendil-works-pi-durable-1.5.0.tgz
-        version: file:vendor/earendil-works-pi-durable-1.5.0.tgz(patch_hash=d071c462b7d72b75fdec1cc6ad4c27a24848f99901fa613fdd1ac6c1240dd6af)(@aws-sdk/credential-provider-node@3.972.97)(@modelcontextprotocol/sdk@1.32.2(zod@4.6.7))(@smithy/signature-v4@5.7.5)(undici@7.30.2)(ws@8.23.0)(zod@4.6.7)
+        specifier: file:../../vendor/earendil-works-pi-durable-1.6.0.tgz
+        version: file:vendor/earendil-works-pi-durable-1.6.0.tgz(patch_hash=a018c3dae8d28aa56b9723ef1322688656c48639ce9edb82f6e1f8083b68a8d5)(@aws-sdk/credential-provider-node@3.972.97)(@modelcontextprotocol/sdk@1.32.2(zod@4.6.7))(@smithy/signature-v4@5.7.5)(google-auth-library@10.9.1)(react@19.3.1)(undici@7.30.2)(ws@8.23.0)(zod@4.6.7)
       '@earendil-works/pi-schema':
-        specifier: file:../../vendor/earendil-works-pi-schema-1.5.0.tgz
-        version: file:vendor/earendil-works-pi-schema-1.5.0.tgz
+        specifier: file:../../vendor/earendil-works-pi-schema-1.6.0.tgz
+        version: file:vendor/earendil-works-pi-schema-1.6.0.tgz
       '@superego/app':
         specifier: workspace:*
         version: link:../../packages/app
@@ -723,8 +723,8 @@ importers:
   extensions/terminal:
     dependencies:
       '@earendil-works/pi-schema':
-        specifier: file:../../vendor/earendil-works-pi-schema-1.5.0.tgz
-        version: file:vendor/earendil-works-pi-schema-1.5.0.tgz
+        specifier: file:../../vendor/earendil-works-pi-schema-1.6.0.tgz
+        version: file:vendor/earendil-works-pi-schema-1.6.0.tgz
       '@lydell/node-pty':
         specifier: 1.2.0-beta.18
         version: 1.2.0-beta.18
@@ -757,8 +757,8 @@ importers:
   extensions/thread-reports:
     dependencies:
       '@earendil-works/pi-durable':
-        specifier: file:../../vendor/earendil-works-pi-durable-1.5.0.tgz
-        version: file:vendor/earendil-works-pi-durable-1.5.0.tgz(patch_hash=d071c462b7d72b75fdec1cc6ad4c27a24848f99901fa613fdd1ac6c1240dd6af)(@aws-sdk/credential-provider-node@3.972.97)(@modelcontextprotocol/sdk@1.32.2(zod@4.6.7))(@smithy/signature-v4@5.7.5)(undici@7.30.2)(ws@8.23.0)(zod@4.6.7)
+        specifier: file:../../vendor/earendil-works-pi-durable-1.6.0.tgz
+        version: file:vendor/earendil-works-pi-durable-1.6.0.tgz(patch_hash=a018c3dae8d28aa56b9723ef1322688656c48639ce9edb82f6e1f8083b68a8d5)(@aws-sdk/credential-provider-node@3.972.97)(@modelcontextprotocol/sdk@1.32.2(zod@4.6.7))(@smithy/signature-v4@5.7.5)(google-auth-library@10.9.1)(react@19.3.1)(undici@7.30.2)(ws@8.23.0)(zod@4.6.7)
       '@superego/daemon':
         specifier: workspace:*
         version: link:../../packages/daemon
@@ -776,11 +776,11 @@ importers:
   extensions/thread-tools:
     dependencies:
       '@earendil-works/pi-durable':
-        specifier: file:../../vendor/earendil-works-pi-durable-1.5.0.tgz
-        version: file:vendor/earendil-works-pi-durable-1.5.0.tgz(patch_hash=d071c462b7d72b75fdec1cc6ad4c27a24848f99901fa613fdd1ac6c1240dd6af)(@aws-sdk/credential-provider-node@3.972.97)(@modelcontextprotocol/sdk@1.32.2(zod@4.6.7))(@smithy/signature-v4@5.7.5)(undici@7.30.2)(ws@8.23.0)(zod@4.6.7)
+        specifier: file:../../vendor/earendil-works-pi-durable-1.6.0.tgz
+        version: file:vendor/earendil-works-pi-durable-1.6.0.tgz(patch_hash=a018c3dae8d28aa56b9723ef1322688656c48639ce9edb82f6e1f8083b68a8d5)(@aws-sdk/credential-provider-node@3.972.97)(@modelcontextprotocol/sdk@1.32.2(zod@4.6.7))(@smithy/signature-v4@5.7.5)(google-auth-library@10.9.1)(react@19.3.1)(undici@7.30.2)(ws@8.23.0)(zod@4.6.7)
       '@earendil-works/pi-schema':
-        specifier: file:../../vendor/earendil-works-pi-schema-1.5.0.tgz
-        version: file:vendor/earendil-works-pi-schema-1.5.0.tgz
+        specifier: file:../../vendor/earendil-works-pi-schema-1.6.0.tgz
+        version: file:vendor/earendil-works-pi-schema-1.6.0.tgz
       '@superego/daemon':
         specifier: workspace:*
         version: link:../../packages/daemon
@@ -894,14 +894,14 @@ importers:
         specifier: ^6.43.15
         version: 6.43.15
       '@earendil-works/chord':
-        specifier: file:../../vendor/earendil-works-chord-1.5.0.tgz
-        version: file:vendor/earendil-works-chord-1.5.0.tgz(ws@8.23.0)
+        specifier: file:../../vendor/earendil-works-chord-1.6.0.tgz
+        version: file:vendor/earendil-works-chord-1.6.0.tgz(react@19.3.1)(ws@8.23.0)
       '@earendil-works/pi-ai':
-        specifier: file:../../vendor/earendil-works-pi-ai-1.5.0.tgz
-        version: file:vendor/earendil-works-pi-ai-1.5.0.tgz(@aws-sdk/credential-provider-node@3.972.97)(@modelcontextprotocol/sdk@1.32.2(zod@4.6.7))(@smithy/signature-v4@5.7.5)(undici@7.30.2)(ws@8.23.0)(zod@4.6.7)
+        specifier: file:../../vendor/earendil-works-pi-ai-1.6.0.tgz
+        version: file:vendor/earendil-works-pi-ai-1.6.0.tgz(@aws-sdk/credential-provider-node@3.972.97)(@modelcontextprotocol/sdk@1.32.2(zod@4.6.7))(@smithy/signature-v4@5.7.5)(google-auth-library@10.9.1)(undici@7.30.2)(ws@8.23.0)(zod@4.6.7)
       '@earendil-works/pi-durable':
-        specifier: file:../../vendor/earendil-works-pi-durable-1.5.0.tgz
-        version: file:vendor/earendil-works-pi-durable-1.5.0.tgz(patch_hash=d071c462b7d72b75fdec1cc6ad4c27a24848f99901fa613fdd1ac6c1240dd6af)(@aws-sdk/credential-provider-node@3.972.97)(@modelcontextprotocol/sdk@1.32.2(zod@4.6.7))(@smithy/signature-v4@5.7.5)(undici@7.30.2)(ws@8.23.0)(zod@4.6.7)
+        specifier: file:../../vendor/earendil-works-pi-durable-1.6.0.tgz
+        version: file:vendor/earendil-works-pi-durable-1.6.0.tgz(patch_hash=a018c3dae8d28aa56b9723ef1322688656c48639ce9edb82f6e1f8083b68a8d5)(@aws-sdk/credential-provider-node@3.972.97)(@modelcontextprotocol/sdk@1.32.2(zod@4.6.7))(@smithy/signature-v4@5.7.5)(google-auth-library@10.9.1)(react@19.3.1)(undici@7.30.2)(ws@8.23.0)(zod@4.6.7)
       '@lezer/common':
         specifier: 1.5.5
         version: 1.5.5
@@ -1006,14 +1006,14 @@ importers:
   packages/daemon:
     dependencies:
       '@earendil-works/chord':
-        specifier: file:../../vendor/earendil-works-chord-1.5.0.tgz
-        version: file:vendor/earendil-works-chord-1.5.0.tgz(ws@8.23.0)
+        specifier: file:../../vendor/earendil-works-chord-1.6.0.tgz
+        version: file:vendor/earendil-works-chord-1.6.0.tgz(react@19.3.1)(ws@8.23.0)
       '@earendil-works/pi-ai':
-        specifier: file:../../vendor/earendil-works-pi-ai-1.5.0.tgz
-        version: file:vendor/earendil-works-pi-ai-1.5.0.tgz(@aws-sdk/credential-provider-node@3.972.97)(@modelcontextprotocol/sdk@1.32.2(zod@4.6.7))(@smithy/signature-v4@5.7.5)(undici@7.30.2)(ws@8.23.0)(zod@4.6.7)
+        specifier: file:../../vendor/earendil-works-pi-ai-1.6.0.tgz
+        version: file:vendor/earendil-works-pi-ai-1.6.0.tgz(@aws-sdk/credential-provider-node@3.972.97)(@modelcontextprotocol/sdk@1.32.2(zod@4.6.7))(@smithy/signature-v4@5.7.5)(google-auth-library@10.9.1)(undici@7.30.2)(ws@8.23.0)(zod@4.6.7)
       '@earendil-works/pi-durable':
-        specifier: file:../../vendor/earendil-works-pi-durable-1.5.0.tgz
-        version: file:vendor/earendil-works-pi-durable-1.5.0.tgz(patch_hash=d071c462b7d72b75fdec1cc6ad4c27a24848f99901fa613fdd1ac6c1240dd6af)(@aws-sdk/credential-provider-node@3.972.97)(@modelcontextprotocol/sdk@1.32.2(zod@4.6.7))(@smithy/signature-v4@5.7.5)(undici@7.30.2)(ws@8.23.0)(zod@4.6.7)
+        specifier: file:../../vendor/earendil-works-pi-durable-1.6.0.tgz
+        version: file:vendor/earendil-works-pi-durable-1.6.0.tgz(patch_hash=a018c3dae8d28aa56b9723ef1322688656c48639ce9edb82f6e1f8083b68a8d5)(@aws-sdk/credential-provider-node@3.972.97)(@modelcontextprotocol/sdk@1.32.2(zod@4.6.7))(@smithy/signature-v4@5.7.5)(google-auth-library@10.9.1)(react@19.3.1)(undici@7.30.2)(ws@8.23.0)(zod@4.6.7)
       '@superego/protocol':
         specifier: workspace:*
         version: link:../protocol
@@ -1030,11 +1030,11 @@ importers:
   packages/protocol:
     dependencies:
       '@earendil-works/pi-durable':
-        specifier: file:../../vendor/earendil-works-pi-durable-1.5.0.tgz
-        version: file:vendor/earendil-works-pi-durable-1.5.0.tgz(patch_hash=d071c462b7d72b75fdec1cc6ad4c27a24848f99901fa613fdd1ac6c1240dd6af)(@aws-sdk/credential-provider-node@3.972.97)(@modelcontextprotocol/sdk@1.32.2(zod@4.6.7))(@smithy/signature-v4@5.7.5)(undici@7.30.2)(ws@8.23.0)(zod@4.6.7)
+        specifier: file:../../vendor/earendil-works-pi-durable-1.6.0.tgz
+        version: file:vendor/earendil-works-pi-durable-1.6.0.tgz(patch_hash=a018c3dae8d28aa56b9723ef1322688656c48639ce9edb82f6e1f8083b68a8d5)(@aws-sdk/credential-provider-node@3.972.97)(@modelcontextprotocol/sdk@1.32.2(zod@4.6.7))(@smithy/signature-v4@5.7.5)(google-auth-library@10.9.1)(react@19.3.1)(undici@7.30.2)(ws@8.23.0)(zod@4.6.7)
       '@earendil-works/pi-schema':
-        specifier: file:../../vendor/earendil-works-pi-schema-1.5.0.tgz
-        version: file:vendor/earendil-works-pi-schema-1.5.0.tgz
+        specifier: file:../../vendor/earendil-works-pi-schema-1.6.0.tgz
+        version: file:vendor/earendil-works-pi-schema-1.6.0.tgz
       es-module-lexer:
         specifier: 2.3.2
         version: 2.3.2
@@ -1454,43 +1454,46 @@ packages:
   '@codemirror/view@6.43.15':
     resolution: {integrity: sha512-HHsfpqFeHyXLs983pSRe38Xajs0vFWZQ2BuX0m7Ki8w3jZ5iD8cuR3lBz2/5/X53Dhf32SBHKh6rtSTB6tKeGw==}
 
-  '@earendil-works/chord@file:vendor/earendil-works-chord-1.5.0.tgz':
-    resolution: {integrity: sha512-jf555zbCM21E03DVBDPD/Tuae0lz64YjaHx/athUxNZ/H7phVVb0dWfZsaYnxaXPQ1odW8iHEoVLOlE/prvUPg==, tarball: file:vendor/earendil-works-chord-1.5.0.tgz}
-    version: 1.5.0
+  '@earendil-works/chord@file:vendor/earendil-works-chord-1.6.0.tgz':
+    resolution: {integrity: sha512-8dQXEKUR6qQPc4zNEblmv6hEfr2JAAU+nUprt+mhtdfRRZzl1At5ZhnJqTqesElAdR7RpAyaRIAilyteNHzyWA==, tarball: file:vendor/earendil-works-chord-1.6.0.tgz}
+    version: 1.6.0
     engines: {node: '>=22.19.0'}
     peerDependencies:
-      esbuild: 0.28.2
-      ws: 8.23.0
+      esbuild: ^0.28.2
+      react: ^19.3.0
+      ws: ^8.21.0
     peerDependenciesMeta:
       esbuild:
+        optional: true
+      react:
         optional: true
       ws:
         optional: true
 
-  '@earendil-works/pi-ai@file:vendor/earendil-works-pi-ai-1.5.0.tgz':
-    resolution: {integrity: sha512-8Jsn5S+MGuJbd0gj0N5s0aDlzQzKDwNmYyQwTayFlnQH9NQvk/J5FmbzGXqtcwWreRbHJD6XWH8j05ZMjT4+TQ==, tarball: file:vendor/earendil-works-pi-ai-1.5.0.tgz}
-    version: 1.5.0
+  '@earendil-works/pi-ai@file:vendor/earendil-works-pi-ai-1.6.0.tgz':
+    resolution: {integrity: sha512-9hL+eygFDEiFp//cydeUfmFsKmEqpmvsNPb10Y1W8+m5K9O+sx1hMStfu6nukrBD5sl6mP4RykCYBBNEgsVLfw==, tarball: file:vendor/earendil-works-pi-ai-1.6.0.tgz}
+    version: 1.6.0
     engines: {node: '>=22.19.0'}
     hasBin: true
 
-  '@earendil-works/pi-codemode@file:vendor/earendil-works-pi-codemode-1.5.0.tgz':
-    resolution: {integrity: sha512-PLBJZ17AEWGzOlAAcFuOkw3PxkOti0JlFuZQyeF2GRTqbpuYo4k9t8YqUV2uOQVzrUnKdxahwaFUqc1eNS1WAg==, tarball: file:vendor/earendil-works-pi-codemode-1.5.0.tgz}
-    version: 1.5.0
+  '@earendil-works/pi-codemode@file:vendor/earendil-works-pi-codemode-1.6.0.tgz':
+    resolution: {integrity: sha512-GAgAy7iJCVbeiuqq2dTIuNj3aXTMUeTF8Nu8LZs72e8ueGGDU5L3/D8VxzTHALIpQ1/q8u1tfmB3iYS2Nopchw==, tarball: file:vendor/earendil-works-pi-codemode-1.6.0.tgz}
+    version: 1.6.0
     engines: {node: '>=22.19.0'}
 
-  '@earendil-works/pi-durable@file:vendor/earendil-works-pi-durable-1.5.0.tgz':
-    resolution: {integrity: sha512-xeBP2vIo5NvsCMQ4Y/V+Z164xQEi9JWiBWHdjn4Z15EnFqV3c0FxJAX26FqyyyintrYyk+Enre94GNcvRlBA5g==, tarball: file:vendor/earendil-works-pi-durable-1.5.0.tgz}
-    version: 1.5.0
+  '@earendil-works/pi-durable@file:vendor/earendil-works-pi-durable-1.6.0.tgz':
+    resolution: {integrity: sha512-nyPjInj/7ZjLEUCDMS7oNGRj1ynftOCVqXilWRBhIuT/xoRHrPy5yFNle/64hvs3F1rukMZ7Ar/4reA7auvUWQ==, tarball: file:vendor/earendil-works-pi-durable-1.6.0.tgz}
+    version: 1.6.0
     engines: {node: '>=22.19.0'}
 
-  '@earendil-works/pi-schema@file:vendor/earendil-works-pi-schema-1.5.0.tgz':
-    resolution: {integrity: sha512-RW0MbT2tR65OY6xMsgB/yVBb7m/RTNwA+9hurSN1vVXfHZRVmVnXbruBPrx/PzbrQnW5yLVlMRWxErGDQtF1Hg==, tarball: file:vendor/earendil-works-pi-schema-1.5.0.tgz}
-    version: 1.5.0
+  '@earendil-works/pi-schema@file:vendor/earendil-works-pi-schema-1.6.0.tgz':
+    resolution: {integrity: sha512-jD0VRCUcFzWQ5zN82pOuoHNN42/3pu4E5krtpiKknvPq4g2m+fuO38lj+xnZhuVpYcd2G0qlmr8lE6ZMzkad7Q==, tarball: file:vendor/earendil-works-pi-schema-1.6.0.tgz}
+    version: 1.6.0
     engines: {node: '>=22.19.0'}
 
-  '@earendil-works/pi-telemetry@file:vendor/earendil-works-pi-telemetry-1.5.0.tgz':
-    resolution: {integrity: sha512-VW3tcVdnNfl/Vk8wHPTzZdKkxcsCOM12ppiO4DXnd9wMxUCmOfLt/wvUnWeKWbTVlVSRg0uqKtnnhE2UCsG2Bw==, tarball: file:vendor/earendil-works-pi-telemetry-1.5.0.tgz}
-    version: 1.5.0
+  '@earendil-works/pi-telemetry@file:vendor/earendil-works-pi-telemetry-1.6.0.tgz':
+    resolution: {integrity: sha512-MNL0TvtpgoSfX7mBLSVgzxTW6yvT8VLEpHvbWnZsIp92FtqVvx+4q9DxWZdX8KvcQqBs0GseAgVnLdVFinjN9Q==, tarball: file:vendor/earendil-works-pi-telemetry-1.6.0.tgz}
+    version: 1.6.0
     engines: {node: '>=22.19.0'}
 
   '@electron-internal/extract-zip@1.0.8':
@@ -1525,8 +1528,8 @@ packages:
   '@floating-ui/utils@0.2.12':
     resolution: {integrity: sha512-HpCo8tmWzLVad5s2d19EhAz5zqrrQ6s69qd6moPMQvkOuSwDT1YgRfWSVuc4ennqrgv3OHppiOGMQ7oC13yIww==}
 
-  '@google/genai@2.21.0':
-    resolution: {integrity: sha512-+PDtco2/Z0ONdzCGekCoCT+O1VJS9xJQNN4XzQpXG/t3El/SWWMkCWlFRO1KmivOHPa4Q0VjUYu1HBKCZ/v33Q==}
+  '@google/genai@2.32.0':
+    resolution: {integrity: sha512-60c79uXpR0a47bmGqDxbXEBuQUalNmwo5mx5kqb91jIW4FoqpsLSt86DeVhRhtH5+s/16Wqxt3sXzFQn2U1OHQ==}
     engines: {node: '>=20.0.0'}
     peerDependencies:
       '@modelcontextprotocol/sdk': ^1.25.2
@@ -3002,15 +3005,16 @@ packages:
   once@1.4.0:
     resolution: {integrity: sha512-lNaJgI+2Q5URQBkccEKHTQOPaXdUxnZZElQTZY0MFUAuaEqe1E+Nyvgdz/aIyNi6Z9MzO5dv1H8n58/GELp3+w==}
 
-  openai@7.19.0:
-    resolution: {integrity: sha512-MX2s3u2L5racTO0CC/SWpCOasJQBCJrqLKXK+l82cAhdeF8mPMBEe/gxMm0ZFa2xpKpOFLRjxv5afYEZbBXmbQ==}
+  openai@7.57.0:
+    resolution: {integrity: sha512-RbmrdE5NdfW6nGq/FaCJ3KFCZpotoExPzruQUSMCTw/ouUFO08vpvVdSmgmPxQMFAiv9EXZCEXvcWYU+n6NzsQ==}
     engines: {node: '>=22.0.0'}
     peerDependencies:
       '@aws-sdk/credential-provider-node': '>=3.972.0 <4'
       '@smithy/hash-node': '>=4.3.0 <5'
       '@smithy/signature-v4': '>=5.4.0 <6'
+      google-auth-library: '>=9.15.1 <12'
       undici: '>=5 <9'
-      ws: 8.23.0
+      ws: ^8.21.0
       zod: ^3.25 || ^4.0
     peerDependenciesMeta:
       '@aws-sdk/credential-provider-node':
@@ -3018,6 +3022,8 @@ packages:
       '@smithy/hash-node':
         optional: true
       '@smithy/signature-v4':
+        optional: true
+      google-auth-library:
         optional: true
       undici:
         optional: true
@@ -4107,24 +4113,25 @@ snapshots:
       style-mod: 4.1.4
       w3c-keyname: 2.2.8
 
-  '@earendil-works/chord@file:vendor/earendil-works-chord-1.5.0.tgz(ws@8.23.0)':
+  '@earendil-works/chord@file:vendor/earendil-works-chord-1.6.0.tgz(react@19.3.1)(ws@8.23.0)':
     dependencies:
-      '@earendil-works/pi-schema': file:vendor/earendil-works-pi-schema-1.5.0.tgz
-      '@earendil-works/pi-telemetry': file:vendor/earendil-works-pi-telemetry-1.5.0.tgz
+      '@earendil-works/pi-schema': file:vendor/earendil-works-pi-schema-1.6.0.tgz
+      '@earendil-works/pi-telemetry': file:vendor/earendil-works-pi-telemetry-1.6.0.tgz
     optionalDependencies:
+      react: 19.3.1
       ws: 8.23.0
 
-  '@earendil-works/pi-ai@file:vendor/earendil-works-pi-ai-1.5.0.tgz(@aws-sdk/credential-provider-node@3.972.97)(@modelcontextprotocol/sdk@1.32.2(zod@4.6.7))(@smithy/signature-v4@5.7.5)(undici@7.30.2)(ws@8.23.0)(zod@4.6.7)':
+  '@earendil-works/pi-ai@file:vendor/earendil-works-pi-ai-1.6.0.tgz(@aws-sdk/credential-provider-node@3.972.97)(@modelcontextprotocol/sdk@1.32.2(zod@4.6.7))(@smithy/signature-v4@5.7.5)(google-auth-library@10.9.1)(undici@7.30.2)(ws@8.23.0)(zod@4.6.7)':
     dependencies:
       '@anthropic-ai/sdk': 0.129.0(zod@4.6.7)
       '@aws-sdk/client-bedrock-runtime': 3.1127.0
-      '@earendil-works/pi-schema': file:vendor/earendil-works-pi-schema-1.5.0.tgz
-      '@earendil-works/pi-telemetry': file:vendor/earendil-works-pi-telemetry-1.5.0.tgz
-      '@google/genai': 2.21.0(@modelcontextprotocol/sdk@1.32.2(zod@4.6.7))
+      '@earendil-works/pi-schema': file:vendor/earendil-works-pi-schema-1.6.0.tgz
+      '@earendil-works/pi-telemetry': file:vendor/earendil-works-pi-telemetry-1.6.0.tgz
+      '@google/genai': 2.32.0(@modelcontextprotocol/sdk@1.32.2(zod@4.6.7))
       '@smithy/node-http-handler': 4.12.1
       http-proxy-agent: 9.1.0
       https-proxy-agent: 9.1.0
-      openai: 7.19.0(@aws-sdk/credential-provider-node@3.972.97)(@smithy/signature-v4@5.7.5)(undici@7.30.2)(ws@8.23.0)(zod@4.6.7)
+      openai: 7.57.0(@aws-sdk/credential-provider-node@3.972.97)(@smithy/signature-v4@5.7.5)(google-auth-library@10.9.1)(undici@7.30.2)(ws@8.23.0)(zod@4.6.7)
       partial-json: 0.1.7
     transitivePeerDependencies:
       - '@aws-sdk/credential-provider-node'
@@ -4132,6 +4139,7 @@ snapshots:
       - '@smithy/hash-node'
       - '@smithy/signature-v4'
       - bufferutil
+      - google-auth-library
       - kerberos
       - supports-color
       - undici
@@ -4139,17 +4147,17 @@ snapshots:
       - ws
       - zod
 
-  '@earendil-works/pi-codemode@file:vendor/earendil-works-pi-codemode-1.5.0.tgz':
+  '@earendil-works/pi-codemode@file:vendor/earendil-works-pi-codemode-1.6.0.tgz':
     dependencies:
       quickjs-wasi: 3.6.2
 
-  '@earendil-works/pi-durable@file:vendor/earendil-works-pi-durable-1.5.0.tgz(patch_hash=d071c462b7d72b75fdec1cc6ad4c27a24848f99901fa613fdd1ac6c1240dd6af)(@aws-sdk/credential-provider-node@3.972.97)(@modelcontextprotocol/sdk@1.32.2(zod@4.6.7))(@smithy/signature-v4@5.7.5)(undici@7.30.2)(ws@8.23.0)(zod@4.6.7)':
+  '@earendil-works/pi-durable@file:vendor/earendil-works-pi-durable-1.6.0.tgz(patch_hash=a018c3dae8d28aa56b9723ef1322688656c48639ce9edb82f6e1f8083b68a8d5)(@aws-sdk/credential-provider-node@3.972.97)(@modelcontextprotocol/sdk@1.32.2(zod@4.6.7))(@smithy/signature-v4@5.7.5)(google-auth-library@10.9.1)(react@19.3.1)(undici@7.30.2)(ws@8.23.0)(zod@4.6.7)':
     dependencies:
-      '@earendil-works/chord': file:vendor/earendil-works-chord-1.5.0.tgz(ws@8.23.0)
-      '@earendil-works/pi-ai': file:vendor/earendil-works-pi-ai-1.5.0.tgz(@aws-sdk/credential-provider-node@3.972.97)(@modelcontextprotocol/sdk@1.32.2(zod@4.6.7))(@smithy/signature-v4@5.7.5)(undici@7.30.2)(ws@8.23.0)(zod@4.6.7)
-      '@earendil-works/pi-codemode': file:vendor/earendil-works-pi-codemode-1.5.0.tgz
-      '@earendil-works/pi-schema': file:vendor/earendil-works-pi-schema-1.5.0.tgz
-      '@earendil-works/pi-telemetry': file:vendor/earendil-works-pi-telemetry-1.5.0.tgz
+      '@earendil-works/chord': file:vendor/earendil-works-chord-1.6.0.tgz(react@19.3.1)(ws@8.23.0)
+      '@earendil-works/pi-ai': file:vendor/earendil-works-pi-ai-1.6.0.tgz(@aws-sdk/credential-provider-node@3.972.97)(@modelcontextprotocol/sdk@1.32.2(zod@4.6.7))(@smithy/signature-v4@5.7.5)(google-auth-library@10.9.1)(undici@7.30.2)(ws@8.23.0)(zod@4.6.7)
+      '@earendil-works/pi-codemode': file:vendor/earendil-works-pi-codemode-1.6.0.tgz
+      '@earendil-works/pi-schema': file:vendor/earendil-works-pi-schema-1.6.0.tgz
+      '@earendil-works/pi-telemetry': file:vendor/earendil-works-pi-telemetry-1.6.0.tgz
       '@silvia-odwyer/photon': 0.3.3
       diff: 8.0.4
     transitivePeerDependencies:
@@ -4159,16 +4167,18 @@ snapshots:
       - '@smithy/signature-v4'
       - bufferutil
       - esbuild
+      - google-auth-library
       - kerberos
+      - react
       - supports-color
       - undici
       - utf-8-validate
       - ws
       - zod
 
-  '@earendil-works/pi-schema@file:vendor/earendil-works-pi-schema-1.5.0.tgz': {}
+  '@earendil-works/pi-schema@file:vendor/earendil-works-pi-schema-1.6.0.tgz': {}
 
-  '@earendil-works/pi-telemetry@file:vendor/earendil-works-pi-telemetry-1.5.0.tgz': {}
+  '@earendil-works/pi-telemetry@file:vendor/earendil-works-pi-telemetry-1.6.0.tgz': {}
 
   '@electron-internal/extract-zip@1.0.8': {}
 
@@ -4218,7 +4228,7 @@ snapshots:
 
   '@floating-ui/utils@0.2.12': {}
 
-  '@google/genai@2.21.0(@modelcontextprotocol/sdk@1.32.2(zod@4.6.7))':
+  '@google/genai@2.32.0(@modelcontextprotocol/sdk@1.32.2(zod@4.6.7))':
     dependencies:
       google-auth-library: 10.9.1
       p-retry: 4.6.2
@@ -5796,10 +5806,11 @@ snapshots:
     dependencies:
       wrappy: 1.0.2
 
-  openai@7.19.0(@aws-sdk/credential-provider-node@3.972.97)(@smithy/signature-v4@5.7.5)(undici@7.30.2)(ws@8.23.0)(zod@4.6.7):
+  openai@7.57.0(@aws-sdk/credential-provider-node@3.972.97)(@smithy/signature-v4@5.7.5)(google-auth-library@10.9.1)(undici@7.30.2)(ws@8.23.0)(zod@4.6.7):
     optionalDependencies:
       '@aws-sdk/credential-provider-node': 3.972.97
       '@smithy/signature-v4': 5.7.5
+      google-auth-library: 10.9.1
       undici: 7.30.2
       ws: 8.23.0
       zod: 4.6.7

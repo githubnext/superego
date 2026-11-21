@@ -13,7 +13,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { CallToolRequestSchema, ListToolsRequestSchema, type CallToolResult } from '@modelcontextprotocol/sdk/types.js'
 import type { McpSdkServerConfigWithInstance } from '@anthropic-ai/claude-agent-sdk'
 import { withAbortSignal, type Context } from '@earendil-works/chord/context'
-import type { JsonValue } from '@earendil-works/chord'
+import type { JsonValue } from '@earendil-works/chord/json'
 import type { Agent, TaskRuntime, ToolExecutionApi, ToolRegistration } from '@earendil-works/pi-durable'
 import { validateToolArguments } from '@earendil-works/pi-ai/utils/validation'
 import type { ToolResultMessage } from '@earendil-works/pi-ai'
@@ -101,8 +101,8 @@ const unsupported = (what: string) => () => { throw new Error(`${what} isn't ava
 /**
  * Run one of the thread's tools as its agent would: its arguments checked against its schema, then `execute` with a
  * tool API made of the turn's (the conversation, the call's id, its details as it reports them), cut short when
- * `signal` aborts. The parts of pi-durable's tool API a model's tool round alone has (nested calls, tasks, memos) are
- * refused, saying so: the offered tools don't use them.
+ * `signal` aborts. The parts of pi-durable's tool API a model's tool round alone has (nested calls, tasks, memos,
+ * parking until woken) are refused, saying so: the offered tools don't use them.
  */
 export async function runTool(tool: ToolRegistration, args: Record<string, unknown>, { runtime, callId, signal, context, details }: {
   runtime: Runtime; callId: string; signal: AbortSignal; context: Context
@@ -120,6 +120,10 @@ export async function runTool(tool: ToolRegistration, args: Record<string, unkno
       taskId: runtime.taskId,
       conversationId: runtime.conversationId,
       callId,
+      // Never parked, so never woken: every call is a first run.
+      wake: undefined,
+      checkpoint: undefined,
+      readSignal: (token, key, c) => runtime.readSignal(token, key, c),
       registry: runtime.registry,
       agent: (c) => runtime.agent(c),
       get models() { return runtime.models },
@@ -146,6 +150,7 @@ export async function runTool(tool: ToolRegistration, args: Record<string, unkno
       watchDoc: runtime.watchDoc.bind(runtime) as ToolExecutionApi['watchDoc'],
     }
     const result = await tool.execute(valid, api, call)
+    if (result.sleep !== undefined || result.wait !== undefined) throw new Error(`Parking isn't available to tools in a Claude Agent thread`)
     const content = result.output ?? [{ type: 'text' as const, text: output.join('') }]
     const final = result.details ?? reported
     return { content, isError: Boolean(result.isError), ...(final !== undefined ? { details: final } : {}) }

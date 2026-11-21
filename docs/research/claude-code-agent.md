@@ -88,12 +88,12 @@ needs: a thread's `agent`, and a way for an extension to run a thread's turns. S
   restart restarts the task.
   - **The seam (wave 1 spike, 2026-11-20).** pi-durable hard-wires runs to its `GenerationTask`: `startRun` creates
     one for every input, and only `pi.generation` may own `pi.live.run`. An extension's task can't own a run without a
-    change to pi-durable, so it got one, in `patches/@earendil-works__pi-durable@1.5.0.patch` (upstream:
-    github.com/earendil-works/pi, `packages/durable`, to offer there):
+    change to pi-durable, so it got one, in `patches/@earendil-works__pi-durable@1.6.0.patch` (upstream:
+    github.com/earendil-works/pi, `packages/durable`, offered there as `docs/research/pi-durable-runner-upstream.md`):
     - `AgentState.runner`: the name of an installed task that runs each turn instead of a model request
       (`configure({ runner })`, or `createConversation({ agent: { runner } })`).
     - The generation's `prepare` sees it and *delegates*: it creates the runner as a child it owns and waits
-      (a new `delegate` phase; `GenerationTask` version 3). When the runner completes with its answer's entry
+      (a new `delegate` phase; `GenerationTask` version 4 on pi 1.6). When the runner completes with its answer's entry
       (`{ entryId }`), the run ends as for a model's final answer (inputs settled, boundaries, queued messages,
       `afterRun`); when it fails, the run fails `model_error` with its message.
     - So pi-durable keeps everything about the run: `pi.live.run` means working, Stop (`Conversation.abort()`)

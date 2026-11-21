@@ -83,6 +83,9 @@
 - Electron 45.3.2 (Chromium 156.0.8078.100), with its security fixes.
 - `superego extension test` checks a profile's types with TypeScript 7, the native compiler: faster, and the same
   compiler an editor on TypeScript 7 checks with.
+- pi 1.6: GPT-6.2 Astra and Sol (OpenAI, Azure, ChatGPT sign-in), Qwen Token Plan Individual CN and newer Qwen
+  models; dropped connections (`ECONNRESET`, "Connection closed") are retried instead of failing the turn, and
+  ChatGPT sign-in keeps its prompt cache across turns and thinking-level changes on GPT-6.2.
 
 ## 0.1.9
 

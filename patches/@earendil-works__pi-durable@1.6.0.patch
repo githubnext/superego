@@ -1,0 +1,219 @@
+diff --git a/dist/harness/agent.js b/dist/harness/agent.js
+index 524ff50a1c555fdbc4e2dbf6a56de11b5b74b67b..97a7f30e1e8df87b1dd01250859aaa60676c0848 100644
+--- a/dist/harness/agent.js
++++ b/dist/harness/agent.js
+@@ -140,6 +140,10 @@ function applyChange(state, change) {
+     set("maxTurns", maxTurns);
+     const compaction = change.compaction;
+     set("compaction", compaction === undefined || compaction === null ? compaction : compactionSettings(compaction));
++    const runner = change.runner;
++    if (runner === "")
++        throw new RangeError("runner must name a task");
++    set("runner", runner);
+ }
+ /** A stored copy of a conversation's compaction settings, without undefined fields. */
+ function compactionSettings(settings) {
+@@ -266,6 +270,7 @@ report) {
+         ...(state?.cwd === undefined ? {} : { cwd: state.cwd }),
+         ...(state?.maxTurns === undefined ? {} : { maxTurns: state.maxTurns }),
+         ...(state?.compaction === undefined ? {} : { compaction: state.compaction }),
++        ...(state?.runner === undefined ? {} : { runner: state.runner }),
+     };
+     return agent;
+ }
+diff --git a/dist/harness/generation.d.ts b/dist/harness/generation.d.ts
+index ed1f22bfb64bbecaafed01395467919530ca54af..66c64ab7e30330d8f559bf665cc71a9fd495a639 100644
+--- a/dist/harness/generation.d.ts
++++ b/dist/harness/generation.d.ts
+@@ -65,6 +65,10 @@ export type GenerationCheckpoint = {
+      */
+     phase: "finish";
+     run: RunSummary;
++} | {
++    /** Waiting on the agent's `runner` (`AgentState.runner`), a child the generation owns, which runs the turn. */
++    phase: "delegate";
++    runner: TaskId<GenerationResult>;
+ } | {
+     /** Waiting on the tasks `afterRun` hooks asked for, which the generation owns; then the run ends. */
+     phase: "drain";
+@@ -93,7 +97,8 @@ export type GenerationResult = {
+ };
+ /**
+  * Built-in generation task: prepares the positional system prompt and tool loadout, requests or polls the model,
+- * retries, and classifies the response. The run's inputs live in `pi.live.run`.
++ * retries, and classifies the response. The run's inputs live in `pi.live.run`. When the agent names a `runner`, that
++ * task runs the turn instead (`delegate`).
+  */
+ export declare const GenerationTask: Task<GenerationInput, GenerationCheckpoint, GenerationResult, GenerationHooks>;
+ /**
+diff --git a/dist/harness/generation.js b/dist/harness/generation.js
+index 56f3055ab58e51d429f91c90c9286531f3086106..3d998586b4a527e66ae75487284be6e22f09a78d 100644
+--- a/dist/harness/generation.js
++++ b/dist/harness/generation.js
+@@ -18,15 +18,17 @@ import { optionalExtension } from "./util.js";
+ const DEFAULT_POLL_AFTER_MS = 5000;
+ /**
+  * Built-in generation task: prepares the positional system prompt and tool loadout, requests or polls the model,
+- * retries, and classifies the response. The run's inputs live in `pi.live.run`.
++ * retries, and classifies the response. The run's inputs live in `pi.live.run`. When the agent names a `runner`, that
++ * task runs the turn instead (`delegate`).
+  */
+ export const GenerationTask = defineTask({
+     name: "pi.generation",
+-    version: 3,
++    version: 4,
+     initial: () => ({ phase: "prepare", attempt: 1 }),
+     // Version 2 leaves calls to tools not offered in a sequential round's `pending`, flagged `unoffered` in their slots.
+     // A version 1 Harness would start their tool tasks unflagged, resolving the name, so it leaves version 2 blocked
+-    // instead. Version 3 adds the `afterTools` and `yield` phases. Older checkpoints are kept as they are.
++    // instead. Version 3 adds the `afterTools` and `yield` phases, version 4 the `delegate` phase. Older checkpoints are
++    // kept as they are.
+     migrate: (input, checkpoint) => ({
+         input: input,
+         checkpoint: checkpoint,
+@@ -43,6 +45,8 @@ export const GenerationTask = defineTask({
+                 return endCutOff(runtime, task, context);
+             const { conversationId } = runtime;
+             const agent = await runtime.agent(context);
++            if (agent.runner !== undefined)
++                return delegate(runtime, agent.runner, context);
+             const settings = runtime.settings;
+             const { model, thinkingLevel } = agent;
+             const resolved = model === undefined ? undefined : runtime.models.getModel(model.provider, model.modelId);
+@@ -249,6 +253,16 @@ export const GenerationTask = defineTask({
+                 return { status: "waiting", checkpoint, on: tasks, policy: "allSettled" };
+             }, context);
+         },
++        /** The runner is terminal: its answer ends the run as a model's final answer does; otherwise the run fails. */
++        delegate: async (task, runtime, context) => {
++            if (cutOffTooOften(task, runtime))
++                return endCutOff(runtime, task, context);
++            const [outcome] = await runtime.outcomes([task.state.checkpoint.runner], context);
++            const answer = outcome?.status === "completed" ? runnerAnswer(outcome.result) : undefined;
++            if (answer !== undefined)
++                return answeredByRunner(runtime, answer, context);
++            return failRunner(runtime, runnerFailure(outcome), context);
++        },
+         /** The after-run tasks are terminal, whatever their outcomes: end the run. */
+         drain: async (task, runtime, context) => {
+             const { answer } = task.state.checkpoint;
+@@ -475,6 +489,10 @@ async function cancelDeferred(runtime, checkpoint, context) {
+ /** Settle the run's inputs `unanswered` with `no_model` and fail. */
+ async function failNoModel(runtime, ref, context) {
+     const message = ref === undefined ? "No model is configured" : `Model ${ref.provider}/${ref.modelId} is not available`;
++    return failUnanswerable(runtime, message, context);
++}
++/** Settle the run's inputs `unanswered` with `no_model` and fail with `message`: nothing can answer the run. */
++async function failUnanswerable(runtime, message, context) {
+     await runtime.commit(async (tx) => {
+         const failure = await prepareFailure(tx, runtime);
+         const live = await tx.doc(LiveDoc, runtime.conversationId);
+@@ -487,6 +505,72 @@ async function failNoModel(runtime, ref, context) {
+         return { status: "terminal", outcome: { status: "failed", error: { message, detail: { reason: "no_model" } } } };
+     }, context);
+ }
++/**
++ * Run the turn with the agent's `runner`, the name of an installed task, instead of a model request. The generation
++ * keeps the run, so its inputs, boundaries, queued items, `afterRun` hooks, aborts, and failures stay the Harness's, and
++ * waits for the runner, a child it owns, created with input `{}`. The runner reads the conversation, appends the turn's
++ * entries itself (assistant messages, tool results), may publish its answer in flight as `pi.live.generation.message`
++ * (deferred, as `PROGRESS_COMMIT`), which becomes an aborted entry if the run is cut short, and completes with its
++ * answer's entry (`GenerationResult`).
++ */
++async function delegate(runtime, name, context) {
++    const view = await runtime.context(runtime.conversationId, context);
++    const last = view.messages.findLast((message) => message.role !== "system");
++    if (last?.role !== "user" && last?.role !== "toolResult")
++        return failNothingToAnswer(runtime, context);
++    const installed = name.startsWith("pi.") ? undefined : runtime.registry.task(name);
++    if (installed === undefined)
++        return failUnanswerable(runtime, `Runner ${name} is not installed`, context);
++    // The registry erases definitions; a runner is a task of the generation's input and result by `AgentState.runner`.
++    const runner = installed;
++    await runtime.commit(async (tx) => {
++        const child = await tx.createTask(runner, {}, { ownership: { kind: "task", taskId: runtime.taskId } });
++        return { status: "waiting", checkpoint: { phase: "delegate", runner: child }, on: [child], policy: "allSettled" };
++    }, context);
++}
++/** The entry a runner completed with (`GenerationResult`), when its result names one. */
++function runnerAnswer(result) {
++    // Task results are task code's: the trust boundary of the result's shape.
++    return isRecord(result) && Number.isSafeInteger(result.entryId) ? result.entryId : undefined;
++}
++/** The runner answered with entry `answer`: conclude the run as `answer()` concludes a model's final answer. */
++async function answeredByRunner(runtime, answer, context) {
++    const afterRun = await asksAfterRun(runtime, context);
++    await runtime.commit(async (tx) => {
++        const boundary = await prepareBoundary(tx, runtime.conversationId, runtime.settings);
++        const live = await tx.doc(LiveDoc, runtime.conversationId);
++        // A partial the runner left is superseded by its answer.
++        delete live.generation;
++        return concludeAnswer(tx, runtime, live, boundary, answer, undefined, afterRun);
++    }, context);
++}
++/** Why a runner ended without an answer: its error, else how it ended. */
++function runnerFailure(outcome) {
++    switch (outcome?.status) {
++        case "failed":
++        case "faulted":
++            return outcome.error.message;
++        case "orphaned":
++            return `The runner could not run: ${outcome.reason}`;
++        case "aborted":
++            return "The runner was aborted";
++        default:
++            return "The runner ended without an answer";
++    }
++}
++/** End the run `model_error` with `text`, keeping a partial the runner left as an aborted entry. */
++async function failRunner(runtime, text, context) {
++    await runtime.commit(async (tx) => {
++        const failure = await prepareFailure(tx, runtime);
++        const live = await tx.doc(LiveDoc, runtime.conversationId);
++        await convertPartial(tx, live, runtime.conversationId);
++        await endFailedRun(tx, runtime, live, failure, { status: "unanswered", reason: "model_error", detail: text });
++        return {
++            status: "terminal",
++            outcome: { status: "failed", error: { message: text, detail: { reason: "model_error" } } },
++        };
++    }, context);
++}
+ /** End the run without a request: its context has nothing the model would answer. */
+ async function failNothingToAnswer(runtime, context) {
+     const message = "The conversation has nothing to answer";
+diff --git a/dist/harness/types.d.ts b/dist/harness/types.d.ts
+index 7ba2571ffb2594913c2dea1cc809f70da912b947..bff9073835b10f1eea94b1a29cd696cf5fc65d9f 100644
+--- a/dist/harness/types.d.ts
++++ b/dist/harness/types.d.ts
+@@ -523,6 +523,13 @@ export type AgentState = {
+      * override. Task-owned children and forks inherit it.
+      */
+     compaction?: CompactionSettings;
++    /**
++     * The name of an installed task that runs each of the conversation's turns instead of a model request: the run's
++     * generation creates it as a child and waits for it; it appends the turn's entries and completes with its answer's
++     * entry (`GenerationResult`). The model, sections, tools, compaction, retries, `maxTurns` and the generation hooks
++     * other than `afterRun` don't apply. Unset: the model answers. Task-owned children and forks inherit it.
++     */
++    runner?: string;
+ };
+ /** A change to `pi.agent`: a given field replaces the stored one, `null` clears it, `undefined` changes nothing. */
+ export type AgentChange = {
+@@ -546,6 +553,8 @@ export type AgentChange = {
+     readonly maxTurns?: number | null;
+     /** Replaces the stored settings as a whole; `configure()` throws a `RangeError` unless every token count is an integer `0` or more. */
+     readonly compaction?: CompactionSettings | null;
++    /** `configure()` throws a `RangeError` for an empty name. */
++    readonly runner?: string | null;
+ };
+ /** A conversation's agent resolved against a registry snapshot and the settings. */
+ export type Agent<Tool extends ToolRegistration = ToolRegistration> = {
+@@ -569,6 +578,8 @@ export type Agent<Tool extends ToolRegistration = ToolRegistration> = {
+     readonly maxTurns?: number;
+     /** This conversation's compaction settings over the harness's (`AgentState.compaction`). */
+     readonly compaction?: CompactionSettings;
++    /** The task that runs each turn instead of a model request (`AgentState.runner`). */
++    readonly runner?: string;
+ };
+ /**
+  * Runs inside the creating commit, after the creation hook and the `agent` change. The conversation creation is already

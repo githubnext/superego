@@ -12,7 +12,7 @@
 // - a subagent's messages (under its Agent call) become that call's steps, kept with the thread by the host: a
 //   subagent may go on after its call returned (Claude Code runs them in the background).
 import { query, type CanUseTool, type Options, type PermissionResult, type Query, type SDKMessage, type SettingSource } from '@anthropic-ai/claude-agent-sdk'
-import type { JsonValue } from '@earendil-works/chord'
+import type { JsonValue } from '@earendil-works/chord/json'
 import type { Json } from '@superego/protocol'
 import type { Context } from '@earendil-works/chord/context'
 import { AssistantEntry, defineDoc, defineTask, LiveDoc, ToolResultEntry, type EntryId, type EntryRecord, type LiveState, type TaskRuntime, type ToolSlot } from '@earendil-works/pi-durable'
