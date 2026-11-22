@@ -488,6 +488,9 @@ details[open] > .row > .row__chevron { transform: rotate(90deg); }
 .auth-flow__prompt { display: flex; flex-direction: column; gap: 4px; margin: 8px 0; }
 .auth-flow__row { display: flex; gap: 6px; }
 .auth-flow__row .superego-field { flex: 1; }
+.auth-flow__device { margin: 6px 0; }
+.auth-flow__device .auth-flow__row { align-items: center; }
+.auth-flow__code { padding: 3px 8px; border-radius: 6px; background: var(--superego-raised); box-shadow: var(--superego-control-edge); font: 600 var(--superego-text-body) var(--superego-mono); letter-spacing: .08em; user-select: all; -webkit-user-select: all; }
 .settings__nav-machine { display: flex; gap: 4px; align-items: center; }
 /* A machine: one line (state, name, host, the one thing it needs, its ···), and under it, lined up with the name, what
    else there is to say. */

@@ -9,6 +9,9 @@
   New thread's Model and Thinking menus no longer overlap.
 - The pane, thread or sidebar that has the focus is outlined in a quiet grey instead of the accent colour, and its tab
   is no longer tinted with the accent.
+- Signing in to GitHub Copilot: the code to enter has a Copy button, and opening GitHub's page copies it too.
+- When GitHub stops accepting a GitHub Copilot sign-in, threads wait for you to sign in again instead of failing with an
+  error.
 
 ## 0.1.10
 

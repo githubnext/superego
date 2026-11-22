@@ -22,6 +22,9 @@ describe('authFailure', () => {
     'OAuth refresh failed for openai: OpenAI Codex token refresh failed (401): {"error":{"message":"Your refresh token has already been used to generate a new access token. Please try signing in again.","type":"invalid_request_error","code":"refresh_token_reused"}}',
     'OAuth refresh failed for anthropic: Anthropic token refresh request failed. url=https://console.anthropic.com/v1/oauth/token; details=Error: HTTP request failed. status=400; url=https://console.anthropic.com/v1/oauth/token; body={"error": "invalid_grant", "error_description": "Refresh token not found or invalid"}',
     'OAuth refresh failed for anthropic: Anthropic token refresh request failed. url=https://console.anthropic.com/v1/oauth/token; details=Error: HTTP request failed. status=401; url=https://console.anthropic.com/v1/oauth/token; body={"type":"error","error":{"type":"authentication_error","message":"Refresh token has been revoked"}}',
+    // GitHub Copilot: GitHub refusing the GitHub token the Copilot token is renewed with (revoked, say).
+    'OAuth refresh failed for github-copilot: 401 : {\n  "message": "Bad credentials",\n  "documentation_url": "https://docs.github.com/rest",\n  "status": "401"\n}',
+    'OAuth refresh failed for github-copilot: 401 Unauthorized: {"message":"Bad credentials"}',
     // Nothing to sign in with.
     'API key auth failed for provider anthropic',
     'Provider is not configured: anthropic',
@@ -52,6 +55,7 @@ describe('authFailure', () => {
     'OAuth refresh failed for anthropic: Anthropic token refresh request failed. url=https://console.anthropic.com/v1/oauth/token; details=TimeoutError: The operation was aborted due to timeout',
     'OAuth refresh failed for anthropic: Anthropic token refresh request failed. url=https://console.anthropic.com/v1/oauth/token; details=Error: HTTP request failed. status=500; url=https://console.anthropic.com/v1/oauth/token; body={"type":"error","error":{"type":"api_error","message":"Internal server error"}}',
     'OAuth refresh failed for openai: The operation was aborted due to timeout',
+    'OAuth refresh failed for github-copilot: 503 Service Unavailable: upstream error',
     // Without the endpoint's answer, nothing says it was refused.
     'OAuth refresh failed for openai',
     'request id req_4011234 failed',

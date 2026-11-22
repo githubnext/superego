@@ -15,6 +15,7 @@ import type { MachineEntry } from '../shared/bridge.ts'
 import { ImageFrame, imageSourceOf, loadWebImages, onImageChange, onWeb, useWebImagesAsked, WebImage, type ImageItem } from './images.tsx'
 import { Lightbox } from './lightbox.tsx'
 import { CheckIcon, CopyIcon } from '@superego/ui'
+import { copyText } from './copy-text.ts'
 import { useOptionalRegistry } from './registry.tsx'
 import { linkHandler, linkSchemes } from './lookups.ts'
 import { Claimed, LinkPlace, WIKILINK, wikilinks } from './links.tsx'
@@ -34,35 +35,6 @@ export function Scroll({ node: _node, ...props }: ComponentProps<'pre'> & { node
     return () => { observer.disconnect(); el.removeEventListener('scroll', check) }
   }, [])
   return <pre ref={ref} {...props} />
-}
-
-/**
- * Puts `text` on the clipboard by selecting it and copying, as a keypress would: at once, with no permission to ask
- * for, and over Web access's plain http too. Focus and the selection go back to where they were.
- */
-function copyBySelection(text: string) {
-  const focused = document.activeElement instanceof HTMLElement ? document.activeElement : undefined
-  const selection = document.getSelection()
-  const ranges = selection ? Array.from({ length: selection.rangeCount }, (_, i) => selection.getRangeAt(i)) : []
-  const area = document.createElement('textarea')
-  area.value = text
-  area.setAttribute('readonly', '')
-  area.style.cssText = 'position:fixed;top:0;left:0;opacity:0;pointer-events:none;user-select:text'
-  document.body.append(area)
-  area.select()
-  let ok = false
-  try { ok = document.execCommand('copy') } finally {
-    area.remove()
-    focused?.focus({ preventScroll: true })
-    if (selection) { selection.removeAllRanges(); for (const range of ranges) selection.addRange(range) }
-  }
-  return ok
-}
-
-async function copyText(text: string) {
-  if (copyBySelection(text)) return
-  if (!navigator.clipboard) throw new Error('No way to copy here')
-  await navigator.clipboard.writeText(text)
 }
 
 /** A code block in a message, with a button in its corner that copies all of it: blue with a check once it has. */

@@ -4,6 +4,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import type { AuthEvent, AuthPrompt, Notifications } from '@superego/protocol'
 import { autoFocusOnOpen, Button, TextField } from '@superego/ui'
+import { copyText } from './copy-text.ts'
 import { machine as client } from './client.ts'
 import { useRegistry } from './registry.tsx'
 
@@ -80,7 +81,7 @@ function FlowEvents({ flow, events, machine }: { flow?: string; events: AuthEven
       {events.map((event, index) => {
         switch (event.type) {
           case 'auth_url': return <p key={index}>A sign-in page opened in your browser. <a href={event.url} target="_blank" rel="noreferrer">Open it again</a>{event.instructions ? ` — ${event.instructions}` : ''}</p>
-          case 'device_code': return <p key={index}>Enter <code>{event.userCode}</code> at <a href={event.verificationUri} target="_blank" rel="noreferrer">{event.verificationUri}</a></p>
+          case 'device_code': return <DeviceCode key={index} code={event.userCode} page={event.verificationUri} />
           case 'info': return <p key={index}>{event.message}</p>
           case 'progress': return <p key={index} className="settings__note">{event.message}</p>
           case 'done': return <p key={index} className="auth-flow__done">Signed in.</p>
@@ -94,6 +95,33 @@ function FlowEvents({ flow, events, machine }: { flow?: string; events: AuthEven
           default: return null
         }
       })}
+    </div>
+  )
+}
+
+/**
+ * A device sign-in's code, to enter on its page: selected whole by a click, with a button that copies it. Opening the
+ * page copies it too, ready to paste where the page asks for it.
+ */
+function DeviceCode({ code, page }: { code: string; page: string }) {
+  const [state, setState] = useState<'idle' | 'copied' | 'failed'>('idle')
+  const [click, setClick] = useState(0)
+  useEffect(() => {
+    if (state === 'idle') return
+    const timer = setTimeout(() => setState('idle'), state === 'copied' ? 1600 : 2400)
+    return () => clearTimeout(timer)
+  }, [state, click])
+  const copy = () => {
+    setClick((n) => n + 1)
+    copyText(code).then(() => setState('copied'), (error: Error) => { console.error('Copying the sign-in code failed', error); setState('failed') })
+  }
+  return (
+    <div className="auth-flow__device">
+      <p>Enter this code at <a href={page} target="_blank" rel="noreferrer" onClick={copy}>{page.replace(/^https:\/\//, '')}</a>:</p>
+      <div className="auth-flow__row">
+        <code className="auth-flow__code">{code}</code>
+        <Button onClick={copy}>{state === 'copied' ? 'Copied' : state === 'failed' ? 'Couldn’t copy' : 'Copy'}</Button>
+      </div>
     </div>
   )
 }

@@ -22,8 +22,11 @@ export function authFailure(error: string | undefined): boolean {
 }
 
 const REFRESH = /\b(?:OAuth|token) refresh\b/i
-/** A token endpoint refusing a refresh token: OAuth's invalid_grant (expired, revoked, reused), or a 401. */
-const REFUSED = /\binvalid_grant\b|\b(?:invalid_token|unauthorized_client|refresh_token_(?:reused|expired|invalid|revoked))\b|\bfailed \(401\)|\bstatus=401\b|\brefresh token (?:\w+ )?(?:is |has been |was )?(?:expired|revoked|invalid|not found)\b/i
+/**
+ * A token endpoint refusing a refresh token: OAuth's invalid_grant (expired, revoked, reused), or a 401 (GitHub Copilot's
+ * says "401 Unauthorized: …Bad credentials…" right after the provider's id).
+ */
+const REFUSED = /\binvalid_grant\b|\brefresh failed for [\w.-]+: 401\b|\b(?:invalid_token|unauthorized_client|refresh_token_(?:reused|expired|invalid|revoked))\b|\bfailed \(401\)|\bstatus=401\b|\brefresh token (?:\w+ )?(?:is |has been |was )?(?:expired|revoked|invalid|not found)\b/i
 
 const AUTH = [
   // Anthropic: 401 {"type":"error","error":{"type":"authentication_error","message":"invalid x-api-key"}}
