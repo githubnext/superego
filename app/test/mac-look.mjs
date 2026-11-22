@@ -1,7 +1,7 @@
 // The window's look, for tuning it (run by `test/look.sh <dir> mac-look`): threads in the sidebar, one shown with
 // markdown, a code block and tool calls, the Diff pane beside it and words in the composer; a thread's menu open; and
-// the sidebar hidden; Settings. In light and dark, into $SUPEREGO_SHOWCASE_OUT as main-, hidden-, menu- and
-// settings-<light|dark>.png.
+// the sidebar hidden (in a narrow window too), full screen; Settings. In light and dark, into $SUPEREGO_SHOWCASE_OUT as
+// main-, hidden-, hidden-narrow-, fullscreen-hidden-, fullscreen-main-, menu- and settings-<light|dark>.png.
 import { openApp } from './harness.mjs'
 import { threads } from './showcase/threads.mjs'
 
@@ -56,13 +56,50 @@ await openApp({ name: 'mac-look', timeout: 300_000 }, async (t) => {
       await t.shot(`${name}-${appearance}`)
     }
   }
+  // The window's buttons aren't in a screenshot of the page: stand-ins drawn where the system puts them
+  // (trafficLightPosition, 12pt each, 20pt apart), and checked to sit clear of the panel's corner.
+  await run(`(() => {
+    const lights = document.createElement('div')
+    lights.id = 'lights'
+    lights.style.cssText = 'position: fixed; z-index: 99; top: 18px; left: 18px; display: flex; gap: 8px; pointer-events: none'
+    for (const colour of ['#ff5f57', '#febc2e', '#28c840']) lights.append(Object.assign(document.createElement('span'), { style: \`width: 12px; height: 12px; border-radius: 50%; background: \${colour}\` }))
+    document.body.append(lights)
+  })()`)
+  const panel = `(() => { const s = getComputedStyle(document.querySelector('.app'), '::before'); return { top: parseFloat(s.top), right: parseFloat(s.left) + parseFloat(s.width) } })()`
+  const clear = async (what) => {
+    const { top, right } = await run(panel)
+    const history = await run(`document.querySelector('.app__history').getBoundingClientRect().left`)
+    // Inside the panel (with room around them), or above it; and back and forward past them.
+    if (!(right >= 70 + 12 || top >= 30 + 8)) t.fail(`${what}: the window's buttons run over the panel's corner (its top ${top}, right ${right})`)
+    if (history < 70) t.fail(`${what}: back and forward under the window's buttons (at ${history})`)
+  }
+  const fold = async (folded) => {
+    t.key('/', [process.platform === 'darwin' ? 'meta' : 'control'])
+    await until(`${folded ? '!' : '!!'}document.querySelector('.app__sidebar')`, folded ? 'the sidebar hidden' : 'the sidebar back')
+  }
+  await clear('the sidebar open')
   await both('main')
-  // The sidebar hidden: the rail alone in the panel.
-  t.key('/', [process.platform === 'darwin' ? 'meta' : 'control'])
-  await until(`!document.querySelector('.app__sidebar')`, 'the sidebar hidden')
+  // The sidebar hidden: the rail alone in the panel, under the title bar.
+  await fold(true)
+  await clear('the sidebar folded')
   await both('hidden')
-  t.key('/', [process.platform === 'darwin' ? 'meta' : 'control'])
-  await until(`!!document.querySelector('.app__sidebar')`, 'the sidebar back')
+  // A narrow window, folded.
+  await t.resize(780, 700)
+  await clear('narrow, folded')
+  await both('hidden-narrow')
+  await t.resize(1440, 960)
+  // Full screen (said as the system does; a headless window doesn't go): no buttons, so no room kept for them.
+  await run(`document.getElementById('lights').style.visibility = 'hidden'`)
+  t.win().emit('enter-full-screen')
+  await until(`document.querySelector('.app').classList.contains('is-full-screen')`, 'full screen')
+  const start = await run(`parseFloat(getComputedStyle(document.querySelector('.app__titlebar')).paddingLeft)`)
+  if (start > 20) t.fail(`full screen, the title bar still keeps ${start}px for the window's buttons`)
+  await both('fullscreen-hidden')
+  await fold(false)
+  await both('fullscreen-main')
+  t.win().emit('leave-full-screen')
+  await until(`!document.querySelector('.app').classList.contains('is-full-screen')`, 'out of full screen')
+  await run(`document.getElementById('lights').style.visibility = ''`)
   // A thread's menu, from the sidebar.
   await run(`(() => { const li = [...document.querySelectorAll('.app__sidebar .superego-list-item')].find((l) => l.textContent.includes('Group spending')); const r = li.getBoundingClientRect()
     li.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, button: 2, clientX: r.left + 60, clientY: r.top + r.height / 2 })) })()`)

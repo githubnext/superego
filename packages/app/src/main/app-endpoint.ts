@@ -55,7 +55,7 @@ export function appMethods(window: AppWindow, { settings, router, service, updat
       window.ready = true
       const what = window.pending
       window.pending = undefined
-      return what ?? {}
+      return { ...what, fullScreen: window.browser.isFullScreen() }
     },
     'profileUi.allowed': async () => machines.uiAllowed.list(),
     'profileUi.declined': async () => machines.uiAllowed.declinedList(),

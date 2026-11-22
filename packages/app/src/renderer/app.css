@@ -5,11 +5,17 @@
 .app__drag { height: 38px; -webkit-app-region: drag; flex: none; }
 .app__drag :is(button, a, input, select, textarea, summary, [role="button"], [contenteditable]) { -webkit-app-region: no-drag; }
 .app__body { flex: 1; display: flex; min-height: 0; }
-/* The panel: drawn once behind the rail and the sidebar (and the title bar over them), as wide as they are. */
-.app:not(.is-narrow) { --side-width: var(--superego-rail); }
-.app:not(.is-narrow):is(:has(.app__sidebar:not(:empty)), :has(.settings--pane)) { --side-width: calc(var(--superego-rail) + var(--superego-sidebar)); }
+/* The window's buttons (macOS's traffic lights, see trafficLightPosition): the room the title bar keeps for them at its
+   start. None in a browser, nor full screen. */
+.app { --lights: 84px; }
+.app:is(.is-web, .is-full-screen) { --lights: 12px; }
+/* The panel: drawn once behind the rail and the sidebar (and the title bar over them, the window's buttons in its
+   corner), as wide as they are. Folded to the rail it's too narrow for the buttons: it starts under the title bar,
+   which runs on over the sheet, the buttons in clear space at its start, as they are with no sidebar on macOS. */
+.app:not(.is-narrow) { --side-width: var(--superego-rail); --side-top: calc(var(--superego-titlebar) + env(safe-area-inset-top, 0px)); }
+.app:not(.is-narrow):is(:has(.app__sidebar:not(:empty)), :has(.settings--pane)) { --side-width: calc(var(--superego-rail) + var(--superego-sidebar)); --side-top: 8px; }
 .app:not(.is-narrow)::before {
-  content: ''; position: absolute; z-index: 0; top: 8px; left: 8px; bottom: 8px; width: calc(var(--side-width) - 8px); pointer-events: none;
+  content: ''; position: absolute; z-index: 0; top: var(--side-top); left: 8px; bottom: 8px; width: calc(var(--side-width) - 8px); pointer-events: none;
   border-radius: 18px; background: var(--superego-chrome);
   box-shadow: var(--superego-glass-edge), 0 6px 24px light-dark(rgb(0 0 0 / .07), rgb(0 0 0 / .35));
 }
@@ -63,7 +69,7 @@
 /* The title bar: past the window's buttons (or, with the list open, past the side), where you are; the thread's
    columns and what it says about itself at the right. Over the list, the side's grey runs up behind the window's
    buttons, with back and forward at its right edge. */
-.app__titlebar { position: relative; height: var(--superego-titlebar); display: flex; align-items: center; gap: var(--superego-space-3); min-width: 0; padding: 0 12px 0 84px; container-type: inline-size; overflow: hidden; }
+.app__titlebar { position: relative; height: var(--superego-titlebar); display: flex; align-items: center; gap: var(--superego-space-3); min-width: 0; padding: 0 12px 0 var(--lights); container-type: inline-size; overflow: hidden; }
 /* On a tablet's home screen the page runs up under the status bar: the bar starts below it, its ground running up. */
 .app.is-web .app__titlebar { height: calc(var(--superego-titlebar) + env(safe-area-inset-top)); padding-top: env(safe-area-inset-top); }
 .app.has-sidebar:has(.app__sidebar:not(:empty)) .app__titlebar { padding-left: calc(var(--superego-rail) + var(--superego-sidebar) + 1px + var(--superego-space-3)); }
@@ -745,7 +751,7 @@ button.app__mobiletitle > svg { flex: none; color: var(--superego-faint); }
   :root[data-keyboard] .superego-dialog__frame { padding-bottom: 0; }
   .superego-dialog__header { padding-top: calc(env(safe-area-inset-top) + 10px); padding-right: max(10px, env(safe-area-inset-right)); padding-left: max(16px, env(safe-area-inset-left)); }
   /* Filling the desktop app's window, a dialog's header is its title bar: past the traffic lights, and it drags. */
-  :root:has(.app:not(.is-web)) .superego-dialog__header { min-height: var(--superego-titlebar); padding-left: 84px; -webkit-app-region: drag; }
+  :root:has(.app:not(.is-web, .is-full-screen)) .superego-dialog__header { min-height: var(--superego-titlebar); padding-left: 84px; -webkit-app-region: drag; }
   :root:has(.app:not(.is-web)) .superego-dialog__header :is(button, a, input, select, [role="button"]) { -webkit-app-region: no-drag; }
   .settings__body { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
   .settings__nav { flex-direction: row; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--superego-line); padding: 8px; }

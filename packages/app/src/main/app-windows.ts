@@ -196,6 +196,9 @@ export function createWindows({ app: appConfig, dataDir, headless, methods, chan
       if (direction === 'left') go(-1)
       if (direction === 'right') go(1)
     })
+    // Full screen, the window's buttons are gone from the title bar: the page stops keeping room for them.
+    browser.on('enter-full-screen', () => window.sendApp('app.fullScreen', { on: true }))
+    browser.on('leave-full-screen', () => window.sendApp('app.fullScreen', { on: false }))
     byId.set(opened.id, window)
     const moved = () => { if (!browser.isDestroyed()) list.moved(opened.id, browser.getNormalBounds()) }
     browser.on('moved', moved)

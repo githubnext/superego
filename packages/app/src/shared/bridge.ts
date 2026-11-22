@@ -192,8 +192,11 @@ export type AppHandlers = {
   'service.get'(): Promise<ServiceState>
   /** Where updating the app itself stands (main/updates.ts). */
   'update.get'(): Promise<UpdateState>
-  /** The page is listening for app events: answer with what it was asked to show before it was. */
-  'app.ready'(): Promise<{ open?: ThreadRef; settings?: boolean }>
+  /**
+   * The page is listening for app events: answer with what it was asked to show before it was, and whether the window
+   * is full screen (then `app.fullScreen` as that changes).
+   */
+  'app.ready'(): Promise<{ open?: ThreadRef; settings?: boolean; fullScreen?: boolean }>
   /**
    * Whether the window's build (the hash of the main process's sources as the window was loaded) differs from the one
    * the main process runs: then the window calls what the main process may not know, until the app restarts.

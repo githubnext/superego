@@ -18,7 +18,7 @@ function setUp() {
   const router = createRouter<AppActionContext>()
   const notifier = { notify: vi.fn(), refreshBadge: vi.fn() }
   const sent: { method: string; params: unknown }[] = []
-  const browser = { webContents: { isDestroyed: () => false, send: (_channel: string, event: { method: string; params: unknown }) => sent.push(event) } }
+  const browser = { isFullScreen: () => false, webContents: { isDestroyed: () => false, send: (_channel: string, event: { method: string; params: unknown }) => sent.push(event) } }
   const window = new AppWindow('w1', browser as never, (window) => appMethods(window, {
     settings, router, notifier,
     service: { state: { phase: 'current', busy: false, deferred: false } },
@@ -52,7 +52,7 @@ describe('a page loading again in a window', () => {
   it('holds what to show until the new page listens, keeping what already waited', async () => {
     const { sent, window } = setUp()
     window.show({ settings: true })
-    expect(await window.methods['app.ready']()).toEqual({ settings: true })
+    expect(await window.methods['app.ready']()).toEqual({ settings: true, fullScreen: false })
     window.show({ open: { machine: 'local', thread: 't1' } })
     expect(sent.map((event) => event.method)).toEqual(['app.select'])
     window.pageLoaded()
@@ -60,7 +60,7 @@ describe('a page loading again in a window', () => {
     expect(sent).toHaveLength(1)
     // A page loading before the last one listened keeps what waited for it.
     window.pageLoaded()
-    expect(await window.methods['app.ready']()).toEqual({ open: { machine: 'local', thread: 't2' } })
+    expect(await window.methods['app.ready']()).toEqual({ open: { machine: 'local', thread: 't2' }, fullScreen: false })
   })
 
   it('forgets what the last page said, and aborts its channels', async () => {

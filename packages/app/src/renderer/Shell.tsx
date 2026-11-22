@@ -140,7 +140,7 @@ export function Shell() {
   // Each tab's number, for its tooltip.
   const tabNumber = new Map(tabsNow().map((tab, i) => [tab.id, i + 1]))
   useAppearance()
-  useAppEvents(useKeyRouting())
+  const fullScreen = useAppEvents(useKeyRouting())
   const setup = useSetup()
 
   const settingsButton = (
@@ -174,7 +174,7 @@ export function Shell() {
   // thread and its panes. Narrow: one column under a bar of its own, the sidebar a drawer.
   return (
     <OverflowProvider value={narrow ? null : overflow}>
-    <div className={`app ${sideOpen ? 'has-sidebar' : ''} ${narrow ? 'is-narrow' : ''} ${window.superego.web ? 'is-web' : ''} ${sidebarEdge.hiding ? 'is-hiding' : ''}`}
+    <div className={`app ${sideOpen ? 'has-sidebar' : ''} ${narrow ? 'is-narrow' : ''} ${window.superego.web ? 'is-web' : ''} ${fullScreen ? 'is-full-screen' : ''} ${sidebarEdge.hiding ? 'is-hiding' : ''}`}
       style={narrow ? undefined : sidebarEdge.style} ref={setApp}>
       {!narrow && (
         <header className="app__drag app__titlebar" ref={overflow.setBar}>
@@ -416,10 +416,11 @@ function useKeyRouting() {
 /**
  * What comes from outside the page: the mouse's back and forward buttons, and the app's events (threads and Settings
  * shown from the command line, a notification or the menu bar; keys and swipes the main process caught; the app menu's
- * actions; another client's).
+ * actions; another client's). Answers whether the window is full screen.
  */
-function useAppEvents(runKeys: (pressed: string) => boolean) {
+function useAppEvents(runKeys: (pressed: string) => boolean): boolean {
   const registry = useRegistry()
+  const [fullScreen, setFullScreen] = useState(false)
   const { select } = useSelection()
   const { openSettings } = useShell()
   useEffect(() => {
@@ -458,12 +459,15 @@ function useAppEvents(runKeys: (pressed: string) => boolean) {
       // Pressed while a page in a pane had the keyboard: the main process caught it before the page (see app.boundKeys).
       if (event.method === 'app.key') runKeys((event.params as { keys: string }).keys)
       if (event.method === 'app.go') go((event.params as { by: number }).by)
+      if (event.method === 'app.fullScreen') setFullScreen((event.params as { on: boolean }).on)
       // One of the window's actions, from the app's menu (File → New Window).
       if (event.method === 'app.action') void registry.router.dispatch((event.params as { action: string }).action, {}, { source: 'menu' }).catch((error) => console.error(error))
     })
-    void (window.superego.call(APP, 'app.ready', {}) as Promise<{ open?: Selection; settings?: boolean }>).then(show)
+    void (window.superego.call(APP, 'app.ready', {}) as Promise<{ open?: Selection; settings?: boolean; fullScreen?: boolean }>)
+      .then(({ fullScreen = false, ...what }) => { setFullScreen(fullScreen); show(what) })
     // Windows closed for good leave their state behind: dropped here.
     if (!window.superego.web) void (window.superego.call(APP, 'app.windows', {}) as Promise<string[]>).then(forgetWindows, () => {})
     return () => { window.removeEventListener('mousedown', onMouse); window.removeEventListener('mouseup', onMouse); off() }
   }, [])
+  return fullScreen
 }
