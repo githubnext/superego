@@ -12,6 +12,9 @@
 - Signing in to GitHub Copilot: the code to enter has a Copy button, and opening GitHub's page copies it too.
 - When GitHub stops accepting a GitHub Copilot sign-in, threads wait for you to sign in again instead of failing with an
   error.
+- Coming back to a thread (from Settings, Ego's thread or another thread) shows its panes scrolled as you left them,
+  instead of jumping to bring the focused pane in from the right, and the focused pane keeps the focus instead of
+  handing it to the prompt.
 
 ## 0.1.10
 

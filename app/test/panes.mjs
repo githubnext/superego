@@ -107,6 +107,21 @@ await openApp({ name: 'panes', timeout: 240_000 }, async (t) => {
   await until(`!!document.querySelector('.panes--keep')`, 'wide again: the thread kept')
   await run(`window.superego.call('local', 'pane.focus', { thread: '${id}', pane: '${editor}' })`)
   await t.settled()
+  // Back from Settings, the row as it was left: scrolled by hand past the focused editor (under the thread), not brought
+  // back to it; the editor still the focused pane (the prompt doesn't take the keyboard from it).
+  await run(`(() => { const p = document.querySelector('.panes'); p.scrollLeft = p.scrollWidth })()`)
+  await t.settled()
+  const leftAt = await run(`document.querySelector('.panes').scrollLeft`)
+  await run(`document.querySelector('.app__settings').click()`)
+  await until(`!!document.querySelector('.settings__nav') && !document.querySelector('.panes')`, 'Settings')
+  await key({ key: 'Escape', code: 'Escape' })
+  await until(`!!document.querySelector('.panes [data-column]:not([data-column="thread"])')`, 'back from Settings')
+  await t.settled()
+  if (await run(`document.querySelector('.panes').scrollLeft`) !== leftAt) t.fail('back from Settings: the row scrolled as it was left')
+  if (await run(`window.superego.call('local', 'thread.list', {}).then((l) => l.find((t) => t.id === '${id}').pane)`) !== editor) t.fail('back from Settings: the editor still focused')
+  // Its tab brings it back into view.
+  await run(`document.querySelector('.strip__tab[data-pane="${editor}"]').click()`)
+  await t.settled()
 
   // A pane's tab mid-drag along the strip: it follows the pointer, lifted, the one it passed slid aside. Esc puts it back.
   await run(`(() => { const tab = document.querySelector('.strip__tab[data-pane="${editor}"]'); const r = tab.getBoundingClientRect(); const x = r.left + r.width / 2, y = r.top + r.height / 2

@@ -19,7 +19,7 @@
 import { createContext, Fragment, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState, type ButtonHTMLAttributes, type ReactNode, type RefObject } from 'react'
 import { createPortal, flushSync } from 'react-dom'
 import type { Pane, ThreadInfo } from '@superego/protocol'
-import { ArrowRightIcon, CardsIcon, ChatTextIcon, ColumnsPlusRightIcon, CornersInIcon, CornersOutIcon, DotsThreeIcon, FileTextIcon, IconButton, Menu, PushPinIcon, SegmentedControl, usePortalAttributes, XIcon, type SegmentedOption } from '@superego/ui'
+import { ArrowRightIcon, autoFocusOnOpen, CardsIcon, ChatTextIcon, ColumnsPlusRightIcon, CornersInIcon, CornersOutIcon, DotsThreeIcon, FileTextIcon, IconButton, Menu, PushPinIcon, SegmentedControl, usePortalAttributes, XIcon, type SegmentedOption } from '@superego/ui'
 import { PANE_KEEP_THREAD, PANE_LAYOUT, type PaneLayout } from '../shared/app-settings.ts'
 import { has, useAppSetting } from './client.ts'
 import type { PaneKind, PaneProps, UiApi } from './extension-api.ts'
@@ -54,6 +54,13 @@ export const StripSlot = createContext<HTMLElement | null>(null)
  * the thread's column, and scrolls out of the way with it as a pane comes in.
  */
 export const SwipeEdgeRef = createContext<((row: HTMLElement | null) => void) | null>(null)
+
+/**
+ * How far each thread's row was scrolled when last seen, by `machine/thread`, kept in this window, and what it showed
+ * then (`view`: the focused column, the panes, whether the thread was kept in view). The row is drawn afresh each time
+ * the thread shows (back from Settings, from Ego's thread, from another thread): it comes back scrolled as it was left.
+ */
+const rowScrolls = new Map<string, { left: number; view: string }>()
 
 export function ThreadPanes({ machine, thread, main }: { machine: PaneProps['machine']; thread: ThreadInfo; main: ReactNode }) {
   const registry = useRegistry()
@@ -154,7 +161,30 @@ export function ThreadPanes({ machine, thread, main }: { machine: PaneProps['mac
     if (kept && !id) return
     columnOf(id)?.scrollIntoView({ inline: 'nearest', block: 'nearest', behavior: 'smooth' })
   }
-  useEffect(() => bringIntoView(focused), [focused, ids.join(), rowWidth, kept])
+  // Shown again, the row scrolled as it was left, as soon as its columns are laid out (the row measured): showing what
+  // was in view then, the focused column as it was (even partly scrolled away). Shown for the first time in this
+  // window, or with the focus or the panes changed meanwhile (an agent opened one), the focused column is brought in.
+  const view = [focused, ids.join(), kept].join('|')
+  const restored = useRef<string>(undefined)
+  const asLeft = useRef(false)
+  useLayoutEffect(() => {
+    const el = row.current
+    if (!el || !rowWidth || restored.current === threadKey) return
+    restored.current = threadKey
+    const left = rowScrolls.get(threadKey)
+    if (!left || stacked) return
+    el.scrollLeft = left.left
+    setScrolled(el.scrollLeft)
+    asLeft.current = left.view === view
+  }, [rowWidth, threadKey])
+  // Not before the row is measured: its columns aren't laid out yet.
+  useEffect(() => {
+    if (!rowWidth) return
+    if (asLeft.current) asLeft.current = false
+    else bringIntoView(focused)
+  }, [focused, ids.join(), rowWidth, kept])
+  // Opened with a pane focused, that pane takes the keyboard (the thread's prompt does otherwise, see composer-view.tsx).
+  useEffect(() => { if (focused && autoFocusOnOpen()) focusRegion(columnOf(focused), { visible: false }) }, [])
 
   const settled = useRef<ReturnType<typeof setTimeout>>(undefined)
 
@@ -208,6 +238,7 @@ export function ThreadPanes({ machine, thread, main }: { machine: PaneProps['mac
     const el = row.current
     if (!el) return
     setScrolled(el.scrollLeft)
+    if (restored.current === threadKey) rowScrolls.set(threadKey, { left: el.scrollLeft, view })
     // On a phone, a swipe that settles on a column gives it the focus.
     if (!narrow) return
     clearTimeout(settled.current)

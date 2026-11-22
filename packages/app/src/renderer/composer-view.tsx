@@ -7,7 +7,7 @@ import type { Attachment, ThreadInfo } from '@superego/protocol'
 import { autoFocusOnOpen, ArrowDownIcon, ArrowElbowRightIcon, ArrowUpIcon, Button, IconButton, ListIcon, XIcon } from '@superego/ui'
 import type { MachineEntry } from '../shared/bridge.ts'
 import { useRegistry } from './registry.tsx'
-import { sentWithIn } from './lookups.ts'
+import { sentWithIn, shownPanes } from './lookups.ts'
 import { Slot } from './placement.tsx'
 import { NoModel } from './Setup.tsx'
 import { ctrlDigit } from '../shared/shortcuts.ts'
@@ -120,7 +120,10 @@ export function ComposerView({ machine, thread, busy, inbox, onJump }: { machine
   // Archived, it can be read, not written to, until it's brought back (the Unarchive button where Send would be).
   const archived = Boolean(thread.archived)
   const disabled = machine.state !== 'connected' || archived
-  useEffect(() => { if (autoFocusOnOpen()) input.current?.focus() }, [thread.id])
+  // Opened, it takes the keyboard while the thread is its focused column; a pane focused, that pane does (panes.tsx).
+  const registry = useRegistry()
+  const paneFocused = shownPanes(registry, { machine: machine.id, thread }).some((pane) => pane.id === thread.pane)
+  useEffect(() => { if (autoFocusOnOpen() && !paneFocused) input.current?.focus() }, [thread.id])
   // Files going with the next message: picked, dropped on the composer or pasted into it.
   const [files, setFiles] = useState<Attachment[]>([])
   useEffect(() => { setFiles([]) }, [thread.id])
@@ -137,7 +140,6 @@ export function ComposerView({ machine, thread, busy, inbox, onJump }: { machine
   // Messages you'd queued, given back as the thread was stopped from this window: after what's typed, each its own
   // paragraph, in order, their files with them. Their words as the transcript shows them: without what extensions
   // put in (a skill named) or the files' tags.
-  const registry = useRegistry()
   useEffect(() => {
     const take = () => {
       const returned = takeBack(machine.id, thread.id)
