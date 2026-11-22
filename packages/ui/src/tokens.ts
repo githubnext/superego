@@ -38,6 +38,8 @@ export const colourTokens = {
     '--superego-field-edge': "A field's edge.",
     '--superego-track': "A switch that's off, a slider's track.",
     '--superego-shadow-float': 'The shadow of what floats.',
+    '--superego-glass': 'Glass: what floats over the content and works it (menus, popovers, the composer).',
+    '--superego-glass-edge': "Glass's edge, lit along its top.",
   },
   syntax: {
     '--superego-syntax-keyword': 'Keywords and operator words.',

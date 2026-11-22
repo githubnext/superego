@@ -15,7 +15,7 @@
   --superego-rail-tab: light-dark(#e6e6e9, #1c1c1e);    /* the rail's tabs behind the open one */
   /* Hairlines between columns and parts: the window's every structural line, 1px. Opaque, so a line is one colour
      whatever it runs over (the rail, the side, the sheet). */
-  --superego-line: light-dark(#dedee1, #38383b);
+  --superego-line: light-dark(#e3e3e6, #333336);
   --superego-fill: light-dark(rgb(0 0 0 / .05), rgb(255 255 255 / .06));   /* quiet fills: file heads, small buttons */
   --superego-card-edge: 0 0 0 .5px var(--superego-border), 0 1px 3px light-dark(rgb(0 0 0 / .06), rgb(0 0 0 / .3));
   --superego-surface: light-dark(#f3f3f6, #262629);     /* wells: code, tool output */
@@ -50,8 +50,8 @@
   --superego-focus: 0 0 0 3px color-mix(in srgb, var(--superego-accent) 45%, transparent);
   --superego-status-working: var(--superego-accent);
   --superego-status-done: var(--superego-accent);
-  --superego-status-blocked: light-dark(#ff9500, #ff9f0a);
-  --superego-status-error: light-dark(#ff3b30, #ff453a);
+  --superego-status-blocked: light-dark(#ff8d28, #ff9230);
+  --superego-status-error: light-dark(#ff383c, #ff4245);
   --superego-status-idle: light-dark(rgb(0 0 0 / .2), rgb(255 255 255 / .22));
   /* Words beside a status (Question, Failed): darker than the mark, to read as text. */
   --superego-status-blocked-text: light-dark(#c26a00, #ff9f0a);
@@ -107,7 +107,7 @@
   --superego-diff-edit-removed-bg: light-dark(rgb(255 59 48 / .11), rgb(255 69 58 / .15));
   --superego-diff-fence-added-bg: light-dark(rgb(46 160 67 / .12), rgb(46 160 67 / .18));  /* a diff fence's, in a message */
   --superego-diff-fence-removed-bg: light-dark(rgb(207 34 46 / .1), rgb(248 81 73 / .16));
-  --superego-radius: 6px;
+  --superego-radius: 8px;
   --superego-radius-lg: 16px;
   --superego-space: 8px;
 
@@ -140,7 +140,12 @@
   --superego-sidebar: 232px;
   --superego-rail: 48px;
   --superego-titlebar: 48px;
-  --superego-shadow-float: 0 0 0 .5px light-dark(rgb(0 0 0 / .12), rgb(0 0 0 / .6)), 0 12px 36px -8px rgb(0 0 0 / .28), 0 2px 6px rgb(0 0 0 / .08);
+  --superego-shadow-float: 0 0 0 .5px light-dark(rgb(0 0 0 / .1), rgb(0 0 0 / .6)), 0 16px 40px -10px light-dark(rgb(0 0 0 / .22), rgb(0 0 0 / .5)), 0 2px 8px light-dark(rgb(0 0 0 / .06), rgb(0 0 0 / .2));
+  /* Glass (macOS's Liquid Glass, as a page can draw it): what floats over the content and works it (menus, popovers,
+     the composer) is a translucent sheet that blurs what's under it, lit along its top edge. */
+  --superego-glass: light-dark(rgb(250 250 252 / .86), rgb(44 44 48 / .84));
+  --superego-glass-edge: inset 0 .5px 0 light-dark(rgb(255 255 255 / .95), rgb(255 255 255 / .16)), 0 0 0 .5px light-dark(rgb(0 0 0 / .1), rgb(255 255 255 / .1));
+  --superego-glass-blur: blur(24px) saturate(1.8);
 }
 
 * { box-sizing: border-box; }
@@ -165,7 +170,7 @@ button, summary { -webkit-user-select: none; user-select: none; }
 
 .superego-button {
   font: inherit; font-weight: 500; color: var(--superego-text); background: var(--superego-control); border: 0; box-shadow: var(--superego-control-edge);
-  border-radius: var(--superego-radius); padding: 3px 11px; min-height: 24px; cursor: default; white-space: nowrap;
+  border-radius: 999px; padding: 3px 12px; min-height: 24px; cursor: default; white-space: nowrap;
   display: inline-flex; align-items: center; justify-content: center; gap: 6px;
 }
 .superego-button:active:not(:disabled) { background: var(--superego-control-active); }
@@ -221,13 +226,13 @@ button, summary { -webkit-user-select: none; user-select: none; }
 
 .superego-field {
   font: inherit; color: inherit; background: var(--superego-field-bg); border: 1px solid var(--superego-field-edge);
-  border-radius: 5px; padding: 3px 7px; min-width: 0; min-height: 24px; box-shadow: inset 0 1px 1px light-dark(rgb(0 0 0 / .06), rgb(0 0 0 / .2));
+  border-radius: 7px; padding: 3px 8px; min-width: 0; min-height: 24px; box-shadow: inset 0 1px 1px light-dark(rgb(0 0 0 / .05), rgb(0 0 0 / .2));
 }
 .superego-field::placeholder { color: var(--superego-muted); }
 .superego-field:focus { outline: 2px solid var(--superego-ring); outline-offset: 1px; }
 /* A pop-up button, as macOS draws it: a push button with ⌃⌄ on the right. */
 .superego-select {
-  appearance: none; font-weight: 500; background-color: var(--superego-control); border: 0; box-shadow: var(--superego-control-edge); padding: 3px 26px 3px 10px;
+  appearance: none; font-weight: 500; background-color: var(--superego-control); border: 0; border-radius: 999px; box-shadow: var(--superego-control-edge); padding: 3px 26px 3px 12px;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='12' viewBox='0 0 8 12' fill='none' stroke='%23888' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M1 4.5 4 1.5 7 4.5M1 7.5 4 10.5 7 7.5'/%3E%3C/svg%3E");
   background-repeat: no-repeat; background-position: right 9px center;
 }
@@ -239,8 +244,8 @@ button, summary { -webkit-user-select: none; user-select: none; }
 .superego-switch:disabled { opacity: .5; }
 
 /* A segmented control: segments on a quiet track, the chosen one raised. */
-.superego-segmented { display: inline-flex; flex: none; gap: 1px; padding: 2px; border-radius: 8px; background: var(--superego-fill); }
-.superego-segmented__item { display: grid; place-items: center; min-width: 26px; height: 24px; padding: 0 5px; border: 0; border-radius: 6px; background: none; font: inherit; font-size: var(--superego-text-sm); color: var(--superego-muted); cursor: default; }
+.superego-segmented { display: inline-flex; flex: none; gap: 1px; padding: 2px; border-radius: 999px; background: var(--superego-fill); }
+.superego-segmented__item { display: grid; place-items: center; min-width: 26px; height: 24px; padding: 0 7px; border: 0; border-radius: 999px; background: none; font: inherit; font-size: var(--superego-text-sm); color: var(--superego-muted); cursor: default; }
 .superego-segmented__item:hover:not([data-pressed]) { background: var(--superego-hover); color: var(--superego-text); }
 .superego-segmented__item[data-pressed] { background: var(--superego-raised); color: var(--superego-text); box-shadow: 0 0 0 .5px light-dark(rgb(0 0 0 / .12), rgb(255 255 255 / .08)), 0 1px 2px light-dark(rgb(0 0 0 / .08), rgb(0 0 0 / .3)); }
 
@@ -280,12 +285,12 @@ button, summary { -webkit-user-select: none; user-select: none; }
 
 /* Layers: dialogs, then what opens from anything (menus, popovers, tooltips) above them. */
 .superego-layer { z-index: 100; outline: none; }
-.superego-dialog__backdrop { position: fixed; inset: 0; z-index: 50; background: rgb(0 0 0 / .28); transition: opacity .14s; }
+.superego-dialog__backdrop { position: fixed; inset: 0; z-index: 50; background: rgb(0 0 0 / .18); transition: opacity .14s; }
 .superego-dialog__backdrop[data-starting-style], .superego-dialog__backdrop[data-ending-style] { opacity: 0; }
 .superego-dialog {
   position: fixed; z-index: 51; left: 50%; top: 50%; transform: translate(-50%, -50%);
-  border: 0; border-radius: 12px; color: var(--superego-text); background: var(--superego-bg);
-  box-shadow: 0 0 0 .5px light-dark(rgb(0 0 0 / .25), rgb(255 255 255 / .15)), 0 24px 64px rgb(0 0 0 / .32); max-width: 92vw; max-height: 86vh; overflow: hidden; outline: none;
+  border: 0; border-radius: 18px; color: var(--superego-text); background: var(--superego-bg);
+  box-shadow: 0 0 0 .5px light-dark(rgb(0 0 0 / .14), rgb(255 255 255 / .14)), 0 28px 70px light-dark(rgb(0 0 0 / .25), rgb(0 0 0 / .55)); max-width: 92vw; max-height: 86vh; overflow: hidden; outline: none;
   transition: opacity .14s, transform .14s;
 }
 .superego-dialog[data-starting-style], .superego-dialog[data-ending-style] { opacity: 0; transform: translate(-50%, calc(-50% + 6px)) scale(.985); }
@@ -306,12 +311,12 @@ button, summary { -webkit-user-select: none; user-select: none; }
 .superego-dialog__search::placeholder { color: var(--superego-faint); }
 
 .superego-menu, .superego-popover {
-  min-width: 200px; background: var(--superego-raised); border: 0; border-radius: 10px;
-  box-shadow: var(--superego-shadow-float); padding: 6px; outline: none; font-size: var(--superego-text-ui);
+  min-width: 200px; background: var(--superego-glass); -webkit-backdrop-filter: var(--superego-glass-blur); backdrop-filter: var(--superego-glass-blur);
+  border: 0; border-radius: 14px; box-shadow: var(--superego-glass-edge), var(--superego-shadow-float); padding: 5px; outline: none; font-size: var(--superego-text-ui);
   transform-origin: var(--transform-origin); transition: opacity .1s, transform .1s;
 }
 .superego-menu[data-starting-style], .superego-menu[data-ending-style], .superego-popover[data-starting-style], .superego-popover[data-ending-style] { opacity: 0; transform: scale(.98); }
-.superego-menu__item { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 5px 8px; border-radius: var(--superego-radius); cursor: default; outline: none; user-select: none; }
+.superego-menu__item { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 4px 10px; border-radius: 9px; cursor: default; outline: none; user-select: none; }
 .superego-menu__item[data-highlighted] { background: var(--superego-accent); color: var(--superego-accent-text); }
 /* What an item says gives way to its hint, to be cut short by what it holds (a title, say). */
 .superego-menu__text { min-width: 0; }
@@ -322,14 +327,14 @@ button, summary { -webkit-user-select: none; user-select: none; }
 .superego-menu__hint { display: inline-flex; gap: 6px; align-items: center; color: var(--superego-muted); font: var(--superego-text-xs) var(--superego-mono); }
 .superego-menu__check { color: var(--superego-text); }
 .superego-menu__label { margin: 6px 8px 4px; font-size: var(--superego-text-xs); color: var(--superego-muted); }
-.superego-menu__separator { border-top: 1px solid var(--superego-border); margin: 5px 8px; }
+.superego-menu__separator { border-top: 1px solid var(--superego-line); margin: 5px 10px; }
 .superego-context { display: contents; }
 .superego-tooltip { background: var(--superego-text); color: var(--superego-bg); font-size: var(--superego-text-sm); border-radius: 6px; padding: 5px 8px; white-space: nowrap; transition: opacity .1s; }
 .superego-tooltip[data-starting-style], .superego-tooltip[data-ending-style] { opacity: 0; }
 /* A card of what something is, while it's pointed at: only to look at, so it takes no pointer. */
 .superego-hover-card {
-  width: max-content; max-width: 300px; padding: 8px 10px; border-radius: 10px; background: var(--superego-raised);
-  box-shadow: var(--superego-shadow-float); font-size: var(--superego-text-sm); pointer-events: none; transition: opacity .1s;
+  width: max-content; max-width: 300px; padding: 8px 10px; border-radius: 12px; background: var(--superego-glass);
+  -webkit-backdrop-filter: var(--superego-glass-blur); backdrop-filter: var(--superego-glass-blur); box-shadow: var(--superego-glass-edge), var(--superego-shadow-float); font-size: var(--superego-text-sm); pointer-events: none; transition: opacity .1s;
 }
 .superego-hover-card[data-starting-style], .superego-hover-card[data-ending-style] { opacity: 0; }
 

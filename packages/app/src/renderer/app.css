@@ -1,37 +1,34 @@
-/* The window: the side (the rail and the sidebar) down the left on the window's greys, the thread and its panes white
-   beside it. Across the top, one hairline: under the window's buttons over the side, and under the title bar beside. */
-.app { display: flex; flex-direction: column; height: 100%; background: var(--superego-bg); overflow: hidden; }
+/* The window: the thread and its panes on the sheet, edge to edge; down the left, over it, the side (the rail and the
+   sidebar) as one panel of glass inset from the window's edges, as macOS draws a sidebar, the window's buttons in it.
+   The title bar runs on across the sheet with no line under it. */
+.app { position: relative; display: flex; flex-direction: column; height: 100%; background: var(--superego-bg); overflow: hidden; }
 .app__drag { height: 38px; -webkit-app-region: drag; flex: none; }
 .app__drag :is(button, a, input, select, textarea, summary, [role="button"], [contenteditable]) { -webkit-app-region: no-drag; }
-.app__body { flex: 1; display: flex; min-height: 0; background: var(--superego-chrome); }
-.app__rail { position: relative; flex: none; width: var(--superego-rail); display: flex; flex-direction: column; justify-content: space-between; align-items: flex-end; padding: 9px 0 16px; background: var(--superego-rail-bg); -webkit-app-region: drag; }
+.app__body { flex: 1; display: flex; min-height: 0; }
+/* The panel: drawn once behind the rail and the sidebar (and the title bar over them), as wide as they are. */
+.app:not(.is-narrow) { --side-width: var(--superego-rail); }
+.app:not(.is-narrow):is(:has(.app__sidebar:not(:empty)), :has(.settings--pane)) { --side-width: calc(var(--superego-rail) + var(--superego-sidebar)); }
+.app:not(.is-narrow)::before {
+  content: ''; position: absolute; z-index: 0; top: 8px; left: 8px; bottom: 8px; width: calc(var(--side-width) - 8px); pointer-events: none;
+  border-radius: 18px; background: var(--superego-chrome);
+  box-shadow: var(--superego-glass-edge), 0 6px 24px light-dark(rgb(0 0 0 / .07), rgb(0 0 0 / .35));
+}
+.app__titlebar, .app__body > * { position: relative; z-index: 1; }
+.app__rail { position: relative; flex: none; width: var(--superego-rail); display: flex; flex-direction: column; justify-content: space-between; align-items: center; padding: 9px 0 18px 8px; -webkit-app-region: drag; }
 .app__rail-group { display: flex; flex-direction: column; align-items: center; gap: 4px; -webkit-app-region: no-drag; }
-.app__rail-button { position: relative; width: 34px; height: 34px; min-height: 34px; border-radius: 8px; color: var(--superego-muted); box-shadow: none; background: none; }
+.app__rail-button { position: relative; width: 34px; height: 34px; min-height: 34px; border-radius: 10px; color: var(--superego-muted); box-shadow: none; background: none; }
 .app__rail-button:hover { color: var(--superego-text); background: var(--superego-hover); }
-.app__rail-button.is-on { color: var(--superego-text); background: var(--superego-selected); }
-/* In the rail, the buttons are folder tabs at its edge: one in front (the shell's `data-tab`), joined to what's beside
-   it: the open space's sidebar, a hidden thread (Ego's) alone, or Settings. The rest are behind, the rail's edge
-   running across them. Each tab is two halves, slanted toward the left. */
-.app__rail { --rail-front: var(--superego-chrome); }
-.app__rail[data-tab="thread"] { --rail-front: var(--superego-bg); }
-.app__rail::after { content: ''; position: absolute; top: 0; bottom: 0; right: 0; width: 1px; background: var(--superego-line); z-index: 2; pointer-events: none; }
-.app__rail .app__rail-group { align-items: flex-end; gap: 6px; }
-.app__rail :is(.app__rail-button, .app__settings) { z-index: 1; width: 42px; height: 50px; min-height: 50px; border-radius: 0; background: none; color: var(--superego-faint); }
-.app__rail :is(.app__rail-button, .app__settings)::before,
-.app__rail :is(.app__rail-button, .app__settings)::after { content: ''; position: absolute; left: 0; right: 0; z-index: -1; background: var(--superego-rail-tab); }
-.app__rail :is(.app__rail-button, .app__settings)::before { top: 0; bottom: 50%; border-top-left-radius: 10px; box-shadow: inset 1px 0 0 var(--superego-line), inset 0 1px 0 var(--superego-line); transform: skewY(-5deg); transform-origin: right bottom; }
-.app__rail :is(.app__rail-button, .app__settings)::after { top: 50%; bottom: 0; border-bottom-left-radius: 10px; box-shadow: inset 1px 0 0 var(--superego-line), inset 0 -1px 0 var(--superego-line); transform: skewY(5deg); transform-origin: right top; }
-.app__rail :is(.app__rail-button, .app__settings):hover { color: var(--superego-text); background: none; }
-.app__rail:not([data-tab="settings"]) .app__rail-button.is-on, .app__rail[data-tab="settings"] .app__settings { z-index: 3; color: var(--superego-text); background: none; }
-.app__rail:not([data-tab="settings"]) .app__rail-button.is-on::before, .app__rail:not([data-tab="settings"]) .app__rail-button.is-on::after,
-.app__rail[data-tab="settings"] .app__settings::before, .app__rail[data-tab="settings"] .app__settings::after { background: var(--rail-front); }
-.app__rail[data-tab="settings"] .app__rail-button.is-on { color: var(--superego-faint); }
+.app__rail-button.is-on { color: var(--superego-accent); background: var(--superego-selected); }
+/* In the rail: the spaces and Settings, the open one lit in the accent on a quiet fill, as a sidebar's icons. */
+.app__rail .app__rail-group { gap: 6px; }
+.app__rail[data-tab="settings"] .app__rail-button.is-on { color: var(--superego-muted); background: none; }
+.app__rail[data-tab="settings"] .app__settings { color: var(--superego-accent); background: var(--superego-selected); }
 .app__rail :is(.app__rail-button, .app__settings) svg { width: 17px; height: 17px; }
 /* The notices, wide (rail-notice.tsx): above Settings, a quiet icon with a dot in its tone; quiet (put off), no dot.
    Opened, all it says in a popover beside the rail. */
-.rail-notice { position: relative; display: grid; place-items: center; width: 30px; height: 30px; margin-right: 6px; padding: 0; border: 0; border-radius: 8px; background: none; color: var(--superego-muted); -webkit-app-region: no-drag; }
+.rail-notice { position: relative; display: grid; place-items: center; width: 30px; height: 30px; padding: 0; border: 0; border-radius: 8px; background: none; color: var(--superego-muted); -webkit-app-region: no-drag; }
 .rail-notice:hover, .rail-notice.is-open { color: var(--superego-text); background: var(--superego-hover); }
-.rail-notice::after { content: ''; position: absolute; top: 3px; right: 2px; width: 7px; height: 7px; border-radius: 50%; background: var(--tone); box-shadow: 0 0 0 2px var(--superego-rail-bg); }
+.rail-notice::after { content: ''; position: absolute; top: 3px; right: 2px; width: 7px; height: 7px; border-radius: 50%; background: var(--tone); box-shadow: 0 0 0 2px var(--superego-chrome); }
 .rail-notice--accent { --tone: var(--superego-accent); }
 .rail-notice--blocked { --tone: var(--superego-status-blocked); }
 .rail-notice--error { --tone: var(--superego-status-error); }
@@ -41,7 +38,7 @@
 .rail-notice__popup .service-notice { margin: 0; background: none; box-shadow: none; }
 /* The sidebar: on the side's grey beside the rail, a hairline at its edge. Hidden while what's in it shows nothing.
    A region (its ring: see the end). */
-.app__sidebar { position: relative; width: var(--superego-sidebar); flex: none; min-height: 0; overflow: auto; padding: 7px 8px 10px; display: flex; flex-direction: column; }
+.app__sidebar { position: relative; width: var(--superego-sidebar); flex: none; min-height: 0; overflow: auto; padding: 7px 10px 18px 6px; display: flex; flex-direction: column; }
 .app__sidebar:empty { display: none; }
 /* Its edge (sidebar-edge.tsx), on the hairline between it and the thread (with it hidden, the rail's): a strip to drag,
    quiet until it's pointed at or dragged, when the line darkens and a grip shows on it, as on the panes' handles.
@@ -58,16 +55,14 @@
 .app__tools .superego-icon-button { color: var(--superego-muted); }
 .app__tools .superego-icon-button:hover { color: var(--superego-text); }
 /* The thread and its panes, white (or the dark's deepest grey); a hairline between it and the list. */
-.app__main { flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; position: relative; background: var(--superego-bg); overflow: hidden; }
-.app.has-sidebar:not(.is-narrow):has(.app__sidebar:not(:empty)) .app__main { border-left: 1px solid var(--superego-line); }
+.app__main { flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; position: relative; overflow: hidden; }
 /* The title bar: past the window's buttons (or, with the list open, past the side), where you are; the thread's
    columns and what it says about itself at the right. Over the list, the side's grey runs up behind the window's
    buttons, with back and forward at its right edge. */
-.app__titlebar { position: relative; height: var(--superego-titlebar); display: flex; align-items: center; gap: var(--superego-space-3); min-width: 0; padding: 0 12px 0 84px; border-bottom: 1px solid var(--superego-line); container-type: inline-size; overflow: hidden; }
+.app__titlebar { position: relative; height: var(--superego-titlebar); display: flex; align-items: center; gap: var(--superego-space-3); min-width: 0; padding: 0 12px 0 84px; container-type: inline-size; overflow: hidden; }
 /* On a tablet's home screen the page runs up under the status bar: the bar starts below it, its ground running up. */
 .app.is-web .app__titlebar { height: calc(var(--superego-titlebar) + env(safe-area-inset-top)); padding-top: env(safe-area-inset-top); }
 .app.has-sidebar:has(.app__sidebar:not(:empty)) .app__titlebar { padding-left: calc(var(--superego-rail) + var(--superego-sidebar) + 1px + var(--superego-space-3)); }
-.app.has-sidebar:has(.app__sidebar:not(:empty)) .app__titlebar::before { content: ''; position: absolute; top: 0; bottom: 0; left: 0; width: calc(var(--superego-rail) + var(--superego-sidebar)); background: var(--superego-chrome); border-right: 1px solid var(--superego-line); pointer-events: none; }
 /* Short of room, the bar gives way in one order (overflow.tsx): its items keep their size and go, in turn, to the ···
    at its end; the title takes what's left, truncating. Nothing in it shrinks, wraps or overlaps another, nor makes the
    window wider; nor does anything come and go with the pointer: what fits shows. */
@@ -330,11 +325,11 @@ details[open] > .row > .row__chevron { transform: rotate(90deg); }
    test in :where(), weighing nothing, so a card that joins the box (below) still takes the gap away. */
 .dock__above:where(:not(:empty, :has(> .profile-scope:empty):not(:has(> :not(.profile-scope:empty))))) { margin-bottom: 10px; }
 /* The box: the words, what goes with them, and one button at their end. White on the sheet, a hairline and a soft shadow. */
-.dock__box { position: relative; background: var(--superego-composer); border-radius: 12px; box-shadow: 0 0 0 .5px light-dark(rgb(0 0 0 / .16), rgb(255 255 255 / .1)), 0 4px 16px light-dark(rgb(0 0 0 / .08), rgb(0 0 0 / .3)); padding: 9px 9px 9px 16px; }
+.dock__box { position: relative; background: var(--superego-glass); -webkit-backdrop-filter: var(--superego-glass-blur); backdrop-filter: var(--superego-glass-blur); border-radius: 20px; box-shadow: var(--superego-glass-edge), 0 8px 28px light-dark(rgb(0 0 0 / .1), rgb(0 0 0 / .35)); padding: 9px 9px 9px 16px; }
 /* Above the box, something can join it (`dock__join`: an agent's question with its options): one card, a hairline between. */
 .dock:has(.dock__join) .dock__above { margin-bottom: 0; }
-.dock:has(.dock__join) .dock__box { border-radius: 0 0 12px 12px; clip-path: inset(0 -32px -32px -32px); }
-.dock__join { position: relative; background: var(--superego-composer); border-radius: 12px 12px 0 0; border-bottom: 1px solid var(--superego-line); box-shadow: 0 0 0 .5px light-dark(rgb(0 0 0 / .16), rgb(255 255 255 / .1)), 0 4px 16px light-dark(rgb(0 0 0 / .08), rgb(0 0 0 / .3)); clip-path: inset(-32px -32px 0 -32px); }
+.dock:has(.dock__join) .dock__box { border-radius: 0 0 20px 20px; clip-path: inset(0 -32px -32px -32px); }
+.dock__join { position: relative; background: var(--superego-composer); border-radius: 20px 20px 0 0; border-bottom: 1px solid var(--superego-line); box-shadow: 0 0 0 .5px light-dark(rgb(0 0 0 / .16), rgb(255 255 255 / .1)), 0 4px 16px light-dark(rgb(0 0 0 / .08), rgb(0 0 0 / .3)); clip-path: inset(-32px -32px 0 -32px); }
 .composer { display: flex; gap: var(--superego-space-2); align-items: flex-end; font-size: var(--superego-text-body); }
 .composer .superego-textarea { line-height: 22px; padding: 3px 0; min-height: 28px; }
 .composer .superego-textarea::placeholder { color: var(--superego-faint); }
@@ -371,9 +366,9 @@ details[open] > .row > .row__chevron { transform: rotate(90deg); }
 .settings__body { display: grid; grid-template-columns: 180px 1fr; height: 100%; }
 .settings__nav { padding: 12px 8px; border-right: 1px solid var(--superego-line); background: var(--superego-sidebar-bg); display: flex; flex-direction: column; gap: 2px; }
 .settings__nav button { font: inherit; color: inherit; text-align: left; background: none; border: 0; padding: 5px 8px; border-radius: var(--superego-radius); }
-.settings__nav button:hover:not([data-active]) { background: var(--superego-hover); }
-.settings__nav button[data-active] { background: var(--superego-accent); color: var(--superego-accent-text); }
 .settings__nav button[data-active] .superego-status { color: inherit; }
+.settings__nav button:hover:not([data-active]) { background: var(--superego-hover); }
+.settings__nav button[data-active] { background: var(--superego-selected); }
 .settings__nav-label { color: var(--superego-muted); font-size: calc(11px * var(--superego-text-scale)); text-transform: uppercase; letter-spacing: .04em; padding: 12px 8px 4px; }
 .settings__content { overflow: auto; padding: 8px 28px 40px; outline: none; }
 /* A stop of its own for the keys (Base UI's tab panel), to scroll it by: ringed inside its edge, as a region is. */
@@ -381,7 +376,8 @@ details[open] > .row > .row__chevron { transform: rotate(90deg); }
 /* Wide, a pane beside the rail: its list where the sidebar is, on the side's grey. */
 .settings--pane { flex: 1; min-height: 0; }
 .settings--pane .settings__body { grid-template-columns: var(--superego-sidebar) 1fr; }
-.settings--pane .settings__nav { background: var(--superego-chrome); }
+/* In the window, Settings' list sits in the side's panel, as a sidebar's. */
+.settings--pane .settings__nav { background: none; border-right: 0; padding: 7px 10px 18px 6px; }
 .settings--pane .settings__content { padding: 8px 40px 48px; }
 .settings--pane .settings__content > * { max-width: 760px; }
 .settings__note { color: var(--superego-muted); font-size: calc(12px * var(--superego-text-scale)); margin: 2px 0; }
