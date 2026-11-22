@@ -183,7 +183,7 @@ pnpmfileChecksum: sha256-8RoD5CkWTubjdo8qG3mRkX7fEgwSEWupGaaz+qEClz4=
 
 patchedDependencies:
   '@earendil-works/pi-durable@1.6.0': 114ac4f0356aa0503f126f67442a99d99dacc4be8d76afd8dd999750ec462502
-  ghostty-web@0.4.0: fef2236870cb562d7c7419513ae06c0fc86a4b58069bd53043e3f9d9af56cb2e
+  ghostty-web@0.4.0: da702ac46937cedd52d32f7179f0b245f5314fbc78738adf8769e9120195f1f1
 
 importers:
 
@@ -742,7 +742,7 @@ importers:
         version: link:../../packages/ui
       ghostty-web:
         specifier: 0.4.0
-        version: 0.4.0(patch_hash=fef2236870cb562d7c7419513ae06c0fc86a4b58069bd53043e3f9d9af56cb2e)
+        version: 0.4.0(patch_hash=da702ac46937cedd52d32f7179f0b245f5314fbc78738adf8769e9120195f1f1)
     devDependencies:
       '@superego/sdk':
         specifier: workspace:*
@@ -5108,7 +5108,7 @@ snapshots:
       dunder-proto: 1.0.1
       es-object-atoms: 1.1.2
 
-  ghostty-web@0.4.0(patch_hash=fef2236870cb562d7c7419513ae06c0fc86a4b58069bd53043e3f9d9af56cb2e): {}
+  ghostty-web@0.4.0(patch_hash=da702ac46937cedd52d32f7179f0b245f5314fbc78738adf8769e9120195f1f1): {}
 
   google-auth-library@10.9.1:
     dependencies:

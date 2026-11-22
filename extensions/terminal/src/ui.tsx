@@ -158,7 +158,9 @@ function TerminalPane({ machine, thread, pane }: PaneProps) {
 
   return (
     <div className="terminal-pane">
-      <div ref={host} className="terminal-pane__screen" data-focus />
+      {/* Focusable before the terminal is in it: the pane's focus (going to it, or back to a thread with it focused) lands
+          here, and the terminal takes it from here once it's there. */}
+      <div ref={host} className="terminal-pane__screen" data-focus tabIndex={-1} />
       {lookProblem && <div className="terminal-pane__problem"><span>{lookProblem}</span></div>}
       {problem && connected && (
         <div className="terminal-pane__problem">

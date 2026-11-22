@@ -48,6 +48,30 @@ await openApp({ name: 'terminal', timeout: 180_000 }, async (t) => {
   await typeIn(win().webContents, 'echo "after-$((2+1))"\n')
   await until(`${text}.includes('after-3')`, 'typing after the reload')
 
+  // Settings and back: the terminal drawn again takes the keyboard only if it had it. The thread focused, it stays so.
+  const focusedPane = `window.superego.call('local', 'thread.list', {}).then((l) => l.find((t) => t.id === '${id}').pane ?? 'thread')`
+  const inTerminal = `document.activeElement?.closest('.terminal-pane') != null`
+  const settingsAndBack = async (label) => {
+    await run(`document.querySelector('.app__settings').click()`)
+    await until(`!!document.querySelector('.settings__nav') && !document.querySelector('.terminal-pane')`, `${label}: Settings`)
+    await run(`window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', bubbles: true }))`)
+    await until(`${text}.includes('after-3')`, `${label}: back, the terminal drawn again`)
+    await t.settled()
+  }
+  // The focus as a shown window has it (focus events, :focus-within), headless as not: the terminal, holding it, is
+  // the focused pane once that settles.
+  await t.emulateFocus()
+  await t.settled()
+  await run(`document.activeElement?.blur(); document.querySelector('.thread__scroll').focus()`)
+  await until(`${focusedPane}.then((p) => p === 'thread')`, 'the thread focused').catch(async (e) => t.fail(`${e.message}: focused ${await run(focusedPane)}, the keyboard in ${await run('document.activeElement?.className')}`))
+  await settingsAndBack('the thread focused')
+  if (await run(inTerminal)) t.fail('back from Settings: the terminal took the keyboard from the thread')
+  if (await run(focusedPane) !== 'thread') t.fail('back from Settings: the terminal became the focused pane')
+  await run(`document.querySelector('.terminal-pane__screen').focus()`)
+  await until(`${focusedPane}.then((p) => p !== 'thread')`, 'the terminal focused')
+  await settingsAndBack('the terminal focused')
+  await until(inTerminal, 'back from Settings: the keyboard in the terminal again')
+
   // A browser, by Web access: the same terminal, its scrollback, and typing.
   const port = 7700 + Math.floor(Math.random() * 200)
   await run(`window.superego.call('local', 'settings.set', { key: 'web.port', value: ${port} })`)
