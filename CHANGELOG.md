@@ -7,6 +7,8 @@
 - On a phone, New thread and other dialogs stay put when the keyboard comes up: they end at the keyboard with their
   header on top, and the field you're typing in stays in sight. The prompt no longer offers to AutoFill a contact, and
   New thread's Model and Thinking menus no longer overlap.
+- The pane, thread or sidebar that has the focus is outlined in a quiet grey instead of the accent colour, and its tab
+  is no longer tinted with the accent.
 
 ## 0.1.10
 

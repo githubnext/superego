@@ -30,8 +30,11 @@
   /* The accent: as chosen, or this blue. In the dark, lifted a little toward white so it carries on dark grounds. */
   --superego-accent-base: #007aff;
   --superego-accent: light-dark(var(--superego-accent-base), color-mix(in oklab, var(--superego-accent-base) 92%, white));
-  /* Focus rings: around what has the keyboard, and the region holding it. */
+  /* Focus rings: around the control that has the keyboard. */
   --superego-ring: var(--superego-accent);
+  /* The edge of the region holding the focus (the sidebar, the thread, a pane): neutral, a step past the hairlines, so
+     it says where you are without calling out. */
+  --superego-region-ring: color-mix(in oklab, var(--superego-line), var(--superego-text) 22%);
   --superego-accent-text: #ffffff;
   --superego-selected: light-dark(rgb(0 0 0 / .07), rgb(255 255 255 / .08));
   --superego-hover: light-dark(rgb(0 0 0 / .04), rgb(255 255 255 / .05));

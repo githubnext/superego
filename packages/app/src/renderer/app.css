@@ -1020,12 +1020,12 @@ a.pane-header__url:hover { color: var(--superego-accent); }
 
 .composer-box.is-dropping .dock__box { outline: 2px dashed var(--superego-ring); outline-offset: 2px; }
 
-/* Focus: the region holding it (the sidebar, the thread, a pane) wears the ring, its own border. The border is always
+/* Focus: the region holding it (the sidebar, the thread, a pane) wears a quiet, neutral ring, its own border. The border is always
    there, clear until then, so nothing moves; it lies outside what's in the region, which the region clips, so nothing
    in it (scrolled text, a page, an editor) can paint over it. Nothing inside a region wears a ring of its own, but a
    small control reached from the keyboard (see @superego/ui's styles). */
 .app__sidebar, .panes > .panes__column { border: 2px solid transparent; }
-:is(.app__sidebar, .panes > .panes__column):focus-within { border-color: var(--superego-ring); }
+:is(.app__sidebar, .panes > .panes__column):focus-within { border-color: var(--superego-region-ring); }
 /* None while a finger works it (touch.ts): what's tapped is where you are. A mouse or a keyboard brings it back, on a
    phone or an iPad too. */
 :root[data-finger] :is(.app__sidebar, .panes > .panes__column) { border-color: transparent; }
@@ -1040,8 +1040,8 @@ a.pane-header__url:hover { color: var(--superego-accent); }
 /* A pane's own glyph in place of its kind's (useTabGlyph): a mark, at the icons' size. */
 .strip__tab > .superego-status { font-size: 14px; }
 .strip__tab:hover { background: var(--superego-hover); }
-.strip__tab.is-focused { background: color-mix(in srgb, var(--superego-accent) 11%, transparent); color: var(--superego-accent); }
-.strip__tab.is-focused svg { color: var(--superego-accent); }
+.strip__tab.is-focused { background: var(--superego-selected); color: var(--superego-text); }
+.strip__tab.is-focused svg { color: inherit; }
 .strip__tab.is-away { color: var(--superego-faint); }
 .strip__label { overflow: hidden; text-overflow: ellipsis; }
 .strip__note { display: inline-flex; align-items: center; font: var(--superego-text-xs) var(--superego-mono); white-space: nowrap; }
