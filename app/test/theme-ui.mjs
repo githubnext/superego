@@ -1,4 +1,4 @@
-// The whole window under every theme (run by `test/look.sh <dir> theme-ui`): threads in the sidebar, one shown with
+// The whole window under every theme, matching it (run by `test/look.sh <dir> theme-ui`): threads in the sidebar, one shown with
 // markdown, a code block and tool calls, the Diff pane beside it and words in the composer, under Superego's own and
 // each built-in theme in its appearance. Screenshots into $SUPEREGO_SHOWCASE_OUT as <theme-id>.png (superego-light,
 // superego-dark), and each one's window colours and their contrast logged.
@@ -57,6 +57,8 @@ await openApp({ name: 'theme-ui', timeout: 300_000 }, async (t) => {
   const css = `(() => { const s = getComputedStyle(document.documentElement); return ['bg', 'chrome', 'text', 'muted', 'border', 'line'].map((n) => n + ' ' + s.getPropertyValue('--superego-' + n).trim()).join(' | ') })()`
   const themes = [{ id: 'superego', appearance: 'light', shot: 'superego-light' }, { id: 'superego', appearance: 'dark', shot: 'superego-dark' },
     ...BUILTIN_THEMES.map((theme) => ({ id: theme.id, appearance: theme.appearance, shot: theme.id }))]
+  // The window matching the theme (Settings → Appearance), unless THEME_UI_WINDOW=off.
+  await setting('app.theme.window', process.env.THEME_UI_WINDOW !== 'off')
   for (const theme of themes) {
     await setting(theme.appearance === 'light' ? 'app.theme.light' : 'app.theme.dark', theme.id)
     await t.theme(theme.appearance)
