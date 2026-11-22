@@ -140,6 +140,9 @@
   --superego-sidebar: 232px;
   --superego-rail: 48px;
   --superego-titlebar: 48px;
+  /* The desktop window's own corners (macOS draws them; no API says how round): measured from a screenshot of the
+     app's window on macOS 26, a 16pt circle. What sits inset against a corner takes this less its inset, concentric. */
+  --superego-window-radius: 16px;
   --superego-shadow-float: 0 0 0 .5px light-dark(rgb(0 0 0 / .1), rgb(0 0 0 / .6)), 0 16px 40px -10px light-dark(rgb(0 0 0 / .22), rgb(0 0 0 / .5)), 0 2px 8px light-dark(rgb(0 0 0 / .06), rgb(0 0 0 / .2));
   /* Glass (macOS's Liquid Glass, as a page can draw it): what floats over the content and works it (menus, popovers,
      the composer) is a translucent sheet that blurs what's under it, lit along its top edge. */

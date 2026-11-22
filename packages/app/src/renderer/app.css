@@ -12,15 +12,19 @@
 /* The panel: drawn once behind the rail and the sidebar (and the title bar over them, the window's buttons in its
    corner), as wide as they are. Folded to the rail it's too narrow for the buttons: it starts under the title bar,
    which runs on over the sheet, the buttons in clear space at its start, as they are with no sidebar on macOS. */
-.app:not(.is-narrow) { --side-width: var(--superego-rail); --side-top: calc(var(--superego-titlebar) + env(safe-area-inset-top, 0px)); }
-.app:not(.is-narrow):is(:has(.app__sidebar:not(:empty)), :has(.settings--pane)) { --side-width: calc(var(--superego-rail) + var(--superego-sidebar)); --side-top: 8px; }
+/* Its corners against the window's are concentric with them: the window's radius less the inset, the curves parallel. */
+.app:not(.is-narrow) {
+  --side-inset: 8px; --side-radius: calc(var(--superego-window-radius) - var(--side-inset));
+  --side-width: var(--superego-rail); --side-top: calc(var(--superego-titlebar) + env(safe-area-inset-top, 0px));
+}
+.app:not(.is-narrow):is(:has(.app__sidebar:not(:empty)), :has(.settings--pane)) { --side-width: calc(var(--superego-rail) + var(--superego-sidebar)); --side-top: var(--side-inset); }
 .app:not(.is-narrow)::before {
-  content: ''; position: absolute; z-index: 0; top: var(--side-top); left: 8px; bottom: 8px; width: calc(var(--side-width) - 8px); pointer-events: none;
-  border-radius: 18px; background: var(--superego-chrome);
+  content: ''; position: absolute; z-index: 0; top: var(--side-top); left: var(--side-inset); bottom: var(--side-inset); width: calc(var(--side-width) - var(--side-inset)); pointer-events: none;
+  border-radius: var(--side-radius); background: var(--superego-chrome);
   box-shadow: var(--superego-glass-edge), 0 6px 24px light-dark(rgb(0 0 0 / .07), rgb(0 0 0 / .35));
 }
 .app__titlebar, .app__body > * { position: relative; z-index: 1; }
-.app__rail { position: relative; flex: none; width: var(--superego-rail); display: flex; flex-direction: column; justify-content: space-between; align-items: center; padding: 9px 0 18px 8px; -webkit-app-region: drag; }
+.app__rail { position: relative; flex: none; width: var(--superego-rail); display: flex; flex-direction: column; justify-content: space-between; align-items: center; padding: 9px 0 18px var(--side-inset); -webkit-app-region: drag; }
 .app__rail-group { display: flex; flex-direction: column; align-items: center; gap: 4px; -webkit-app-region: no-drag; }
 .app__rail-button { position: relative; width: 34px; height: 34px; min-height: 34px; border-radius: 10px; color: var(--superego-muted); box-shadow: none; background: none; }
 .app__rail-button:hover { color: var(--superego-text); background: var(--superego-hover); }
