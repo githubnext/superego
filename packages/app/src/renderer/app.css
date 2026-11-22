@@ -24,6 +24,10 @@
 .app__rail[data-tab="settings"] .app__rail-button.is-on { color: var(--superego-muted); background: none; }
 .app__rail[data-tab="settings"] .app__settings { color: var(--superego-accent); background: var(--superego-selected); }
 .app__rail :is(.app__rail-button, .app__settings) svg { width: 17px; height: 17px; }
+/* Between the rail and the list beside it in the panel, a hairline, short of the panel's ends. */
+.app:not(.is-narrow):is(:has(.app__sidebar:not(:empty)), :has(.settings--pane)) .app__rail::after {
+  content: ''; position: absolute; top: 4px; bottom: 18px; right: 0; width: 1px; background: var(--superego-line); pointer-events: none;
+}
 /* The notices, wide (rail-notice.tsx): above Settings, a quiet icon with a dot in its tone; quiet (put off), no dot.
    Opened, all it says in a popover beside the rail. */
 .rail-notice { position: relative; display: grid; place-items: center; width: 30px; height: 30px; padding: 0; border: 0; border-radius: 8px; background: none; color: var(--superego-muted); -webkit-app-region: no-drag; }
