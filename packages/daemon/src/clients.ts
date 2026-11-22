@@ -9,21 +9,26 @@ import { PERFORMABLE, RpcError, type ClientInfo, type Json, type RpcPeer } from 
  * What the transport knows about a connection before it says hello: a browser's device (or tailnet device), and whether
  * it's on another computer (`elsewhere`: a browser through Tailscale; the socket's clients are told by their hello).
  */
-export type Via = { via: ClientInfo['via']; label?: string; device?: string; elsewhere?: boolean }
+export type Via = {
+  via: ClientInfo['via']; label?: string; device?: string; elsewhere?: boolean
+  /** The name a browser reached this machine by (its tailnet name, through serve). */
+  host?: string
+}
 
 /**
  * Where the user's windows are, as this machine sees them: whether one is on this computer, the other computers the app
- * is on (by hostname), and whether a browser on another computer is one.
+ * is on (by hostname), and whether a browser on another computer is one, and the names such browsers reached this
+ * machine by.
  */
-export type Windows = { here: boolean; elsewhere: string[]; browser: boolean }
+export type Windows = { here: boolean; elsewhere: string[]; browser: boolean; reached: string[] }
 
 export class Clients {
-  #entries = new Map<string, { info: ClientInfo; peer: RpcPeer }>()
+  #entries = new Map<string, { info: ClientInfo; peer: RpcPeer; host?: string }>()
   #listeners = new Set<(list: ClientInfo[]) => void>()
   #timer: ReturnType<typeof setTimeout> | undefined
   #hostname: string
   #windowKinds: Set<string>
-  #windows: Windows = { here: false, elsewhere: [], browser: false }
+  #windows: Windows = { here: false, elsewhere: [], browser: false, reached: [] }
 
   /** `hostname`: this machine's, to tell a client on another computer by its hello. `windowKinds`: the kinds that are a window (the app's, a browser's). */
   constructor({ hostname, windowKinds }: { hostname: string; windowKinds: string[] }) {
@@ -34,7 +39,7 @@ export class Clients {
   add(peer: RpcPeer, via: Via = { via: 'socket' }): string {
     const id = `c${randomBytes(4).toString('hex')}`
     const now = Date.now()
-    this.#entries.set(id, { peer, info: {
+    this.#entries.set(id, { peer, ...(via.host ? { host: via.host } : {}), info: {
       id, kind: 'client', label: via.label ?? 'client', connectedAt: now, activeAt: now, via: via.via,
       ...(via.device ? { device: via.device } : {}), ...(via.elsewhere ? { elsewhere: true } : {}),
     } })
@@ -68,12 +73,15 @@ export class Clients {
    * one. With none connected, where they last were: a window that went to sleep hasn't moved.
    */
   windows(): Windows {
-    const windows = [...this.#entries.values()].map((e) => e.info).filter((info) => !info.from && this.#windowKinds.has(info.kind))
-    if (windows.length) {
+    const entries = [...this.#entries.values()].filter(({ info }) => !info.from && this.#windowKinds.has(info.kind))
+    if (entries.length) {
+      const windows = entries.map((e) => e.info)
+      const browsers = entries.filter(({ info }) => info.elsewhere && info.via !== 'socket')
       this.#windows = {
         here: windows.some((w) => !w.elsewhere),
         elsewhere: [...new Set(windows.filter((w) => w.elsewhere && w.via === 'socket').map((w) => w.label))],
-        browser: windows.some((w) => w.elsewhere && w.via !== 'socket'),
+        browser: browsers.length > 0,
+        reached: [...new Set(browsers.flatMap((b) => b.host ? [b.host] : []))],
       }
     }
     return this.#windows

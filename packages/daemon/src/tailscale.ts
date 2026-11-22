@@ -31,6 +31,7 @@ type Status = {
   Self?: { DNSName?: string; UserID?: number; Tags?: string[] | null }
   CurrentTailnet?: { Name?: string } | null
   User?: Record<string, { LoginName?: string }>
+  Peer?: Record<string, { HostName?: string; DNSName?: string }> | null
 }
 type ServeStatus = { Web?: Record<string, { Handlers?: Record<string, { Proxy?: string }> }> }
 
@@ -173,4 +174,60 @@ export async function describeInstance(socket?: string): Promise<string | undefi
     const tailnet = s.CurrentTailnet?.Name
     return tailnet && name ? `${tailnet} (${name})` : name || tailnet
   } catch { return undefined } // not running or not reachable: shown by its socket alone
+}
+
+/**
+ * A tailnet this machine is on, for telling an agent its real names (see where.ts): the tailnet's name, the machine's
+ * MagicDNS name on it, and the other devices on it by their computers' hostnames and MagicDNS names (lowercase), to
+ * tell which tailnet a window's computer is on.
+ */
+export type Tailnet = { tailnet?: string; name: string; peers: Set<string> }
+
+/** The tailnets this machine's running tailscaleds are on: none without Tailscale. `failed`: one that couldn't be read. */
+export async function tailnetsHere(failed: (socket: string | undefined, error: Error) => void): Promise<Tailnet[]> {
+  const found = await Promise.all([undefined, ...otherInstances()].map(async (socket) => {
+    try {
+      const s = await status(socket)
+      const name = nameOf(s)
+      if (s.BackendState !== 'Running' || !name) return undefined
+      const peers = new Set<string>()
+      for (const peer of Object.values(s.Peer ?? {})) {
+        if (peer.HostName) peers.add(peer.HostName.toLowerCase())
+        const dns = peer.DNSName?.split('.')[0]
+        if (dns) peers.add(dns.toLowerCase())
+      }
+      return { ...(s.CurrentTailnet?.Name ? { tailnet: s.CurrentTailnet.Name } : {}), name, peers }
+    } catch (error) {
+      // Not installed: no tailnet, nothing wrong.
+      if (!(error instanceof Missing)) failed(socket, error as Error)
+      return undefined
+    }
+  }))
+  return found.filter((t): t is Tailnet => Boolean(t))
+}
+
+/**
+ * The tailnets this machine is on, as last read: asked of tailscaled in the background, at most once in `every` ms, so
+ * reading it is free and never waits (the agent's prompt asks on every request). The first ask starts reading; until
+ * that's done, none.
+ */
+export function watchTailnets(every = 60_000, read = tailnetsHere): () => Tailnet[] {
+  let known: Tailnet[] = []
+  let at = -Infinity
+  let reading = false
+  /** What failed last, by socket: said once, not every minute. */
+  const said = new Map<string, string>()
+  const failed = (socket: string | undefined, error: Error) => {
+    const key = socket ?? 'default'
+    if (said.get(key) === error.message) return
+    said.set(key, error.message)
+    console.warn(`Couldn't read the tailscaled at ${socket ?? 'the default socket'}: ${error.message}`)
+  }
+  const refresh = () => {
+    if (reading || Date.now() - at < every) return
+    reading = true
+    at = Date.now()
+    read(failed).then((next) => { known = next }, (error: Error) => failed(undefined, error)).finally(() => { reading = false })
+  }
+  return () => { refresh(); return known }
 }

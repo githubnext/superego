@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- When your window is on another computer, agents no longer hand you `localhost` addresses (the Browser pane still
+  opens them), and when an address is needed they use this machine's real Tailscale name on your tailnet.
+
 ## 0.1.10
 
 - **Upgrade:** `AGENTS.md` and project profiles are read only from the thread's project (up to its repository's top).

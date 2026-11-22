@@ -20,6 +20,7 @@ import { createAuthFlows } from './auth-flows.ts'
 import { readCommit } from './build.ts'
 import { Clients, type Via } from './clients.ts'
 import { coreExtensions } from './core-extensions.ts'
+import { watchTailnets } from './tailscale.ts'
 import { whereYouRun } from './where.ts'
 import { createExtensionHost } from './extension-host.ts'
 import type { DaemonExtension } from './extension.ts'
@@ -199,7 +200,11 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
 
   // The core's own, then the bundled ones: for the daemon's life, each giving every thread its agent parts unless the
   // thread goes without it.
-  const core = coreExtensions({ agentsDir: host.agentsDir, where: () => whereYouRun(machine.hostname, clients.windows()), panesOf: extensions.panesOf, openPane: threads.openPane, images: agent.images.processor, note: threads.note })
+  // This machine's tailnet names, for an agent whose user is on another computer: read once one is, and kept fresh.
+  const tailnets = watchTailnets()
+  const remote = () => { const { elsewhere, browser } = clients.windows(); return elsewhere.length > 0 || browser }
+  daemonLife.add(clients.watch(() => { if (remote()) tailnets() }))
+  const core = coreExtensions({ agentsDir: host.agentsDir, where: () => whereYouRun(clients.windows(), remote() ? tailnets() : []), panesOf: extensions.panesOf, openPane: threads.openPane, images: agent.images.processor, note: threads.note })
   for (const extension of core) daemonLife.add(await extensions.setUpBuiltin(extension, 'core'))
   for (const extension of options.extensions ?? []) daemonLife.add(await extensions.setUpBuiltin(extension, 'bundled'))
   extensions.registerSwitches()

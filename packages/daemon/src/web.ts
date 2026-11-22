@@ -308,7 +308,8 @@ export async function serveWeb({ root, port, devices, tailscale, serveSocket, or
     // For the client list: a device by its name (a tailnet device's, Tailscale's). Through serve, it's on another
     // computer of the tailnet; otherwise on this one (Web access listens on loopback).
     const device = devices.list().find((d) => d.id === who)
-    const via: Via = { via: device?.tailscale ? 'tailscale' : 'web', device: who, label: device?.name ?? 'A browser', elsewhere: Boolean(caller.serve) }
+    const via: Via = { via: device?.tailscale ? 'tailscale' : 'web', device: who, label: device?.name ?? 'A browser', elsewhere: Boolean(caller.serve),
+      ...(caller.serve ? { host: new URL(caller.origin).hostname } : {}) }
     sockets.handleUpgrade(request, socket, head, (ws) => {
       live.set(ws, who)
       // Full past 1 MiB unsent, as a socket's write says; each sent message checks whether there's room again.
