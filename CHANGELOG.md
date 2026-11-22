@@ -4,6 +4,9 @@
 
 - When your window is on another computer, agents no longer hand you `localhost` addresses (the Browser pane still
   opens them), and when an address is needed they use this machine's real Tailscale name on your tailnet.
+- On a phone, New thread and other dialogs stay put when the keyboard comes up: they end at the keyboard with their
+  header on top, and the field you're typing in stays in sight. The prompt no longer offers to AutoFill a contact, and
+  New thread's Model and Thinking menus no longer overlap.
 
 ## 0.1.10
 

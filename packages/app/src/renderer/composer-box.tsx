@@ -132,7 +132,7 @@ export function ComposerBox({ where, className, text, setText, files, setFiles, 
           </div>
         )}
         <div className="composer">
-          <TextArea ref={setInput} rows={1} value={text} disabled={disabled} aria-label={aria['aria-label']} autoFocus={autoFocus}
+          <TextArea ref={setInput} rows={1} value={text} disabled={disabled} aria-label={aria['aria-label']} autoFocus={autoFocus} autoComplete="off"
             onChange={(e) => setText(e.target.value)} onKeyDown={keyDown} onSelect={(e) => setCaret(e.currentTarget.selectionStart)}
             onPaste={(e) => { if (open && e.clipboardData.files.length) { e.preventDefault(); void attach(e.clipboardData.files) } }}
             placeholder={placeholder} />
