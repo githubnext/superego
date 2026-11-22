@@ -16,12 +16,14 @@ export type SyntaxRole = Strip<keyof typeof colourTokens.syntax, '--superego-syn
 /** A colour of the terminal's: `fg`, `bg`, `cursor`, `selection`, and the 16 ANSI colours (`black` … `white`, `bright-black` … `bright-white`). */
 export type TerminalRole = Strip<keyof typeof colourTokens.terminal, '--superego-terminal-'>
 /**
- * A colour of the window's own, where the theme has one (a VS Code theme's workbench colours): `bg` the sheet,
- * `fg` text, `muted` secondary text, `sidebar` the window's side, `raised` what floats, `border` frames and lines.
- * Left out, each is derived from the ground and text (`bg`/`fg`, else the terminal's): apply.ts's palette.
+ * A colour of the window's own, where the theme has one (a VS Code theme's workbench colours): `bg` the sheet (and the
+ * terminal's), `fg` text, `muted` secondary text, `sidebar` the window's side, `raised` what floats, `border` frames
+ * and lines, `surface` wells (code, output), `field` fields and the composer, `selected` and `hover` rows, `link`
+ * links, `accent-text` text on the accent. Left out, each is derived from the ground and text (`bg`/`fg`, else the
+ * terminal's): palette.ts.
  */
 export type UiRole = (typeof UI_ROLES)[number]
-export const UI_ROLES = ['bg', 'fg', 'muted', 'sidebar', 'raised', 'border'] as const
+export const UI_ROLES = ['bg', 'fg', 'muted', 'sidebar', 'raised', 'border', 'surface', 'field', 'selected', 'hover', 'link', 'accent-text'] as const
 
 /** Which of the two pickers a theme is for: the window shows the light theme in light mode, the dark one in dark. */
 export type Appearance = 'light' | 'dark'
@@ -42,7 +44,7 @@ export type Theme = {
   terminal?: Partial<Record<TerminalRole, Color>>
   /** The window's own colours (UiRole): those left out derived from its ground and text. */
   ui?: Partial<Record<UiRole, Color>>
-  /** The accent (focus rings, primary buttons, links), unless the user chose their own. */
+  /** The accent: focus rings, primary buttons, switches, a highlighted menu item. Left out, the theme's blue. */
   accent?: Color
 }
 

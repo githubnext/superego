@@ -20,15 +20,15 @@
   --superego-card-edge: 0 0 0 .5px var(--superego-border), 0 1px 3px light-dark(rgb(0 0 0 / .06), rgb(0 0 0 / .3));
   --superego-surface: light-dark(#f3f3f6, #262629);     /* wells: code, tool output */
   --superego-pane-tab: light-dark(#f9f9fb, #232325);   /* a pane's tab and its bars, a step off the sheet */
-  --superego-bubble: light-dark(color-mix(in oklab, var(--superego-accent) 9%, #fff), color-mix(in oklab, var(--superego-accent) 14%, #2a2a2e));      /* your messages */
+  --superego-bubble: light-dark(color-mix(in oklab, var(--superego-link) 9%, #fff), color-mix(in oklab, var(--superego-link) 14%, #2a2a2e));      /* your messages */
   --superego-code-chip: light-dark(rgb(0 0 0 / .055), rgb(255 255 255 / .08));
   --superego-raised: light-dark(#ffffff, #2c2c2e);      /* what floats: menus, popovers, the composer */
   --superego-border: light-dark(#d1d1d6, #444446);      /* frames: fields, menus */
   --superego-text: light-dark(rgb(0 0 0 / .85), rgb(255 255 255 / .88));
   --superego-muted: light-dark(rgb(0 0 0 / .55), rgb(255 255 255 / .56));
   --superego-faint: light-dark(rgb(0 0 0 / .36), rgb(255 255 255 / .36));
-  /* The accent: as chosen, or this blue. In the dark, lifted a little toward white so it carries on dark grounds. */
-  --superego-accent-base: #007aff;
+  /* The accent: the theme's, or this blue. In the dark, lifted a little toward white so it carries on dark grounds. */
+  --superego-accent-base: color(display-p3 0.155 0.319 0.654);
   --superego-accent: light-dark(var(--superego-accent-base), color-mix(in oklab, var(--superego-accent-base) 92%, white));
   /* Focus rings: around the control that has the keyboard. */
   --superego-ring: var(--superego-accent);
@@ -36,6 +36,7 @@
      it says where you are without calling out. */
   --superego-region-ring: color-mix(in oklab, var(--superego-line), var(--superego-text) 22%);
   --superego-accent-text: #ffffff;
+  --superego-link: var(--superego-accent);              /* links, and what opens a file or a thread */
   --superego-selected: light-dark(rgb(0 0 0 / .07), rgb(255 255 255 / .08));
   --superego-hover: light-dark(rgb(0 0 0 / .04), rgb(255 255 255 / .05));
   /* Controls: push buttons, pop-ups, fields. */

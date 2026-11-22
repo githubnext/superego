@@ -41,7 +41,7 @@ button.setup__line:hover { background: var(--superego-hover); }
 .setup__local .setup__error { flex-basis: 100%; }
 
 .setup__note { color: var(--superego-muted); }
-.setup__note a, .setup__link { color: var(--superego-accent); }
+.setup__note a, .setup__link { color: var(--superego-link); }
 .setup__link { font: inherit; padding: 0; border: 0; background: none; cursor: pointer; }
 .setup__error { color: var(--superego-status-error-text); }
 .setup__ok { color: var(--superego-status-success); }

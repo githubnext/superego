@@ -1,13 +1,13 @@
 // Themes in the window: every theme there is to choose (Superego's, the built-ins, those imported and those extensions
-// bring), the pair chosen applied to the root (code, diffs, the terminal, and the accent unless the user chose one),
+// bring), the pair chosen applied to the root (the window's colours and accent, code, diffs and the terminal),
 // and Settings → Appearance's parts: a picker for each, a sample of both, and importing.
 import { useEffect, useRef, useState, useSyncExternalStore, type CSSProperties } from 'react'
 import { Button, Select } from '@superego/ui'
 import {
-  BUILTIN_THEMES, DEFAULT_THEME, THEMED_PROPERTIES, importTheme, superegoTheme, themeAccent, themeColor, themeStyle, type Appearance, type Theme,
+  BUILTIN_THEMES, DEFAULT_THEME, THEMED_PROPERTIES, importTheme, superegoTheme, themeColor, themeStyle, type Appearance, type Theme,
 } from '@superego/ui/themes'
 import type { Json } from '@superego/protocol'
-import { ACCENT, APP, DEFAULT_ACCENT } from '../shared/app-settings.ts'
+import { APP } from '../shared/app-settings.ts'
 import { THEME_DARK, THEME_LIGHT, type ImportedThemes } from '../shared/themes.ts'
 import { useSettings } from './client.ts'
 import { scopeIsOn, useRegistry, type Registry } from './registry.tsx'
@@ -51,28 +51,19 @@ export function themeFor(choices: ThemeChoice[], id: unknown, appearance: Appear
   return { theme: superegoTheme(appearance), ...(typeof id === 'string' && id !== DEFAULT_THEME ? { missing: id } : {}) }
 }
 
-/**
- * The themes chosen for light and dark (Superego's for one that isn't there), and the accent to show: the user's (the
- * setting), or while that's left at its default, the themes' own if they have one (`accentThemed`). One the browser
- * can't read is none: styles.css's.
- */
-export function useChosenThemes() {
+/** The themes chosen for light and dark: Superego's for one that isn't there. */
+function useChosenThemes() {
   const { choices } = useThemes()
   const values = useSettings(APP, true)?.values
-  const light = themeFor(choices, values?.[THEME_LIGHT], 'light').theme
-  const dark = themeFor(choices, values?.[THEME_DARK], 'dark').theme
-  const chosen = values?.[ACCENT]
-  const valid = typeof chosen === 'string' && CSS.supports('color', chosen) ? chosen : undefined
-  const themed = valid === undefined || valid === DEFAULT_ACCENT ? themeAccent(light, dark, DEFAULT_ACCENT) : undefined
-  return { light, dark, accent: themed ?? valid, accentThemed: Boolean(themed) }
+  return { light: themeFor(choices, values?.[THEME_LIGHT], 'light').theme, dark: themeFor(choices, values?.[THEME_DARK], 'dark').theme }
 }
 
 /**
- * Apply the chosen themes to the window's root, in its style: each themed colour as light-dark() (read by code's
- * highlighting, diffs and the terminal, which watches the root's style), and the accent. At once, with no reload.
+ * Apply the chosen themes to the window's root, in its style: each themed colour as light-dark() (read by the window,
+ * code's highlighting, diffs and the terminal, which watches the root's style). At once, with no reload.
  */
 export function useThemeStyle() {
-  const { light, dark, accent } = useChosenThemes()
+  const { light, dark } = useChosenThemes()
   const style = themeStyle(light, dark)
   const key = JSON.stringify(style)
   useEffect(() => {
@@ -80,11 +71,6 @@ export function useThemeStyle() {
     for (const property of THEMED_PROPERTIES) if (!(property in style)) root.removeProperty(property)
     for (const [property, value] of Object.entries(style)) root.setProperty(property, value)
   }, [key])
-  useEffect(() => {
-    const root = document.documentElement.style
-    if (accent) root.setProperty('--superego-accent-base', accent)
-    else root.removeProperty('--superego-accent-base')
-  }, [accent])
 }
 
 /** A theme in a few colours on its terminal's background, drawn as its appearance whatever the window's. */

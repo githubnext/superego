@@ -76,7 +76,7 @@
 @media (hover: hover) { .blocks-option:hover .blocks-option__go { opacity: 1; } }
 .blocks-preview { padding: var(--superego-space-3); border-radius: var(--superego-radius); background: var(--superego-surface); }
 
-.blocks-open__link { all: unset; display: inline-flex; align-items: center; gap: 4px; color: var(--superego-accent); cursor: pointer; font-weight: 500; }
+.blocks-open__link { all: unset; display: inline-flex; align-items: center; gap: 4px; color: var(--superego-link); cursor: pointer; font-weight: 500; }
 .blocks-open__link:hover { text-decoration: underline; }
 .blocks-open__link:focus-visible { outline: 2px solid var(--superego-ring); border-radius: 3px; }
 

@@ -1,129 +1,90 @@
-// The window's own colours from a theme's: its ground and its text (`ui.bg`/`ui.fg`, else the terminal's), and the
-// workbench colours it has (`ui`). Every surface is a step from the ground toward the text, every line a bigger one,
-// secondary text most of the way: the same few rules for every theme, Superego's own steps measured from styles.css.
-// A step that wouldn't stand out enough from the ground on a low-contrast theme is taken further, until it does.
-// A theme with no ground (Superego's own, one with only code colours) colours nothing here: styles.css's stay.
+// The window's own colours from a theme's: its workbench colours (`ui`) where it has them, as it has them, and the rest
+// derived from its ground and text (`ui.bg`/`ui.fg`, else the terminal's; Superego's text on a ground given alone) by a few fixed steps: each surface a step
+// from the ground toward the text, each line a bigger one, secondary text most of the way (Superego's own steps,
+// measured from styles.css). The theme's contrast is kept as it is: one that's low stays low.
+// A theme with no ground (Superego's own, one with only code colours) colours nothing here but its accent, if it has one.
 import type { ColourToken } from '../tokens.ts'
-import type { Color, Theme } from './format.ts'
+import type { Color, Theme, UiRole } from './format.ts'
+import { isLight } from './import.ts'
+import { DEFAULTS } from './superego.ts'
 
-type Rgba = [r: number, g: number, b: number, a: number]
+type Ground = { theme: Theme; bg: Color; fg: Color; dark: boolean }
 
-/** A #rgb(a) or #rrggbb(aa) colour's channels, 0–1; undefined for anything else (a colour function). */
-export function parseHex(colour: string | undefined): Rgba | undefined {
-  const hex = colour?.trim().match(/^#([0-9a-f]{3,8})$/i)?.[1]
-  if (!hex || ![3, 4, 6, 8].includes(hex.length)) return undefined
-  const full = hex.length <= 4 ? [...hex].map((c) => c + c).join('') : hex
-  const at = (i: number) => parseInt(full.slice(i * 2, i * 2 + 2), 16) / 255
-  return [at(0), at(1), at(2), full.length === 8 ? at(3) : 1]
-}
+/** `percent` of the text on the ground. */
+const step = ({ bg, fg }: Ground, percent: number) => percent === 0 ? bg : `color-mix(in srgb, ${fg} ${percent}%, ${bg})`
+/** `percent` of the text over whatever it's on. */
+const tint = ({ fg }: Ground, percent: number) => `color-mix(in srgb, ${fg} ${percent}%, transparent)`
+/** The theme's own colour for `role`, else `otherwise`. */
+const own = (role: UiRole, otherwise: (g: Ground) => string) => (g: Ground) => g.theme.ui?.[role] ?? otherwise(g)
+/** In light and in dark. */
+const by = (light: (g: Ground) => string, dark: (g: Ground) => string) => (g: Ground) => (g.dark ? dark : light)(g)
 
-/** `a` mixed with `b`, `p` (0–1) of `a`, in sRGB as CSS's color-mix(in srgb, …) mixes them (both taken opaque). */
-const mix = (a: Rgba, b: Rgba, p: number): Rgba => [0, 1, 2].map((i) => a[i]! * p + b[i]! * (1 - p)).concat(1) as Rgba
+const chrome = own('sidebar', by((g) => step(g, 6), (g) => step(g, 5)))
+const link = (g: Ground) => g.theme.ui?.link ?? g.theme.terminal?.blue ?? accentOf(g.theme) ?? 'var(--superego-accent)'
+const raised = own('raised', by((g) => g.bg, (g) => step(g, 8)))
 
-/** `top` drawn over `base`: what a translucent colour looks like on it. */
-const over = (top: Rgba, base: Rgba): Rgba => mix(top, base, top[3])
-
-const luminance = ([r, g, b]: Rgba) => {
-  const lin = (c: number) => c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4
-  return 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b)
-}
-
-/** WCAG's contrast ratio between two opaque colours, 1–21. */
-export function contrast(a: Rgba, b: Rgba): number {
-  const [x, y] = [luminance(a), luminance(b)].sort((m, n) => n - m) as [number, number]
-  return (x + 0.05) / (y + 0.05)
-}
-
-/**
- * A step from the ground toward the text: `percent` of the text, or more (up to `most`, else all of it) until it has
- * `least` contrast with the ground. The colour as CSS: color-mix(), so a ground or text the math can't read still
- * works, at `percent`.
- */
-type Step = { percent: number; least?: number; most?: number }
-
-/** How far each token steps from the ground to the text, in light and in dark: Superego's own, measured. */
-const STEPS: Partial<Record<ColourToken, [light: Step, dark: Step]>> = {
-  // The window's side, the rail beside it and its tabs.
-  '--superego-chrome': [{ percent: 6, least: 1.08 }, { percent: 5, least: 1.08 }],
-  '--superego-sidebar-bg': [{ percent: 6, least: 1.08 }, { percent: 5, least: 1.08 }],
-  '--superego-rail-bg': [{ percent: 9, least: 1.1 }, { percent: 2 }],
-  '--superego-rail-tab': [{ percent: 11, least: 1.13 }, { percent: 0 }],
-  // Wells (code, output), a pane's tab, what floats, the composer.
-  '--superego-surface': [{ percent: 5, least: 1.07 }, { percent: 5, least: 1.08 }],
-  '--superego-pane-tab': [{ percent: 3 }, { percent: 3 }],
-  '--superego-raised': [{ percent: 0 }, { percent: 8, least: 1.12 }],
-  '--superego-composer': [{ percent: 0 }, { percent: 4 }],
+/** Each token the palette sets, and how. */
+const RULES: Partial<Record<ColourToken, (g: Ground) => string>> = {
+  '--superego-bg': (g) => g.bg,
+  '--superego-text': (g) => g.fg,
+  '--superego-muted': own('muted', (g) => step(g, 62)),
+  // Meta and placeholders: the theme's comments.
+  '--superego-faint': (g) => g.theme.syntax?.comment ?? step(g, g.dark ? 38 : 40),
+  // The window's side, and the rail a shade under it.
+  '--superego-chrome': chrome,
+  '--superego-sidebar-bg': chrome,
+  '--superego-rail-bg': (g) => `color-mix(in srgb, #000 ${g.dark ? 13 : 3}%, ${chrome(g)})`,
+  '--superego-rail-tab': (g) => `color-mix(in srgb, #000 ${g.dark ? 26 : 5}%, ${chrome(g)})`,
+  // Wells, a pane's tab, what floats, fields and the composer.
+  '--superego-surface': own('surface', (g) => step(g, 5)),
+  '--superego-pane-tab': (g) => step(g, 3),
+  '--superego-raised': raised,
+  '--superego-composer': own('field', by((g) => g.bg, (g) => step(g, 4))),
+  '--superego-field-bg': own('field', by((g) => g.bg, (g) => step(g, 6))),
   // Lines and frames.
-  '--superego-line': [{ percent: 14, least: 1.3 }, { percent: 14, least: 1.35 }],
-  '--superego-border': [{ percent: 21, least: 1.5 }, { percent: 20, least: 1.7 }],
-  // Controls and fields.
-  '--superego-control': [{ percent: 0 }, { percent: 30 }],
-  '--superego-control-active': [{ percent: 13 }, { percent: 41 }],
-  '--superego-field-bg': [{ percent: 0 }, { percent: 6 }],
-  '--superego-field-edge': [{ percent: 30, least: 1.9 }, { percent: 28, least: 2.1 }],
-  '--superego-track': [{ percent: 18, least: 1.35 }, { percent: 22, least: 1.6 }],
-  // Text below the text: secondary words readable (4.5:1, WCAG AA), meta and placeholders at least Superego's own.
-  // On a theme whose text itself is barely that (Solarized), secondary words stay a step under the text, below AA.
-  '--superego-muted': [{ percent: 62, least: 4.5, most: 85 }, { percent: 62, least: 4.5, most: 85 }],
-  '--superego-faint': [{ percent: 40, least: 2.5 }, { percent: 38, least: 2.5 }],
+  '--superego-line': own('border', (g) => step(g, 14)),
+  '--superego-border': own('border', (g) => step(g, 20)),
+  '--superego-field-edge': by((g) => step(g, 30), (g) => step(g, 28)),
+  '--superego-track': by((g) => step(g, 18), (g) => step(g, 22)),
+  // Controls.
+  '--superego-control': by((g) => g.bg, (g) => step(g, 30)),
+  '--superego-control-active': by((g) => step(g, 13), (g) => step(g, 41)),
+  // Rows and quiet fills.
+  '--superego-selected': own('selected', (g) => tint(g, 8)),
+  '--superego-hover': own('hover', (g) => tint(g, 5)),
+  '--superego-fill': (g) => tint(g, 6),
+  '--superego-code-chip': (g) => tint(g, 7),
+  // Links, and your messages tinted by them.
+  '--superego-link': link,
+  '--superego-bubble': (g) => `color-mix(in oklab, ${link(g)} ${g.dark ? 14 : 9}%, ${g.dark ? raised(g) : g.bg})`,
 }
 
-/** Tints of the text over whatever they're on: rows hovered and selected, quiet fills, inline code. */
-const TINTS: Partial<Record<ColourToken, number>> = {
-  '--superego-selected': 8,
-  '--superego-hover': 5,
-  '--superego-fill': 6,
-  '--superego-code-chip': 7,
+/** Every token `uiPalette` may set, the accent's too. */
+export const PALETTE_TOKENS: readonly ColourToken[] = [...Object.keys(RULES) as ColourToken[], '--superego-accent-base', '--superego-accent-text']
+
+/** A theme's accent: its own, else (with a ground of its own) its blue. */
+function accentOf(theme: Theme): Color | undefined {
+  if (theme.accent) return theme.accent
+  if (!(theme.ui?.bg ?? theme.terminal?.bg)) return undefined
+  return theme.terminal?.blue ?? theme.syntax?.function
 }
 
-/** Which of a theme's workbench colours (`ui`) stands for a token, kept where it reads well enough on the ground. */
-const GIVEN: Partial<Record<ColourToken, { role: keyof NonNullable<Theme['ui']>; least?: number }>> = {
-  '--superego-muted': { role: 'muted', least: 4.5 },
-  '--superego-chrome': { role: 'sidebar' },
-  '--superego-sidebar-bg': { role: 'sidebar' },
-  '--superego-raised': { role: 'raised' },
-  '--superego-border': { role: 'border', least: 1.5 },
-}
-
-/** Every token `uiPalette` may set. */
-export const PALETTE_TOKENS: readonly ColourToken[] = [
-  '--superego-bg', '--superego-text', ...Object.keys(STEPS), ...Object.keys(TINTS), '--superego-bubble',
-] as ColourToken[]
-
-/** A theme's ground and text: its own (`ui`), else its terminal's. */
-const groundOf = (theme: Theme): { bg?: Color; fg?: Color } => ({ bg: theme.ui?.bg ?? theme.terminal?.bg, fg: theme.ui?.fg ?? theme.terminal?.fg })
-
-/**
- * The window's colours for `theme`, by token; none for a theme without a ground and text of its own (its window keeps
- * Superego's).
- */
-export function uiPalette(theme: Theme): Partial<Record<ColourToken, string>> | undefined {
-  const { bg, fg } = groundOf(theme)
-  if (!bg || !fg) return undefined
+/** The window's colours for `theme`, by token: none for a theme with no ground or accent of its own. */
+export function uiPalette(theme: Theme): Partial<Record<ColourToken, string>> {
+  const palette: Partial<Record<ColourToken, string>> = {}
   const dark = theme.appearance === 'dark'
-  const [ground, text] = [parseHex(bg), parseHex(fg)]
-  // A translucent ground or text is taken as it shows: over the opposite of the appearance's own.
-  const base: Rgba = dark ? [0, 0, 0, 1] : [1, 1, 1, 1]
-  const g = ground && over(ground, base)
-  const t = text && g && over(text, g)
-  const palette: Partial<Record<ColourToken, string>> = { '--superego-bg': bg, '--superego-text': fg }
-
-  const step = ({ percent, least, most = 100 }: Step) => {
-    let p = percent
-    if (g && t && least) while (p < most && contrast(mix(t, g, p / 100), g) < least) p++
-    return p === 0 ? bg : p === 100 ? fg : `color-mix(in srgb, ${fg} ${p}%, ${bg})`
+  const bg = theme.ui?.bg ?? theme.terminal?.bg
+  // A ground with no text given (a terminal theme with a background alone): Superego's text on it.
+  const fg = theme.ui?.fg ?? theme.terminal?.fg ?? DEFAULTS['--superego-text']![dark ? 1 : 0]
+  if (bg) {
+    const ground: Ground = { theme, bg, fg, dark }
+    for (const [token, rule] of Object.entries(RULES) as [ColourToken, (g: Ground) => string][]) palette[token] = rule(ground)
   }
-  for (const [token, [light, darkStep]] of Object.entries(STEPS) as [ColourToken, [Step, Step]][]) {
-    const given = GIVEN[token]
-    const colour = given && theme.ui?.[given.role]
-    const parsed = parseHex(colour)
-    const readable = !given?.least || !parsed || !g || contrast(over(parsed, g), g) >= given.least
-    palette[token] = colour && readable ? colour : step(dark ? darkStep : light)
+  const accent = accentOf(theme)
+  if (accent) {
+    palette['--superego-accent-base'] = accent
+    // Text on it: the theme's, else white, or on a light accent, the theme's dark (its ground in the dark, its text in the light).
+    palette['--superego-accent-text'] = theme.ui?.['accent-text'] ?? (isLight(accent) ? (dark && bg ? bg : fg) : '#ffffff')
   }
-  for (const [token, percent] of Object.entries(TINTS) as [ColourToken, number][]) {
-    palette[token] = `color-mix(in srgb, ${fg} ${percent}%, transparent)`
-  }
-  // Your messages: the accent, a touch, on the window's side.
-  palette['--superego-bubble'] = `color-mix(in oklab, var(--superego-accent) ${dark ? 14 : 9}%, ${dark ? palette['--superego-raised'] : bg})`
   return palette
 }

@@ -47,6 +47,12 @@ const UI_KEYS: Record<UiRole, string[]> = {
   sidebar: ['sideBar.background'],
   raised: ['editorWidget.background', 'menu.background', 'dropdown.background'],
   border: ['panel.border', 'editorGroup.border', 'sideBar.border'],
+  surface: ['textCodeBlock.background'],
+  field: ['input.background'],
+  selected: ['list.inactiveSelectionBackground', 'list.activeSelectionBackground'],
+  hover: ['list.hoverBackground'],
+  link: ['textLink.foreground'],
+  'accent-text': ['button.foreground'],
 }
 
 /** The 16 ANSI colours' roles, by number. */
@@ -129,7 +135,12 @@ export function fromVsCode(json: unknown, fallbackName: string): ImportedTheme {
   const type = theme.type
   const appearance: Appearance = type === 'light' || type === 'hcLight' ? 'light' : type === 'dark' || type === 'hc' ? 'dark' : appearanceOf(terminal.bg)
   const name = typeof theme.name === 'string' && theme.name.trim() ? theme.name.trim() : fallbackName
-  return { name, appearance, ...(Object.keys(syntax).length ? { syntax } : {}), ...(Object.keys(terminal).length ? { terminal } : {}), ...(Object.keys(ui).length ? { ui } : {}) }
+  // The accent: its primary buttons'.
+  const accent = [colors['button.background']].find(isColor)
+  return {
+    name, appearance, ...(Object.keys(syntax).length ? { syntax } : {}), ...(Object.keys(terminal).length ? { terminal } : {}),
+    ...(Object.keys(ui).length ? { ui } : {}), ...(accent ? { accent } : {}),
+  }
 }
 
 /** A Ghostty theme (`palette = 0=#1d1f21`, `background = 1d1f21`, `foreground = "#c5c8c6"`, …) as ours: the terminal's colours. */

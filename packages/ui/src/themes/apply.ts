@@ -1,5 +1,5 @@
-// A light theme and a dark one, as the window's root takes them (the window's own colours too, from each one's ground and
-// text: palette.ts): each role the two give as light-dark(<light>, <dark>),
+// A light theme and a dark one, as the window's root takes them (the window's own colours and its accent too:
+// palette.ts): each role the two give as light-dark(<light>, <dark>),
 // the side a theme leaves out from the default (superego.ts). Diffs take their colours from the syntax roles `inserted`
 // and `deleted`. Roles neither theme gives aren't set, so styles.css's own stay.
 import type { ColourToken } from '../tokens.ts'
@@ -18,7 +18,9 @@ const deleted: Source = (theme) => theme.syntax?.deleted
 /** Every token a theme colours, and where in a theme its colour comes from. */
 const SOURCES: [ColourToken, Source][] = [
   ...SYNTAX_ROLES.map((role): [ColourToken, Source] => [`--superego-syntax-${role}`, (theme) => theme.syntax?.[role]]),
-  ...TERMINAL_ROLES.map((role): [ColourToken, Source] => [`--superego-terminal-${role}`, (theme) => theme.terminal?.[role]]),
+  // The terminal's ground and text are the window's (styles.css), the theme's own going to the window's (palette.ts).
+  ...TERMINAL_ROLES.filter((role) => role !== 'bg' && role !== 'fg')
+    .map((role): [ColourToken, Source] => [`--superego-terminal-${role}`, (theme) => theme.terminal?.[role]]),
   ['--superego-diff-added', inserted],
   ['--superego-diff-added-text', inserted],
   ['--superego-diff-added-bg', mix(12, inserted)],
@@ -30,7 +32,7 @@ const SOURCES: [ColourToken, Source][] = [
   ['--superego-diff-edit-removed-bg', mix(12, deleted)],
   ['--superego-diff-fence-removed-bg', mix(12, deleted)],
   // The window's own: derived from the theme's ground and text (palette.ts).
-  ...PALETTE_TOKENS.map((token): [ColourToken, Source] => [token, (theme) => uiPalette(theme)?.[token]]),
+  ...PALETTE_TOKENS.map((token): [ColourToken, Source] => [token, (theme) => uiPalette(theme)[token]]),
 ]
 
 /** Every custom property `themeStyle` may set: what to clear before setting a new pair's. */
@@ -46,12 +48,6 @@ export function themeStyle(light: Theme, dark: Theme): Record<string, string> {
     style[token] = `light-dark(${lightValue ?? lightDefault}, ${darkValue ?? darkDefault})`
   }
   return style
-}
-
-/** The accent the two themes give, light and dark (`fallback` for one that gives none); none when neither does. */
-export function themeAccent(light: Theme, dark: Theme, fallback: string): string | undefined {
-  if (!light.accent && !dark.accent) return undefined
-  return `light-dark(${light.accent ?? fallback}, ${dark.accent ?? fallback})`
 }
 
 /** A role's colour in `theme`, its default's where it gives none: for a preview drawn with its own colour-scheme. */
