@@ -3,8 +3,8 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import {
-  BUILTIN_THEMES, DEFAULTS, PALETTE_TOKENS, uiPalette, SYNTAX_ROLES, TERMINAL_ROLES, checkTheme, fromGhostty, fromITerm, fromVsCode, importTheme, parseJsonc, superegoTheme,
-  themeProblems, themeStyle, type Theme,
+  BUILTIN_THEMES, DEFAULTS, PALETTE_TOKENS, contrast, parseHex, uiPalette, SYNTAX_ROLES, TERMINAL_ROLES, checkTheme, fromGhostty, fromITerm, fromVsCode, importTheme, parseJsonc, superegoTheme,
+  themeAccent, themeProblems, themeStyle, type Theme,
 } from '../src/themes/index.ts'
 import { colourTokens } from '../src/tokens.ts'
 
@@ -86,7 +86,8 @@ describe('applying a light and a dark theme', () => {
   it('sets each role either gives as light-dark(), the other side the default, and leaves the rest', () => {
     const style = themeStyle(light, dark)
     expect(style['--superego-syntax-keyword']).toBe('light-dark(#aa0000, #ff5555)')
-    expect(style['--superego-terminal-bg']).toBeUndefined() // the terminal's ground is the window's
+    expect(style['--superego-terminal-bg']).toBe('light-dark(#fafafa, var(--superego-bg))')
+    expect(style['--superego-bg']).toBeUndefined() // the window keeps its own, unless it matches the themes
     expect(style['--superego-syntax-inserted']).toBe('light-dark(#00aa00, #a5d68a)')
     expect(style['--superego-syntax-string']).toBeUndefined()
     expect(style['--superego-terminal-red']).toBeUndefined()
@@ -99,46 +100,51 @@ describe('applying a light and a dark theme', () => {
     expect(style['--superego-diff-removed']).toBeUndefined()
   })
 
-  it('sets nothing for Superego’s own, and an accent only where a theme gives one or has a ground of its own', () => {
+  it('sets nothing for Superego’s own, and an accent only where a theme gives one', () => {
     expect(themeStyle(superegoTheme('light'), superegoTheme('dark'))).toEqual({})
-    const style = themeStyle(light, dark)
-    expect(style['--superego-accent-base']).toBe('light-dark(#0000aa, color(display-p3 0.155 0.319 0.654))')
-    expect(style['--superego-accent-text']).toBe('light-dark(#ffffff, #ffffff)')
-    expect(themeStyle(dark, dark)['--superego-accent-base']).toBeUndefined()
+    expect(themeStyle(superegoTheme('light'), superegoTheme('dark'), true)).toEqual({})
+    expect(themeAccent(light, dark, '#007aff')).toEqual({ accent: 'light-dark(#0000aa, #007aff)', text: 'light-dark(#ffffff, #ffffff)' })
+    expect(themeAccent(dark, dark, '#007aff')).toBeUndefined()
   })
 })
 
-describe('the window’s colours from a theme', () => {
+describe('the window matching the theme', () => {
   const night: Theme = { id: 'night', name: 'Night', appearance: 'dark', terminal: { bg: '#101018', fg: '#d0d0e0', blue: '#88aaff' } }
 
-  it('come from its ground and text, a step toward the text for each surface and line', () => {
-    const palette = uiPalette(night)
+  it('takes its ground and text, a step toward the text for each surface and line, and the terminal on it', () => {
+    const palette = uiPalette(night)!
     expect(palette['--superego-bg']).toBe('#101018')
     expect(palette['--superego-text']).toBe('#d0d0e0')
     expect(palette['--superego-chrome']).toBe('color-mix(in srgb, #d0d0e0 5%, #101018)')
     expect(palette['--superego-hover']).toBe('color-mix(in srgb, #d0d0e0 5%, transparent)')
-    expect(uiPalette(superegoTheme('dark'))).toEqual({})
-    expect(uiPalette({ ...night, terminal: { bg: '#101018' } })['--superego-text']).toBe('rgb(255 255 255 / .88)')
-  })
-
-  it('takes a theme’s own workbench colours as they are', () => {
-    const palette = uiPalette({ ...night, ui: { sidebar: '#0a0a10', muted: '#202028', link: '#ffcc00' }, syntax: { comment: '#505060' } })
-    expect(palette['--superego-chrome']).toBe('#0a0a10')
-    expect(palette['--superego-rail-bg']).toBe('color-mix(in srgb, #000 13%, #0a0a10)')
-    expect(palette['--superego-muted']).toBe('#202028')
-    expect(palette['--superego-faint']).toBe('#505060')
-    expect(palette['--superego-link']).toBe('#ffcc00')
-  })
-
-  it('takes the theme’s blue for the accent where it has none, text on it dark where it’s light', () => {
-    const palette = uiPalette(night)
-    expect(palette['--superego-accent-base']).toBe('#88aaff')
-    expect(palette['--superego-accent-text']).toBe('#101018')
     expect(palette['--superego-link']).toBe('#88aaff')
+    expect(uiPalette(superegoTheme('dark'))).toBeUndefined()
+    expect(uiPalette({ ...night, terminal: { bg: '#101018' } })!['--superego-text']).toBe('rgb(255 255 255 / .88)')
+    const style = themeStyle(superegoTheme('light'), night, true)
+    expect(style['--superego-bg']).toBe('light-dark(#ffffff, #101018)')
+    expect(style['--superego-terminal-bg']).toBeUndefined()
   })
 
-  it('pairs with Superego’s own on the other side', () => {
-    expect(themeStyle(superegoTheme('light'), night)['--superego-bg']).toBe('light-dark(#ffffff, #101018)')
+  it('keeps secondary text readable, lines visible and links legible on every built-in', () => {
+    for (const theme of BUILTIN_THEMES) {
+      const palette = uiPalette(theme)!
+      const bg = parseHex(palette['--superego-bg'])!
+      const at = (token: keyof typeof palette) => {
+        const value = palette[token]!
+        const [, a, p, b] = value.match(/color-mix\(in srgb, (#\w+) (\d+)%, (#\w+)\)/) ?? [value, value, '100', value]
+        const [x, y] = [parseHex(a)!, parseHex(b)!]
+        return contrast([0, 1, 2].map((i) => x[i]! * Number(p) / 100 + y[i]! * (1 - Number(p) / 100)).concat(1) as never, bg)
+      }
+      // AA, but on a theme whose text is barely that itself, where it stays a step under the text.
+      expect(at('--superego-muted'), theme.id).toBeGreaterThanOrEqual(3)
+      expect(at('--superego-border'), theme.id).toBeGreaterThanOrEqual(1.5)
+      expect(at('--superego-link'), theme.id).toBeGreaterThanOrEqual(4) // as far as the theme's text goes
+    }
+  })
+
+  it('takes the theme’s blue for its accent where it has none, text on it whichever reads', () => {
+    expect(themeAccent(night, night, '#007aff')).toBeUndefined()
+    expect(themeAccent(night, night, '#007aff', true)).toEqual({ accent: 'light-dark(#88aaff, #88aaff)', text: 'light-dark(#101018, #101018)' })
   })
 })
 

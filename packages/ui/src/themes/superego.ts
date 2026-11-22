@@ -41,8 +41,6 @@ export const DEFAULTS: Partial<Record<ColourToken, Pair>> = {
   '--superego-code-chip': ['rgb(0 0 0 / .055)', 'rgb(255 255 255 / .08)'],
   '--superego-bubble': ['color-mix(in oklab, var(--superego-link) 9%, #fff)', 'color-mix(in oklab, var(--superego-link) 14%, #2a2a2e)'],
   '--superego-link': same('var(--superego-accent)'),
-  '--superego-accent-base': same('color(display-p3 0.155 0.319 0.654)'),
-  '--superego-accent-text': same('#ffffff'),
 
   '--superego-syntax-keyword': ['#a626a4', '#c792ea'],
   '--superego-syntax-string': ['#50a14f', '#a5d68a'],

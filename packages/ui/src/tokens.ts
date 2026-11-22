@@ -22,7 +22,7 @@ export const colourTokens = {
     '--superego-text': 'Text.',
     '--superego-muted': 'Secondary text.',
     '--superego-faint': 'Tertiary text: meta, placeholders.',
-    '--superego-accent-base': "The accent as the theme gives it.",
+    '--superego-accent-base': 'The accent as chosen (Settings → Appearance), or the theme\'s.',
     '--superego-accent': 'The accent as drawn, lifted in the dark.',
     '--superego-accent-text': 'Text on the accent.',
     '--superego-link': 'Links, and what opens a file or a thread.',

@@ -14,6 +14,9 @@ export const KEYMAP = 'app.keys'
 export const INTERFACE_FONT = 'app.font.interface'
 export const TEXT_SIZE = 'app.font.size'
 export const MONO_FONT = 'app.font.mono'
+export const ACCENT = 'app.accent'
+/** The accent as it comes: left at this, a theme's own accent shows instead, if it has one. */
+export const DEFAULT_ACCENT = 'color(display-p3 0.155 0.319 0.654)'
 /** Where the window's views go, as the user changed it; see shared/layout.ts. */
 export const LAYOUT = 'app.layout'
 /**
@@ -69,6 +72,10 @@ export function registerAppSettings(settings: SettingsRegistry, { desktop, theme
         type: { type: 'font', monospace: true, nullLabel: 'System monospace' },
       },
       ...THEME_SETTINGS,
+      {
+        key: ACCENT, title: 'Accent colour', default: DEFAULT_ACCENT,
+        description: 'Focus rings, primary buttons, links and selection. Any CSS colour.', type: { type: 'color' },
+      },
       PANE_LAYOUT_SETTING,
       {
         key: PANE_KEEP_THREAD, title: 'Keep thread in view', default: true,

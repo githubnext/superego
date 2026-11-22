@@ -27,8 +27,8 @@
   --superego-text: light-dark(rgb(0 0 0 / .85), rgb(255 255 255 / .88));
   --superego-muted: light-dark(rgb(0 0 0 / .55), rgb(255 255 255 / .56));
   --superego-faint: light-dark(rgb(0 0 0 / .36), rgb(255 255 255 / .36));
-  /* The accent: the theme's, or this blue. In the dark, lifted a little toward white so it carries on dark grounds. */
-  --superego-accent-base: color(display-p3 0.155 0.319 0.654);
+  /* The accent: as chosen, or this blue. In the dark, lifted a little toward white so it carries on dark grounds. */
+  --superego-accent-base: #007aff;
   --superego-accent: light-dark(var(--superego-accent-base), color-mix(in oklab, var(--superego-accent-base) 92%, white));
   /* Focus rings: around the control that has the keyboard. */
   --superego-ring: var(--superego-accent);

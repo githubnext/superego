@@ -1,5 +1,5 @@
-// Themes for code and the terminal, as the app keeps them: which one is chosen for light and which for dark (app
-// settings, Settings → Appearance), and the themes imported into it. The desktop keeps those as files in
+// Themes, as the app keeps them: which one is chosen for light and which for dark, and whether the window matches them
+// (app settings, Settings → Appearance), and the themes imported into it. The desktop keeps those as files in
 // <dataDir>/themes/<id>.json (main/theme-files.ts), a browser in its own storage; both answer the same two actions,
 // and list them as the Appearance section's data, so the window hears of a change as it hears of settings.
 import { BUILTIN_THEMES, DEFAULT_THEME, checkTheme, type ImportedTheme, type Theme } from '@superego/ui/themes'
@@ -8,10 +8,16 @@ import type { SettingSpec, SettingsRegistry } from '@superego/settings'
 
 export const THEME_LIGHT = 'app.theme.light'
 export const THEME_DARK = 'app.theme.dark'
+/** Whether the window takes its colours from the chosen themes too, not only code, diffs and the terminal. */
+export const THEME_WINDOW = 'app.theme.window'
 
 export const THEME_SETTINGS: SettingSpec[] = [
   { key: THEME_LIGHT, title: 'Light theme', default: DEFAULT_THEME, type: { type: 'theme', appearance: 'light' } },
   { key: THEME_DARK, title: 'Dark theme', default: DEFAULT_THEME, type: { type: 'theme', appearance: 'dark' } },
+  {
+    key: THEME_WINDOW, title: 'Match window to theme', default: false, type: { type: 'boolean' },
+    description: 'Backgrounds, text, links and the accent in the theme’s colours.',
+  },
 ]
 
 /** A theme file that doesn't read: which, and why. */

@@ -3,8 +3,8 @@
 // Settings in the window drawn whole (superego/testing's mountUi) over a real daemon: the app's settings on three tabs
 // (General, Appearance, Hotkeys; an extension's under General unless it names another), a link into a machine's
 // Providers landing on its tab, a shortcut recorded for an action (the old one stops, the new one runs it, a clash
-// shows, Reset all), the fonts applied, and a provider signed in with an API key (a wrong one refused, as it's tried
-// first) and out again.
+// shows, Reset all), the accent colour and fonts applied, and a provider signed in with an API key (a wrong one refused,
+// as it's tried first) and out again.
 import { createServer } from 'node:http'
 import { afterEach, beforeEach, expect, it } from 'vitest'
 import { defineUiExtension } from '../src/renderer/sdk-ui.ts'
@@ -100,8 +100,15 @@ it('records a shortcut for an action: a bare key refused, the old one off, the n
   await ui.until(() => !$('.keymap__clash') && Boolean(keys('app.sidebar')?.textContent?.includes('/')), 'reset to the actions’ own')
 })
 
-it('applies the fonts', async () => {
+it('applies the accent colour and the fonts, and resets the accent', async () => {
   await go('Appearance')
+  const accent = () => $('[data-key="app.accent"] .color-field input:not([type=color])') as HTMLInputElement
+  await ui.until(() => accent()?.value === 'color(display-p3 0.155 0.319 0.654)', 'the accent shown')
+  await ui.type('[data-key="app.accent"] .color-field input:not([type=color])', 'oklch(0.6 0.2 30)')
+  accent().dispatchEvent(new FocusEvent('focusout', { bubbles: true }))
+  await ui.until(() => css('--superego-accent-base') === 'oklch(0.6 0.2 30)', 'the accent applied')
+  $$('[data-key="app.accent"] button').find((b) => b.textContent === 'Reset')!.click()
+  await ui.until(() => css('--superego-accent-base').startsWith('color(display-p3'), 'the accent reset')
   await ui.dispatch('app.settings.set', { key: 'app.font.mono', value: 'Menlo' })
   await ui.until(() => css('--superego-mono').includes('Menlo'), 'the mono font applied')
 })

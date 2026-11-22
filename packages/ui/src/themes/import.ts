@@ -43,14 +43,6 @@ const TERMINAL_KEYS: Record<TerminalRole, string[]> = {
 const UI_KEYS: Record<UiRole, string[]> = {
   bg: ['editor.background'],
   fg: ['editor.foreground', 'foreground'],
-  muted: ['descriptionForeground'],
-  sidebar: ['sideBar.background'],
-  raised: ['editorWidget.background', 'menu.background', 'dropdown.background'],
-  border: ['panel.border', 'editorGroup.border', 'sideBar.border'],
-  surface: ['textCodeBlock.background'],
-  field: ['input.background'],
-  selected: ['list.inactiveSelectionBackground', 'list.activeSelectionBackground'],
-  hover: ['list.hoverBackground'],
   link: ['textLink.foreground'],
   'accent-text': ['button.foreground'],
 }
