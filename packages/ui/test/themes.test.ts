@@ -3,7 +3,7 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import {
-  BUILTIN_THEMES, DEFAULTS, SYNTAX_ROLES, TERMINAL_ROLES, checkTheme, fromGhostty, fromITerm, fromVsCode, importTheme, parseJsonc, superegoTheme,
+  BUILTIN_THEMES, DEFAULTS, PALETTE_TOKENS, contrast, parseHex, uiPalette, SYNTAX_ROLES, TERMINAL_ROLES, checkTheme, fromGhostty, fromITerm, fromVsCode, importTheme, parseJsonc, superegoTheme,
   themeAccent, themeProblems, themeStyle, type Theme,
 } from '../src/themes/index.ts'
 import { colourTokens } from '../src/tokens.ts'
@@ -33,7 +33,7 @@ describe('the format', () => {
 
   it('says everything wrong with one, by where it is', () => {
     expect(themeProblems({ id: 'Bad Id', appearance: 'dim', syntax: { keywrd: '#fff', string: 'red' }, terminal: [], accent: 'var(--x)', extra: 1 })).toEqual([
-      'extra: not part of a theme (id, name, appearance, syntax, terminal, accent)',
+      'extra: not part of a theme (id, name, appearance, syntax, terminal, ui, accent)',
       'id: "Bad Id" isn\'t lowercase letters, digits and dashes (dots between an extension\'s name and the rest)',
       'name: missing',
       'appearance: "dim" is neither "light" nor "dark"',
@@ -56,8 +56,8 @@ describe('Superego’s defaults', () => {
   const root = css.match(/:root\s*\{([^}]*)\}/)![1]!
   const declared = new Map([...root.matchAll(/(--superego-[\w-]+)\s*:\s*([^;]+);/g)].map(([, name, value]) => [name!, value!.trim()]))
 
-  it('are styles.css’s, light and dark, for every syntax, terminal and diff token', () => {
-    const themed = [...Object.keys(colourTokens.syntax), ...Object.keys(colourTokens.terminal), ...Object.keys(colourTokens.diff)]
+  it('are styles.css’s, light and dark, for every syntax, terminal and diff token, and the window’s a theme derives', () => {
+    const themed = [...PALETTE_TOKENS, ...Object.keys(colourTokens.syntax), ...Object.keys(colourTokens.terminal), ...Object.keys(colourTokens.diff)]
     expect(Object.keys(DEFAULTS).sort()).toEqual(themed.sort())
     for (const token of themed) expect([token, DEFAULTS[token as keyof typeof DEFAULTS]]).toEqual([token, sides(declared.get(token)!)])
   })
@@ -103,6 +103,46 @@ describe('applying a light and a dark theme', () => {
     expect(themeStyle(superegoTheme('light'), superegoTheme('dark'))).toEqual({})
     expect(themeAccent(light, dark, '#007aff')).toBe('light-dark(#0000aa, #007aff)')
     expect(themeAccent(dark, dark, '#007aff')).toBeUndefined()
+  })
+})
+
+describe('the window’s colours from a theme', () => {
+  const night: Theme = { id: 'night', name: 'Night', appearance: 'dark', terminal: { bg: '#101018', fg: '#d0d0e0' } }
+
+  it('come from its ground and text, a step toward the text for each surface and line', () => {
+    const palette = uiPalette(night)!
+    expect(palette['--superego-bg']).toBe('#101018')
+    expect(palette['--superego-text']).toBe('#d0d0e0')
+    expect(palette['--superego-chrome']).toBe('color-mix(in srgb, #d0d0e0 5%, #101018)')
+    expect(palette['--superego-hover']).toBe('color-mix(in srgb, #d0d0e0 5%, transparent)')
+    expect(uiPalette(superegoTheme('dark'))).toBeUndefined()
+    expect(uiPalette({ ...night, terminal: { bg: '#101018' } })).toBeUndefined()
+  })
+
+  it('keeps secondary text readable and lines visible on every built-in', () => {
+    for (const theme of BUILTIN_THEMES) {
+      const palette = uiPalette(theme)!
+      const bg = parseHex(palette['--superego-bg'])!
+      const at = (token: keyof typeof palette) => {
+        const value = palette[token]!
+        const [, fg, p] = value.match(/color-mix\(in srgb, (#\w+) (\d+)%, #\w+\)/) ?? [value, value, '100']
+        const text = parseHex(fg)!
+        return contrast([0, 1, 2].map((i) => text[i]! * Number(p) / 100 + bg[i]! * (1 - Number(p) / 100)).concat(1) as never, bg)
+      }
+      // AA, but on a theme whose text is barely that itself, where it stays a step under the text.
+      expect(at('--superego-muted'), theme.id).toBeGreaterThanOrEqual(3)
+      expect(at('--superego-border'), theme.id).toBeGreaterThanOrEqual(1.5)
+    }
+  })
+
+  it('takes a theme’s own workbench colours where they read', () => {
+    const palette = uiPalette({ ...night, ui: { sidebar: '#0a0a10', muted: '#202028' } })!
+    expect(palette['--superego-chrome']).toBe('#0a0a10')
+    expect(palette['--superego-muted']).toMatch(/^color-mix/) // too faint on the ground: derived instead
+  })
+
+  it('pairs with Superego’s own on the other side', () => {
+    expect(themeStyle(superegoTheme('light'), night)['--superego-bg']).toBe('light-dark(#ffffff, #101018)')
   })
 })
 

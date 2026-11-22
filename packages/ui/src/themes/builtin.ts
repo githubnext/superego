@@ -41,6 +41,7 @@ export const BUILTIN_THEMES: readonly Theme[] = [
   {
     id: 'tokyo-night', name: 'Tokyo Night', appearance: 'dark', accent: '#3d59a1',
     syntax: { keyword: '#bb9af7', string: '#9ece6a', number: '#ff9e64', comment: '#51597d', function: '#7aa2f7', type: '#0db9d7', tag: '#f7768e', attribute: '#bb9af7', definition: '#c0caf5', meta: '#bb9af7', inserted: '#73daca', deleted: '#f7768e', invalid: '#ff5370' },
+    ui: { bg: '#1a1b26', fg: '#a9b1d6' },
     terminal: { fg: '#787c99', bg: '#16161e', cursor: '#c0caf5', selection: '#515c7e4d', black: '#363b54', red: '#f7768e', green: '#73daca', yellow: '#e0af68', blue: '#7aa2f7', magenta: '#bb9af7', cyan: '#7dcfff', white: '#787c99', 'bright-black': '#363b54', 'bright-red': '#f7768e', 'bright-green': '#73daca', 'bright-yellow': '#e0af68', 'bright-blue': '#7aa2f7', 'bright-magenta': '#bb9af7', 'bright-cyan': '#7dcfff', 'bright-white': '#acb0d0' },
   },
   // catppuccin/vscode 3.19.0 (MIT)

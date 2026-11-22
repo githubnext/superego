@@ -15,6 +15,14 @@ type Strip<T, P extends string> = T extends `${P}${infer R}` ? R : never
 export type SyntaxRole = Strip<keyof typeof colourTokens.syntax, '--superego-syntax-'>
 /** A colour of the terminal's: `fg`, `bg`, `cursor`, `selection`, and the 16 ANSI colours (`black` … `white`, `bright-black` … `bright-white`). */
 export type TerminalRole = Strip<keyof typeof colourTokens.terminal, '--superego-terminal-'>
+/**
+ * A colour of the window's own, where the theme has one (a VS Code theme's workbench colours): `bg` the sheet,
+ * `fg` text, `muted` secondary text, `sidebar` the window's side, `raised` what floats, `border` frames and lines.
+ * Left out, each is derived from the ground and text (`bg`/`fg`, else the terminal's): apply.ts's palette.
+ */
+export type UiRole = (typeof UI_ROLES)[number]
+export const UI_ROLES = ['bg', 'fg', 'muted', 'sidebar', 'raised', 'border'] as const
+
 /** Which of the two pickers a theme is for: the window shows the light theme in light mode, the dark one in dark. */
 export type Appearance = 'light' | 'dark'
 
@@ -32,6 +40,8 @@ export type Theme = {
   appearance: Appearance
   syntax?: Partial<Record<SyntaxRole, Color>>
   terminal?: Partial<Record<TerminalRole, Color>>
+  /** The window's own colours (UiRole): those left out derived from its ground and text. */
+  ui?: Partial<Record<UiRole, Color>>
   /** The accent (focus rings, primary buttons, links), unless the user chose their own. */
   accent?: Color
 }
@@ -45,16 +55,16 @@ export const isColor = (value: unknown): value is Color => typeof value === 'str
 
 /** Why `value` isn't a theme, one line each; empty when it is. */
 export function themeProblems(value: unknown): string[] {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return ['A theme is an object: { id, name, appearance, syntax?, terminal?, accent? }']
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return ['A theme is an object: { id, name, appearance, syntax?, terminal?, ui?, accent? }']
   const problems: string[] = []
   const theme = value as Record<string, unknown>
   for (const key of Object.keys(theme)) {
-    if (!['id', 'name', 'appearance', 'syntax', 'terminal', 'accent', '$schema'].includes(key)) problems.push(`${key}: not part of a theme (id, name, appearance, syntax, terminal, accent)`)
+    if (!['id', 'name', 'appearance', 'syntax', 'terminal', 'ui', 'accent', '$schema'].includes(key)) problems.push(`${key}: not part of a theme (id, name, appearance, syntax, terminal, ui, accent)`)
   }
   if (typeof theme.id !== 'string' || !ID.test(theme.id)) problems.push(`id: ${JSON.stringify(theme.id)} isn't lowercase letters, digits and dashes (dots between an extension's name and the rest)`)
   if (typeof theme.name !== 'string' || !theme.name.trim()) problems.push('name: missing')
   if (theme.appearance !== 'light' && theme.appearance !== 'dark') problems.push(`appearance: ${JSON.stringify(theme.appearance)} is neither "light" nor "dark"`)
-  const colours = (group: 'syntax' | 'terminal', known: readonly string[]) => {
+  const colours = (group: 'syntax' | 'terminal' | 'ui', known: readonly string[]) => {
     const given = theme[group]
     if (given === undefined) return
     if (!given || typeof given !== 'object' || Array.isArray(given)) return void problems.push(`${group}: an object of colours by role`)
@@ -65,6 +75,7 @@ export function themeProblems(value: unknown): string[] {
   }
   colours('syntax', SYNTAX_ROLES)
   colours('terminal', TERMINAL_ROLES)
+  colours('ui', UI_ROLES)
   if (theme.accent !== undefined && !isColor(theme.accent)) problems.push(`accent: ${JSON.stringify(theme.accent)} isn't a colour`)
   return problems
 }

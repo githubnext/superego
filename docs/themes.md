@@ -9,7 +9,11 @@ once. A theme colours:
 - the terminal: its text, background, cursor, selection and 16 colours;
 - the accent (focus rings, buttons, links), if the theme has one and you haven't chosen your own accent colour.
 
-The rest of the window (its backgrounds and text) keeps Superego's own look.
+- the window itself: its backgrounds, text, lines and fields, derived from the theme's ground and text (its `ui.bg`
+  and `ui.fg`, else the terminal's `bg` and `fg`). Each surface is a small step from the ground toward the text, each
+  line a bigger one, secondary text most of the way; a step that wouldn't stand out on a low-contrast theme is taken
+  further, so secondary text stays readable and lines visible. A theme with no ground of its own (Superego's, one with
+  only code colours) leaves the window as it is.
 
 ## Built in
 
@@ -23,7 +27,8 @@ Settings → Appearance → Import theme… reads:
 
 - **a VS Code colour theme** (its JSON, comments and all): its token colours become code's colours, and its
   `terminal.ansi*`, `editor.background`, `editor.foreground`, `terminalCursor.foreground` and
-  `editor.selectionBackground` the terminal's;
+  `editor.selectionBackground` the terminal's; `editor.background`, `editor.foreground`, `descriptionForeground`,
+  `sideBar.background`, `editorWidget.background` and `panel.border` the window's (`ui`);
 - **a Ghostty theme** (`palette = 0=#1d1f21`, `background = …`): the terminal's colours;
 - **an iTerm2 colour preset** (`.itermcolors`): the terminal's colours;
 - **a theme of Superego's own** (below).
@@ -55,6 +60,7 @@ Superego's. In `~/.superego/themes/`, the file's name is the theme's id (`paper-
 |---|---|
 | `syntax` | `keyword`, `string`, `number` (and booleans, null), `comment`, `function`, `type`, `tag`, `attribute`, `definition` (a variable where it's defined), `meta` (annotations), `inserted` and `deleted` (a diff's lines), `invalid` |
 | `terminal` | `fg`, `bg`, `cursor`, `selection`, `black`, `red`, `green`, `yellow`, `blue`, `magenta`, `cyan`, `white`, and each of those eight as `bright-…` |
+| `ui` | `bg` (the sheet), `fg` (text), `muted` (secondary text), `sidebar`, `raised` (menus, popovers), `border`: the rest derived from `bg` and `fg` |
 
 ## From extensions
 

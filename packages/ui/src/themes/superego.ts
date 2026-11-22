@@ -1,4 +1,4 @@
-// Superego's own colours for code, the terminal and diffs, light and dark: the defaults styles.css declares, as data,
+// Superego's own colours for the window, code, the terminal and diffs, light and dark: the defaults styles.css declares, as data,
 // for a theme to fall back on where it leaves a role out (test/themes.test.ts keeps the two in step). The default theme,
 // "Superego", is these and nothing else: choosing it sets nothing on the window's root.
 import type { ColourToken } from '../tokens.ts'
@@ -15,6 +15,32 @@ const same = (value: string): Pair => [value, value]
 
 /** Each themed token's default, light and dark. */
 export const DEFAULTS: Partial<Record<ColourToken, Pair>> = {
+  // The window's own (palette.ts derives a theme's).
+  '--superego-bg': ['#ffffff', '#1d1d1f'],
+  '--superego-text': ['rgb(0 0 0 / .85)', 'rgb(255 255 255 / .88)'],
+  '--superego-chrome': ['#f2f2f4', '#262628'],
+  '--superego-sidebar-bg': ['#f2f2f4', '#262628'],
+  '--superego-rail-bg': ['#ebebed', '#212123'],
+  '--superego-rail-tab': ['#e6e6e9', '#1c1c1e'],
+  '--superego-surface': ['#f3f3f6', '#262629'],
+  '--superego-pane-tab': ['#f9f9fb', '#232325'],
+  '--superego-raised': ['#ffffff', '#2c2c2e'],
+  '--superego-composer': ['#ffffff', '#252527'],
+  '--superego-line': ['#dedee1', '#38383b'],
+  '--superego-border': ['#d1d1d6', '#444446'],
+  '--superego-control': ['#ffffff', '#5a5a5e'],
+  '--superego-control-active': ['#e3e3e8', '#6e6e73'],
+  '--superego-field-bg': ['#ffffff', '#2a2a2c'],
+  '--superego-field-edge': ['#bdbdc2', '#545458'],
+  '--superego-track': ['#d9d9de', '#48484a'],
+  '--superego-muted': ['rgb(0 0 0 / .55)', 'rgb(255 255 255 / .56)'],
+  '--superego-faint': ['rgb(0 0 0 / .36)', 'rgb(255 255 255 / .36)'],
+  '--superego-selected': ['rgb(0 0 0 / .07)', 'rgb(255 255 255 / .08)'],
+  '--superego-hover': ['rgb(0 0 0 / .04)', 'rgb(255 255 255 / .05)'],
+  '--superego-fill': ['rgb(0 0 0 / .05)', 'rgb(255 255 255 / .06)'],
+  '--superego-code-chip': ['rgb(0 0 0 / .055)', 'rgb(255 255 255 / .08)'],
+  '--superego-bubble': ['color-mix(in oklab, var(--superego-accent) 9%, #fff)', 'color-mix(in oklab, var(--superego-accent) 14%, #2a2a2e)'],
+
   '--superego-syntax-keyword': ['#a626a4', '#c792ea'],
   '--superego-syntax-string': ['#50a14f', '#a5d68a'],
   '--superego-syntax-number': ['#b76b01', '#f2b46d'],

@@ -2,7 +2,7 @@
 // `terminal.ansi*` colours onto the terminal's), a Ghostty theme or an iTerm2 `.itermcolors` file (the terminal alone),
 // or a theme of ours. `importTheme` tells which from the text. What comes back has no id yet: the app gives it one as it
 // keeps it.
-import { SYNTAX_ROLES, isColor, themeProblems, type Appearance, type SyntaxRole, type TerminalRole, type Theme } from './format.ts'
+import { SYNTAX_ROLES, isColor, themeProblems, type Appearance, type SyntaxRole, type TerminalRole, type Theme, type UiRole } from './format.ts'
 
 export type ImportedTheme = Omit<Theme, 'id'>
 
@@ -37,6 +37,16 @@ const TERMINAL_KEYS: Record<TerminalRole, string[]> = {
   'bright-black': ['terminal.ansiBrightBlack'], 'bright-red': ['terminal.ansiBrightRed'], 'bright-green': ['terminal.ansiBrightGreen'],
   'bright-yellow': ['terminal.ansiBrightYellow'], 'bright-blue': ['terminal.ansiBrightBlue'], 'bright-magenta': ['terminal.ansiBrightMagenta'],
   'bright-cyan': ['terminal.ansiBrightCyan'], 'bright-white': ['terminal.ansiBrightWhite'],
+}
+
+/** VS Code's workbench colours for each of the window's own (UiRole), the first one given winning. */
+const UI_KEYS: Record<UiRole, string[]> = {
+  bg: ['editor.background'],
+  fg: ['editor.foreground', 'foreground'],
+  muted: ['descriptionForeground'],
+  sidebar: ['sideBar.background'],
+  raised: ['editorWidget.background', 'menu.background', 'dropdown.background'],
+  border: ['panel.border', 'editorGroup.border', 'sideBar.border'],
 }
 
 /** The 16 ANSI colours' roles, by number. */
@@ -109,11 +119,17 @@ export function fromVsCode(json: unknown, fallbackName: string): ImportedTheme {
     const colour = keys.map((key) => colors[key]).find(isColor)
     if (colour) terminal[role] = colour
   }
+  const ui: Theme['ui'] = {}
+  for (const [role, keys] of Object.entries(UI_KEYS) as [UiRole, string[]][]) {
+    // A transparent one (`#00000000`, often a border turned off) says nothing.
+    const colour = keys.map((key) => colors[key]).find((c) => isColor(c) && !/^#([0-9a-f]{3}0|[0-9a-f]{6}00)$/i.test(c))
+    if (colour) ui[role] = colour as string
+  }
   if (!Object.keys(syntax).length && !Object.keys(terminal).length) throw new Error('No colours found: neither tokenColors nor terminal colours')
   const type = theme.type
   const appearance: Appearance = type === 'light' || type === 'hcLight' ? 'light' : type === 'dark' || type === 'hc' ? 'dark' : appearanceOf(terminal.bg)
   const name = typeof theme.name === 'string' && theme.name.trim() ? theme.name.trim() : fallbackName
-  return { name, appearance, ...(Object.keys(syntax).length ? { syntax } : {}), ...(Object.keys(terminal).length ? { terminal } : {}) }
+  return { name, appearance, ...(Object.keys(syntax).length ? { syntax } : {}), ...(Object.keys(terminal).length ? { terminal } : {}), ...(Object.keys(ui).length ? { ui } : {}) }
 }
 
 /** A Ghostty theme (`palette = 0=#1d1f21`, `background = 1d1f21`, `foreground = "#c5c8c6"`, …) as ours: the terminal's colours. */
@@ -181,7 +197,7 @@ export function importTheme(text: string, file: string): ImportedTheme {
     let json: unknown
     try { json = parseJsonc(text) } catch (error) { throw new Error(`Not JSON: ${(error as Error).message}`) }
     const ours = json as Record<string, unknown>
-    if (ours && typeof ours === 'object' && ('syntax' in ours || 'terminal' in ours) && !('tokenColors' in ours) && !('colors' in ours)) {
+    if (ours && typeof ours === 'object' && ('syntax' in ours || 'terminal' in ours || 'ui' in ours) && !('tokenColors' in ours) && !('colors' in ours)) {
       const { id: _id, ...rest } = ours
       const problems = themeProblems({ ...rest, id: 'imported' })
       if (problems.length) throw new Error(problems.join('; '))

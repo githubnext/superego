@@ -77,7 +77,7 @@ which doesn't type-check them: `superego extension test` does.
 | `superego.signal` | an `AbortSignal`, aborted when this UI is torn down (its profile's files changed, it was revoked): for timers, listeners and fetches of its own. `setup` may also return a cleanup, run then. Registering after that throws. Each component it draws is drawn apart: one that throws shows "<name> failed to draw" with Retry, in its place |
 | `superego.on(event, listener)` | hear what happens in the window, in the desktop app and a browser alike; returns a function that stops it (teardown does too). `'thread.status'`: `{ machine, thread, before }`, a thread's status changed (`before` undefined the first time the window sees it; only your profile's threads). `'select'`: `{ selection, before }`, the thread shown changed. `'focus'`: `{ focused }`. `'visibility'`: `{ visible }`. `superego.window` is how things are now: `{ focused, visible, selection, thread, machines, threads }` (`threads`: each machine's threads in use, by machine id) |
 | `superego.style(css)` | bring CSS, scoped to what this profile draws ([Styling](#styling)). Gone at teardown; also returns a function that takes it out sooner |
-| `superego.theme({ id, name, appearance, syntax?, terminal?, accent? })` | a theme for code and the terminal, offered in Settings → Appearance's picker for its `appearance` (`'light'` or `'dark'`), under your extension's name ([Themes](#themes)). `id` starts with your extension's name. One that doesn't read throws, saying what's wrong. Needs extension API `^5.5` |
+| `superego.theme({ id, name, appearance, syntax?, terminal?, ui?, accent? })` | a theme for code and the terminal, offered in Settings → Appearance's picker for its `appearance` (`'light'` or `'dark'`), under your extension's name ([Themes](#themes)). `id` starts with your extension's name. One that doesn't read throws, saying what's wrong. Needs extension API `^5.5` |
 | `superego.appSetting(key)` | one of the app's settings as it is now, outside React (`useAppSetting` in components) |
 | `superego.entry(kind, component)` | draw transcript entries of a kind an extension writes |
 | `superego.settings(ui, component)` | draw below the settings section (of its daemon half) that names `ui` |
@@ -294,7 +294,8 @@ Bring a theme for code and the terminal with `superego.theme(theme)`. The user p
 dark in Settings → Appearance; yours is listed in the picker for its `appearance`, under your extension's name. Chosen,
 it colours code in the editor, in messages and in rendered files, diffs, and the terminal, in the whole window (a
 profile's theme too, not only its threads). `accent` colours the window's accent too, unless the user chose their own.
-App surfaces (backgrounds, text) aren't a theme's yet.
+The window's backgrounds, text and lines follow the theme's ground and text (`ui.bg`/`ui.fg`, else the terminal's),
+derived by a few fixed steps; `ui` can give `muted`, `sidebar`, `raised` and `border` outright.
 
 <!-- check: ui -->
 ```ts

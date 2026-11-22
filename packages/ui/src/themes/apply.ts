@@ -1,8 +1,10 @@
-// A light theme and a dark one, as the window's root takes them: each role the two give as light-dark(<light>, <dark>),
+// A light theme and a dark one, as the window's root takes them (the window's own colours too, from each one's ground and
+// text: palette.ts): each role the two give as light-dark(<light>, <dark>),
 // the side a theme leaves out from the default (superego.ts). Diffs take their colours from the syntax roles `inserted`
 // and `deleted`. Roles neither theme gives aren't set, so styles.css's own stay.
 import type { ColourToken } from '../tokens.ts'
 import { SYNTAX_ROLES, TERMINAL_ROLES, type SyntaxRole, type TerminalRole, type Theme } from './format.ts'
+import { PALETTE_TOKENS, uiPalette } from './palette.ts'
 import { DEFAULTS } from './superego.ts'
 
 type Source = (theme: Theme) => string | undefined
@@ -27,6 +29,8 @@ const SOURCES: [ColourToken, Source][] = [
   ['--superego-diff-removed-bg', mix(10, deleted)],
   ['--superego-diff-edit-removed-bg', mix(12, deleted)],
   ['--superego-diff-fence-removed-bg', mix(12, deleted)],
+  // The window's own: derived from the theme's ground and text (palette.ts).
+  ...PALETTE_TOKENS.map((token): [ColourToken, Source] => [token, (theme) => uiPalette(theme)?.[token]]),
 ]
 
 /** Every custom property `themeStyle` may set: what to clear before setting a new pair's. */
