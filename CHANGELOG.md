@@ -37,6 +37,7 @@
   header on top, and the field you're typing in stays in sight. The prompt no longer offers to AutoFill a contact, and
   New thread's Model and Thinking menus no longer overlap.
 - Signing in to GitHub Copilot: the code to enter has a Copy button, and opening GitHub's page copies it too.
+- Signing in to GitHub Copilot with its domain left blank, as it says, goes on to github.com instead of doing nothing.
 - When GitHub stops accepting a GitHub Copilot sign-in, threads wait for you to sign in again instead of failing with an
   error.
 - Coming back to a thread (from Settings, Ego's thread or another thread) shows its panes as you left them: a terminal

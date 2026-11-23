@@ -126,13 +126,21 @@ function DeviceCode({ code, page }: { code: string; page: string }) {
   )
 }
 
+/**
+ * A question the flow asks. What a blank answer means is the flow's to say ("blank for github.com"): a text one goes
+ * as it is, blank too. A key or a code is never blank: nothing goes until there's one.
+ */
 function PromptField({ prompt, onAnswer }: { prompt: AuthPrompt; onAnswer(value: string): void }) {
   const input = useRef<HTMLInputElement>(null)
   if (prompt.type === 'select') {
     return <div className="auth-flow__prompt"><p>{prompt.message}</p>{prompt.options.map((o) => <Button key={o.id} onClick={() => onAnswer(o.id)}>{o.label}</Button>)}</div>
   }
   return (
-    <form className="auth-flow__prompt" onSubmit={(e) => { e.preventDefault(); if (input.current?.value) onAnswer(input.current.value) }}>
+    <form className="auth-flow__prompt" onSubmit={(e) => {
+      e.preventDefault()
+      const value = input.current?.value ?? ''
+      if (value || prompt.type === 'text') onAnswer(value)
+    }}>
       <label>{prompt.message}</label>
       <div className="auth-flow__row">
         <TextField ref={input} autoFocus={autoFocusOnOpen()} type={prompt.type === 'secret' ? 'password' : 'text'} placeholder={prompt.placeholder} />
