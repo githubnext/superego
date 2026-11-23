@@ -21,7 +21,7 @@
   --superego-pane-tab: light-dark(#f9f9fb, #232325);   /* a pane's tab and its bars, a step off the sheet */
   --superego-bubble: light-dark(color-mix(in oklab, var(--superego-link) 9%, #fff), color-mix(in oklab, var(--superego-link) 14%, #2a2a2e));      /* your messages */
   --superego-code-chip: light-dark(rgb(0 0 0 / .055), rgb(255 255 255 / .08));
-  --superego-raised: light-dark(#ffffff, #2c2c2e);      /* what floats: menus, popovers, the composer */
+  --superego-raised: light-dark(#ffffff, #2c2c2e);      /* what stands off its ground: notices, small lists, a chosen segment */
   --superego-border: light-dark(#d1d1d6, #444446);      /* frames: fields, menus */
   --superego-text: light-dark(rgb(0 0 0 / .85), rgb(255 255 255 / .88));
   --superego-muted: light-dark(rgb(0 0 0 / .55), rgb(255 255 255 / .56));

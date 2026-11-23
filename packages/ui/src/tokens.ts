@@ -15,7 +15,7 @@ export const colourTokens = {
     '--superego-pane-tab': "A pane's tab and its bars.",
     '--superego-bubble': 'Your messages.',
     '--superego-code-chip': 'Inline code.',
-    '--superego-raised': 'What floats: menus, popovers.',
+    '--superego-raised': 'What stands off its ground: notices, small lists, a chosen segment.',
     '--superego-composer': "The composer's box.",
     '--superego-border': 'Frames: fields, menus.',
     '--superego-text': 'Text.',
