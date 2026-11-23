@@ -43,6 +43,8 @@ const SUBAGENTS_KEPT = 20
 const SAVE_MS = 250
 /** How old a look at Claude Code may be when the model menus are listed before it's looked at again (behind them). */
 const CHECK_STALE_MS = 60_000
+/** How long the model menus wait for a look at Claude Code once what's known is old, before going on with that. */
+const FRESH_WAIT_MS = 2_000
 /** The terminal extension's action that runs a program in a terminal pane (terminal.run). */
 const TERMINAL_RUN = 'terminal.run'
 /** How long a thread's Claude Code waits for its next turn before it goes. */
@@ -341,9 +343,13 @@ export function claudeAgent({ skills = [], executable, env = () => claudeEnv(), 
         // Offered where Claude Code is installed; its models picked only once it's signed in. What it says when they
         // can't be is what a thread started on them by default is refused with.
         async menu() {
-          // Looked at once before it's offered; after that, again behind the menu when it's old.
-          const found = claude.get() ?? await check()
-          if (Date.now() - checked > CHECK_STALE_MS) void check().catch((error: unknown) => console.error('Claude Agent: looking at Claude Code here failed:', error))
+          // Looked at once before it's offered; after that, again when it's old: what it finds, if that's quick (a
+          // thread about to start on it by default is refused once it's signed out), else what it knew, while it looks.
+          const known = claude.get()
+          const found = !known ? await check() : Date.now() - checked <= CHECK_STALE_MS ? known : await Promise.race([
+            check().catch((error: unknown) => { console.error('Claude Agent: looking at Claude Code here failed:', error); return known }),
+            new Promise<ClaudeCheck>((resolve) => setTimeout(() => resolve(known), FRESH_WAIT_MS).unref()),
+          ])
           if (!found?.installed) return { unavailable: "Claude Code isn't installed here" }
           const unavailable = found.loggedIn ? undefined : found.error ? "Couldn't tell whether Claude Code is signed in here" : "Claude Code isn't signed in here: run claude, then /login"
           return { title: about.title, description: 'Runs your Claude Code', models: MODELS.map((m) => ({ ...m, thinking: [...m.thinking] })), ...(unavailable ? { unavailable } : {}) }

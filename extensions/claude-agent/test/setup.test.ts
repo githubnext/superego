@@ -4,7 +4,7 @@
 import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, expect, it } from 'vitest'
+import { afterEach, expect, it, vi } from 'vitest'
 import { arr, obj, str } from '@earendil-works/pi-schema'
 import { defineAction, defineDaemonExtension } from '@superego/daemon'
 import { testDaemon, type TestDaemon } from '@superego/sdk/testing'
@@ -142,4 +142,20 @@ it("opens Claude Code in a terminal beside a thread for the user's own /login, n
   expect(ran).toEqual([{ thread: thread.id, command: [claude] }])
   // Nothing but `--version` and `auth status` was run for it: no login.
   expect(readFileSync(join(dir!, 'log'), 'utf8').trim().split('\n').every((line) => line === '--version' || line === 'auth status --json')).toBe(true)
+})
+
+it("looks at Claude Code again before a new thread starts on it by default, once what it knew is old", async () => {
+  const signedIn = fakeClaude({ loggedIn: true, authMethod: 'claude.ai', subscriptionType: 'pro' })
+  const signedOut = fakeClaude({ loggedIn: false, authMethod: 'none' })
+  let installed = signedIn
+  vi.useFakeTimers({ toFake: ['Date'] })
+  try {
+    daemon = await testDaemon({ extensions: [claudeAgent({ executable: async () => installed })] })
+    await daemon.call<ModelCatalog>('agent.models', {})
+    await daemon.call('settings.set', { key: 'agent.model', value: 'claude-agent/sonnet' })
+    // Signed out since it was last looked at, a minute and more ago: the next start is refused, not run on what it knew.
+    installed = signedOut
+    vi.setSystemTime(Date.now() + 61_000)
+    await expect(daemon.call('thread.start', {})).rejects.toMatchObject({ kind: 'model_unavailable', message: "Claude Code isn't signed in here: run claude, then /login" })
+  } finally { vi.useRealTimers() }
 })
