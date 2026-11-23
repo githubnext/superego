@@ -48,5 +48,13 @@ describe('Router', () => {
     expect(await consent.dispatch('thing.allow', {}, {}, { exposure: 'cli' })).toBe(2)
     expect(consent.list().find((a) => a.id === 'thing.allow')).toMatchObject({ consent: true })
     expect(() => consent.register(defineAction({ id: 'thing.open', title: 'x', runs: 'machine', expose: ['ui', 'outside'], consent: true, run: () => {} }))).toThrow(/can't be exposed to outside agents/)
+    // An extension's dispatch alike; and what records consent only for some params, for those.
+    await expect(consent.dispatch('thing.allow', {}, {}, { extension: 'x' })).rejects.toMatchObject({ kind: 'consent' })
+    consent.register({ ...defineAction({ id: 'thing.set', title: 'Set', runs: 'machine', expose: ['ui', 'cli'], run: () => 'set' }), consentIn: (params: { key?: string }) => params.key === 'door' ? 'Open the door' : undefined })
+    await expect(consent.dispatch('thing.set', { key: 'door' }, {}, { extension: 'x' })).rejects.toMatchObject({ kind: 'consent', message: "Open the door: that's the user's consent to give, not an agent's" })
+    await expect(consent.dispatch('thing.set', { key: 'door' }, {}, { from: 't1' })).rejects.toMatchObject({ kind: 'consent' })
+    expect(await consent.dispatch('thing.set', { key: 'lamp' }, {}, { extension: 'x' })).toBe('set')
+    expect(await consent.dispatch('thing.set', { key: 'door' }, {})).toBe('set')
+    expect(consent.get('thing.set')).not.toHaveProperty('consentIn')
   })
 })

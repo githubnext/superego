@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { defineExtension, type Extension, hook, ToolTask } from '@earendil-works/pi-durable'
 import {
   type ChannelAcceptor, Channels, compareVersion, contractProblem, dataViewProblem, EXTENSION_API, FEATURES, Lifetime, manifestOf, paramsParser,
-  consentRefused, parseVersion, RpcError, UNVERSIONED, DATA_VIEWS, type DataViewInfo, type ExtensionAbout, type ExtensionReport, type ExtensionsReport, type Json,
+  parseVersion, RpcError, UNVERSIONED, DATA_VIEWS, type DataViewInfo, type ExtensionAbout, type ExtensionReport, type ExtensionsReport, type Json,
   type AgentKindMenu, type RpcPeer, type ThreadInfo,
 } from '@superego/protocol'
 import { registerExtensionSettings } from './extension-settings.ts'
@@ -613,16 +613,9 @@ export function createExtensionHost(host: Host, later: { profiles(): ProfileHost
         onChange: (listener) => { life.live('a settings listener'); undo(settings.onChange(listener), 'a settings listener') },
       },
       action: (action) => { life.live(`the action ${action.id}`); undo(router.register({ ...action, id: named(extension.name, action.id) }), 'an action'); note('actions', action.keys ? `${action.id} (${action.keys})` : action.id) },
-      async dispatch(id, params) {
-        // The user's consent (allowing code, letting devices in, a secret) is theirs alone: no extension gives it for
-        // them, as no agent does. A consent action, or a setting that records consent, is refused here.
-        const action = router.get(id)
-        if (action?.consent) throw consentRefused(action.title)
-        const key = id === 'settings.set' && params && typeof params === 'object' ? (params as { key?: unknown }).key : undefined
-        const setting = typeof key === 'string' ? settings.spec(key) : undefined
-        if (setting?.consent) throw consentRefused(setting.title)
-        return router.dispatch(id, params ?? {}, { source: extension.name, notify: () => {} }, { source: extension.name })
-      },
+      // The user's consent (allowing code, letting devices in, a secret) is theirs alone: no extension gives it for them,
+      // as no agent does (the router refuses it to `extension`).
+      dispatch: (id, params) => router.dispatch(id, params ?? {}, { source: extension.name, notify: () => {} }, { source: extension.name, extension: extension.name }),
       actions: (exposure) => router.list(exposure),
       async call(id, params) {
         const run = methods.get(id)

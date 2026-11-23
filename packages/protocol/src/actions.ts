@@ -29,8 +29,9 @@ export type ActionInfo = {
   thread?: boolean
   /**
    * It records the user's consent: to run a command or a project's code, to let a device or outside agents in. Only the
-   * user gives it, in a window or in their own terminal, never an agent: it's refused for a client that said it runs in
-   * a thread's shell (`hello`'s `from`), and it can't be exposed to `outside`.
+   * user gives it, in a window or in their own terminal, never an agent nor an extension: it's refused for a client that
+   * said it runs in a thread's shell (`hello`'s `from`) and to an extension's `dispatch`, and it can't be exposed to
+   * `outside`.
    */
   consent?: true
   /** Its parameters by these names hold secrets (a key, a token): the action log keeps them as `•••`, never their values. */
@@ -45,6 +46,11 @@ export type ActionDef<P = any, R = unknown, C = unknown> = ActionInfo & {
    * keeps those as `•••` too, beside `secret`'s.
    */
   secretIn?(params: unknown): string[]
+  /**
+   * What this dispatch records the user's consent to, when that depends on its params (`settings.set` of a setting that
+   * records consent): refused as `consent` is, named by what this returns.
+   */
+  consentIn?(params: P): string | undefined
 }
 
 /** Define an action; with a pi-schema `params`, `run` gets them typed. */
@@ -88,9 +94,10 @@ export type Router<C = unknown> = {
   list(exposure?: Exposure): ActionInfo[]
   /**
    * Run `id`. `exposure`: who is asking, refused if the action isn't exposed to it. `from`: the thread whose agent's shell
-   * is asking (its command line), refused for an action that records the user's `consent`.
+   * is asking (its command line); `extension`: the extension asking (its `dispatch`). Either is refused what records the
+   * user's consent (`consent`, `consentIn`).
    */
-  dispatch(id: string, params: unknown, context: C, options?: { source?: string; exposure?: Exposure; from?: string; client?: ActionLogEntry['client'] }): Promise<unknown>
+  dispatch(id: string, params: unknown, context: C, options?: { source?: string; exposure?: Exposure; from?: string; extension?: string; client?: ActionLogEntry['client'] }): Promise<unknown>
   /**
    * Time and log work done elsewhere for an action this router doesn't hold (a window forwarding to a daemon).
    * `client`: who dispatched it. `secret`: the params it logs as `•••` (`ActionInfo.secret`) for one it doesn't hold, or
@@ -119,13 +126,17 @@ export function createRouter<C = unknown>({ logSize = 500 }: { logSize?: number 
     has: (id) => actions.has(id),
     get: (id) => actions.get(id) && info(actions.get(id)!.def),
     list: (exposure) => [...actions.values()].map(({ def }) => info(def)).filter((a) => !exposure || a.expose.includes(exposure)),
-    dispatch(id, params, context, { source = 'ui', exposure, from, client } = {}) {
+    dispatch(id, params, context, { source = 'ui', exposure, from, extension, client } = {}) {
       return router.track(id, params, source, async () => {
         const action = actions.get(id)
         if (!action) throw new RpcError('unknown_action', `No action ${id}`)
         if (exposure && !action.def.expose.includes(exposure)) throw new RpcError('not_exposed', `${id} can't be run from ${exposure}`)
-        if (from && action.def.consent) throw consentRefused(action.def.title)
-        return action.def.run(action.parse(params), context)
+        const parsed = action.parse(params)
+        if (from || extension) {
+          const consent = action.def.consent ? action.def.title : action.def.consentIn?.(parsed)
+          if (consent) throw consentRefused(consent)
+        }
+        return action.def.run(parsed, context)
       }, client ? { client } : {})
     },
     async track(id, params, source, run, { client, secret } = {}) {
@@ -170,7 +181,7 @@ function withoutSecrets(params: unknown, secret: string[] | undefined): unknown 
   return Object.fromEntries(Object.entries(params).map(([name, value]) => [name, secret.includes(name) && value != null ? '•••' : value]))
 }
 
-const info = ({ run: _run, secretIn: _secretIn, ...rest }: ActionDef<any, unknown, any>): ActionInfo => rest
+const info = ({ run: _run, secretIn: _secretIn, consentIn: _consentIn, ...rest }: ActionDef<any, unknown, any>): ActionInfo => rest
 
 /** Schema builders for action parameters, so extensions need nothing beyond @superego/*. */
 export { arr, bool, int, lit, nullable, num, obj, opt, str, union, unknown } from '@earendil-works/pi-schema'

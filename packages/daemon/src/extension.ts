@@ -55,6 +55,7 @@ export const defineDaemonExtension = (extension: DaemonExtension) => extension
 export function defineAction<S extends JsonSchema | undefined, R>(
   def: Omit<ActionInfo, 'params' | 'expose' | 'runs'> & {
     runs?: 'machine'; params?: S; expose?: Exposure[]; secretIn?(params: unknown): string[]
+    consentIn?(params: S extends JsonSchema ? Static<S> : Record<string, never>): string | undefined
     run(params: S extends JsonSchema ? Static<S> : Record<string, never>, context: DaemonContext): R | Promise<R>
   },
 ): ActionDef<any, R, DaemonContext> {

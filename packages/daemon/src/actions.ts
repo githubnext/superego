@@ -3,7 +3,7 @@
 import { randomUUID } from 'node:crypto'
 import type { ConversationId, Harness, SubmissionId } from '@earendil-works/pi-durable'
 import { InboxDoc } from '@earendil-works/pi-durable'
-import { arr, bool, consentRefused, int, lit, num, obj, opt, RpcError, str, union, unknown, type Json, type MachineInfo, type Pane } from '@superego/protocol'
+import { arr, bool, int, lit, num, obj, opt, RpcError, str, union, unknown, type Json, type MachineInfo, type Pane } from '@superego/protocol'
 import { ATTACHMENT } from './attachments.ts'
 import { defineAction } from './extension.ts'
 import type { threadFiles } from './files.ts'
@@ -237,9 +237,8 @@ export function registerCoreActions(host: Host, { harness, machine, threads, fil
     params: obj({ key: str(), value: unknown() }),
     // A secret given here by mistake is refused (secrets.set sets one), and never logged.
     secretIn: (params) => settings.isSecret(String((params as { key?: unknown } | null)?.key)) ? ['value'] : [],
-    async run({ key, value }, { from }) {
-      const spec = settings.spec(key)
-      if (from && spec?.consent) throw consentRefused(spec.title)
+    consentIn: ({ key }) => { const spec = settings.spec(key); return spec?.consent ? spec.title : undefined },
+    async run({ key, value }) {
       await settings.set(key, value as Json)
       return null
     },
