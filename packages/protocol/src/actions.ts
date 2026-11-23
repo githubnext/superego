@@ -38,7 +38,14 @@ export type ActionInfo = {
 }
 
 /** An action with what it does: `run`, given its params and what it runs for. Made with `defineAction`. */
-export type ActionDef<P = any, R = unknown, C = unknown> = ActionInfo & { run(params: P, context: C): R | Promise<R> }
+export type ActionDef<P = any, R = unknown, C = unknown> = ActionInfo & {
+  run(params: P, context: C): R | Promise<R>
+  /**
+   * Which params hold secrets in this dispatch, when that depends on them (`settings.set` of a secret setting): the log
+   * keeps those as `•••` too, beside `secret`'s.
+   */
+  secretIn?(params: unknown): string[]
+}
 
 /** Define an action; with a pi-schema `params`, `run` gets them typed. */
 export function defineAction<S extends JsonSchema | undefined, R, C = any>(
@@ -85,10 +92,11 @@ export type Router<C = unknown> = {
    */
   dispatch(id: string, params: unknown, context: C, options?: { source?: string; exposure?: Exposure; from?: string; client?: ActionLogEntry['client'] }): Promise<unknown>
   /**
-   * Time and log work done elsewhere for an action this router doesn't hold (a window forwarding to a daemon). `secret`:
-   * the params it logs as `•••` (`ActionInfo.secret`), for one it doesn't hold; one it holds says its own.
+   * Time and log work done elsewhere for an action this router doesn't hold (a window forwarding to a daemon).
+   * `client`: who dispatched it. `secret`: the params it logs as `•••` (`ActionInfo.secret`) for one it doesn't hold, or
+   * `'all'` to log none (an action it knows nothing of, which may take a secret); one it holds says its own.
    */
-  track<R>(id: string, params: unknown, source: string, run: () => Promise<R>, client?: ActionLogEntry['client'], secret?: string[]): Promise<R>
+  track<R>(id: string, params: unknown, source: string, run: () => Promise<R>, options?: { client?: ActionLogEntry['client']; secret?: string[] | 'all' }): Promise<R>
   /** The newest dispatches, oldest first. */
   log(): ActionLogEntry[]
   onDispatch(listener: (entry: ActionLogEntry) => void): () => void
@@ -118,11 +126,12 @@ export function createRouter<C = unknown>({ logSize = 500 }: { logSize?: number 
         if (exposure && !action.def.expose.includes(exposure)) throw new RpcError('not_exposed', `${id} can't be run from ${exposure}`)
         if (from && action.def.consent) throw consentRefused(action.def.title)
         return action.def.run(action.parse(params), context)
-      }, client)
+      }, client ? { client } : {})
     },
-    async track(id, params, source, run, client, secret) {
+    async track(id, params, source, run, { client, secret } = {}) {
       const started = Date.now()
-      const logged = withoutSecrets(params, actions.get(id)?.def.secret ?? secret)
+      const held = actions.get(id)?.def
+      const logged = held ? withoutSecrets(params, [...held.secret ?? [], ...held.secretIn?.(params) ?? []]) : secret === 'all' ? undefined : withoutSecrets(params, secret)
       const record = (ok: boolean, error?: string) => {
         const entry: ActionLogEntry = { at: started, id, source, ms: Date.now() - started, ok, ...(logged !== undefined ? { params: logged as Json } : {}), ...(error ? { error } : {}), ...(client ? { client } : {}) }
         log.push(entry)
@@ -161,7 +170,7 @@ function withoutSecrets(params: unknown, secret: string[] | undefined): unknown 
   return Object.fromEntries(Object.entries(params).map(([name, value]) => [name, secret.includes(name) && value != null ? '•••' : value]))
 }
 
-const info = ({ run: _run, ...rest }: ActionDef<any, unknown, any>): ActionInfo => rest
+const info = ({ run: _run, secretIn: _secretIn, ...rest }: ActionDef<any, unknown, any>): ActionInfo => rest
 
 /** Schema builders for action parameters, so extensions need nothing beyond @superego/*. */
 export { arr, bool, int, lit, nullable, num, obj, opt, str, union, unknown } from '@earendil-works/pi-schema'

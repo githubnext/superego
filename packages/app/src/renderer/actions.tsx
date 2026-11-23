@@ -97,20 +97,29 @@ export function createWindowRouter() {
   const listeners = new Set<() => void>()
   let version = 0
 
+  /**
+   * The params of `target`'s action `id` the log keeps as `•••`: those it says hold secrets, or all of them while the
+   * window doesn't know it (one registered after it listed them: a profile's, as it loads), as any could.
+   */
+  const secretOf = (target: string, id: string): string[] | 'all' => {
+    const action = remote.get(target)?.find((a) => a.id === id)
+    return action ? action.secret ?? [] : 'all'
+  }
+
   const dispatch: Dispatch = (id, params = {}, { source = 'ui', machine } = {}) => {
     if (router.has(id)) {
       if (!context) return Promise.reject(new Error('The window is not ready'))
       return router.dispatch(id, params, context, { source })
     }
     if (machine === APP || remote.get(APP)?.some((a) => a.id === id)) {
-      return router.track(id, params, source, () => window.superego.call(APP, id, params))
+      return router.track(id, params, source, () => window.superego.call(APP, id, params), { secret: secretOf(APP, id) })
     }
     const target = machine ?? (typeof params.machine === 'string' ? params.machine : undefined) ?? context?.selection?.machine ?? 'local'
     const action = remote.get(target)?.find((a) => a.id === id)
     const { machine: _machine, ...rest } = params
     const filled = action?.thread && rest.thread === undefined && context?.selection?.machine === target ? { ...rest, thread: context.selection.thread } : rest
     // Through action.run: it finds actions registered after this window connected (a profile's, as it loads).
-    const ran = router.track(id, filled, `${source} → ${target}`, () => window.superego.call(target, 'action.run', { id, params: filled }), undefined, action?.secret)
+    const ran = router.track(id, filled, `${source} → ${target}`, () => window.superego.call(target, 'action.run', { id, params: filled }), { secret: secretOf(target, id) })
     // A pane opened from this window was asked for here: the focus goes into it. (The agent's open beside, unfocused.)
     if (id === 'pane.open') void ran.then((pane) => { const opened = (pane as { id?: string } | null)?.id; if (opened) focusColumn(opened) }, () => {})
     // A stop from this window gives the messages you'd queued back to the thread's composer here, to write again: this
@@ -152,6 +161,7 @@ export function createWindowRouter() {
       version++
       for (const listener of listeners) listener()
     },
+    secretOf,
     /** Every action this window can dispatch: its own, the app's, and `machine`'s. */
     all(machine?: string): ActionInfo[] {
       return [...router.list(), ...(remote.get(APP) ?? []), ...(machine ? remote.get(machine) ?? [] : [])]

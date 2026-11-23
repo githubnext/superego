@@ -50,6 +50,10 @@ export type SettingInfo = SettingType & {
   hidden?: boolean
   /** It records the user's consent (lets devices or outside agents in): only the user changes it, never an agent. */
   consent?: true
+  /** A word on it from the machine, shown under it: where a secret is kept. */
+  note?: string
+  /** What went wrong with it, shown under it as an error: a secret that couldn't be moved into the secret store. */
+  problem?: string
 }
 
 export type SectionInfo = {

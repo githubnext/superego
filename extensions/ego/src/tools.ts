@@ -124,11 +124,13 @@ What ${name} is:
 
 Data folder layout (${dataDir}): settings.json (this machine's settings), app-settings.json (the app's), machines.json
 (the machines this computer reaches), profiles/, worktrees/, attachments/, allowed-profiles.json, and extensions'
-files: extensions/<name>/ is each one's own folder, to read when it helps, never to change. Settings and machines change through your tools, the rest through actions a thread runs, not by hand. What
-records the user's consent (allowing a profile or an MCP server's command, pairing a device, letting outside agents or
-devices in) is theirs to do: no agent can, so point them to where they do it. So is setting a secret (an extension's key
-or token: a setting of type secret, which you see only as set or not): in Settings, or \`${id} secrets set <key>\` in their
-own terminal. ${[...CORE_SECRETS, ...secrets].join(', ')} hold sign-ins and keys, or may: you don't read them.`
+files. extensions/<name>/ is each extension's own folder, which may hold its credentials: list it, never read or change
+what's in it. Settings and machines change through your tools, the rest through actions a thread runs, not by hand.
+What records the user's consent (allowing a profile or an MCP server's command, pairing a device, letting outside
+agents or devices in) is theirs to do: no agent can, so point them to where they do it. So is setting a secret (an
+extension's key or token: a setting of type secret, which you see only as set or not): in Settings, or
+\`${id} secrets set <key>\` in their own terminal. ${[...CORE_SECRETS, ...secrets].join(', ')} hold sign-ins and keys, or
+may: you don't read them.`
 }
 
 /**
@@ -161,6 +163,9 @@ export function egoTools({ dir, secrets = () => [], dispatch, actions, snapshot,
       execute(params: { path: string }, ...rest: unknown[]) {
         const at = folder(params.path)
         if (dirname(at) === resolve(dir) && [...CORE_SECRETS, ...secrets()].includes(basename(at))) throw new Error(`${basename(at)} holds sign-ins and keys: not for reading here.`)
+        // Extensions' own folders (`superego.dir`) may keep credentials no list names: none of them is read.
+        const extensions = resolve(dir, 'extensions')
+        if (at.startsWith(`${extensions}/`)) throw new Error(`${at.slice(extensions.length + 1).split('/')[0]}'s folder is its own, and may hold its credentials: not for reading here.`)
         return (read.execute as (...args: unknown[]) => unknown)(params, ...rest)
       },
     } as typeof read,

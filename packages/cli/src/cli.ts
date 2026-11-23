@@ -27,7 +27,7 @@ import {
 // The daemon itself only for `daemon run`: loading it costs every other command most of its start.
 import { appEnv, appSocketPath, connectSocket, daemonStarting, defaultDataDir, installService, isListening, readBuild, socketPath, spawnDaemon, startService, uninstallService } from '@superego/daemon/client'
 import {
-  AUTH_REJECTED, compareVersions, consentRefused, driftPhrase, PROTOCOL_VERSION, RpcError, threadEnv, unreadThreads, versionOf, statusShape, statusWord, STATUS_WORDS, type ActionInfo, type AppConfig, type AuthEvent, type AuthPrompt, type Hello, type Json, type MethodName, type Params, type ProviderAuthInfo, type Result,
+  AUTH_REJECTED, compareVersions, consentRefused, offers, driftPhrase, PROTOCOL_VERSION, RpcError, threadEnv, unreadThreads, versionOf, statusShape, statusWord, STATUS_WORDS, type ActionInfo, type AppConfig, type AuthEvent, type AuthPrompt, type Hello, type Json, type MethodName, type Params, type ProviderAuthInfo, type Result,
   type ProfileInfo, type ProfileRef, type ProfileSourceInfo, type ProviderRejection, type ThreadInfo, type SettingInfo, type SettingsSnapshot,
 } from '@superego/protocol'
 
@@ -410,6 +410,8 @@ async function settingsCommand(sub: string | undefined, rest: string[], options:
         const snapshot = (await call('settings.watch', {})).value
         const setting = snapshot.sections.flatMap((s) => s.settings).find((s) => s.key === key)
         if (!setting) throw new RpcError('unknown_setting', `No setting ${key}`)
+        // Never sent on: the daemon would refuse it, but only once the value had been in its log.
+        if (setting.type === 'secret') throw new RpcError('secret', `${key} is a secret: set it with ${app.id} secrets set ${key}, which asks for it without echoing it`)
         await call('settings.set', { key, value: next === undefined ? setting.default : next })
       })
       if (!json) console.log(`${target.label}: ${key} = ${JSON.stringify(next ?? 'default')}`)
@@ -430,8 +432,13 @@ const shownValue = (setting: SettingInfo, value: Json | undefined) => setting.ty
  */
 async function secretsCommand(sub: string | undefined, rest: string[], machineName: string | undefined) {
   const machine = resolveMachine(machineName)
+  // A daemon from before secrets has none to list or set: said as what to do, not as an unknown action.
+  const older = () => new RpcError('not_supported', `${machine.label} runs a Superego without secrets`, { hint: `Update it: ${app.id} machines update ${machine.label}` })
   if (!sub) {
-    const snapshot = await on(machine, (call) => call('settings.watch', {}).then((r) => r.value))
+    const snapshot = await on(machine, async (call, hello) => {
+      if (!offers(hello, 'secrets')) throw older()
+      return (await call('settings.watch', {})).value
+    })
     const secrets = snapshot.sections.flatMap((section) => section.settings.filter((s) => s.type === 'secret').map((s) => ({ key: s.key, title: s.title, section: section.title, set: snapshot.values[s.key] === true })))
     return print(secrets, () => {
       if (!secrets.length) return console.log(`No extension on ${machine.label} asks for a secret now.`)
@@ -444,7 +451,10 @@ async function secretsCommand(sub: string | undefined, rest: string[], machineNa
   let value: string | null = null
   if (sub === 'set') {
     // Known before asking for it: a typo, or an extension not set up yet, isn't found out after the secret is typed.
-    const setting = await on(machine, (call) => call('settings.watch', {}).then((r) => r.value.sections.flatMap((s) => s.settings).find((s) => s.key === key)))
+    const setting = await on(machine, async (call, hello) => {
+      if (!offers(hello, 'secrets')) throw older()
+      return (await call('settings.watch', {})).value.sections.flatMap((s) => s.settings).find((s) => s.key === key)
+    })
     if (!setting) throw new RpcError('unknown_setting', `No secret ${key} on ${machine.label}`, { hint: `Its extension declares it once it's set up. See: ${app.id} secrets` })
     if (setting.type !== 'secret') throw new RpcError('invalid_setting', `${key} isn't a secret: ${app.id} settings set ${key} <value>`)
     value = await readSecret(`${setting.title} (${key}): `)

@@ -197,4 +197,17 @@ describe("a data view's buttons", () => {
     expect(calls).toHaveLength(1)
   })
 
+  it('keeps secret params out of the window\'s log, and all of an action it doesn\'t know yet', async () => {
+    const actions = [{ id: 'orders.key', title: 'Key', runs: 'machine', expose: ['ui'], secret: ['key'] }, { id: 'orders.ship', title: 'Ship', runs: 'machine', expose: ['ui'] }]
+    ;(globalThis as { window: { superego?: unknown } }).window.superego = { call: async (_machine: string, method: string) => method === 'action.list' ? actions : null }
+    const registry = createRegistry(app, [], () => {})
+    await runViewAction(registry, 'box', 'orders', 'orders.key', { key: 'hush-one' })
+    await registry.router.load('box')
+    await runViewAction(registry, 'box', 'orders', 'orders.key', { key: 'hush-two', name: 'n' })
+    await registry.router.dispatch('orders.key', { key: 'hush-three' }, { machine: 'box' })
+    await registry.router.dispatch('orders.ship', { id: '1' }, { machine: 'box' })
+    const log = registry.router.router.log()
+    expect(log.map((e) => e.params)).toEqual([undefined, { key: '•••', name: 'n' }, { key: '•••' }, { id: '1' }])
+    expect(JSON.stringify(log)).not.toContain('hush')
+  })
 })

@@ -103,7 +103,7 @@ function groups(id: string, name: string, added: CliCommand[]): Entry[][] {
       { use: 'settings reset <key> [--all]', does: 'Back to the default', options: [['    --all', 'On every enabled machine']] },
       { use: 'secrets', does: "List extensions' secrets (keys, tokens) and whether each is set: never their values" },
       {
-        use: 'secrets set <key>', does: "Set one (prompted without echo, or read from stdin): kept in the OS keychain,\nelse encrypted in the data folder. Yours alone: refused from a thread's shell",
+        use: 'secrets set <key>', does: "Set one (prompted without echo, or read from stdin): kept in the OS keychain,\nelse encrypted in the data folder. Yours to do: a thread's shell is refused",
         examples: [`${id} secrets set email.token`, `pbpaste | ${id} secrets set email.token`],
       },
       { use: 'secrets clear <key>', does: 'Forget one (also one whose extension is gone)' },

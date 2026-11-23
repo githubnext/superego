@@ -124,5 +124,5 @@ export function ViewBlocks({ blocks, error, info, machine, thread, ran }: {
  */
 export function runViewAction(registry: Pick<Registry, 'router'>, machine: string, extension: string, action: string, params: Json = {}): Promise<unknown> {
   if (!action.startsWith(`${extension}.`)) return Promise.reject(new Error(`${action} isn’t one of ${extension}’s actions`))
-  return registry.router.router.track(action, params, `view → ${machine}`, () => call(machine, 'action.run', { id: action, params, exposure: 'ui' }))
+  return registry.router.router.track(action, params, `view → ${machine}`, () => call(machine, 'action.run', { id: action, params, exposure: 'ui' }), { secret: registry.router.secretOf(machine, action) })
 }

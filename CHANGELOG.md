@@ -4,8 +4,8 @@
 
 - Extensions can ask for a key or token as a secret: you set it in Settings (or `superego secrets set <key>` in your own
   terminal), it's kept in the system keychain (or encrypted in `~/.superego` where there's none), and agents, Ego and
-  `superego settings` only ever see whether it's set. A profile setting that was a masked text field moves into the
-  keychain once its extension asks for it as a secret.
+  `superego settings` only ever see whether it's set. Settings says where each one is kept. A profile setting that was
+  a masked text field moves into the keychain once its extension asks for it as a secret.
 - `superego extensions` shows each extension's own folder in `~/.superego/extensions`, and lists those left behind by
   profiles that are gone, for you to delete.
 - API keys typed into a sign-in no longer show in the action log (`superego actions log`).

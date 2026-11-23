@@ -380,6 +380,8 @@ it("gives a command its secret env values from the store, hides them in its log,
   const added = await act(d, 'add', { name: 'fx', server: fixture({ unprofiled: true, auth: { type: 'env', names: ['FIXTURE_SECRET'] } }) })
   expect(added.server).toMatchObject({ state: 'needs-sign-in', secrets: [{ name: 'FIXTURE_SECRET', set: false }] })
   await act(d, 'set-secret', { server: 'fx', values: { FIXTURE_SECRET: 'hush-hush-value' } })
+  // Kept out of the action log, as every action's secret params are.
+  expect(JSON.stringify(await d.call('action.log', {}))).not.toContain('hush-hush-value')
   const thread = await d.thread('go')
   expect(await results(d, thread.id)).toEqual(['secret: hush-hush-value'])
   const log = await act<LogResult>(d, 'log', { server: 'fx' })

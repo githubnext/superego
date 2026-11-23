@@ -216,6 +216,8 @@ export function registerCoreActions(host: Host, { harness, machine, threads, fil
   router.register(defineAction({
     id: 'settings.set', title: 'Change a setting', expose: ['ui', 'cli'],
     params: obj({ key: str(), value: unknown() }),
+    // A secret given here by mistake is refused (secrets.set sets one), and never logged.
+    secretIn: (params) => settings.isSecret(String((params as { key?: unknown } | null)?.key)) ? ['value'] : [],
     async run({ key, value }, { from }) {
       const spec = settings.spec(key)
       if (from && spec?.consent) throw consentRefused(spec.title)

@@ -159,6 +159,8 @@ it("runs an extension's own sign-in flow as a provider's: events, a prompt answe
   const { flow } = await start()
   await peer.call('auth.respond', { flow, prompt: await promptOf(flow), value: 'http://127.0.0.1:47123/callback?code=abc&state=x' })
   await ended(flow)
+  // What answers a sign-in's prompt (a code, a key) isn't in the action log.
+  expect(JSON.stringify(await peer.call('action.log', {}))).not.toContain('code=abc')
   const prompt = await promptOf(flow)
   expect(events.get(flow)).toEqual([
     { type: 'auth_url', url: 'https://auth.example/authorize', callback: 'http://127.0.0.1:47123/callback' },

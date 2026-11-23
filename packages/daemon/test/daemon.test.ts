@@ -154,6 +154,10 @@ describe('daemon', () => {
     await peer.call('auth.signIn', { provider: 'anthropic', type: 'api_key', key: 'sk-ant-test' })
     await until(() => events.some((e) => e.type === 'done' || e.type === 'failed'))
     expect(events.at(-1)).toEqual({ type: 'done' })
+    // The key isn't in the action log: `•••` in its place.
+    const log = await peer.call<{ id: string; params?: unknown }[]>('action.log', {})
+    expect(log.find((e) => e.id === 'auth.signIn')?.params).toEqual({ provider: 'anthropic', type: 'api_key', key: '•••' })
+    expect(JSON.stringify(log)).not.toContain('sk-ant-test')
     await until(() => providers(snapshot).find((p) => p.id === 'anthropic')?.stored === true)
     // Signed in, the model resolves automatically to the provider's preferred one.
     const model = snapshot.sections[0]!.settings.find((s) => s.key === 'agent.model')!

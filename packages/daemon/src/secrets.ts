@@ -57,17 +57,27 @@ function run(command: string, args: string[], input = ''): Promise<{ code: numbe
   })
 }
 
+/** A value a keychain can't take, though it works (too long for it): it goes in the file, and the keychain stays in use. */
+export class TooLong extends Error {}
+
 /**
- * The keychain of this platform, if it has a kind we use. Values go in base64, so what the tools print back is always
- * text, and nothing about a value is ever on a command line (`ps` shows those): macOS's gets it on stdin, in its
- * interactive mode; `secret-tool` reads it from stdin.
+ * macOS's `security -i` reads each command into a 4096-byte line, and runs what's past it as another command (saying
+ * it, the value's tail included, on stderr): a command this long or longer never goes to it.
  */
-function systemKeychain(app: AppConfig, dataDir: string): Keychain | undefined {
+const SECURITY_LINE = 4000
+
+/**
+ * The keychain of `platform`, if it has a kind we use. Values go in base64, so what the tools print back is always
+ * text, and nothing about a value is ever on a command line (`ps` shows those): macOS's gets it on stdin, in its
+ * interactive mode; `secret-tool` reads it from stdin. What macOS's says as it stores one is never repeated (it could
+ * be part of the value): only its exit code.
+ */
+export function systemKeychain(app: AppConfig, dataDir: string, platform: NodeJS.Platform = process.platform): Keychain | undefined {
   // One service per data folder: a test's or a second install's never mixes with yours.
   const service = `${app.id}-secrets-${createHash('sha256').update(dataDir).digest('hex').slice(0, 12)}`
   const decode = (text: string) => Buffer.from(text.trim(), 'base64').toString('utf8')
   const encode = (value: string) => Buffer.from(value, 'utf8').toString('base64')
-  if (process.platform === 'darwin') {
+  if (platform === 'darwin') {
     const check = (what: string, result: { code: number; stderr: string }, ok = [0]) => {
       if (!ok.includes(result.code)) throw new Error(`security ${what} failed (${result.code}): ${result.stderr.trim()}`)
     }
@@ -75,11 +85,15 @@ function systemKeychain(app: AppConfig, dataDir: string): Keychain | undefined {
       name: 'keychain',
       async set(key, value) {
         // Keys are `<name>.<key>` and the service ours, base64 the value: nothing here needs quoting.
-        const result = await run('security', ['-i'], `add-generic-password -U -s ${service} -a ${key} -w ${encode(value)}\n`)
-        check('add-generic-password', result)
-        if (result.stderr.trim()) throw new Error(`security add-generic-password failed: ${result.stderr.trim()}`)
-        // Its interactive mode doesn't always say a command failed: read it back.
-        if (await keychain.get(key) !== value) throw new Error("security add-generic-password didn't keep the value")
+        const command = `add-generic-password -U -s ${service} -a ${key} -w ${encode(value)}\n`
+        if (command.length >= SECURITY_LINE) throw new TooLong(`${key} is too long for the keychain's command line`)
+        const result = await run('security', ['-i'], command)
+        if (result.code !== 0 || result.stderr.trim()) throw new Error(`security add-generic-password failed (exit code ${result.code})`)
+        // Its interactive mode doesn't always say a command failed: read it back, and take away what it kept otherwise.
+        if (await keychain.get(key) !== value) {
+          await keychain.delete(key)
+          throw new Error("security add-generic-password didn't keep the value")
+        }
       },
       async get(key) {
         const result = await run('security', ['find-generic-password', '-s', service, '-a', key, '-w'])
@@ -91,7 +105,7 @@ function systemKeychain(app: AppConfig, dataDir: string): Keychain | undefined {
     }
     return keychain
   }
-  if (process.platform === 'linux') {
+  if (platform === 'linux') {
     const attributes = (key: string) => ['app', app.id, 'store', service, 'key', key]
     return {
       name: 'secret-service',
@@ -136,9 +150,17 @@ export class FileSecretStore implements SecretStore {
   #broken: string | undefined
   /** Values read or set since the daemon started, so the keychain is asked once. */
   #cache = new Map<string, string>()
+  /**
+   * Each key's changes so far: a read caches what it read only if no change came while it read, so a read of the old
+   * value that ends after a replace never caches over the new one.
+   */
+  #changes = new Map<string, number>()
   #queue: Promise<unknown> = Promise.resolve()
-  /** Said once: secrets go to the file because the keychain didn't take one. */
-  #warned = false
+  /**
+   * Why the keychain isn't used for the rest of this run, once it failed to take a value (none answering, a locked
+   * one): each save would otherwise wait on it again. Said once, in the log and beside each secret in Settings.
+   */
+  #keychainDown: string | undefined
 
   constructor({ app, dataDir, where = 'system', keychain }: SecretsOptions) {
     this.path = join(dataDir, 'secrets.json')
@@ -158,10 +180,18 @@ export class FileSecretStore implements SecretStore {
   }
 
   has(key: string) { return Object.hasOwn(this.#index.secrets, key) }
-  keys() { return Object.keys(this.#index.secrets) }
 
-  /** Where a key's value is (`keychain`, `secret-service` or `file`), if it's set: for tests and the docs' claims. */
+  /** Where a key's value is (`keychain`, `secret-service` or `file`), if it's set. */
   where(key: string) { return this.#index.secrets[key]?.in }
+
+  /** Where a key's value is kept, in words, for Settings to say beside it: nothing while it isn't set. */
+  about(key: string): string | undefined {
+    const entry = this.#index.secrets[key]
+    if (!entry) return undefined
+    if (entry.in === 'keychain') return 'Kept in the macOS keychain.'
+    if (entry.in === 'secret-service') return 'Kept in the Secret Service (your keyring).'
+    return `Kept encrypted in ${this.path}${this.#keychainDown ? `: ${this.#keychainDown}` : ''}.`
+  }
 
   async get(key: string): Promise<string | undefined> {
     this.#check()
@@ -169,6 +199,7 @@ export class FileSecretStore implements SecretStore {
     if (!entry) return undefined
     const cached = this.#cache.get(key)
     if (cached !== undefined) return cached
+    const at = this.#changes.get(key) ?? 0
     let value: string | undefined
     if (entry.in === 'file') value = await this.#decrypt(entry)
     else {
@@ -176,7 +207,7 @@ export class FileSecretStore implements SecretStore {
       value = await this.#keychain.get(key)
       if (value === undefined) throw new Error(`The secret ${key} is gone from the ${entry.in}: set it again`)
     }
-    this.#cache.set(key, value)
+    if ((this.#changes.get(key) ?? 0) === at) this.#cache.set(key, value)
     return value
   }
 
@@ -184,16 +215,20 @@ export class FileSecretStore implements SecretStore {
     const work = this.#queue.then(async () => {
       this.#check()
       const before = this.#index.secrets[key]
+      const keychain = this.#keychainDown ? undefined : this.#keychain
       let entry: Entry | undefined
       if (value !== undefined) {
-        if (this.#keychain) {
+        if (keychain) {
           try {
-            await this.#keychain.set(key, value)
-            entry = { in: this.#keychain.name }
+            await keychain.set(key, value)
+            entry = { in: keychain.name }
           } catch (error) {
-            // No keychain answering (a headless machine, a locked one): the file, said once.
-            if (!this.#warned) console.warn(`Secrets: the ${this.#keychain.name} didn't take ${key}, so secrets go in ${this.path}, encrypted:`, (error as Error).message)
-            this.#warned = true
+            // Too long for it: this one goes in the file. Not answering (a headless machine, a locked keyring): every
+            // one does, for the rest of this run, said once.
+            if (!(error instanceof TooLong)) {
+              this.#keychainDown = `the ${keychain.name} didn't take a secret (${(error as Error).message})`
+              console.warn(`Secrets: ${this.#keychainDown}, so until the daemon restarts they go in ${this.path}, encrypted`)
+            }
           }
         }
         entry ??= await this.#encrypt(value)
@@ -201,13 +236,26 @@ export class FileSecretStore implements SecretStore {
       const secrets = { ...this.#index.secrets }
       if (entry) secrets[key] = entry
       else delete secrets[key]
-      await writeAtomic(this.path, JSON.stringify({ version: 1, secrets } satisfies Index, null, 2) + '\n')
+      try {
+        await writeAtomic(this.path, JSON.stringify({ version: 1, secrets } satisfies Index, null, 2) + '\n')
+      } catch (error) {
+        // Not recorded: a value the keychain took for it now is nobody's, unless the keychain had this key before.
+        if (entry && entry.in !== 'file' && before?.in !== entry.in) {
+          await keychain?.delete(key).catch((failed: Error) => console.error(`Secrets: taking ${key} out of the ${entry!.in} again failed:`, failed.message))
+        }
+        throw error
+      }
       this.#index = { version: 1, secrets }
+      this.#changes.set(key, (this.#changes.get(key) ?? 0) + 1)
       if (value === undefined) this.#cache.delete(key)
       else this.#cache.set(key, value)
       // What the keychain kept of it before, when it's elsewhere now (or cleared).
       if (before && before.in !== 'file' && entry?.in !== before.in) {
-        await this.#keychain?.delete(key).catch((error: Error) => console.error(`Secrets: removing ${key} from the ${before.in} failed:`, error.message))
+        if (this.#keychain?.name === before.in) {
+          await this.#keychain.delete(key).catch((error: Error) => console.error(`Secrets: removing ${key} from the ${before.in} failed:`, error.message))
+        } else {
+          console.error(`Secrets: ${key} was in the ${before.in}, which this daemon doesn't use: it's left there (remove it with the ${before.in === 'keychain' ? 'Keychain Access app' : 'secret-tool clear'})`)
+        }
       }
     })
     this.#queue = work.catch(() => {})

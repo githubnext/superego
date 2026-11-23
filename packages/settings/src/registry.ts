@@ -56,18 +56,17 @@ export interface SettingsStore {
  */
 export interface SecretStore {
   has(key: string): boolean
-  /** The keys set. */
-  keys(): string[]
   get(key: string): Promise<string | undefined>
   /** `undefined` clears it. */
   set(key: string, value: string | undefined): Promise<void>
+  /** Where a key's value is kept, in words, for Settings to say beside it (`SettingInfo.note`). */
+  about?(key: string): string | undefined
 }
 
 /** Secrets in memory: for tests, and a registry that keeps nothing. */
 export class MemorySecretStore implements SecretStore {
   values = new Map<string, string>()
   has(key: string) { return this.values.has(key) }
-  keys() { return [...this.values.keys()] }
   async get(key: string) { return this.values.get(key) }
   async set(key: string, value: string | undefined) { if (value === undefined) this.values.delete(key); else this.values.set(key, value) }
 }
@@ -140,6 +139,8 @@ export class SettingsRegistry {
   #store: SettingsStore
   #secrets: SecretStore | undefined
   #secretListeners = new Set<(key: string) => void>()
+  /** Secrets that couldn't be moved out of the settings into the store, with why (`SettingInfo.problem`). */
+  #problems = new Map<string, string>()
   #values: Record<string, Json>
   #sections = new Map<string, SectionSpec>()
   #settings = new Map<string, SettingSpec>()
@@ -220,20 +221,28 @@ export class SettingsRegistry {
     if (!this.#secrets) throw new RpcError('unknown_setting', `No secret ${key}: there's no secret store here`)
     if (value === null) {
       if (spec && !isSecret(spec)) throw new RpcError('invalid_setting', `${spec.title} isn't a secret: change it with settings.set`)
-      if (!this.#secrets.has(key)) return
+      if (!this.#secrets.has(key) && !(key in this.#values)) return
     } else {
       if (!spec) throw new RpcError('unknown_setting', `No secret ${key}`, { hint: 'Its extension declares it (a setting of type secret), once it is set up.' })
       if (!isSecret(spec)) throw new RpcError('invalid_setting', `${spec.title} isn't a secret: change it with settings.set`)
       const disabled = spec.disabled?.()
       if (disabled) throw new RpcError('setting_disabled', `${spec.title}: ${disabled}`)
       check(spec, value)
-      const invalid = spec.validate?.(value)
+      // Its extension's word on it, which could quote it: never the secret itself, as errors are logged.
+      const invalid = spec.validate?.(value)?.split(value).join('•••')
       if (invalid) throw new RpcError('invalid_setting', `${spec.title}: ${invalid}`)
     }
     if (this.#closed) throw new RpcError('closing', `Settings are closed: ${key} wasn't changed`)
     const saving = this.#secrets.set(key, value ?? undefined)
     this.#saving.add(saving)
     try { await saving } finally { this.#saving.delete(saving) }
+    // Set (or cleared) here: what's left of it in the settings file from before it was a secret goes now.
+    this.#problems.delete(key)
+    if (key in this.#values) {
+      const { [key]: _gone, ...rest } = this.#values
+      this.#values = rest
+      await this.#store.save(this.#values)
+    }
     this.#secretChanged(key)
   }
 
@@ -252,15 +261,21 @@ export class SettingsRegistry {
   #moveIntoStore(key: string) {
     if (!(key in this.#values)) return
     const value = this.#values[key]
-    const { [key]: _gone, ...rest } = this.#values
     const move = (async () => {
       if (typeof value === 'string' && value.trim() && !this.#secrets!.has(key)) await this.#secrets!.set(key, value.trim())
+      // The settings as they are now, less this one: others changed while it moved stay changed.
+      const { [key]: _gone, ...rest } = this.#values
       this.#values = rest
       await this.#store.save(this.#values)
     })().then(() => {
+      this.#problems.delete(key)
       console.log(`Settings: ${key} is a secret now: moved out of the settings into the secret store`)
       this.#secretChanged(key)
-    }, (error: unknown) => console.error(`Settings: moving ${key} into the secret store failed; it stays in the settings for now:`, error))
+    }, (error: unknown) => {
+      this.#problems.set(key, `Couldn't move it into the secret store (${error instanceof Error ? error.message : String(error)}), so it's still in the settings file in the clear: set it again here.`)
+      console.error(`Settings: moving ${key} into the secret store failed; it stays in the settings for now:`, error)
+      this.invalidate()
+    })
     this.#saving.add(move)
     void move.finally(() => this.#saving.delete(move))
   }
@@ -305,6 +320,8 @@ export class SettingsRegistry {
           ...(disabled ? { disabled } : {}),
           ...(spec.hidden?.() ? { hidden: true } : {}),
           ...(spec.consent || isSecret(spec) ? { consent: true as const } : {}),
+          ...(isSecret(spec) && this.#secrets?.about?.(spec.key) ? { note: this.#secrets.about(spec.key)! } : {}),
+          ...(this.#problems.has(spec.key) ? { problem: this.#problems.get(spec.key)! } : {}),
         }
       })
       const data = await section.data?.()

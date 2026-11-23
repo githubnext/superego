@@ -115,9 +115,13 @@ describe("Ego's tools", () => {
       const { tools = [] } = egoTools({ dir, secrets: () => ['mcp-auth.json', 'mcp-servers.json'], ...on(createRouter()), snapshot, threads: threads() })
       const read = (tools as unknown as Tool[]).find((t) => t.name === 'read')!
       const api = { conversationId: 1, cwd: dir, env: process.env }
-      for (const path of ['mcp-auth.json', './auth.json', join(dir, 'sub', '..', 'mcp-auth.json'), 'mcp-servers.json']) {
+      for (const path of ['mcp-auth.json', './auth.json', join(dir, 'sub', '..', 'mcp-auth.json'), 'mcp-servers.json', 'secrets.json', 'secrets.key']) {
         await expect(Promise.resolve().then(() => read.execute({ path }, api, { cwd: dir }))).rejects.toThrow(/holds sign-ins and keys/)
       }
+      // An extension's own folder (`superego.dir`) may keep credentials of its own: listed, never read.
+      await mkdir(join(dir, 'extensions', 'mail'), { recursive: true })
+      await writeFile(join(dir, 'extensions', 'mail', 'oauth.json'), '{"refresh":"r-x"}')
+      await expect(Promise.resolve().then(() => read.execute({ path: 'extensions/mail/oauth.json' }, api, { cwd: dir }))).rejects.toThrow(/mail's folder is its own/)
     } finally {
       await rm(dir, { recursive: true, force: true })
     }

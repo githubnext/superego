@@ -120,7 +120,7 @@ describe('upsert', () => {
     // One whose extension is gone can still be cleared, never set.
     await secrets.set('gone.token', 'left behind')
     await settings.setSecret('gone.token', null)
-    expect(secrets.keys()).toEqual([])
+    expect(secrets.values.size).toBe(0)
   })
 
   it('refuses a secret where there is no secret store (a window\'s settings)', () => {
@@ -143,5 +143,47 @@ describe('upsert', () => {
     expect(store.values).toEqual({ 'mail.other': 'kept' })
     expect(settings.get('mail.token')).toBe(true)
     expect(heard).toEqual(['mail.token'])
+  })
+
+  it('keeps settings changed while a value moves into the secret store, and says so under it when the move fails', async () => {
+    let release!: () => void
+    const slow = new MemorySecretStore()
+    const set = slow.set.bind(slow)
+    slow.set = async (key, value) => { await new Promise<void>((resolve) => { release = resolve }); await set(key, value) }
+    const store = new MemorySettingsStore({ 'mail.token': 'fmu1-was-plain' })
+    const settings = new SettingsRegistry(store, slow)
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    settings.register({ id: 'other', title: 'Other', settings: [{ key: 'other.x', title: 'X', default: 'a', type: { type: 'string' } }] })
+    settings.register({ id: 'mail', title: 'Mail', settings: [{ key: 'mail.token', title: 'Token', type: { type: 'secret' } }] })
+    await settings.set('other.x', 'changed meanwhile')
+    release()
+    await settings.close()
+    log.mockRestore()
+    expect(store.values).toEqual({ 'other.x': 'changed meanwhile' })
+    expect(slow.values.get('mail.token')).toBe('fmu1-was-plain')
+
+    const broken = new MemorySecretStore()
+    broken.set = async () => { throw new Error('keychain locked') }
+    const kept = new MemorySettingsStore({ 'mail.token': 'fmu1-was-plain' })
+    const failing = new SettingsRegistry(kept, broken)
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+    failing.register({ id: 'mail', title: 'Mail', settings: [{ key: 'mail.token', title: 'Token', type: { type: 'secret' } }] })
+    await failing.close()
+    error.mockRestore()
+    expect(kept.values).toEqual({ 'mail.token': 'fmu1-was-plain' })
+    const [setting] = (await failing.snapshot()).sections[0]!.settings
+    expect(setting!.problem).toMatch(/Couldn't move it into the secret store \(keychain locked\).*set it again here/)
+  })
+
+  it('says beside a secret where it is kept, and never quotes it in an error', async () => {
+    const secrets = Object.assign(new MemorySecretStore(), { about: (key: string) => secrets.has(key) ? 'Kept in the macOS keychain.' : undefined })
+    const settings = new SettingsRegistry(new MemorySettingsStore(), secrets)
+    settings.register({ id: 'mail', title: 'Mail', settings: [
+      { key: 'mail.token', title: 'Token', type: { type: 'secret' }, validate: (value) => String(value).startsWith('fmu1-') ? undefined : `${String(value)} isn't a Fastmail token` },
+    ] })
+    expect((await settings.snapshot()).sections[0]!.settings[0]!.note).toBeUndefined()
+    await expect(settings.setSecret('mail.token', 'sk-wrong-kind')).rejects.toThrow("Token: ••• isn't a Fastmail token")
+    await settings.setSecret('mail.token', 'fmu1-right')
+    expect((await settings.snapshot()).sections[0]!.settings[0]!.note).toBe('Kept in the macOS keychain.')
   })
 })

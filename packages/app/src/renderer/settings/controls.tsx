@@ -62,7 +62,8 @@ export function Setting({ setting, value, apply, mixed, note }: {
       <div className="setting__label">
         <div>{setting.title}</div>
         {(setting.description || setting.disabled) && <div className="settings__note">{setting.disabled ?? setting.description}</div>}
-        {(mixed || note) && <div className="settings__note">{[mixed && 'Mixed: the machines differ.', note].filter(Boolean).join(' ')}</div>}
+        {(mixed || note || setting.note) && <div className="settings__note">{[mixed && 'Mixed: the machines differ.', note, setting.note].filter(Boolean).join(' ')}</div>}
+        {setting.problem && <div className="setting__error">{setting.problem}</div>}
         {error && <div className="setting__error">{error}</div>}
       </div>
       <div className="setting__control">{control}</div>

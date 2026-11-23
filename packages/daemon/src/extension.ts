@@ -53,7 +53,10 @@ export const defineDaemonExtension = (extension: DaemonExtension) => extension
  * `params`, `run` gets them typed. Throw an `RpcError` for a clean error.
  */
 export function defineAction<S extends JsonSchema | undefined, R>(
-  def: Omit<ActionInfo, 'params' | 'expose' | 'runs'> & { runs?: 'machine'; params?: S; expose?: Exposure[]; run(params: S extends JsonSchema ? Static<S> : Record<string, never>, context: DaemonContext): R | Promise<R> },
+  def: Omit<ActionInfo, 'params' | 'expose' | 'runs'> & {
+    runs?: 'machine'; params?: S; expose?: Exposure[]; secretIn?(params: unknown): string[]
+    run(params: S extends JsonSchema ? Static<S> : Record<string, never>, context: DaemonContext): R | Promise<R>
+  },
 ): ActionDef<any, R, DaemonContext> {
   return { expose: ['ui'], runs: 'machine', ...def } as ActionDef<any, R, DaemonContext>
 }
@@ -339,7 +342,8 @@ export type DaemonApi = {
    * time it's read. For what it keeps that isn't a setting nor a thread's: JSON files, a `node:sqlite` database, a
    * cache. It stays when the extension is torn down (its profile reloaded or gone, switched off, the daemon stopping),
    * so the next set-up finds it; `superego extensions` lists those whose extension isn't here, for the user to delete.
-   * The name's, not the profile's: two profiles' extensions of one name share it.
+   * The name's, not the profile's: two profiles' extensions of one name share it. Ego lists it but never reads what's in
+   * it, so credentials of the extension's own (an OAuth refresh token) may go there; one the user gives is a `secret`.
    */
   readonly dir: string
   /**
@@ -414,7 +418,11 @@ export type DaemonApi = {
    * palette, and to the command line by its exposure. Define it with `defineAction`. Throw an `RpcError` for a clean error.
    */
   action(action: ActionDef<any, unknown, DaemonContext>): void
-  /** Run any action on this machine by id, as this extension (`settings.set`, another extension's): params checked first. */
+  /**
+   * Run any action on this machine by id, as this extension (`settings.set`, another extension's): params checked first.
+   * The user's consent isn't an extension's to give: a consent action (`secrets.set`, `profile.allow`, …), or setting
+   * one that records consent, is refused (`consent`).
+   */
   dispatch(id: string, params?: unknown): Promise<unknown>
   /** The actions on this machine, as data; `exposure`: only those offered to it (`cli`: what `superego do` runs). */
   actions(exposure?: Exposure): ActionInfo[]
