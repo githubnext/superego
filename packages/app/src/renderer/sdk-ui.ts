@@ -18,6 +18,7 @@ export type {
 } from './extension-api.ts'
 export type { Place, Placement } from '../shared/layout.ts'
 export type { Store } from './local-state.ts'
+export { useLocalState } from './local-state.ts'
 export type { Completion, CompletionProvider, CompletionWord, ComposerWhere, SentBlock, SentWith } from './composer.ts'
 export type { ImageItem } from './images.tsx'
 export type { Theme, SyntaxRole, TerminalRole, Appearance, Color } from '@superego/ui/themes'

@@ -9,7 +9,7 @@ import {
 } from '@superego/protocol'
 import type { MachineEntry, SuperegoBridge, SuperegoEvent } from '@superego/app/shared'
 import {
-  bound, closeWebViews, DescribedCall, describeRun, LAYOUT, layoutOf, linkHandler, mainKind, normalize, pageApp, PaneBody, paneKind, placedFor, PlacedViews, profileUisLoaded, RegistryProvider, resetProfileUi,
+  bound, closeWebViews, DescribedCall, describeRun, LAYOUT, layoutOf, linkHandler, mainKind, normalize, pageApp, PaneBody, paneKind, placedFor, PlacedViews, profileUisLoaded, provideProfileUi, RegistryProvider, resetProfileUi,
   scopedViews, seenIn, setLocalState, Shell as Window, ShellStateProvider, Slot, toolRow, urlKind, ViewScopeProvider, useAllThreads, useMachines, useSelection, windowRegistry,
   type BehaviourSlot, type Layout, type Place, type Registry, type SlotProps, type UiExtension, type ViewProps,
 } from '@superego/app/internals'
@@ -249,8 +249,10 @@ export type MountOptions = {
    * UI halves set up as a profile's: drawn only in threads of that profile, on that machine (the first, unless given).
    * One that fails to start throws. `ref`, the profile as its threads name it: unless given, the test daemon's that
    * machine is (`daemon.profile`), else the profile under test. `testThread()` makes threads of it while it's mounted.
+   * `global`: set up as a global profile's (`global: true`), as the app's: its spaces and surfaces too. The window
+   * doesn't fetch this profile's UI from the daemon: these are it.
    */
-  profile?: { ref?: ProfileRef; machine?: string; extensions: UiExtension[] }
+  profile?: { ref?: ProfileRef; machine?: string; extensions: UiExtension[]; global?: boolean }
   /** The machines it reaches: fakes, or test daemons (`daemonMachine`, or the daemon itself as `local`). */
   machines?: (TestMachine | TestDaemon)[]
   /** The user's layout (`app.layout`). */
@@ -456,15 +458,18 @@ export async function mountUi(options: MountOptions = {}): Promise<TestWindow> {
   if (options.select) setLocalState('selection', { machine: options.select.machine ?? machines[0]?.id, thread: options.select.thread }, undefined)
 
   // The window logs a profile's UI that fails to start and goes on without it; a test fails on it.
-  const install = (into: Registry, machine: string, ref: ProfileRef, extensions: UiExtension[]) => {
-    const [failed] = into.installProfile(machine, ref, extensions)
+  const install = (into: Registry, machine: string, ref: ProfileRef, extensions: UiExtension[], global = false) => {
+    const [failed] = global ? into.installProfile(machine, ref, extensions, { global }) : into.installProfile(machine, ref, extensions)
     if (failed) throw failed.error
   }
   const registry = (() => {
     let made: Registry | undefined
     try {
       made = windowRegistry(app, options.extensions ?? [])
-      if (profile) install(made, profile.machine, profile.ref, profile.extensions)
+      if (profile) {
+        provideProfileUi(profile.machine, profile.ref)
+        install(made, profile.machine, profile.ref, profile.extensions, profile.global)
+      }
       return made
     } catch (error) {
       made?.teardown()

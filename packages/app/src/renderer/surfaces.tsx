@@ -114,6 +114,7 @@ function AskAbout({ machine, at, kind, started }: { machine: MachineEntry; at: S
     setError(undefined)
     try {
       const thread = await client(machine.id).call('thread.start', {
+        title: surfaceTitle(kind, at),
         prompt: [about, asked].filter(Boolean).join('\n\n'),
         ...(kind.profile ? { profile: kind.profile } : {}),
       })

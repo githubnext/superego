@@ -234,9 +234,15 @@ export async function ensureProfileUi(registry: Pick<Registry, 'installProfile'>
   }
 }
 
+/** Profiles whose UI the window was given already (a test's, by `keyOf`): not fetched from their machine. */
+const provided = new Set<string>()
+/** Tests: `profile` on `machine` is installed by the test itself; the window doesn't load it from the daemon. */
+export const provideProfileUi = (machine: string, profile: Pick<ProfileRef, 'dir'>) => { provided.add(keyOf(machine, profile.dir)) }
+
 /** `ensureProfileUi`, unless it's under way for that profile already: one at a time per profile, however many ask. */
 function ensureOnce(registry: Pick<Registry, 'installProfile'>, machine: string, profile: ProfileRef, quiet = false) {
   const key = keyOf(machine, profile.dir)
+  if (provided.has(key)) return Promise.resolve()
   const under = loading.get(key)
   if (under) return under
   const done = ensureProfileUi(registry, machine, profile)
@@ -380,5 +386,5 @@ export async function profileUisLoaded() {
 
 /** Tests: forget every profile's UI. */
 export function resetProfileUi() {
-  known.clear(); loading.clear(); globals.clear(); reopened.clear(); revokedRan.clear(); revokedList = []; allowed = []; declined = []; allowedLoad = undefined; load = loadProfileUi
+  known.clear(); loading.clear(); globals.clear(); provided.clear(); reopened.clear(); revokedRan.clear(); revokedList = []; allowed = []; declined = []; allowedLoad = undefined; load = loadProfileUi
 }
