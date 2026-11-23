@@ -402,8 +402,9 @@ export type UiApi = {
   /**
    * A theme for code and the terminal (`Theme`: `{ id, name, appearance, syntax?, terminal?, accent? }`), offered in
    * Settings → Appearance's picker for its appearance, under this extension's name. Its id starts with the extension's
-   * (`<extension>.<name>`). A theme that doesn't read throws, saying what's wrong. Chosen, it colours the whole window,
-   * a profile's too.
+   * (`<extension>.<name>`). A theme that doesn't read throws, saying what's wrong. Chosen, it colours code, diffs and
+   * the terminal everywhere in the window (a profile's theme too) and its accent unless the user chose one; the
+   * window's own backgrounds, text and links only with Match window to theme on.
    */
   theme(theme: Theme): void
   /** Run any action (window, app or machine) through the window's router, outside React. In components: `useDispatch`. */

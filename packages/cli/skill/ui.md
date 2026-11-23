@@ -292,8 +292,9 @@ let it scroll.
 
 Bring a theme for code and the terminal with `superego.theme(theme)`. The user picks one theme for light and one for
 dark in Settings → Appearance; yours is listed in the picker for its `appearance`, under your extension's name. Chosen,
-it colours code in the editor, in messages and in rendered files, diffs, and the terminal, in the whole window (a
-profile's theme too, not only its threads). `accent` colours the window's accent too, unless the user chose their own.
+it colours code in the editor, in messages and in rendered files, diffs, and the terminal, everywhere in the window (a
+profile's theme too, not only in its own threads); the window's own backgrounds and text only with Match window to
+theme on (below). `accent` colours the window's accent too, unless the user chose their own.
 With Match window to theme on (Settings → Appearance), the window's backgrounds, text and lines follow the theme's
 ground and text (`ui.bg`/`ui.fg`, else the terminal's), derived by a few fixed steps, and its links `ui.link`;
 `ui['accent-text']` is the text on its accent.
