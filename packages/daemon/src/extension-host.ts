@@ -898,10 +898,11 @@ export function createExtensionHost(host: Host, later: { profiles(): ProfileHost
     reports.push(...failures.values())
     // Folders of extensions not set up here now: a profile's not loaded yet, or one gone. The user's to delete.
     let names: string[] = []
-    try { names = readdirSync(join(options.dataDir, 'extensions')) } catch (error) {
+    try { names = readdirSync(join(options.dataDir, 'extensions'), { withFileTypes: true }).filter((entry) => entry.isDirectory()).map((entry) => entry.name) } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
     }
     const folders = names.filter((name) => !records.get(name)?.ready).sort().map((name) => ({ name, dir: extensionDir(name) }))
+    const leftover = settings.leftoverSecrets()
     const report: ExtensionsReport = {
       api: EXTENSION_API,
       extensions: reports,
@@ -910,6 +911,7 @@ export function createExtensionHost(host: Host, later: { profiles(): ProfileHost
         ...profiles.errors().map(({ ref, error }) => ({ name: ref.name, scope: ref.scope, dir: ref.dir, state: 'failed' as const, error })),
       ],
       ...(folders.length ? { folders } : {}),
+      ...(leftover.length ? { secrets: leftover } : {}),
     }
     if (threadId === undefined) return report
     const { meta } = await later.threads().get(threadId)

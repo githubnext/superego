@@ -26,7 +26,7 @@
 - A secret's field in Settings fits a narrow window, and on a phone, Escape while replacing one no longer closes
   Settings too.
 - `superego extensions` shows each extension's own folder in `~/.superego/extensions`, and lists those left behind by
-  profiles that are gone, for you to delete.
+  profiles that are gone, for you to delete, and their secrets, which `superego secrets` lists too, for you to clear.
 - API keys typed into a sign-in no longer show in the action log (`superego actions log`).
 - On a phone, swipe a dialog (New thread, Settings, any other) down to close it, as on iOS: it follows your finger and
   the app behind comes forward with it; let go short of a third of the way and it springs back. A prompt typed into

@@ -585,6 +585,11 @@ export type ExtensionsReport = {
    * here now: a profile's not loaded yet, or one gone. Kept until the user deletes them.
    */
   folders?: { name: string; dir: string }[]
+  /**
+   * Secrets set here whose setting no extension registers now (a profile's not loaded yet, or one gone), by key: kept
+   * until the user clears them (`superego secrets clear <key>`).
+   */
+  secrets?: string[]
 }
 
 export type Notifications = {

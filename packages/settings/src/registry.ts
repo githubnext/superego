@@ -58,17 +58,28 @@ export interface SettingsStore {
  */
 export interface SecretStore {
   has(key: string): boolean
+  /** Every key set, its setting registered now or not. */
+  keys(): string[]
   get(key: string): Promise<string | undefined>
   /** `undefined` clears it. */
   set(key: string, value: string | undefined): Promise<void>
   /** Where a key's value is kept, in words, for Settings to say beside it (`SettingInfo.note`). */
   about?(key: string): string | undefined
+  /** What's wrong with the whole store, if anything (its index can't be read): said beside every secret. */
+  problem?(): string | undefined
 }
+
+/**
+ * What a secret's key may be: lowercase letters, digits, `.`, `_` and `-`, starting with a letter or digit. Checked
+ * once, as a secret setting is registered: a keychain's command line takes the key as it is.
+ */
+export const SECRET_KEY = /^[a-z0-9][a-z0-9._-]*$/
 
 /** Secrets in memory: for tests, and a registry that keeps nothing. */
 export class MemorySecretStore implements SecretStore {
   values = new Map<string, string>()
   has(key: string) { return this.values.has(key) }
+  keys() { return [...this.values.keys()] }
   async get(key: string) { return this.values.get(key) }
   async set(key: string, value: string | undefined) { if (value === undefined) this.values.delete(key); else this.values.set(key, value) }
 }
@@ -164,6 +175,7 @@ export class SettingsRegistry {
     for (const setting of section.settings) {
       if (this.#settings.has(setting.key)) throw new Error(`Setting ${setting.key} is already registered`)
       if (isSecret(setting) && !this.#secrets) throw new Error(`Setting ${setting.key} is a secret, and there's no secret store here: secrets are a machine's settings`)
+      if (isSecret(setting) && !SECRET_KEY.test(setting.key)) throw new Error(`Secret ${JSON.stringify(setting.key)}: a secret's key is lowercase letters, digits, ".", "_" and "-"`)
     }
     this.#sections.set(section.id, section)
     for (const setting of section.settings) {
@@ -207,6 +219,11 @@ export class SettingsRegistry {
 
   /** Whether `key` is a `secret` setting, as registered now. */
   isSecret(key: string) { return isSecret(this.#settings.get(key)) }
+
+  /** Secrets set whose setting isn't registered now (its extension not set up here, or gone): the user's to clear. */
+  leftoverSecrets(): string[] {
+    return this.#secrets ? this.#secrets.keys().filter((key) => !isSecret(this.#settings.get(key))).sort() : []
+  }
 
   /** A secret's value, by its key (registered or not: one whose extension isn't set up now still reads). */
   async secret(key: string): Promise<string | undefined> {
@@ -320,7 +337,7 @@ export class SettingsRegistry {
         const disabled = spec.disabled?.()
         const secret = isSecret(spec)
         const note = secret ? this.#secrets!.about?.(spec.key) : undefined
-        const problem = this.#problems.get(spec.key)
+        const problem = this.#problems.get(spec.key) ?? (secret ? this.#secrets!.problem?.() : undefined)
         return {
           ...resolveType(spec), key: spec.key, title: spec.title, default: secret ? false : spec.default,
           ...(spec.description ? { description: spec.description } : {}),

@@ -84,7 +84,8 @@ export function systemKeychain(app: AppConfig, dataDir: string, platform: NodeJS
     const keychain: Keychain = {
       name: 'keychain',
       async set(key, value) {
-        // Keys are `<name>.<key>` and the service ours, base64 the value: nothing here needs quoting.
+        // The service is ours, the value base64, and a key only what a secret setting may be (`SECRET_KEY`, checked as
+        // it's registered): nothing in this line needs quoting.
         const command = `add-generic-password -U -s ${service} -a ${key} -w ${encode(value)}\n`
         if (command.length >= SECURITY_LINE) throw new TooLong(`${key} is too long for the keychain's command line`)
         const result = await run('security', ['-i'], command)
@@ -180,6 +181,11 @@ export class FileSecretStore implements SecretStore {
   }
 
   has(key: string) { return Object.hasOwn(this.#index.secrets, key) }
+
+  keys() { return Object.keys(this.#index.secrets) }
+
+  /** Why no secret can be read or set here, if none can (`secrets.json` unreadable): said beside each one in Settings. */
+  problem() { return this.#broken }
 
   /** Where a key's value is (`keychain`, `secret-service` or `file`), if it's set. */
   where(key: string) { return this.#index.secrets[key]?.in }

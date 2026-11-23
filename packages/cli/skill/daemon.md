@@ -122,7 +122,9 @@ action is refused to a thread's shell (its command line says whose it is) and to
 `superego.machines.call`), on this machine or passed on to another, so an extension can't set its own or another's. The action log keeps `•••` for its value, and a `validate` message never
 has it (the value in it shows as `•••`). Settings says beside each one where it's kept.
 
-Secrets, like `dir`, are the name's: two profiles' extensions of one name share them.
+Secrets, like `dir`, are the name's: two profiles' extensions of one name share them. A secret's key is the
+extension's name, a dot, and lowercase letters, digits, `.`, `_` or `-` (`mail.api-token`): another is refused as the
+section is registered.
 
 <!-- check: daemon; declare function connect(token: string): void -->
 ```ts

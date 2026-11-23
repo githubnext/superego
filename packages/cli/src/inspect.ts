@@ -22,6 +22,10 @@ export function formatReport(report: ExtensionsReport, machine: string, id: stri
     lines.push('', 'Folders of extensions not set up here now (a profile not loaded yet, or gone): yours to delete once unneeded')
     for (const f of report.folders) lines.push(`${f.name}  (${f.dir})`)
   }
+  if (report.secrets?.length) {
+    lines.push('', `Secrets of extensions not set up here now: yours to clear once unneeded (${id} secrets clear <key>)`)
+    for (const key of report.secrets) lines.push(key)
+  }
   if (report.profiles.length) {
     lines.push('', 'Profiles')
     for (const p of report.profiles) lines.push(`${p.scope}:${p.name}: ${p.state}${p.error ? `: ${p.error}` : ''}  (${p.dir})`)

@@ -86,6 +86,8 @@ it('says why, rather than writing over it, when secrets.json can\'t be read', as
   const store = new FileSecretStore({ app, dataDir: dir, where: 'file' })
   expect(error).toHaveBeenCalledWith(expect.stringMatching(/secrets\.json can't be read/))
   error.mockRestore()
+  // Said beside every secret, rather than each reading as not set.
+  expect(store.problem()).toMatch(/secrets\.json can't be read .*move it aside/)
   await expect(store.set('mail.token', 'x')).rejects.toThrow(/can't be read .*move it aside/)
   expect(await readFile(join(dir, 'secrets.json'), 'utf8')).toBe('{ not json')
 })

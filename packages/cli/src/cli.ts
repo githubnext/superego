@@ -444,10 +444,18 @@ async function secretsCommand(sub: string | undefined, rest: string[], machineNa
   const settings = snapshot.sections.flatMap((section) => section.settings.map((setting) => ({ setting, section })))
   if (!sub) {
     const secrets = settings.filter(({ setting }) => setting.type === 'secret')
-      .map(({ setting, section }) => ({ key: setting.key, title: setting.title, section: section.title, set: snapshot.values[setting.key] === true }))
-    return print(secrets, () => {
-      if (!secrets.length) return console.log(`No extension on ${machine.label} asks for a secret now.`)
-      table(secrets.map((s) => [s.key, s.set ? 'set' : 'not set', `${s.section}: ${s.title}`]))
+      .map(({ setting, section }) => ({ key: setting.key, title: setting.title, section: section.title, set: snapshot.values[setting.key] === true, ...(setting.problem ? { problem: setting.problem } : {}) }))
+    // Set, and no extension asks for them now: kept until cleared.
+    const report = await on(machine, (call) => call('extension.inspect', {}))
+    const leftover = (report.secrets ?? []).map((key) => ({ key, set: true, leftover: true as const }))
+    return print([...secrets, ...leftover], () => {
+      if (!secrets.length) console.log(`No extension on ${machine.label} asks for a secret now.`)
+      else table(secrets.map((s) => [s.key, s.set ? 'set' : 'not set', `${s.section}: ${s.title}`]))
+      for (const s of secrets) if (s.problem) console.log(`${s.key}: ${s.problem}`)
+      if (leftover.length) {
+        console.log(`\nSet, but no extension asks for them now (a profile not loaded yet, or gone): clear one with ${app.id} secrets clear <key>`)
+        for (const s of leftover) console.log(s.key)
+      }
     })
   }
   let value: string | null = null

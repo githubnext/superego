@@ -172,7 +172,7 @@ until `machines login`.
 superego settings                     # every setting and its value
 superego settings set <key> <value>   # value is JSON, or plain text; --all: every enabled machine
 superego settings reset <key>
-superego secrets                      # extensions' secrets (keys, tokens): set or not, never their values
+superego secrets                      # extensions' secrets (keys, tokens): set or not, never their values; and those left set that no extension asks for now
 superego secrets set <key>            # asked for without echo, or from stdin; yours alone: refused from a thread's shell
 superego secrets clear <key>
 superego layout                       # the window's layout.json: the views there are, the places each fits, and where they are

@@ -123,6 +123,30 @@ describe('upsert', () => {
     expect(secrets.values.size).toBe(0)
   })
 
+  it("takes a secret's key only as letters, digits, dots, dashes and underscores: a keychain's command line has it as it is", () => {
+    const settings = new SettingsRegistry(new MemorySettingsStore(), new MemorySecretStore())
+    for (const key of ['mail.to ken', 'mail.token\nadd-generic-password', 'Mail.Token', '.mail', 'mail.tök', 'mail.token"'])
+      expect(() => settings.register({ id: `s${key}`, title: 'S', settings: [{ key, title: 'Key', type: { type: 'secret' } }] })).toThrow(/a secret's key is lowercase letters/)
+    expect(settings.spec('mail.to ken')).toBeUndefined()
+    settings.register({ id: 'mail', title: 'Mail', settings: [{ key: 'mail.api_token-2', title: 'Key', type: { type: 'secret' } }] })
+  })
+
+  it("says what's wrong with the whole secret store beside each secret, and lists those set that no setting asks for", async () => {
+    const secrets = Object.assign(new MemorySecretStore(), { broken: undefined as string | undefined, problem() { return this.broken } })
+    const settings = new SettingsRegistry(new MemorySettingsStore(), secrets)
+    settings.register({ id: 'mail', title: 'Mail', settings: [{ key: 'mail.token', title: 'Token', type: { type: 'secret' } }, { key: 'mail.from', title: 'From', type: { type: 'string' }, default: '' }] })
+    expect((await settings.snapshot()).sections[0]!.settings[0]!.problem).toBeUndefined()
+    secrets.broken = "secrets.json can't be read"
+    const [secret, plain] = (await settings.snapshot()).sections[0]!.settings
+    expect(secret!.problem).toBe("secrets.json can't be read")
+    expect(plain!.problem).toBeUndefined()
+
+    await secrets.set('mail.token', 'x')
+    await secrets.set('gone.token', 'y')
+    await secrets.set('mail.from', 'z')
+    expect(settings.leftoverSecrets()).toEqual(['gone.token', 'mail.from'])
+  })
+
   it('refuses a secret where there is no secret store (a window\'s settings)', () => {
     const settings = new SettingsRegistry()
     expect(() => settings.register({ id: 'x', title: 'X', settings: [{ key: 'x.key', title: 'Key', type: { type: 'secret' } }] })).toThrow(/no secret store/)
