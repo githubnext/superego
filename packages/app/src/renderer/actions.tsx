@@ -2,7 +2,7 @@
 // forwarded to where they run (see `dispatch`). Every dispatch from this window is logged, and the log is one action
 // away (Show action log).
 import { useEffect, useState } from 'react'
-import { bool, createRouter, int, lit, obj, offers, opt, str, type Router, union, type ActionDef, type ActionInfo, type ActionLogEntry, type AppConfig, type Exposure, type Json, type JsonSchema, type Static } from '@superego/protocol'
+import { bool, createRouter, int, lit, obj, offers, opt, str, type Router, union, type ActionDef, type ActionInfo, type ActionLogEntry, type AppConfig, type SettingsSnapshot, type Exposure, type Json, type JsonSchema, type Static } from '@superego/protocol'
 import { Dialog } from '@superego/ui'
 import type { ReturnedMessage, ThreadInfo } from '@superego/protocol'
 import type { MachineEntry } from '../shared/bridge.ts'
@@ -16,6 +16,7 @@ import { startRename } from './rename.ts'
 import { windowState } from './local-state.ts'
 import { MACHINES } from './settings/tabs.ts'
 import { giveBack } from './returned.ts'
+import { watched } from './client.ts'
 import { clearProblem, reportProblem } from './machine-problems.ts'
 import { openSetup } from './Setup.tsx'
 import { maximizedStore, THREAD_COLUMN, toggleMaximized } from './maximized.ts'
@@ -100,12 +101,15 @@ export function createWindowRouter() {
   let version = 0
 
   /**
-   * The params of `target`'s action `id` the log keeps as `•••`: those it says hold secrets, or all of them while the
-   * window doesn't know it (one registered after it listed them: a profile's, as it loads), as any could.
+   * The params of `target`'s action `id` the log keeps as `•••` (dispatched with `params`): those it says hold secrets,
+   * and a secret setting's value as it's set; or all of them while the window doesn't know it (one registered after it
+   * listed them: a profile's, as it loads), or knows it takes a key it doesn't say it does (a machine without `secrets`).
    */
-  const secretOf = (target: string, id: string): string[] | 'all' => {
+  const secretOf = (target: string, id: string, params?: Record<string, unknown>): string[] | 'all' => {
     const action = remote.get(target)?.find((a) => a.id === id)
-    return action ? action.secret ?? [] : 'all'
+    if (!action) return 'all'
+    if (target !== APP && UNDECLARED_SECRETS.has(id) && !offers(context?.machines.find((m) => m.id === target), 'secrets')) return 'all'
+    return [...action.secret ?? [], ...(id === 'settings.set' && target !== APP && secretSetting(target, params?.key) ? ['value'] : [])]
   }
 
   const dispatch: Dispatch = (id, params = {}, { source = 'ui', machine } = {}) => {
@@ -114,14 +118,14 @@ export function createWindowRouter() {
       return router.dispatch(id, params, context, { source })
     }
     if (machine === APP || remote.get(APP)?.some((a) => a.id === id)) {
-      return router.track(id, params, source, () => window.superego.call(APP, id, params), { secret: secretOf(APP, id) })
+      return router.track(id, params, source, () => window.superego.call(APP, id, params), { secret: secretOf(APP, id, params) })
     }
     const target = machine ?? (typeof params.machine === 'string' ? params.machine : undefined) ?? context?.selection?.machine ?? 'local'
     const action = remote.get(target)?.find((a) => a.id === id)
     const { machine: _machine, ...rest } = params
     const filled = action?.thread && rest.thread === undefined && context?.selection?.machine === target ? { ...rest, thread: context.selection.thread } : rest
     // Through action.run: it finds actions registered after this window connected (a profile's, as it loads).
-    const ran = router.track(id, filled, `${source} → ${target}`, () => window.superego.call(target, 'action.run', { id, params: filled }), { secret: secretOf(target, id) })
+    const ran = router.track(id, filled, `${source} → ${target}`, () => window.superego.call(target, 'action.run', { id, params: filled }), { secret: secretOf(target, id, filled) })
     // A pane opened from this window was asked for here: the focus goes into it. (The agent's open beside, unfocused.)
     if (id === 'pane.open') void ran.then((pane) => { const opened = (pane as { id?: string } | null)?.id; if (opened) focusColumn(opened) }, () => {})
     // A stop from this window gives the messages you'd queued back to the thread's composer here, to write again: this
@@ -174,6 +178,24 @@ export function createWindowRouter() {
   }
 }
 export type WindowRouter = ReturnType<typeof createWindowRouter>
+
+/**
+ * Actions a machine without the `secrets` feature (0.1.10) takes a key or a sign-in's answer with, without saying
+ * which of their params hold it (`ActionInfo.secret`): the log keeps all their params as `•••`.
+ */
+const UNDECLARED_SECRETS = new Set(['auth.signIn', 'auth.respond', 'providers.save'])
+
+/**
+ * Whether `machine`'s setting `key` holds a secret: one kept as a secret, or (a 0.1.10 machine's, before `secrets`) a
+ * text field it masks, where keys were kept; any, while the window doesn't have that machine's settings (Settings
+ * shows them).
+ */
+function secretSetting(machine: string, key: unknown): boolean {
+  const snapshot = watched<SettingsSnapshot>(machine, 'settings.watch', {})
+  const setting = snapshot?.sections.flatMap((s) => s.settings).find((s) => s.key === key)
+  if (!snapshot || !setting) return true
+  return setting.type === 'secret' || (setting.type === 'string' && (setting as { secret?: boolean }).secret === true)
+}
 
 /** The dev server's restart endpoint, defined only when the window is served by it (see dev-packages.ts). */
 declare const __SUPEREGO_DEV_SERVER__: string | undefined

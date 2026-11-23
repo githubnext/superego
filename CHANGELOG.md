@@ -31,7 +31,8 @@
   Settings too.
 - `superego extensions` shows each extension's own folder in `~/.superego/extensions`, and lists those left behind by
   profiles that are gone, for you to delete, and their secrets, which `superego secrets` lists too, for you to clear.
-- API keys typed into a sign-in no longer show in the action log (`superego actions log`).
+- API keys typed into a sign-in, a provider or a secret setting no longer show in the action log (`superego actions log`,
+  or the window's), on a machine still running 0.1.10 too.
 - On a phone, swipe a dialog (New thread, Settings, any other) down to close it, as on iOS: it follows your finger and
   the app behind comes forward with it; let go short of a third of the way and it springs back. A prompt typed into
   New thread is kept for next time; with a name, attached files or another form's unsaved changes, a swipe asks
