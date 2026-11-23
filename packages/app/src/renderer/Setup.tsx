@@ -369,22 +369,25 @@ function Way({ icon, title, detail, open, onToggle, children }: { icon: ReactNod
 }
 
 /**
- * A pasted key: whose it is, told from the key (or asked, when it doesn't say), refused when it can't be one, and
- * tried with its provider before it's kept.
+ * A pasted key (a line from a shell file too): whose it is, told from the key (or asked, when it doesn't say), or
+ * the provider it's for (`of`: one picked among More providers); refused when it can't be one, and tried with its
+ * provider before it's kept.
  */
-function KeyForm({ machine, providers, all, onDone }: { machine: string; providers: ProviderAuthInfo[]; all: ProviderAuthInfo[]; onDone(provider: string): void }) {
+function KeyForm({ machine, providers, all, of, onDone, onEscape }: {
+  machine: string; providers: ProviderAuthInfo[]; all: ProviderAuthInfo[]; of?: ProviderAuthInfo; onDone(provider: string): void; onEscape?(): void
+}) {
   const dispatch = useRegistry().router.dispatch
   const [text, setText] = useState('')
   // Picked by hand: the key didn't say, or said wrong.
   const [picked, setPicked] = useState<string>()
   const [problem, setProblem] = useState<string>()
   const [signing, setSigning] = useState<{ provider: string; key: string; n: number }>()
-  const detected = keyProvider(text, all)
-  const provider = picked ?? detected
+  const detected = of ? undefined : keyProvider(text, all)
+  const provider = of?.id ?? picked ?? detected
   const nameOf = (id: string) => all.find((p) => p.id === id)?.name ?? id
   // What's wrong with it before it's sent: a Claude subscription token.
   const wrong = keyProblem(text, { sent: false })
-  const asking = Boolean(text.trim()) && !wrong && (!detected || picked !== undefined)
+  const asking = !of && Boolean(text.trim()) && !wrong && (!detected || picked !== undefined)
   const options = [...providers, ...provider && !providers.some((p) => p.id === provider) ? all.filter((p) => p.id === provider) : []]
   const submit = () => {
     const wrong = keyProblem(text)
@@ -394,8 +397,9 @@ function KeyForm({ machine, providers, all, onDone }: { machine: string; provide
   return (
     <>
       <form className="setup__key" onSubmit={(e) => { e.preventDefault(); submit() }}>
-        <TextField type="password" aria-label="API key" autoFocus placeholder="Paste a key" value={text}
-          onChange={(e) => { setText(e.target.value); setProblem(undefined); setSigning(undefined) }} />
+        <TextField type="password" aria-label={of ? `${of.name} API key` : 'API key'} autoFocus placeholder="Paste a key" value={text}
+          onChange={(e) => { setText(e.target.value); setProblem(undefined); setSigning(undefined) }}
+          onKeyDown={(e) => { if (onEscape && e.key === 'Escape') { e.preventDefault(); onEscape() } }} />
         {asking && <Select aria-label="Provider" value={provider ?? null} {...provider ? {} : { placeholder: 'Whose key?' }}
           options={options.map((p) => ({ value: p.id, label: p.name }))} onChange={(id) => { if (id) { setPicked(id); setSigning(undefined) } }} />}
         <Button type="submit" variant="primary" disabled={!text.trim() || !provider || Boolean(wrong)}>Add</Button>
@@ -403,7 +407,7 @@ function KeyForm({ machine, providers, all, onDone }: { machine: string; provide
       {detected && picked === undefined && text.trim() && (
         <p className="setup__note">{nameOf(detected)} key · <button type="button" className="setup__link" onClick={() => setPicked(detected)}>Not {nameOf(detected)}?</button></p>
       )}
-      {!text.trim() && (
+      {!of && !text.trim() && (
         <p className="setup__note">Get one from {FIRST_KEYS.map((id, i) => (
           <span key={id}>{i ? (i === FIRST_KEYS.length - 1 ? ' or ' : ', ') : ''}<a href={KEY_PAGES[id]} target="_blank" rel="noreferrer">{nameOf(id)}</a></span>
         ))}.</p>
@@ -467,11 +471,12 @@ function MoreProviders({ machine, providers, onDone }: { machine: string; provid
   const dispatch = useRegistry().router.dispatch
   const [query, setQuery] = useState('')
   const [keyFor, setKeyFor] = useState<string>()
-  const [signing, setSigning] = useState<{ provider: string; type: 'api_key' | 'oauth'; key?: string; n: number }>()
+  // A sign-in, or a provider's own way of taking its key (a flow asking more than the key: Bedrock's, Vertex's).
+  const [signing, setSigning] = useState<{ provider: string; type: 'api_key' | 'oauth'; n: number }>()
   const [own, setOwn] = useState(false)
-  const start = (provider: string, type: 'api_key' | 'oauth', key?: string) => {
+  const start = (provider: string, type: 'api_key' | 'oauth') => {
     setKeyFor(undefined)
-    setSigning((was) => ({ provider, type, ...(key ? { key } : {}), n: (was?.n ?? 0) + 1 }))
+    setSigning((was) => ({ provider, type, n: (was?.n ?? 0) + 1 }))
   }
   const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean)
   const listed = providers.filter((p) => words.every((w) => `${p.name} ${p.id}`.toLowerCase().includes(w)))
@@ -484,21 +489,21 @@ function MoreProviders({ machine, providers, onDone }: { machine: string; provid
           <li key={p.id}>
             <div className="setup__provider">
               <span className="setup__what">{p.name}</span>
-              {keyFor === p.id ? (
-                <form onSubmit={(e) => { e.preventDefault(); const key = (new FormData(e.currentTarget).get('key') as string).trim(); if (key) start(p.id, 'api_key', key) }}>
-                  <TextField name="key" type="password" autoFocus placeholder="API key" aria-label={`${p.name} API key`}
-                    onKeyDown={(e) => { if (e.key === 'Escape') { e.preventDefault(); setKeyFor(undefined) } }} />
-                </form>
-              ) : (
+              {keyFor !== p.id && (
                 <span className="setup__actions">
                   {p.oauth && <Button onClick={() => start(p.id, 'oauth')}>Sign in</Button>}
-                  {p.apiKey && <Button onClick={() => p.keyFlow ? start(p.id, 'api_key') : setKeyFor(p.id)}>{p.keyFlow ? 'Set up…' : 'API key…'}</Button>}
+                  {p.apiKey && <Button onClick={() => {
+                    if (p.keyFlow) return start(p.id, 'api_key')
+                    setSigning(undefined)
+                    setKeyFor(p.id)
+                  }}>{p.keyFlow ? 'Set up…' : 'API key…'}</Button>}
                 </span>
               )}
             </div>
+            {keyFor === p.id && <KeyForm machine={machine} providers={[p]} all={providers} of={p} onDone={onDone} onEscape={() => setKeyFor(undefined)} />}
             {signing?.provider === p.id && (
-              <SignInFlow key={signing.n} machine={machine} title={signing.key ? 'Checking the key…' : 'Signing in…'}
-                start={() => dispatch('auth.signIn', { provider: p.id, type: signing.type, ...(signing.key ? { key: signing.key } : {}), ...(signing.type === 'api_key' ? { check: true } : {}) }, { machine, source: 'setup' }) as Promise<{ flow: string }>}
+              <SignInFlow key={signing.n} machine={machine} title="Signing in…"
+                start={() => dispatch('auth.signIn', { provider: p.id, type: signing.type, ...(signing.type === 'api_key' ? { check: true } : {}) }, { machine, source: 'setup' }) as Promise<{ flow: string }>}
                 onClose={() => setSigning(undefined)} onDone={() => onDone(p.id)} />
             )}
           </li>

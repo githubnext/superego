@@ -279,6 +279,13 @@ it('finds any other provider in setup itself, and adds an endpoint of your own t
   await click(way('More providers'))
   await type(container.querySelector<HTMLInputElement>('.setup__open input[type=search]')!, 'groq')
   expect([...container.querySelectorAll('.setup__provider .setup__what')].map((n) => n.textContent)).toEqual(['Groq'])
+  // Its key field is the same as Paste an API key's: what can't be a key is refused before it's sent.
+  await click(button('API key…'))
+  await type(container.querySelector<HTMLInputElement>('.setup__more input[type=password]')!, 'hello')
+  await act(async () => { container.querySelector<HTMLFormElement>('.setup__more form')!.requestSubmit() })
+  await settle()
+  expect(text()).toContain("That doesn't look like an API key.")
+  expect(container.querySelector('.auth-flow')).toBeNull()
   await click(button('Add your own OpenAI-compatible endpoint'))
   await type(container.querySelector<HTMLInputElement>('#provider-name')!, 'Mine')
   await type(container.querySelector<HTMLInputElement>('#provider-url')!, baseUrl)
