@@ -121,6 +121,37 @@ superego.view('orders.open', { title: 'Orders', icon: 'list', context: 'window',
   error in its place.
 - The `skills` extension's *Skills* is one (`extensions/skills/src/daemon.ts`).
 
+### Surfaces
+
+A **surface** fills the window's main area, where a thread otherwise shows: a notes page, a canvas. An app extension's
+UI half registers it, or a global profile's (`global: true`, [profiles.md](profiles.md)); a thread-bound profile's
+can't, as it would have nowhere to open.
+
+```tsx
+superego.surface('notes.page', {
+  title: (params) => String(params.name),          // the title bar, history; or a string
+  icon: NotebookIcon,
+  component: NotePage,                             // { machine, kind, params, thread, open(params) }
+  match: 'note:',                                  // links of this scheme open it, in any Markdown (an agent's answer too)…
+  params: (href) => ({ name: href.slice(5) }),     // …with these params (default { href })
+  about: (params) => `The user has the note "${params.name}" open.`,  // a thread started on it is told this first
+  profile: 'notes',                                // the profile that thread runs (default: the machine's)
+  agent: 'docked',                                 // its thread as a column beside it, or 'floating': a card over it
+})
+```
+
+- Open one with the window action `surface.open` (`{ kind, params, machine? }`, this computer unless given):
+  `superego.dispatch('surface.open', { kind: 'notes.page', params: { name } })`, a space's list say. Another client
+  may ask a window to (`client.perform`). In the component, `open(params)` shows another of its kind in its place.
+- The title bar shows its title, and a button that shows or hides its thread. Back and forward go through surfaces as
+  through threads; selecting a thread leaves the surface for it.
+- **Its thread.** One thread is docked to each surface (by kind, machine and params), remembered in the window. With
+  none, the column asks: what you send starts a thread with the surface's `profile`, its first message `about(params)`
+  then yours, and docks it. It's listed in the sidebar like any other; the column's ↗ opens it as the thread, ✕
+  undocks it. The component gets it as `thread`. How the agent works on what the surface shows is the profile's: tools
+  in its daemon half, and live values the component watches.
+- On a phone the surface is the whole screen; its thread opens as the thread, from the title.
+
 ### On a phone
 
 Below 600px wide there's no rail and no title bar. `space` views are the drawer, with the others to switch to at its

@@ -38,12 +38,20 @@ export default defineProfile({
   without: ['agent-ui'],                             // built-ins to leave out
   options: { worktrees: true },                      // what its threads ask extensions for, by name: a worktree each
   extends: 'user:default',                           // start from your profile of that name, and add to it
+  // global: true,                                   // yours only: part of the app, not only of its threads (below)
   mcpServers: [                                      // the mcp-servers extension's key: MCP servers its threads use
     'linear',                                        // the machine's, by name
     { docs: { command: 'node', args: ['./tools/docs-mcp.js'], auth: { type: 'env', names: ['DOCS_TOKEN'] } } },  // its own
   ],
 })
 ```
+
+**Global profiles.** `global: true` makes one of your own profiles part of the app, not only of its threads: the daemon
+loads it as it starts (its daemon halves run for the daemon's life, whatever threads there are), and the window installs
+its UI as the app's: its views go in any place (a space in the rail), its slots and tool rows apply to every thread, its
+styles are the window's, and it can add **surfaces** (views that fill the main area, with a thread docked beside them:
+`superego --skill window`). A Notes app or a canvas is a global profile. A project's profile can't be global (it's
+told so in its `problems`), and a profile extending a global one isn't global unless it says so itself.
 
 Every field is optional, and no other is taken: a misspelt key, or one that's gone, fails the type check. A profile
 that loads with one anyway (a key no extension here reads, a `without` naming no extension) is told so on its card
@@ -56,7 +64,8 @@ that loads with one anyway (a key no extension here reads, a `without` naming no
     (`superego --skill tools`), or
   - a **daemon half**, `defineDaemonExtension({ name, setup(superego) { … } })`: actions the UI and command
     line run, live values, a thread's blocked status, and agent parts of its own (`superego --skill daemon`).
-- **`ui`** are modules for the window (`superego --skill ui`). They draw only in this profile's threads. A space (a
+- **`ui`** are modules for the window (`superego --skill ui`). They draw only in this profile's threads, unless it's
+  global. A space (a
   rail tab and its sidebar) comes from a daemon half instead: a data view (`superego.view`, `context: 'window'`) of
   one of your own profiles' may fit `space`, and shows while the profile is loaded (a project's may not).
 - **`panes`** describes each pane kind the UI registers, so the agent knows it can open one and with which params.

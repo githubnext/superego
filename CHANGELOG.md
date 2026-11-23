@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Your own profiles can be global (`global: true`): loaded as Superego starts, and part of the whole app rather than
+  only their threads. They can add spaces to the rail and surfaces: views that fill the main area, like a notes page
+  or a canvas, with a thread docked beside them that knows what you have open.
 - One of your own profiles can add a space, a tab in the rail with its sidebar: a data view of its daemon extension
   that fits `space`. It shows while the profile is loaded (as soon as the daemon starts, when a thread of it is in use).
   A project's profiles still can't.

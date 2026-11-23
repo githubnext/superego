@@ -55,10 +55,11 @@ a daemon half's `defineDaemonExtension`, `panes: { order: '…' }`). The agent o
 
 ## What a module can import
 
-- `'react'` and `'react/jsx-runtime'`: the window's own React (19).
+- `'react'` and `'react/jsx-runtime'`: the window's own React (19); `'react-dom'` and `'react-dom/client'`, its own too.
 - `'superego/ui'`: the hooks and components below: the stable surface. `'superego/unstable'`: the window's own
   workings (`useRegistry`, `useShell`, …), which change with it.
-- Its own files, by relative path (`'./chart.ts'`).
+- Its own files, by relative path (`'./chart.ts'`), plain `.js` among them: a library vendored as one ESM bundle, with
+  React left as bare imports (`esbuild --bundle --format=esm --external:react --external:react-dom …`).
 
 Nothing else: no npm packages, no CSS imports. TSX and TS are compiled by the daemon (types stripped, JSX for React),
 which doesn't type-check them: `superego extension test` does.
@@ -68,6 +69,7 @@ which doesn't type-check them: `superego extension test` does.
 | | |
 |---|---|
 | `superego.pane(kind, { title, component, icon?, file?, menu?, opens?, fallback?, folders?, urls?, width? })` | a kind of pane. `title`: a string, or `(pane) => string`. `component` gets `{ machine, thread, pane }`; `pane.params` is what it was opened with. `icon`: its glyph on the pane's tab (a Phosphor icon from `superego/ui`). `file: true`: its title is a file name, and the tab shows it as one. `menu: true` offers it in the thread's pane menu (it needs no params). `opens: (path) => boolean` makes files named in the thread open in it (`/\.csv$/.test(path)`), ahead of the editor (`fallback: true`: any file no kind `opens`); `folders: true`, folders (`params.path`, `''` for the thread's own); `urls: true`, web pages a thread links to, when opened beside (`params.url`). `width`: share of the row, 0.5 by default |
+| `superego.surface(kind, { title, component, icon?, match?, params?, about?, profile?, agent? })` | a view that fills the main area, with a thread docked beside it: an app extension's or a global profile's only ([window.md](window.md#surfaces)) |
 | `superego.tool(name, row, { fold? })` | how calls to a tool look in the transcript, described: `{ icon?, verbs?, verb?, subject?, stat?, meta?, body?, phrase?, file?, weight? }`. `verbs`: done, working, failed (`['Read', 'Reading', 'Read failed']`); `verb(call)`, a call's own instead, where one needs another. The functions get the call (below) and its `state` (`idle`, `working`, `done`, `error`): `subject` is what it acted on, after the verb (text in mono, or a node such as `<ThreadRef machine id />`); `stat` its lines `{ added, removed }`; `meta` a little more at the row's end; `body` what it opens to. `phrase(count)` says what `count` calls did in a run's line (`read 2 files`); `file(args)` names the one file a lone call was about there; `weight` decides which kind leads that line. Anything left out (or returning `undefined`) is the default: its name, its `command`/`path`/`pattern`, its output; `null` from `subject` or `body` is nothing. `fold: false` shows them under their run of work, open, instead of folded into it: for what the agent shows you (as `images` does) |
 | `superego.tool(name, component, { fold? })` | draw calls to a tool whole, yourself. Gets `{ machine, thread, call: { id, name, arguments }, result?: { text, isError, details, images? }, live?: { status, output, details } }`; `text` is the output, then a failed call's error message, as the user should read it (not in the `<harness>` wrapper the model saw); `images` are those the model was shown, as `ImageItem`s: where each is in the transcript (`entry`), its `mimeType`, `width` and `height`, not its pixels; read one with `call(machine.id, 'image.read', { thread: thread.id, image: { entry: entry.id, message: entry.message, block: entry.block }, thumbnail: true })` (`{ data, mimeType }`, base64; leave out `thumbnail` for the whole of it) |
 | `superego.tool('prefix*', row \| component)` | a name ending in `*` matches every tool whose name starts so (`mcp__*`), where the tool has no row of its own; the longest prefix wins. Tools of one prefix's row with a `phrase` count as one kind in a run's line. |
