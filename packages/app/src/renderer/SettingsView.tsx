@@ -84,7 +84,8 @@ export function SettingsView({ machines, onClose, pane = false }: { machines: Ma
       </Dialog>
     )
   }
-  // Down the side in the window; across the top in a dialog (app.css), where the arrow keys follow.
+  // Down the side in the window; across the top in a dialog (app.css), where the arrow keys follow. A panel of its own
+  // for each tab (keyed), so one opens at its top, not scrolled as the last was.
   const body = (
     <BaseUI.Tabs.Root className="settings__body" orientation={pane ? 'vertical' : 'horizontal'} value={target} onValueChange={(value: string) => setTarget(value)}>
       <BaseUI.Tabs.List className="settings__nav" render={<nav />}>
@@ -97,7 +98,7 @@ export function SettingsView({ machines, onClose, pane = false }: { machines: Ma
           </BaseUI.Tabs.Tab>
         ))}
       </BaseUI.Tabs.List>
-      <BaseUI.Tabs.Panel value={target} className="settings__content">{content}</BaseUI.Tabs.Panel>
+      <BaseUI.Tabs.Panel key={target} value={target} className="settings__content">{content}</BaseUI.Tabs.Panel>
     </BaseUI.Tabs.Root>
   )
   return pane

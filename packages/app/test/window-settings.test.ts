@@ -163,3 +163,11 @@ it('goes through its sections as tabs: the arrow keys move down the list, a clic
   tabs()[3]!.click()
   await ui.until(() => tabs()[3]!.hasAttribute('data-active') && $('.settings__content')?.getAttribute('role') === 'tabpanel', 'Machines open')
 })
+
+it('opens each tab at its top, not scrolled as the last one was', async () => {
+  const general = $('.settings__content')!
+  general.scrollTop = 400
+  await go('Appearance')
+  expect($('.settings__content')).not.toBe(general)
+  expect($('.settings__content')!.scrollTop).toBe(0)
+})
