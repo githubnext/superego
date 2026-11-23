@@ -14,7 +14,7 @@ export type MergedSection = Omit<SectionInfo, 'settings'> & { settings: MergedSe
 /**
  * The sections and settings of `snapshots` (by machine id), merged. A choice offers only what every machine having it
  * accepts, so one change is valid everywhere. Sections with a custom component are per-machine and left out, and so
- * are hidden settings and settings no machine could take the same value for.
+ * are hidden settings, secrets, and settings no machine could take the same value for.
  */
 export function mergeSettings(snapshots: Record<string, SettingsSnapshot>): MergedSection[] {
   const sections = new Map<string, MergedSection>()
@@ -24,7 +24,8 @@ export function mergeSettings(snapshots: Record<string, SettingsSnapshot>): Merg
       const merged = sections.get(section.id) ?? { ...section, settings: [] }
       sections.set(section.id, merged)
       for (const setting of section.settings) {
-        if (setting.hidden) continue
+        // A secret is set on each machine on its own, never to one value for all.
+        if (setting.hidden || setting.type === 'secret') continue
         const value = snapshot.values[setting.key] ?? null
         const existing = merged.settings.find((s) => s.key === setting.key)
         if (!existing) {

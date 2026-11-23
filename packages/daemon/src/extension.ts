@@ -334,6 +334,25 @@ export type DaemonApi = {
   app: AppConfig
   /** This machine's data folder (`~/.superego`): where the app keeps its own files. */
   dataDir: string
+  /**
+   * This extension's own folder on this machine, `<dataDir>/extensions/<name>`: made (0700, only the user's) the first
+   * time it's read. For what it keeps that isn't a setting nor a thread's: JSON files, a `node:sqlite` database, a
+   * cache. It stays when the extension is torn down (its profile reloaded or gone, switched off, the daemon stopping),
+   * so the next set-up finds it; `superego extensions` lists those whose extension isn't here, for the user to delete.
+   * The name's, not the profile's: two profiles' extensions of one name share it.
+   */
+  readonly dir: string
+  /**
+   * This extension's secrets: the values of its `secret` settings (`settings.register({ settings: [{ key: '<name>.token',
+   * title, type: { type: 'secret' } }] })`), which only the user sets (in Settings, or `superego secrets set`) and no
+   * client reads. Kept in the OS keychain where there is one, else encrypted in the data folder.
+   */
+  secrets: {
+    /** A secret's value, by its key (`<name>.<key>`, this extension's only); undefined while it isn't set. */
+    get(key: string): Promise<string | undefined>
+    /** Hear `key` (`<name>.<key>`) set, replaced or cleared: reconnect with the new one. Settings' `onChange` hears it too. */
+    onChange(key: string, listener: () => void): void
+  }
   /** The folder agents share on this machine (`~/.agents`, or `<APPID>_AGENTS`): skills, `AGENTS.md`. */
   agentsDir: string
   /**

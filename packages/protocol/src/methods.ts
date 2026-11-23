@@ -44,9 +44,9 @@ export const linkTo = (thread: Pick<ThreadInfo, 'id' | 'title'>) => `[${thread.t
  * connection to a port on its loopback (forward.ts). `image-read`: the `image.read` method, and transcripts whose images
  * come without their pixels (`ImageStub`). `file-locate`: the `file.locate` method. `pane-move`: the `pane.move` action.
  * `artifact-read`: the `artifact.read` method. `model-setup`: the `setup.probe` and `model.test` methods, and
- * `auth.signIn`'s `check`.
+ * `auth.signIn`'s `check`. `secrets`: the `secrets.set` action, and settings of type `secret`.
  */
-export const FEATURES = ['thread-read', 'forward', 'image-read', 'file-locate', 'pane-move', 'artifact-read', 'model-setup'] as const
+export const FEATURES = ['thread-read', 'forward', 'image-read', 'file-locate', 'pane-move', 'artifact-read', 'model-setup', 'secrets'] as const
 export type Feature = (typeof FEATURES)[number]
 
 export type ThreadId = string
@@ -538,6 +538,8 @@ export type ExtensionReport = {
   registered: Record<string, string[]>
   /** Its live values being watched now: by how many, whole, and in how many scopes. */
   watches: { value: string; whole: number; scopes: number }[]
+  /** Its folder in the data folder (`superego.dir`), once it has used one. */
+  dir?: string
 }
 
 /** What `extension.inspect` says. */
@@ -548,6 +550,11 @@ export type ExtensionsReport = {
   profiles: { name: string; scope: 'user' | 'project'; dir: string; state: 'loaded' | 'failed'; error?: string }[]
   /** Given a thread: its profile, and each extension that doesn't take part in it, with why. */
   thread?: { id: string; profile?: string; without: { extension: string; why: string }[] }
+  /**
+   * Extensions' folders in the data folder (`superego.dir`, `<dataDir>/extensions/<name>`) whose extension isn't set up
+   * here now: a profile's not loaded yet, or one gone. Kept until the user deletes them.
+   */
+  folders?: { name: string; dir: string }[]
 }
 
 export type Notifications = {

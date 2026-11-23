@@ -68,7 +68,7 @@ export type ToolCall = {
 export type TestDaemon = {
   /** The app it runs as: its own id, so its environment, and the names it gives (branches, `.<id>` folders), are its own. */
   app: AppConfig
-  /** Its data folder. */
+  /** Its data folder: a temporary one unless given, so each extension's `superego.dir` (`<dataDir>/extensions/<name>`) is the test's own. */
   dataDir: string
   /** The folder agents share (`<dataDir>/agents`): skills in `skills/`. */
   agentsDir: string
@@ -95,6 +95,14 @@ export type TestDaemon = {
    *   await daemon.dispatch('builds.cancel', { thread: thread.id })
    */
   dispatch<T = unknown>(id: string, params?: Record<string, unknown>): Promise<T>
+  /**
+   * Set one of an extension's secrets (a `secret` setting, by its key), as the user does in Settings; `null` clears it.
+   * Its extension reads it with `superego.secrets.get(key)`. A test daemon keeps secrets in its data folder (encrypted),
+   * never in your keychain.
+   *
+   *   await daemon.setSecret('email.token', 'fmu1-test')
+   */
+  setSecret(key: string, value: string | null): Promise<void>
   /**
    * Start a thread (with the profile, if there is one); with a prompt, sent and waited out.
    *
@@ -229,7 +237,7 @@ export async function testDaemon(options: TestDaemonOptions = {}): Promise<TestD
     const work = join(dataDir, 'work')
     await mkdir(work, { recursive: true })
     const daemon = await openDaemon({
-      app, dataDir, defaultCwd: work, agentsDir: join(dataDir, 'agents'), extensions: options.extensions ?? [],
+      app, dataDir, defaultCwd: work, agentsDir: join(dataDir, 'agents'), extensions: options.extensions ?? [], secrets: 'file',
       ...(options.setupTimeout ? { setupTimeout: options.setupTimeout } : {}),
       ...(options.agentPartsLimit ? { agentPartsLimit: options.agentPartsLimit } : {}),
     })
@@ -328,6 +336,7 @@ export async function testDaemon(options: TestDaemonOptions = {}): Promise<TestD
     },
     call: (method, params = {}) => peer().call(method, params),
     dispatch: (id, params = {}) => peer().call('action.run', { id, params }),
+    async setSecret(key, value) { await peer().call('action.run', { id: 'secrets.set', params: { key, value } }) },
     async thread(prompt, { cwd, profile, title } = {}) {
       const which = profile ?? (profileDir ? name : undefined)
       const thread = await peer().call<ThreadInfo>('thread.start', { ...(cwd ? { cwd } : {}), ...(which ? { profile: which } : {}), ...(title ? { title } : {}) })

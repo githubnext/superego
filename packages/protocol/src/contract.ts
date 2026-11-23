@@ -58,11 +58,14 @@ import type { ExtensionAbout } from './app.ts'
  * contribution's `{ working }` (what a working thread waits on, `Status.msg`).
  * 5.7: an agent kind's `describe` (what a thread of it runs on, where its model shows: `ThreadInfo.agent`, its
  * `model`, `provider` and `thinking`), and `ThreadInfo.context` (how full a thread's context is).
+ * 5.8: the daemon half's `secrets` (`get`, `onChange`: the values of its `secret` settings, a setting type that keeps
+ * them in the machine's secret store, which only the user sets) and `dir` (its own folder in the data folder);
+ * 'superego/testing''s `setSecret`.
  * Minor: something added (an extension that uses it asks for `^3.<minor>`); major: something an extension could rely
  * on changed or went, from 2.5 on without exception. An extension whose `api` range this doesn't satisfy is refused
  * when it's set up.
  */
-export const EXTENSION_API = '5.7.0'
+export const EXTENSION_API = '5.8.0'
 
 /** What a machine says of an extension set up there: `hello.extensions` and `features.changed` carry one each. */
 export type ExtensionManifest = Pick<ExtensionAbout, 'name' | 'version' | 'api'>

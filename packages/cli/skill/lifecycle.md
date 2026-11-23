@@ -10,6 +10,9 @@ Each set-up of an extension, in either half, has one lifetime: everything it reg
 - Teardown aborts `superego.signal`, then runs `setup`'s cleanup (if it returned one), then undoes every registration,
   last first. Each step is tried whatever the others do: a cleanup that throws is logged, and the rest still goes, its
   name too, so the next version sets up. Torn down twice, nothing more happens.
+- Its folder (`superego.dir`) isn't a registration: it stays through teardown, a reload, being switched off and its
+  profile going, so the next set-up finds what it kept. `superego extensions` lists the folders of extensions not set up
+  now, for the user to delete. Its secrets stay too (cleared in Settings, or `superego secrets clear <key>`).
 - Registrations need no cleanup. What isn't a registration does: a timer, a watcher, a fetch, a listener on something
   of its own, a process. Give it the signal (`setInterval` cleared on `abort`, `watch(path, { signal })`, `fetch(url, { signal })`,
   `addEventListener(…, { signal })`, `spawnGroup(command, args, { signal })`), or return a cleanup that stops it. A listener on the signal that throws is logged as

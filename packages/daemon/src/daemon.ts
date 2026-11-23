@@ -29,11 +29,13 @@ import { createWindowImages } from './window-images.ts'
 import { serveClient } from './handlers.ts'
 import { context, type DaemonContext, type Host } from './host.ts'
 import { createProfileHost } from './profile-host.ts'
+import { appEnv } from './paths.ts'
 import { Allowances, provideSdk } from './profiles.ts'
 import { ProfileSources } from './profile-sources.ts'
 import { createRelay, type MachineReach } from './relay.ts'
 import * as sdk from './sdk.ts'
 import { keepsRunning } from './service.ts'
+import { FileSecretStore } from './secrets.ts'
 import { createThreads } from './threads.ts'
 import { Values } from './values.ts'
 import { openWebAccess } from './web-access.ts'
@@ -47,6 +49,11 @@ export type DaemonOptions = {
   dataDir: string
   /** Defaults to `settings.json` in `dataDir`. */
   settingsStore?: SettingsStore
+  /**
+   * Where `secret` settings' values go (secrets.ts): `system`, the OS keychain where there is one, else an encrypted file
+   * in `dataDir`; `file`, that file only (tests, and `<ID>_SECRETS=file`). `system` unless the environment says `file`.
+   */
+  secrets?: 'system' | 'file'
   /** Defaults to SQLite in `dataDir`. */
   storage?: Storage
   /** The app's extensions (their daemon halves), set up in order. */
@@ -114,7 +121,8 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   // pane, an MCP server) carries that thread's mark, and its threads' shells get their own.
   delete process.env[threadEnv(options.app)]
   await mkdir(options.dataDir, { recursive: true, mode: 0o700 })
-  const settings = new SettingsRegistry(options.settingsStore ?? new FileSettingsStore(join(options.dataDir, 'settings.json')))
+  const secrets = new FileSecretStore({ app: options.app, dataDir: options.dataDir, where: options.secrets ?? (appEnv(options.app)('SECRETS') === 'file' ? 'file' : 'system') })
+  const settings = new SettingsRegistry(options.settingsStore ?? new FileSettingsStore(join(options.dataDir, 'settings.json')), secrets)
   const flows = createAuthFlows()
   const agent = await createAgentSettings(settings, options.dataDir, options.app, flows, {
     ...(options.loginEnv ? { loginEnv: options.loginEnv } : {}), ...(options.localServers ? { localServers: options.localServers } : {}),

@@ -1,6 +1,8 @@
 // The extension host: every daemon half set up here (the core's, the bundled ones, profiles'), and the extensions
 // windows declare, in one registry; what each registered about threads, and for which; and the API a daemon half's
 // setup is given (`DaemonApi`), everything it registers going through its lifetime, undone together at teardown.
+import { chmodSync, existsSync, mkdirSync, readdirSync } from 'node:fs'
+import { join } from 'node:path'
 import { defineExtension, type Extension, hook, ToolTask } from '@earendil-works/pi-durable'
 import {
   type ChannelAcceptor, Channels, compareVersion, contractProblem, dataViewProblem, EXTENSION_API, FEATURES, Lifetime, manifestOf, paramsParser,
@@ -22,7 +24,7 @@ import type { Threads } from './threads.ts'
  */
 export const RESERVED = new Set([
   'action', 'agent', 'app', 'artifact', 'auth', 'core', 'daemon', 'extension', 'extensions', 'file', 'hello', 'image', 'model', 'pane', 'profile', 'profiles',
-  'providers', 'settings', 'setup', 'thread', 'threads', 'unwatch', 'value', 'view', 'watch', 'web',
+  'providers', 'secrets', 'settings', 'setup', 'thread', 'threads', 'unwatch', 'value', 'view', 'watch', 'web',
   // Its own settings sections besides.
   'outside', 'onboarding',
   // A connection's own (heartbeat, channels), who is connected, and the machines this one reaches.
@@ -74,6 +76,8 @@ function aboutOf(about: ExtensionAbout): ExtensionAbout {
 export function createExtensionHost(host: Host, later: { profiles(): ProfileHost; threads(): Threads; relay(): Relay }) {
   const { options, settings, router, registry, values, changed } = host
   const partsLimit = options.agentPartsLimit ?? 5_000
+  /** An extension's own folder (`superego.dir`), by its name: made as it's first read. */
+  const extensionDir = (name: string) => join(options.dataDir, 'extensions', name)
   /** How long an agent kind's group in the model menus may take to say what it is. */
   const MENU_LIMIT = 3_000
 
@@ -517,9 +521,28 @@ export function createExtensionHost(host: Host, later: { profiles(): ProfileHost
       note('pane kinds', kind)
     }
     const threads = later.threads()
+    const ownSecret = (key: string) => {
+      if (!key.startsWith(`${extension.name}.`)) throw new Error(`Extension ${extension.name} reads its own secrets, "${extension.name}.<key>", not "${key}"`)
+      return key
+    }
     const api: DaemonApi = {
       app: options.app,
       dataDir: options.dataDir,
+      get dir() {
+        const dir = extensionDir(extension.name)
+        mkdirSync(dir, { recursive: true, mode: 0o700 })
+        // Made before with other permissions (by hand, an older build): only the user's, as it says.
+        chmodSync(dir, 0o700)
+        return dir
+      },
+      secrets: {
+        get: async (key) => settings.secret(ownSecret(key)),
+        onChange(key, listener) {
+          life.live('a secret listener')
+          ownSecret(key)
+          undo(settings.onSecretChange((changed) => { if (changed === key) listener() }), 'a secret listener')
+        },
+      },
       agentsDir: host.agentsDir,
       signal: life.signal,
       agent(agentPart, { always = true } = {}) {
@@ -851,9 +874,16 @@ export function createExtensionHost(host: Host, later: { profiles(): ProfileHost
         ...manifestOf(about), ...(about.title ? { title: about.title } : {}), ...(about.required ? { required: true } : {}),
         source, ...(file ? { file } : {}), ...(dirs ? { profiles: [...dirs].map((dir) => dirName.get(dir) ?? dir) } : {}),
         state: off.has(name) ? 'off' : 'set up', registered: Object.fromEntries(registered), watches: values.watchedUnder(name),
+        ...(existsSync(extensionDir(name)) ? { dir: extensionDir(name) } : {}),
       })
     }
     reports.push(...failures.values())
+    // Folders of extensions not set up here now: a profile's not loaded yet, or one gone. The user's to delete.
+    let names: string[] = []
+    try { names = readdirSync(join(options.dataDir, 'extensions')) } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+    }
+    const folders = names.filter((name) => !records.get(name)?.ready).sort().map((name) => ({ name, dir: extensionDir(name) }))
     const report: ExtensionsReport = {
       api: EXTENSION_API,
       extensions: reports,
@@ -861,6 +891,7 @@ export function createExtensionHost(host: Host, later: { profiles(): ProfileHost
         ...profiles.all().map((p) => ({ name: p.name, scope: p.scope, dir: p.dir, state: 'loaded' as const })),
         ...profiles.errors().map(({ ref, error }) => ({ name: ref.name, scope: ref.scope, dir: ref.dir, state: 'failed' as const, error })),
       ],
+      ...(folders.length ? { folders } : {}),
     }
     if (threadId === undefined) return report
     const { meta } = await later.threads().get(threadId)

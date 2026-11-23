@@ -28,7 +28,7 @@ import {
 import { appEnv, appSocketPath, connectSocket, daemonStarting, defaultDataDir, installService, isListening, readBuild, socketPath, spawnDaemon, startService, uninstallService } from '@superego/daemon/client'
 import {
   AUTH_REJECTED, compareVersions, consentRefused, driftPhrase, PROTOCOL_VERSION, RpcError, threadEnv, unreadThreads, versionOf, statusShape, statusWord, STATUS_WORDS, type ActionInfo, type AppConfig, type AuthEvent, type AuthPrompt, type Hello, type Json, type MethodName, type Params, type ProviderAuthInfo, type Result,
-  type ProfileInfo, type ProfileRef, type ProfileSourceInfo, type ProviderRejection, type ThreadInfo, type SettingsSnapshot,
+  type ProfileInfo, type ProfileRef, type ProfileSourceInfo, type ProviderRejection, type ThreadInfo, type SettingInfo, type SettingsSnapshot,
 } from '@superego/protocol'
 
 export type CliOptions = {
@@ -397,7 +397,7 @@ async function settingsCommand(sub: string | undefined, rest: string[], options:
         const settings = section.settings.filter((s) => !s.hidden)
         if (!settings.length) continue
         console.log(`${section.title}`)
-        table(settings.map((s) => ['  ' + s.key, JSON.stringify(snapshot.values[s.key] ?? null), s.type === 'choice' && s.options.length <= 8 ? s.options.map((o) => o.value).join(' | ') : s.title]))
+        table(settings.map((s) => ['  ' + s.key, shownValue(s, snapshot.values[s.key]), s.type === 'choice' && s.options.length <= 8 ? s.options.map((o) => o.value).join(' | ') : s.title]))
       }
     })
   }
@@ -419,6 +419,39 @@ async function settingsCommand(sub: string | undefined, rest: string[], options:
       process.exitCode = 1
     }
   }
+}
+
+/** A setting's value as `settings` lists it: a secret only as whether it's set (a snapshot has no more of it). */
+const shownValue = (setting: SettingInfo, value: Json | undefined) => setting.type === 'secret' ? (value === true ? 'set' : 'not set') : JSON.stringify(value ?? null)
+
+/**
+ * `secrets`: extensions' secret settings, listed (whether each is set), set (asked for without echo, or from stdin) or
+ * cleared. Setting and clearing are the user's consent: refused here before asking, when an agent runs this.
+ */
+async function secretsCommand(sub: string | undefined, rest: string[], machineName: string | undefined) {
+  const machine = resolveMachine(machineName)
+  if (!sub) {
+    const snapshot = await on(machine, (call) => call('settings.watch', {}).then((r) => r.value))
+    const secrets = snapshot.sections.flatMap((section) => section.settings.filter((s) => s.type === 'secret').map((s) => ({ key: s.key, title: s.title, section: section.title, set: snapshot.values[s.key] === true })))
+    return print(secrets, () => {
+      if (!secrets.length) return console.log(`No extension on ${machine.label} asks for a secret now.`)
+      table(secrets.map((s) => [s.key, s.set ? 'set' : 'not set', `${s.section}: ${s.title}`]))
+    })
+  }
+  const key = rest[0]
+  if ((sub !== 'set' && sub !== 'clear') || !key) throw new RpcError('usage', `${app.id} secrets [set|clear] <key>`)
+  userOnly('Set a secret')
+  let value: string | null = null
+  if (sub === 'set') {
+    // Known before asking for it: a typo, or an extension not set up yet, isn't found out after the secret is typed.
+    const setting = await on(machine, (call) => call('settings.watch', {}).then((r) => r.value.sections.flatMap((s) => s.settings).find((s) => s.key === key)))
+    if (!setting) throw new RpcError('unknown_setting', `No secret ${key} on ${machine.label}`, { hint: `Its extension declares it once it's set up. See: ${app.id} secrets` })
+    if (setting.type !== 'secret') throw new RpcError('invalid_setting', `${key} isn't a secret: ${app.id} settings set ${key} <value>`)
+    value = await readSecret(`${setting.title} (${key}): `)
+    if (!value) throw new RpcError('usage', 'Nothing given: no secret was set')
+  }
+  await on(machine, (call) => call('action.run', { id: 'secrets.set', params: { key, value }, exposure: 'cli' }))
+  return print({ key, set: value !== null }, () => console.log(`${machine.label}: ${key} ${value === null ? 'cleared' : 'set'}`))
 }
 
 async function readSecret(prompt: string): Promise<string> {
@@ -1139,6 +1172,7 @@ async function main() {
     }
     case 'machines': return machinesCommand(rest[0], rest.slice(1), values)
     case 'settings': return settingsCommand(rest[0], rest.slice(1), values)
+    case 'secrets': return secretsCommand(rest[0], rest.slice(1), values.machine)
     case 'providers': return providersCommand(rest[0], rest.slice(1), values.machine, values)
     case 'models': return modelsCommand(rest[0], rest.slice(1), values.machine)
     case 'daemon': return daemonCommand(rest[0], Boolean(values.now))

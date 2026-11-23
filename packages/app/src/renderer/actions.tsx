@@ -110,7 +110,7 @@ export function createWindowRouter() {
     const { machine: _machine, ...rest } = params
     const filled = action?.thread && rest.thread === undefined && context?.selection?.machine === target ? { ...rest, thread: context.selection.thread } : rest
     // Through action.run: it finds actions registered after this window connected (a profile's, as it loads).
-    const ran = router.track(id, filled, `${source} → ${target}`, () => window.superego.call(target, 'action.run', { id, params: filled }))
+    const ran = router.track(id, filled, `${source} → ${target}`, () => window.superego.call(target, 'action.run', { id, params: filled }), undefined, action?.secret)
     // A pane opened from this window was asked for here: the focus goes into it. (The agent's open beside, unfocused.)
     if (id === 'pane.open') void ran.then((pane) => { const opened = (pane as { id?: string } | null)?.id; if (opened) focusColumn(opened) }, () => {})
     // A stop from this window gives the messages you'd queued back to the thread's composer here, to write again: this

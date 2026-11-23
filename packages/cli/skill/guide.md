@@ -258,7 +258,8 @@ it('queues builds and shows the thread its own', async () => {
   `watch(key, { scope })` (`value`, `seen`, `until(check)`), `until(check)` (a function that returns true, or a promise
   of it); `toolCalls(thread)`, the calls a thread made in order (`{ name, args, result: { isError, text } }`),
   `facts(thread)`, what extensions say of it (`superego.facts`), and `transcript(thread)`, its entries as JSON text
-  (a thread is its id or its info); `extensions` (the manifests of those set up and on there, kept current: where yours shows) and
+  (a thread is its id or its info); `setSecret(key, value)` sets a `secret` setting as the user would (`null` clears
+  it), kept in the test's data folder, never your keychain, which also holds each extension's `superego.dir`; `extensions` (the manifests of those set up and on there, kept current: where yours shows) and
   `features` (protocol features only); `app` (its own id), `dataDir` and `agentsDir` (skills go in `skills/`); `peer`,
   the connection (`Channels.of(daemon.peer)` opens a channel), and `connect()` for another client's, as a second
   window; `profile`, the ref its threads have; `edit(path, content)` then `reload()` to load a change (a helper edited

@@ -168,6 +168,7 @@ and left out by a profile (`without`), and its tools, pane kinds and UI are then
 | `SUPEREGO_AGENTS` | The folder agents share, for skills and `AGENTS.md` (default `~/.agents`) |
 | `SUPEREGO_CLAUDE` | The `claude` Claude Agent threads run (default: the one on the login shell's `PATH`) |
 | `SUPEREGO_HEADLESS` | The app shows nothing: no window, Dock icon, notification or focus (tests) |
+| `SUPEREGO_SECRETS` | `file`: keep extensions' secrets encrypted in the data dir (`secrets.json`, `secrets.key`), never in the OS keychain |
 
 ## The command
 

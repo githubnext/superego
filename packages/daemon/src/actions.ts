@@ -223,8 +223,19 @@ export function registerCoreActions(host: Host, { harness, machine, threads, fil
       return null
     },
   }))
+  // A secret's value only the user gives, in a window or their own terminal: an agent's shell is refused (`consent`),
+  // and the log keeps `•••` for it. Clients never read it back: a snapshot says only whether it's set.
   router.register(defineAction({
-    id: 'auth.signIn', title: 'Sign in to a provider', expose: ['ui', 'cli'],
+    id: 'secrets.set', title: 'Set a secret', expose: ['ui', 'cli'], consent: true, secret: ['value'],
+    description: 'Set a secret setting (an extension\'s key or token) to `value`, or clear it with `value: null`. Kept in the OS keychain where there is one, else encrypted in the data folder.',
+    params: obj({ key: str(), value: union([str(), lit(null)]) }),
+    async run({ key, value }) {
+      await settings.setSecret(key, value)
+      return null
+    },
+  }))
+  router.register(defineAction({
+    id: 'auth.signIn', title: 'Sign in to a provider', expose: ['ui', 'cli'], secret: ['key'],
     params: obj({ provider: str(), type: union([lit('api_key'), lit('oauth')]), key: opt(str()), check: opt(bool()) }),
     run({ provider, type, key, check }, ctx: DaemonContext) {
       const flow: string = agent.login(provider, type, key, (event) => ctx.notify('auth.event', { flow, event }), check)
@@ -237,7 +248,7 @@ export function registerCoreActions(host: Host, { harness, machine, threads, fil
     async run({ provider }) { return { retried: await threads.retrySignIn(provider) } },
   }))
   router.register(defineAction({
-    id: 'auth.respond', title: 'Answer a sign-in step', runs: 'machine',
+    id: 'auth.respond', title: 'Answer a sign-in step', runs: 'machine', secret: ['value'],
     params: obj({ flow: str(), prompt: str(), value: str() }),
     run({ flow, prompt, value }) { host.flows.respond(flow, prompt, value); return null },
   }))
@@ -252,7 +263,7 @@ export function registerCoreActions(host: Host, { harness, machine, threads, fil
     async run({ provider }) { await agent.logout(provider); return null },
   }))
   router.register(defineAction({
-    id: 'providers.save', title: 'Add or change a provider', expose: ['ui', 'cli'],
+    id: 'providers.save', title: 'Add or change a provider', expose: ['ui', 'cli'], secret: ['key'],
     description: 'An OpenAI-compatible endpoint, by its base URL: its models are those it lists, unless given.',
     params: obj({ id: opt(str()), name: str(), baseUrl: str(), key: opt(union([str(), lit(null)])), models: opt(arr(str())) }),
     async run(input) { return { id: await agent.saveProvider(input) } },

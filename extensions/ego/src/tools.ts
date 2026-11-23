@@ -11,7 +11,7 @@ import { basename, dirname, resolve } from 'node:path'
 import { defineExtension, defineTool } from '@earendil-works/pi-durable'
 import { createReadTool } from '@earendil-works/pi-durable/tools'
 import { listTool, readTool, type ThreadsHost } from '@superego/thread-tools/tools'
-import type { DaemonApi } from '@superego/daemon'
+import { SECRET_FILES, type DaemonApi } from '@superego/daemon'
 import { bool, lit, obj, opt, str, union, unknown } from '@earendil-works/pi-schema'
 import { linkTo, type ActionInfo, type Exposure, type Json, type MachineEntry, type SettingsSnapshot, type ThreadInfo } from '@superego/protocol'
 
@@ -24,8 +24,11 @@ const briefMachine = (m: MachineEntry) => ({
   ...(m.remote ? { route: m.remote.route, enabled: m.remote.enabled } : {}), ...(m.machine ? { hostname: m.machine.hostname } : {}),
 })
 
-/** The data folder's own credential store, providers' (pi-ai's); extensions name theirs (`about.secrets`). */
-const AUTH = 'auth.json'
+/**
+ * The data folder's own credential stores: providers' (pi-ai's), and secret settings' (with its key, when they're kept
+ * there); extensions name theirs (`about.secrets`).
+ */
+const CORE_SECRETS = ['auth.json', ...SECRET_FILES]
 
 /**
  * What Ego needs of the daemon's threads: the listed ones (never Ego itself), on this machine and those it reaches, as
@@ -121,9 +124,11 @@ What ${name} is:
 
 Data folder layout (${dataDir}): settings.json (this machine's settings), app-settings.json (the app's), machines.json
 (the machines this computer reaches), profiles/, worktrees/, attachments/, allowed-profiles.json, and extensions'
-files. Settings and machines change through your tools, the rest through actions a thread runs, not by hand. What
+files: extensions/<name>/ is each one's own folder, to read when it helps, never to change. Settings and machines change through your tools, the rest through actions a thread runs, not by hand. What
 records the user's consent (allowing a profile or an MCP server's command, pairing a device, letting outside agents or
-devices in) is theirs to do: no agent can, so point them to where they do it. ${[AUTH, ...secrets].join(', ')} hold sign-ins and keys, or may: you don't read them.`
+devices in) is theirs to do: no agent can, so point them to where they do it. So is setting a secret (an extension's key
+or token: a setting of type secret, which you see only as set or not): in Settings, or \`${id} secrets set <key>\` in their
+own terminal. ${[...CORE_SECRETS, ...secrets].join(', ')} hold sign-ins and keys, or may: you don't read them.`
 }
 
 /**
@@ -155,7 +160,7 @@ export function egoTools({ dir, secrets = () => [], dispatch, actions, snapshot,
       ...read,
       execute(params: { path: string }, ...rest: unknown[]) {
         const at = folder(params.path)
-        if (dirname(at) === resolve(dir) && [AUTH, ...secrets()].includes(basename(at))) throw new Error(`${basename(at)} holds sign-ins and keys: not for reading here.`)
+        if (dirname(at) === resolve(dir) && [...CORE_SECRETS, ...secrets()].includes(basename(at))) throw new Error(`${basename(at)} holds sign-ins and keys: not for reading here.`)
         return (read.execute as (...args: unknown[]) => unknown)(params, ...rest)
       },
     } as typeof read,

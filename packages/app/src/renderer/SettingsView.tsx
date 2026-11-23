@@ -80,7 +80,7 @@ function Section({ machine, target, section, values }: { machine: MachineEntry |
       {shown.map((setting, index) => (
         <Fragment key={setting.key}>
           <Setting setting={setting} value={values[setting.key] ?? null} note={target === APP && setting.key === ACCENT && accentThemed ? 'The theme’s, until you choose one.' : undefined}
-            apply={(value) => dispatch(target === APP ? 'app.settings.set' : 'settings.set', { key: setting.key, value }, { machine: target, source: 'settings' })} />
+            apply={(value) => dispatch(setting.type === 'secret' ? 'secrets.set' : target === APP ? 'app.settings.set' : 'settings.set', { key: setting.key, value }, { machine: target, source: 'settings' })} />
           {/* Under the theme pickers: both themes as they look, and importing. */}
           {setting.type === 'theme' && shown[index + 1]?.type !== 'theme' && <ThemeTools />}
         </Fragment>

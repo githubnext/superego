@@ -427,7 +427,7 @@ export function mcpServersExtension(options: McpServersOptions = {}): DaemonExte
         },
       }))
       superego.action(defineAction({
-        id: ACTIONS.setSecret, title: "Set an MCP server's secrets", expose: ['ui', 'cli'],
+        id: ACTIONS.setSecret, title: "Set an MCP server's secrets", expose: ['ui', 'cli'], secret: ['values'],
         description: "Store a server's API key (key) or secret env values on this machine (null forgets one), then check it.",
         params: SET_SECRET_PARAMS,
         async run({ server: id, values }) {

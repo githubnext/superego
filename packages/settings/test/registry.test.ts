@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest'
-import { MemorySettingsStore, SettingsRegistry } from '../src/index.ts'
+import { describe, expect, it, vi } from 'vitest'
+import { declaredSpec, MemorySecretStore, MemorySettingsStore, SettingsRegistry } from '../src/index.ts'
 
 const flush = () => new Promise((resolve) => setTimeout(resolve))
 
@@ -87,5 +87,61 @@ describe('upsert', () => {
     await expect(settings.set('pins', { machine: 'local', thread: 'a' })).rejects.toMatchObject({ kind: 'invalid_setting' })
     await expect(settings.set('pins', [{ machine: 'local' }])).rejects.toMatchObject({ kind: 'invalid_setting' })
     await expect(settings.set('pins', [null])).rejects.toMatchObject({ kind: 'invalid_setting' })
+  })
+
+  it('keeps a secret in its store: everyone else sees only whether it is set, and only setSecret changes it', async () => {
+    const store = new MemorySettingsStore()
+    const secrets = new MemorySecretStore()
+    const settings = new SettingsRegistry(store, secrets)
+    settings.register({ id: 'mail', title: 'Mail', settings: [{ key: 'mail.token', title: 'Token', type: { type: 'secret', placeholder: 'fmu1-…' } }] })
+    const heard: string[] = []
+    settings.onSecretChange((key) => heard.push(key))
+    expect(settings.get('mail.token')).toBe(false)
+    expect(settings.isSet('mail.token')).toBe(false)
+
+    await settings.setSecret('mail.token', 'fmu1-very-secret')
+    expect(secrets.values.get('mail.token')).toBe('fmu1-very-secret')
+    expect(await settings.secret('mail.token')).toBe('fmu1-very-secret')
+    expect(settings.get('mail.token')).toBe(true)
+    expect(store.values).toEqual({})
+    const snapshot = await settings.snapshot()
+    expect(snapshot.values).toEqual({ 'mail.token': true })
+    // Always the user's to set, whatever the extension said.
+    expect(snapshot.sections[0]!.settings[0]).toEqual({ type: 'secret', placeholder: 'fmu1-…', key: 'mail.token', title: 'Token', default: false, consent: true })
+    expect(JSON.stringify(snapshot)).not.toContain('very-secret')
+
+    await expect(settings.set('mail.token', 'other')).rejects.toMatchObject({ kind: 'secret' })
+    await expect(settings.setSecret('mail.token', '  ')).rejects.toMatchObject({ kind: 'invalid_setting' })
+    await expect(settings.setSecret('mail.other', 'x')).rejects.toMatchObject({ kind: 'unknown_setting' })
+    await settings.setSecret('mail.token', null)
+    expect(settings.get('mail.token')).toBe(false)
+    expect(heard).toEqual(['mail.token', 'mail.token'])
+
+    // One whose extension is gone can still be cleared, never set.
+    await secrets.set('gone.token', 'left behind')
+    await settings.setSecret('gone.token', null)
+    expect(secrets.keys()).toEqual([])
+  })
+
+  it('refuses a secret where there is no secret store (a window\'s settings)', () => {
+    const settings = new SettingsRegistry()
+    expect(() => settings.register({ id: 'x', title: 'X', settings: [{ key: 'x.key', title: 'Key', type: { type: 'secret' } }] })).toThrow(/no secret store/)
+    expect(() => declaredSpec({ id: 'y', title: 'Y', settings: [{ key: 'y.key', title: 'Key', type: 'secret', default: false }] })).toThrow(/machine's setting/)
+  })
+
+  it('moves a value kept with the settings into the secret store once its key is a secret (a masked string before)', async () => {
+    const store = new MemorySettingsStore({ 'mail.token': 'fmu1-was-plain', 'mail.other': 'kept' })
+    const secrets = new MemorySecretStore()
+    const settings = new SettingsRegistry(store, secrets)
+    const heard: string[] = []
+    settings.onSecretChange((key) => heard.push(key))
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    settings.register({ id: 'mail', title: 'Mail', settings: [{ key: 'mail.token', title: 'Token', type: { type: 'secret' } }] })
+    await settings.close()
+    log.mockRestore()
+    expect(secrets.values.get('mail.token')).toBe('fmu1-was-plain')
+    expect(store.values).toEqual({ 'mail.other': 'kept' })
+    expect(settings.get('mail.token')).toBe(true)
+    expect(heard).toEqual(['mail.token'])
   })
 })

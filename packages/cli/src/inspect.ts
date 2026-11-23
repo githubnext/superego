@@ -16,6 +16,11 @@ export function formatReport(report: ExtensionsReport, machine: string, id: stri
     if (e.error) lines.push(`  ${e.state === 'refused' ? 'refused' : e.state === 'timed out' ? 'gave up' : 'error'}: ${e.error}`)
     for (const [kind, names] of Object.entries(e.registered)) lines.push(`  ${kind}: ${names.join('; ')}`)
     for (const w of e.watches) lines.push(`  watched: ${w.value}${w.whole ? `, whole by ${w.whole}` : ''}${w.scopes ? `, in ${w.scopes} scope${w.scopes === 1 ? '' : 's'}` : ''}`)
+    if (e.dir) lines.push(`  its folder: ${e.dir}`)
+  }
+  if (report.folders?.length) {
+    lines.push('', 'Folders of extensions not set up here now (a profile not loaded yet, or gone): yours to delete once unneeded')
+    for (const f of report.folders) lines.push(`${f.name}  (${f.dir})`)
   }
   if (report.profiles.length) {
     lines.push('', 'Profiles')

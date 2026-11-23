@@ -9,7 +9,15 @@ export type SettingOption = { value: string; label: string; description?: string
 
 export type SettingType =
   | { type: 'boolean' }
+  /** Text. `secret`: only drawn masked in Settings; the value is a setting like any other, so not for keys (see `secret`). */
   | { type: 'string'; placeholder?: string; secret?: boolean }
+  /**
+   * A key or token, kept in the machine's secret store (the OS keychain, or an encrypted file in the data folder), not
+   * with the settings: a snapshot's value for it is only whether it's set (`true` or `false`), never the secret. Only the
+   * user sets it (`secrets.set`, a consent action): in Settings, or `superego secrets set <key>` in their own terminal.
+   * Its extension reads it with `superego.secrets.get(key)`. A machine's setting only (needs the `secrets` feature).
+   */
+  | { type: 'secret'; placeholder?: string }
   | { type: 'number'; min?: number; max?: number; step?: number }
   /**
    * One of `options`; `null` is allowed when `nullable`, shown as `nullLabel`. `slider`: drawn as steps along a slider,

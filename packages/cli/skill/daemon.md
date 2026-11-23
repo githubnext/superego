@@ -75,7 +75,9 @@ once.
 | `superego.value(key, initial)` | a live value named `<name>.<key>`: `get()`, `set(next)`, `update(fn)`. In memory only; a UI reads it with `useValue(machine, key)` (null until it's published) |
 | `superego.scopedValue(key, initial)` | a live value kept per scope (a thread's id): `get(scope)`, `set(scope, next)`, `update(scope, fn)`, `delete(scope)`, `scopes()`. A UI watching one scope (`useValue(machine, key, { scope: thread.id })`) hears only its changes, never another thread's. For anything per thread |
 | `superego.view(id, { title, icon?, context, fits, default?, narrow?, order?, value \| method, about? })` | a view drawn from data, with no UI code: the window draws its blocks (`Block[]`, as agents draw: `list`, `table`, `markdown`, inputs, …; `[]` or null: nothing yet). A button `{ id, label, action, params }` runs that action of this extension's on this machine, with the inputs' values in its params by id. A view whose blocks fail the check (`blockErrors`) shows its first error instead. Fed by a value of the extension's (a `thread` view's: by thread id) or a method of its (called with `{ thread }` for a `thread` view). `fits`: `space`, `beside`, `pane`. `about`: tell the agent it can open it as a pane. A remote machine's or a project profile's runs no code in the window, so needs no allowing there; its buttons still have this machine's authority |
-| `superego.settings.register({ id, title, settings, ui?, data? \| value? })` | a settings section of its own: id `<name>`, keys `<name>.<key>`. `ui` names a component the UI half registers for it, given the section; its `data` is read with each snapshot, or, with `value: '<name>.<key>'`, it's one of the extension's live values, which the window gives the component as `section.data`, kept current, instead of sending it again with every snapshot. `settings.get(key)` reads any setting, `settings.snapshot()` all of them with their sections (a `value` section's value as its `data`), `settings.onChange(fn)` hears changes |
+| `superego.settings.register({ id, title, settings, ui?, data? \| value? })` | a settings section of its own: id `<name>`, keys `<name>.<key>`. `ui` names a component the UI half registers for it, given the section; its `data` is read with each snapshot, or, with `value: '<name>.<key>'`, it's one of the extension's live values, which the window gives the component as `section.data`, kept current, instead of sending it again with every snapshot. `settings.get(key)` reads any setting, `settings.snapshot()` all of them with their sections (a `value` section's value as its `data`), `settings.onChange(fn)` hears changes. A key or token is a setting of `type: 'secret'` (no `default`), read with `secrets.get`: see [Secrets](#secrets) |
+| `superego.secrets.get(key)`, `secrets.onChange(key, fn)` | (API ^5.8) the value of one of its `secret` settings (`<name>.<key>`, its own only), or undefined while it isn't set; `onChange` hears it set, replaced or cleared (reconnect then). Only the user sets one; no client reads it. See [Secrets](#secrets) |
+| `superego.dir` | (API ^5.8) its own folder, `<dataDir>/extensions/<name>`, made (0700) when first read: for JSON files, a `node:sqlite` database, a cache. Kept when the extension is torn down or switched off, and when its profile goes; `superego extensions` lists the folders of those not set up |
 | `superego.agentKind({ name, runner, menu?, profile?, describe? })` | a kind of agent (API ^5.3): threads whose profile says `agent: '<name>'` (the extension's name, or `<name>.<kind>`) have every turn run by `runner`, a pi-durable task, instead of a model. It reads the thread's conversation (`runtime.context`), appends the turn's entries (`AssistantEntry`, `ToolResultEntry`), may publish its answer as it streams (`pi.live.generation.message`, a deferred commit), and completes with `{ entryId }` of its answer, or fails with why. The run is the daemon's: working, done or failed, Stop (its `abort` handler, after `runtime.signal`), messages sent meanwhile. A thread keeps its kind for its whole life (`thread.setProfile` moves one only while it has no conversation). API ^5.6: `menu()` gives its group in the model menus (`{ title, description?, models: [{ value, label, thinking }], unavailable? }`, or nothing while it isn't offered; may be async, up to 3s), its models `<name>/<model>`; `profile: { name, make() }` is the profile a thread started on one of them runs with (made first if need be). The thread's own model and thinking reach `agentParts` (`model`, `thinking`). API ^5.7: `describe({ id, model?, thinking?, profile?, state? })` says what a thread of it runs on where its model shows (`{ model, provider?, thinking?, about?, context? }`: "Claude Opus", `anthropic` for its mark, `high`, "runs your Claude Code", `{ tokens, max }`), as `ThreadInfo.agent`, `model`, `provider`, `thinking` and `context`; asked as the thread's info is made, so quick. A runner that drives an agent taking messages mid-turn places the steers sent meanwhile with pi-durable's `placeSteers(tx, conversationId, runtime.settings, runtime.now())` (watch `InboxDoc`). Claude Agent's (`extensions/claude-agent`) is one. |
 | `superego.profileKey(key, { check?, merge?, brings?, title? })` | a key of the extension's own in profiles (`mcpServers` is mcp-servers'): a camelCase word, not one of the core's. As a profile loads, `check(value)` says why its value won't do, if it won't (the profile then fails to load); with `extends`, `merge(base, own)` puts the two together (unset, a profile's own replaces the other's); `brings(value)` names what it brings, shown with the profile (`profile.list`'s `brings`, by `title`). Read it from the thread's profile: `agentParts`' `profile.spec[key]`, a `starting` hook's `draft.profile.spec[key]`. A bundled extension's only |
 | `superego.beforeSend(({ thread, text, attachments, content, by, exposure, from }) => …)` | change what each message sent to a thread gives its agent, before the turn starts (`by`: the extension that sent it, absent for the user's, from a window or the command line; `exposure`: `outside` when an outside agent sent it, `cli` the command line, else what `threads.send` passed on; `from`: the thread it's from, as `threads.send` said, or the parent for the prompt a child starts with): `content` is its blocks so far (`{ type: 'text', text }`, `{ type: 'image', data, mimeType }`), the text first; return the blocks to send instead, or nothing. Transforms run in order, each given the last one's; not for threads that go without the extension, a profile's only for its own threads. A throw fails the send |
@@ -108,6 +110,42 @@ once.
 | `superego.dataDir` | this machine's data folder (`~/.superego`): worktrees keeps its own in `worktrees/` |
 | `superego.signal` | an `AbortSignal`, aborted when the extension is torn down (its profile reloaded or gone, the daemon stopping) |
 | `superego.agentsDir` | the folder agents share on this machine (`~/.agents`, or `SUPEREGO_AGENTS`): `skills/`, `AGENTS.md` |
+
+## Secrets
+
+A key or token an extension needs (an API token that can send mail, say) is a setting of type `secret` in its section.
+Its value isn't kept with the other settings: it's in the machine's secret store, and every client (the window,
+`superego settings`, Ego, `settings.get` over RPC, a snapshot) sees only whether it's set (`true` or `false`). The user
+sets it in Settings → the extension's section (Save, Replace, Clear), or `superego secrets set <key>` in their own
+terminal (asked for without echo, or read from stdin). That's a consent action (`secrets.set`): refused from a thread's
+shell, so no agent sets one, and the action log keeps `•••` for its value. The extension can't set its own.
+
+<!-- check: daemon; declare function connect(token: string): void -->
+```ts
+superego.settings.register({ id: 'mail', title: 'Mail', settings: [
+  { key: 'mail.token', title: 'API token', description: 'From your mail provider’s settings.', type: { type: 'secret', placeholder: 'fmu1-…' } },
+] })
+const reconnect = async () => { const token = await superego.secrets.get('mail.token'); if (token) connect(token) }
+superego.secrets.onChange('mail.token', () => void reconnect())
+void reconnect()
+```
+
+**Where it's kept.** On a Mac, in the login keychain (`security`; a generic password whose service is
+`superego-secrets-<hash of the data folder>`, account the key). On Linux with a Secret Service (`secret-tool`, GNOME
+Keyring or KWallet), there. Where neither answers (a headless Linux machine, a daemon run with `SUPEREGO_SECRETS=file`),
+encrypted (AES-256-GCM) in `~/.superego/secrets.json` with the key in `~/.superego/secrets.key`, both 0600.
+`secrets.json` also says which keys are set and where each is, so nothing asks the keychain to show a snapshot.
+
+**What it protects against:** agents and tools reading settings, snapshots, `superego settings` or the data folder
+(Ego never reads `secrets.json` or `secrets.key`, and the encrypted file reads as noise), and a token pasted into a
+transcript or a log by accident. **What it doesn't:** code running as the user that sets out to read it. The keychain
+gives the same user its items (`security find-generic-password`), and the key file sits beside the data. An agent with a
+shell that wants the token can get it; this keeps it from leaking, it isn't a vault. A project's profile you allow runs
+with the same reach.
+
+**A `string` setting with `secret: true`** only masks the field in Settings: its value is plain text in
+`settings.json`, in every snapshot, and in `superego settings`. Don't use it for keys. Change its type to `secret` under
+the same key, and the value it has moves into the secret store when the extension next sets up.
 
 ## Common patterns
 

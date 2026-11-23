@@ -55,6 +55,7 @@ export function Setting({ setting, value, apply, mixed, note }: {
     case 'models': return null
     case 'string': control = <TextField type={setting.secret ? 'password' : 'text'} aria-label={setting.title} defaultValue={typeof value === 'string' ? value : ''}
       placeholder={setting.placeholder} disabled={disabled} onBlur={(e) => set(e.target.value)} />; break
+    case 'secret': control = <SecretField label={setting.title} isSet={value === true} placeholder={setting.placeholder} disabled={disabled} apply={(next) => { setError(undefined); return apply(next).catch((e: Error) => { setError(e.message); throw e }) }} />; break
   }
   return (
     <div className="setting" data-key={setting.key}>
@@ -66,6 +67,42 @@ export function Setting({ setting, value, apply, mixed, note }: {
       </div>
       <div className="setting__control">{control}</div>
     </div>
+  )
+}
+
+/**
+ * A secret (`apply`: its value, or null to clear it): the window never has it back, so set, it shows as Set with Replace
+ * and Clear; replacing, or not set, a masked field saved with Enter or Save (Escape leaves it as it was).
+ */
+function SecretField({ label, isSet, placeholder, disabled, apply }: {
+  label: string; isSet: boolean; placeholder?: string; disabled: boolean; apply(value: string | null): Promise<unknown>
+}) {
+  const [editing, setEditing] = useState(false)
+  const [text, setText] = useState('')
+  const [busy, setBusy] = useState(false)
+  const run = (value: string | null) => {
+    setBusy(true)
+    // A failure shows as the setting's error (apply); the field stays open to try again.
+    apply(value).then(() => { setText(''); setEditing(false) }, () => {}).finally(() => setBusy(false))
+  }
+  if (isSet && !editing) {
+    return (
+      <span className="setting__buttons">
+        <span className="settings__note">Set</span>
+        <Button onClick={() => setEditing(true)} disabled={disabled || busy}>Replace</Button>
+        <Button onClick={() => run(null)} disabled={disabled || busy}>Clear</Button>
+      </span>
+    )
+  }
+  const save = () => { if (text.trim()) run(text.trim()) }
+  return (
+    <span className="setting__buttons">
+      <TextField type="password" aria-label={label} value={text} placeholder={placeholder} disabled={disabled || busy} autoComplete="off" spellCheck={false}
+        autoFocus={editing} onChange={(e) => setText(e.target.value)}
+        onKeyDown={(e) => { if (e.key === 'Enter') save(); if (e.key === 'Escape' && editing) { e.preventDefault(); setText(''); setEditing(false) } }} />
+      <Button onClick={save} disabled={disabled || busy || !text.trim()}>Save</Button>
+      {editing && <Button onClick={() => { setText(''); setEditing(false) }} disabled={busy}>Cancel</Button>}
+    </span>
   )
 }
 

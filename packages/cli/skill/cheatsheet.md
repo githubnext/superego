@@ -15,6 +15,8 @@ and [ui.md](ui.md) have the full tables.
 | `status((thread) => ({ kind: 'question' }))`, `invalidate()` | show a thread as needing you |
 | `beforeSend(({ thread, text, attachments, content, by, exposure }) => [...content, block])` | add to what a message gives the agent before its turn (a named skill's instructions); return nothing to leave it. `by`: the extension that sent it (`threads.send`, `threads.start`'s prompt), absent for the user's; `exposure`: `outside` when an outside agent sent it, `cli` the command line |
 | `settings.register({ id: 'x', settings })`, `settings.get`, `settings.snapshot`, `settings.onChange` | machine settings of its own (`x.…`); read any |
+| `secrets.get('x.token')`, `secrets.onChange('x.token', fn)` | a key or token: a setting of `type: 'secret'` the user sets (Settings, `superego secrets set`), kept in the keychain or encrypted; clients see only set or not ([Secrets](daemon.md#secrets)) |
+| `dir` | its own folder, `<dataDir>/extensions/x` (0700, made when first read): JSON files, a `node:sqlite` database, a cache; kept when it's torn down |
 | `dispatch(id, params)`, `actions(exposure)` | run any action on the machine as this extension (`settings.set`); list them |
 | `call(id, params)` | read another extension's method on this machine (`skills.list`) |
 | `thread({ starting, abandoned, started, turnStart, turnEnd, stopped, blocked, archiving, archived, unarchiving, unarchiveAbandoned, unarchived })` | take part in a thread's life ([A thread's life](lifecycle.md#a-threads-life)): make it work elsewhere, refuse to archive it, clean up after it, hear it end a run, be stopped with others' messages queued, or come to need the user |

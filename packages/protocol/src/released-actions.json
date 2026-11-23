@@ -613,6 +613,29 @@
     ],
     "additionalProperties": false
   },
+  "secrets.set": {
+    "type": "object",
+    "properties": {
+      "key": {
+        "type": "string"
+      },
+      "value": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "const": null
+          }
+        ]
+      }
+    },
+    "required": [
+      "key",
+      "value"
+    ],
+    "additionalProperties": false
+  },
   "providers.remove": {
     "type": "object",
     "properties": {

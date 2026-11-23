@@ -33,6 +33,8 @@ export type ActionInfo = {
    * a thread's shell (`hello`'s `from`), and it can't be exposed to `outside`.
    */
   consent?: true
+  /** Its parameters by these names hold secrets (a key, a token): the action log keeps them as `•••`, never their values. */
+  secret?: string[]
 }
 
 /** An action with what it does: `run`, given its params and what it runs for. Made with `defineAction`. */
@@ -82,8 +84,11 @@ export type Router<C = unknown> = {
    * is asking (its command line), refused for an action that records the user's `consent`.
    */
   dispatch(id: string, params: unknown, context: C, options?: { source?: string; exposure?: Exposure; from?: string; client?: ActionLogEntry['client'] }): Promise<unknown>
-  /** Time and log work done elsewhere for an action this router doesn't hold (a window forwarding to a daemon). */
-  track<R>(id: string, params: unknown, source: string, run: () => Promise<R>, client?: ActionLogEntry['client']): Promise<R>
+  /**
+   * Time and log work done elsewhere for an action this router doesn't hold (a window forwarding to a daemon). `secret`:
+   * the params it logs as `•••` (`ActionInfo.secret`), for one it doesn't hold; one it holds says its own.
+   */
+  track<R>(id: string, params: unknown, source: string, run: () => Promise<R>, client?: ActionLogEntry['client'], secret?: string[]): Promise<R>
   /** The newest dispatches, oldest first. */
   log(): ActionLogEntry[]
   onDispatch(listener: (entry: ActionLogEntry) => void): () => void
@@ -115,10 +120,11 @@ export function createRouter<C = unknown>({ logSize = 500 }: { logSize?: number 
         return action.def.run(action.parse(params), context)
       }, client)
     },
-    async track(id, params, source, run, client) {
+    async track(id, params, source, run, client, secret) {
       const started = Date.now()
+      const logged = withoutSecrets(params, actions.get(id)?.def.secret ?? secret)
       const record = (ok: boolean, error?: string) => {
-        const entry: ActionLogEntry = { at: started, id, source, ms: Date.now() - started, ok, ...(params !== undefined ? { params: params as Json } : {}), ...(error ? { error } : {}), ...(client ? { client } : {}) }
+        const entry: ActionLogEntry = { at: started, id, source, ms: Date.now() - started, ok, ...(logged !== undefined ? { params: logged as Json } : {}), ...(error ? { error } : {}), ...(client ? { client } : {}) }
         log.push(entry)
         if (log.length > logSize) log.splice(0, log.length - logSize)
         for (const listener of listeners) listener(entry)
@@ -148,6 +154,12 @@ export function createRouter<C = unknown>({ logSize = 500 }: { logSize?: number 
 export const consentRefused = (what: string) => new RpcError('consent', `${what}: that's the user's consent to give, not an agent's`, {
   hint: 'Ask the user to do it themselves: in the window (Settings), or in their own terminal.',
 })
+
+/** `params` as the log keeps them: those named in `secret` (that are there) as `•••`. */
+function withoutSecrets(params: unknown, secret: string[] | undefined): unknown {
+  if (!secret?.length || !params || typeof params !== 'object' || Array.isArray(params)) return params
+  return Object.fromEntries(Object.entries(params).map(([name, value]) => [name, secret.includes(name) && value != null ? '•••' : value]))
+}
 
 const info = ({ run: _run, ...rest }: ActionDef<any, unknown, any>): ActionInfo => rest
 

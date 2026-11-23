@@ -101,6 +101,12 @@ function groups(id: string, name: string, added: CliCommand[]): Entry[][] {
       { use: 'settings', does: 'List settings and their values' },
       { use: 'settings set <key> <value> [--all]', does: 'Change a setting (value is JSON, or plain text)', options: [['    --all', 'On every enabled machine']], examples: [`${id} settings set agent.model anthropic/claude-sonnet-4-5`] },
       { use: 'settings reset <key> [--all]', does: 'Back to the default', options: [['    --all', 'On every enabled machine']] },
+      { use: 'secrets', does: "List extensions' secrets (keys, tokens) and whether each is set: never their values" },
+      {
+        use: 'secrets set <key>', does: "Set one (prompted without echo, or read from stdin): kept in the OS keychain,\nelse encrypted in the data folder. Yours alone: refused from a thread's shell",
+        examples: [`${id} secrets set email.token`, `pbpaste | ${id} secrets set email.token`],
+      },
+      { use: 'secrets clear <key>', does: 'Forget one (also one whose extension is gone)' },
       { use: 'layout', does: "Where the window's views go: layout.json (edit it; Edit layout… in ⌘K), with the\nviews there are and the places each fits" },
       {
         use: 'app profile [--seconds 10] [--window <id>]', does: `Profile the running app's windows: each renderer's CPU profile, what it showed, every\nprocess's CPU and a trace, in ~/.${id}/profiles; prints the hot spots`,
