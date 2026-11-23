@@ -11,13 +11,13 @@ import { createModels, getSupportedThinkingLevels, clampThinkingLevel, type Mode
 import { registerBunOAuthFlows } from '@earendil-works/pi-ai/bun-oauth'
 import type { ModelRef } from '@earendil-works/pi-durable'
 import { createNodePhotonImages } from '@earendil-works/pi-durable/images/node'
-import { RpcError, type AppConfig, type AuthEvent, type CustomProviderInput, type ModelCatalog, type ModelTest, type AuthPrompt, type ProviderAuthInfo, type SettingOption, type SetupProbe } from '@superego/protocol'
+import { RpcError, type AgentKindMenu, type AppConfig, type AuthEvent, type CustomProviderInput, type ModelCatalog, type ModelTest, type AuthPrompt, type ProviderAuthInfo, type SettingOption, type SetupProbe } from '@superego/protocol'
 import type { SettingsRegistry } from '@superego/settings'
 import { appEnv } from './paths.ts'
 import { sniff } from './image-kind.ts'
 import { createModelImages, type ModelImages } from './model-images.ts'
 import { replayProvider, withRecording } from './replay.ts'
-import { authFailure, Rejections, rejectionSummary, WAITING } from './provider-auth.ts'
+import { authFailure, providerWords, Rejections, rejectionSummary, WAITING } from './provider-auth.ts'
 import { watchFiles } from './watch-files.ts'
 import { wrapStreams } from './provider-streams.ts'
 import { withoutSubscriptionAuth, withoutSubscriptionEnv } from './claude-subscription.ts'
@@ -186,6 +186,9 @@ function echoProvider() {
   return { ...faux, provider }
 }
 
+/** Other kinds of agent's models, as the model menus last listed them, and whether a model is one (`<kind>/<model>`). */
+export type KindModels = { menus(): readonly AgentKindMenu[]; known(model: string): boolean }
+
 export type AgentSettings = {
   models: Models
   /** How images are fitted to the model: every request's (see model-images.ts), and those `read` gives it. */
@@ -199,10 +202,18 @@ export type AgentSettings = {
   /** The models a thread can choose from here, with their thinking levels, and what a thread gets by default. */
   catalog(): ModelCatalog
   /**
-   * Sign in to a provider, as a flow of `flows` (auth-flows.ts): its id. `check`: a key is tried on one of its models
-   * before the flow is done, and the credentials it had before are put back if the provider refuses it.
+   * Where the other kinds of agent's models are (an extension's: Claude Agent's), which the default may be too: given
+   * once the extensions are there (extension-host.ts).
    */
-  login(provider: string, type: 'api_key' | 'oauth', key: string | undefined, emit: (event: AuthEvent) => void, check?: boolean): string
+  useKinds(kinds: KindModels): void
+  /** The default model when it's another kind of agent's (`<kind>/<model>`): new threads given none start on it. */
+  kindDefault(): string | undefined
+  /**
+   * Sign in to a provider, as a flow of `flows` (auth-flows.ts): its id. `key`: the key a key's sign-in asks for.
+   * `check`: a key is tried on one of its models before the flow is done, and the credentials it had before are put
+   * back if the provider refuses it. `domain`: GitHub Copilot's GitHub Enterprise domain (`''`: github.com), not asked.
+   */
+  login(provider: string, type: 'api_key' | 'oauth', emit: (event: AuthEvent) => void, options?: { key?: string; check?: boolean; domain?: string }): string
   /** Ask a model (`provider/model`; the default unset) to say hi, once. */
   test(model?: string): Promise<ModelTest>
   /** What this machine has for running models (`setup.probe`). */
@@ -325,10 +336,19 @@ export async function createAgentSettings(settings: SettingsRegistry, dataDir: s
     const slash = value.indexOf('/')
     return slash < 0 ? undefined : { provider: value.slice(0, slash), modelId: value.slice(slash + 1) }
   }
+  /** The sign-in going on for each provider, by its flow's id. */
+  const signingIn = new Map<string, string>()
+  let kinds: KindModels = { menus: () => [], known: () => false }
+  /** The default model set, when it's another kind of agent's. */
+  function kindDefault() {
+    const set = settings.get<string | null>(KEYS.model)
+    return set && kinds.known(set) ? set : undefined
+  }
   /** The chosen model; with none chosen, `<ID>_MODEL`, else the preferred model of the first provider signed in. */
   function chosen(): ModelRef | undefined {
     const builtIn = model === 'faux' ? `faux/${models.getModels('faux')[0]?.id}` : model?.startsWith('replay:') ? 'replay/replay' : model
-    const explicit = parse(settings.get<string | null>(KEYS.model)) ?? parse(builtIn)
+    // Another kind's model is that kind's threads' default: Superego's own threads pick theirs as if none were set.
+    const explicit = (kindDefault() ? undefined : parse(settings.get<string | null>(KEYS.model))) ?? parse(builtIn)
     if (explicit) return explicit
     for (const provider of ordered()) {
       const [model] = recommendedOf(provider.id, usable(provider.id))
@@ -386,6 +406,8 @@ export async function createAgentSettings(settings: SettingsRegistry, dataDir: s
               if (!starred.has(value)) options.push({ value, label: model.name, group: provider.name })
             }
           }
+          // Other kinds of agent's (Claude Agent's), a group each: new threads given none start on that kind.
+          for (const menu of kinds.menus()) for (const model of menu.models) options.push({ value: model.value, label: model.label, group: menu.title })
           // A choice whose provider was signed out stays visible, so the setting never shows something else.
           const current = settings.get<string | null>(KEYS.model)
           if (current && !options.some((o) => o.value === current)) options.unshift({ value: current, label: `${current} (not signed in)` })
@@ -470,8 +492,8 @@ export async function createAgentSettings(settings: SettingsRegistry, dataDir: s
     }
     if (answer.stopReason === 'error' || answer.stopReason === 'aborted') {
       const said = answer.errorMessage ?? (answer.stopReason === 'aborted' ? `No answer in ${TEST_TIMEOUT / 1000}s` : 'It failed without saying why')
-      if (authFailure(said)) throw new RpcError('rejected', `${rejectionSummary(provider.name, authed.get(provider.id)?.type, said)}: ${said}`)
-      throw new RpcError('model_failed', `${provider.name}: ${said}`)
+      if (authFailure(said)) throw new RpcError('rejected', `${rejectionSummary(provider.name, authed.get(provider.id)?.type, said)}: ${providerWords(said)}`)
+      throw new RpcError('model_failed', `${provider.name}: ${providerWords(said)}`)
     }
     const text = answer.content.flatMap((part) => part.type === 'text' ? [part.text] : []).join('').trim()
     return { model: `${ref.provider}/${ref.modelId}`, label: model.name, text, ms: Date.now() - started }
@@ -561,17 +583,27 @@ export async function createAgentSettings(settings: SettingsRegistry, dataDir: s
         }
       }
       const ref = chosen()
+      const own = kindDefault() ?? (ref ? `${ref.provider}/${ref.modelId}` : undefined)
       return {
         models: list, favourites: favourites(),
-        default: { ...(ref ? { model: `${ref.provider}/${ref.modelId}` } : {}), thinking: settings.get<string | null>(KEYS.thinking) },
+        default: { ...(own ? { model: own } : {}), thinking: settings.get<string | null>(KEYS.thinking) },
       }
     },
-    login(provider, type, key, emit, check) {
+    useKinds(given) { kinds = given; settings.invalidate() },
+    kindDefault,
+    login(provider, type, emit, { key, check, domain } = {}) {
       if (!models.getProviders().some((p) => p.id === provider)) throw new RpcError('unknown_provider', `No provider ${provider}`)
       if (type === 'oauth' && !OAUTH.has(provider)) throw new RpcError('unsupported', `Sign-in is not offered for ${provider}; use an API key`)
-      return flows.start(emit, async (flow) => {
+      // One sign-in to a provider at a time: an earlier one not finished (its window closed, say) is cancelled, and
+      // this one starts once it has let go of what it held (ChatGPT's listens on a fixed port).
+      const earlier = signingIn.get(provider)
+      if (earlier) flows.cancel(earlier)
+      const id = flows.start(emit, async (flow) => {
+        if (earlier) await flows.ended(earlier)
         const prompt = ({ signal, ...prompt }: PiAuthPrompt) => {
           if (key !== undefined && type === 'api_key' && prompt.type === 'secret') return Promise.resolve(key)
+          // Copilot's one question before its code: which GitHub, when the caller said.
+          if (domain !== undefined && provider === 'github-copilot' && prompt.type === 'text') return Promise.resolve(domain)
           return flow.prompt(prompt as AuthPrompt, signal ? { signal } : {})
         }
         const before = check && type === 'api_key' ? await credentials.read(provider) : undefined
@@ -583,7 +615,7 @@ export async function createAgentSettings(settings: SettingsRegistry, dataDir: s
         await refreshAuth()
         const trial = check && type === 'api_key' ? testModelOf(provider) : undefined
         if (trial) {
-          flow.emit({ type: 'progress', message: `Checking the key with ${models.getModel(trial.provider, trial.modelId)?.name ?? trial.modelId}…` })
+          flow.emit({ type: 'progress', message: `Trying it on ${models.getModel(trial.provider, trial.modelId)?.name ?? trial.modelId}…` })
           try {
             await tryModel(trial)
           } catch (error) {
@@ -602,6 +634,9 @@ export async function createAgentSettings(settings: SettingsRegistry, dataDir: s
         seen.set(provider, hashOf(await credentials.read(provider).catch(() => undefined)))
         credentialsChanged(provider)
       })
+      signingIn.set(provider, id)
+      void flows.ended(id).then(() => { if (signingIn.get(provider) === id) signingIn.delete(provider) })
+      return id
     },
     test(value) {
       const ref = value ? parse(value) : chosen()
@@ -627,7 +662,7 @@ export async function createAgentSettings(settings: SettingsRegistry, dataDir: s
           return []
         }
       }))).flat()
-      return { usable: works(), fromEnv, local }
+      return { usable: works() || Boolean(kindDefault()), fromEnv, local }
     },
     async logout(provider) {
       await models.logout(provider)

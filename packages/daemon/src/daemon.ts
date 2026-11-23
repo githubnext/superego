@@ -216,6 +216,9 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   for (const extension of core) daemonLife.add(await extensions.setUpBuiltin(extension, 'core'))
   for (const extension of options.extensions ?? []) daemonLife.add(await extensions.setUpBuiltin(extension, 'bundled'))
   extensions.registerSwitches()
+  // The default model may be another kind of agent's (Claude Agent's): its models listed once now, for the Model setting.
+  agent.useKinds({ menus: extensions.menusSeen, known: extensions.kindModel })
+  void extensions.agentMenus()
 
   // Mount everything once so statuses (and anything a previous process left running) are live from the start; and
   // learn which thread each subagent's conversation is of, before any resumed run asks.

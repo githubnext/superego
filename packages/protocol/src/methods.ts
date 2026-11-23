@@ -466,9 +466,10 @@ export type Methods = {
   /**
    * Start a sign-in. It reports through `auth.event`; prompts are answered with `auth.respond`. `check` (with the
    * `model-setup` feature): a key is tried on one of the provider's models before the flow is done, and taken back
-   * if the provider refuses it.
+   * if the provider refuses it. `domain`: GitHub Copilot's GitHub Enterprise domain, `''` for github.com, so the flow
+   * doesn't ask.
    */
-  'auth.signIn': { params: { provider: string; type: 'api_key' | 'oauth'; key?: string; check?: boolean }; result: { flow: string } }
+  'auth.signIn': { params: { provider: string; type: 'api_key' | 'oauth'; key?: string; check?: boolean; domain?: string }; result: { flow: string } }
   'auth.respond': { params: { flow: string; prompt: string; value: string }; result: null }
   'auth.cancel': { params: { flow: string }; result: null }
   'auth.signOut': { params: { provider: string }; result: null }

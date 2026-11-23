@@ -156,8 +156,8 @@ export function NewThreadDialog({ start: asked, onClose }: { start: NewThreadSta
           if (!live) return
           const found = list as ProfileInfo[]
           setProfiles(found)
-          // The profile it started with, while the folder is the one it started in.
-          setProfile(start.profile && start.profile !== 'default' && cwd.trim() === start.cwd && found.some((p) => p.name === start.profile) ? start.profile : null)
+          // The profile it started with, while the folder is the one it started in (any, when it named none).
+          setProfile(start.profile && start.profile !== 'default' && (start.cwd === undefined || cwd.trim() === start.cwd) && found.some((p) => p.name === start.profile) ? start.profile : null)
         }, (e: Error) => {
           console.error(`Listing the profiles for ${cwd || 'the home folder'} failed`, e)
           if (live) setProfiles({ message: e.message })
@@ -169,20 +169,25 @@ export function NewThreadDialog({ start: asked, onClose }: { start: NewThreadSta
   const modelsFailed = catalog && !('models' in catalog) ? catalog : undefined
   /** The kind of agent a model is another's (Claude Agent's), with its group. */
   const agentOf = (value: string | null) => value ? models?.agents?.find((a) => a.models.some((m) => m.value === value)) : undefined
-  const agentModel = agentOf(model)
+  // The machine's default may be another kind's model (Claude Code, picked in setup): with neither a model nor a profile
+  // picked, the thread starts on it, with that kind's profile.
+  const defaultKind = agentOf(models?.default.model ?? null)
+  const agentModel = agentOf(model) ?? (model === null && profile === null ? defaultKind : undefined)
   const found = Array.isArray(profiles) ? profiles : undefined
   // The profile another kind's model starts with, listed before it's made (starting makes it).
   const profileList = found && agentModel && !found.some((p) => p.name === agentModel.profile)
     ? [...found, { name: agentModel.profile, scope: 'user' as const, dir: '', allowed: true, agent: agentModel.kind }]
     : found
   const profilesFailed = profiles && !Array.isArray(profiles) ? profiles : undefined
-  const picked = profileList?.find((p) => p.name === (profile ?? 'default'))
+  const shownProfile = profile ?? agentModel?.profile ?? null
+  const picked = profileList?.find((p) => p.name === (shownProfile ?? 'default'))
   /** The kind of agent the profile picked runs on, when it's another's: its models alone are offered. */
   const pickedKind = picked?.agent
 
-  const chosen = agentModel ? agentModel.models.find((m) => m.value === model) : pickedKind ? undefined : models?.models.find((m) => m.value === (model ?? models.default.model))
+  const chosen = agentModel ? agentModel.models.find((m) => m.value === (model ?? models?.default.model)) : pickedKind ? undefined : models?.models.find((m) => m.value === (model ?? models.default.model))
   const levels = chosen?.thinking ?? []
-  const defaultLabel = !pickedKind && models?.default.model ? `Default · ${models.models.find((m) => m.value === models.default.model)?.label ?? models.default.model}` : 'Default'
+  const defaultModel = models && [...models.models, ...defaultKind?.models ?? []].find((m) => m.value === models.default.model)
+  const defaultLabel = defaultModel && (pickedKind ? defaultKind?.kind === pickedKind : !defaultKind) ? `Default · ${defaultModel.label}` : 'Default'
   /** Pick a model; another kind's picks a profile of that kind, unless one is picked. */
   const pickModel = (value: string | null) => {
     setModel(value)
@@ -277,7 +282,7 @@ export function NewThreadDialog({ start: asked, onClose }: { start: NewThreadSta
           <div className="new-thread__how">
             <Field name="profile" label="Profile">
               {profileList
-                ? <ProfileSelect profiles={profileList} value={profile} onChange={pickProfile} />
+                ? <ProfileSelect profiles={profileList} value={shownProfile} onChange={pickProfile} />
                 : <Select aria-label="Profile" options={[]} value={null} nullLabel={profiles ? 'Unavailable' : 'Loading…'} disabled onChange={() => {}} />}
             </Field>
             <Field name="model" label="Model">

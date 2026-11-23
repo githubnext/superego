@@ -84,6 +84,31 @@ it("doesn't let Claude Agent's models be picked while Claude Code isn't signed i
   expect($$('.model-picker__item.is-unavailable').map((row) => row.textContent)).toEqual(['Opus', 'Sonnet', 'Haiku'])
 })
 
+it("makes Claude Code the machine's default when it's used in setup: ⌘N then starts on it, with the claude profile", async () => {
+  await open({ loggedIn: true, authMethod: 'claude.ai', subscriptionType: 'max' })
+  await ui!.registry.router.dispatch('app.setup')
+  // The scripted model works already: setup opens on it, and Claude Code is among what's found once another is asked for.
+  await ui!.until(() => Boolean($('.setup__another')), 'setup, on the model that works')
+  $('.setup__another')!.click()
+  const claude = () => $$('.setup__row').find((r) => r.querySelector('.setup__what')?.firstElementChild?.textContent === 'Claude Code')
+  await ui!.until(() => Boolean(claude()?.querySelector('button')), 'Claude Code found')
+  expect(claude()!.textContent).toContain('Signed in with your Claude Max plan · experimental')
+  claude()!.querySelector('button')!.click()
+  await ui!.until(() => Boolean($('.setup')?.textContent?.includes('New threads run on your Claude Code')), 'Claude Code used')
+  expect((await daemon!.call<{ default: { model?: string } }>('agent.models', {})).default.model).toBe('claude-agent/opus')
+  expect($('.setup__model.is-default')?.textContent).toContain('Opus')
+
+  // Start a thread: ⌘N says it runs on Claude Code, and asks for no model or profile of its own (the default is it).
+  $$('.setup__foot button').find((b) => b.textContent === 'Start a thread')!.click()
+  await ui!.until(() => $('.new-thread [aria-label="Model"]')?.textContent === 'Default · Opus', "⌘N on the default, Claude Code's Opus")
+  expect($<HTMLSelectElement>('.new-thread select[aria-label="Profile"]')!.value).toBe('claude')
+  $$('.new-thread__foot button').find((b) => b.textContent?.startsWith('Start'))!.click()
+  await ui!.until(async () => (await daemon!.call<ActionLogEntry[]>('action.log', {})).some((e) => e.id === 'thread.start'), 'started')
+  const asked = (await daemon!.call<ActionLogEntry[]>('action.log', {})).find((e) => e.id === 'thread.start')!
+  expect(asked.params).not.toHaveProperty('model')
+  expect(asked.params).not.toHaveProperty('profile')
+})
+
 /** Settings, on this machine's tab, once Claude Agent's section says what's there. */
 async function settings(what: string) {
   $('.app__settings')!.click()

@@ -589,10 +589,14 @@ export function createThreads(host: Host, { harness, extensions, profiles }: { h
    * it hears from it, though no list shows it there); `hidden`, in no list and the extension's of that name. Extensions' `starting` hooks
    * may move it (a worktree) and give it state.
    */
-  async function startThread({ cwd, title, model: ownModel, thinking, prompt, attachments, profile: profileName, parent, options: asked, hidden, by, exposure, from }: ThreadStart) {
+  async function startThread({ cwd, title, model: given, thinking, prompt, attachments, profile: profileName, parent, options: asked, hidden, by, exposure, from }: ThreadStart) {
     // Uploads are inline again by now (see connection.ts).
     const dir = folderOf(cwd)
     if (!(await stat(dir).then((s) => s.isDirectory(), () => false))) throw new RpcError('invalid', `No folder ${dir} on ${hostname()}`)
+    // Given neither a model nor a profile, the machine's default: another kind's (Claude Agent's, picked in setup) starts
+    // it on that kind, while that kind is here.
+    const fallback = !given && !profileName?.trim() && !hidden ? agent.kindDefault() : undefined
+    const ownModel = given ?? (fallback && await extensions.kindOfModel(fallback) ? fallback : undefined)
     // Another kind of agent's model (Claude Agent's): the thread runs on that kind, with a profile of it.
     const modelKind = ownModel ? await extensions.kindOfModel(ownModel) : undefined
     if (ownModel && !modelKind && !agent.catalog().models.some((m) => m.value === ownModel)) throw new RpcError('invalid', `No model ${ownModel} here; sign in to its provider first`)

@@ -24,7 +24,7 @@ export type AuthFlow = {
   prompt(prompt: AuthPrompt, options?: { signal?: AbortSignal }): Promise<string>
 }
 
-type Running = { abort: AbortController; prompts: Map<string, { resolve(value: string): void; close(): void }> }
+type Running = { abort: AbortController; prompts: Map<string, { resolve(value: string): void; close(): void }>; ended: Promise<void> }
 
 export type AuthFlows = {
   /**
@@ -35,6 +35,8 @@ export type AuthFlows = {
   /** Answer a flow's prompt; `not_found` when it no longer waits. */
   respond(flow: string, prompt: string, value: string): void
   cancel(flow: string): void
+  /** Once a flow has ended, everything it held let go (a port it listened on); at once for one that's gone. */
+  ended(flow: string): Promise<void>
   /** Cancel every flow: the daemon is stopping. */
   close(): void
 }
@@ -47,7 +49,8 @@ export function createAuthFlows({ timeout = FLOW_TIMEOUT } = {}): AuthFlows {
   return {
     start(emit, run, signal) {
       const id = randomUUID()
-      const flow: Running = { abort: new AbortController(), prompts: new Map() }
+      let end = () => {}
+      const flow: Running = { abort: new AbortController(), prompts: new Map(), ended: new Promise((resolve) => { end = resolve }) }
       flows.set(id, flow)
       const cancel = () => flow.abort.abort()
       signal?.addEventListener('abort', cancel, { once: true })
@@ -83,6 +86,7 @@ export function createAuthFlows({ timeout = FLOW_TIMEOUT } = {}): AuthFlows {
         flows.delete(id)
         signal?.removeEventListener('abort', cancel)
         for (const pending of flow.prompts.values()) pending.close()
+        end()
       })
       return id
     },
@@ -94,6 +98,7 @@ export function createAuthFlows({ timeout = FLOW_TIMEOUT } = {}): AuthFlows {
     cancel(flow) {
       flows.get(flow)?.abort.abort()
     },
+    ended: (flow) => flows.get(flow)?.ended ?? Promise.resolve(),
     close() {
       for (const flow of flows.values()) flow.abort.abort()
     },

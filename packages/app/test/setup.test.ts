@@ -30,9 +30,14 @@ let root: Root | undefined
 let container: HTMLElement
 let server: Server | undefined
 
-/** An OpenAI-compatible server, as Ollama is: two models, and one line for every chat. */
-async function mockOllama() {
+/** An OpenAI-compatible server, as Ollama is: two models, and one line for every chat; or, `refusing`, a 401 for every chat. */
+async function mockOllama({ refusing = false } = {}) {
   server = createServer((request, response) => {
+    if (refusing && request.url !== '/v1/models') {
+      request.resume()
+      response.writeHead(401, { 'content-type': 'application/json' })
+      return response.end(JSON.stringify({ error: { message: 'Incorrect API key provided', type: 'invalid_request_error', code: 'invalid_api_key' } }))
+    }
     if (request.url === '/v1/models') {
       response.writeHead(200, { 'content-type': 'application/json' })
       return response.end(JSON.stringify({ object: 'list', data: [{ id: 'qwen3:32b' }, { id: 'llama3.1:8b' }] }))
@@ -186,11 +191,85 @@ it("opens from a composer that couldn't send, and goes back to its thread once d
   const thread = await peer.call<{ id: string }>('thread.start', { title: 'stuck' })
   await mount(thread.id)
   await act(async () => { select({ machine: 'local', thread: thread.id }) })
-  await until(() => text().includes('No model is set up on This computer.'), 'the card')
+  await until(() => text().includes('No model is set up on this computer.'), 'the card')
   await click(button('Set up models…'))
   await until(() => Boolean(rowOf('Ollama')), 'the page, for the thread')
   await click(rowOf('Ollama')!.querySelector('button')!)
   await until(() => Boolean(container.querySelector('.setup__bubble')), 'it answering')
   await click(button('Back to the thread'))
   await until(() => selection?.thread === thread.id && !page(), 'back at the thread')
+})
+
+it("shows on first run when the model found doesn't answer, saying why", async () => {
+  // A key in the environment that's been revoked counts as a model until it's tried.
+  const baseUrl = await mockOllama({ refusing: true })
+  await start()
+  await peer.call('providers.save', { name: 'Revoked', baseUrl })
+  expect((await peer.call<{ usable: boolean }>('setup.probe', {})).usable).toBe(true)
+  await mount()
+  await until(() => Boolean(page()), 'the page, though a model is set')
+  await until(() => Boolean(container.querySelector('.setup__test .setup__error')), 'its test failing')
+  expect(container.querySelector('.setup__test .setup__error')!.textContent).toBe('Revoked rejected the API key: Incorrect API key provided')
+  expect(container.querySelector('.setup__bad')).not.toBeNull()
+})
+
+/** Type into a field as React hears it. */
+async function type(field: HTMLInputElement, value: string) {
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(field, value)
+    field.dispatchEvent(new Event('input', { bubbles: true }))
+  })
+  await settle()
+}
+const way = (title: string) => rowOf(title)!.querySelector<HTMLButtonElement>('button.setup__line')!
+
+it("tells whose a pasted key is, and refuses one that can't be a key before sending it", async () => {
+  await start()
+  await mount()
+  await until(() => Boolean(rowOf('Paste an API key')), 'the ways in')
+  await click(way('Paste an API key'))
+  const field = container.querySelector<HTMLInputElement>('.setup__key input[type=password]')!
+  await type(field, 'sk-proj-abcdefghijklmnopqrstuvwxyz0123')
+  expect(text()).toContain('OpenAI key')
+  expect(container.querySelector('.setup__key select')).toBeNull()
+  // Not OpenAI's after all: its provider picked by hand.
+  await click(button('Not OpenAI?'))
+  expect(container.querySelector<HTMLSelectElement>('.setup__key select')!.value).toBe('openai')
+
+  await type(field, 'hello')
+  expect(container.querySelector('.setup__key select')).not.toBeNull()
+  await act(async () => { container.querySelector<HTMLFormElement>('.setup__key')!.requestSubmit() })
+  await settle()
+  expect(text()).toContain("That doesn't look like an API key.")
+  expect(container.querySelector('.auth-flow')).toBeNull()
+})
+
+it('adds a local server by its address as typed, and starts on its first model', async () => {
+  const baseUrl = await mockOllama()
+  await start()
+  await mount()
+  await until(() => Boolean(rowOf('Local model')), 'the ways in')
+  await click(way('Local model'))
+  // Without its scheme or /v1, as an address is often written.
+  await type(container.querySelector<HTMLInputElement>('.setup__local input')!, baseUrl.replace('http://', '').replace('/v1', ''))
+  await act(async () => { container.querySelector<HTMLFormElement>('.setup__local')!.requestSubmit() })
+  await until(() => text().includes('Hi! Ready when you are.'), 'it saying hi')
+  expect((await peer.call<{ default: { model?: string } }>('agent.models', {})).default.model).toMatch(/\/qwen3:32b$/)
+})
+
+it('finds any other provider in setup itself, and adds an endpoint of your own there', async () => {
+  const baseUrl = await mockOllama()
+  await start()
+  await mount()
+  await until(() => Boolean(rowOf('More providers')), 'the ways in')
+  expect(rowOf('More providers')!.textContent).toContain('Amazon Bedrock, Google Vertex AI, Azure and')
+  await click(way('More providers'))
+  await type(container.querySelector<HTMLInputElement>('.setup__open input[type=search]')!, 'groq')
+  expect([...container.querySelectorAll('.setup__provider .setup__what')].map((n) => n.textContent)).toEqual(['Groq'])
+  await click(button('Add your own OpenAI-compatible endpoint'))
+  await type(container.querySelector<HTMLInputElement>('#provider-name')!, 'Mine')
+  await type(container.querySelector<HTMLInputElement>('#provider-url')!, baseUrl)
+  await act(async () => { container.querySelector<HTMLFormElement>('.provider-form')!.requestSubmit() })
+  await until(() => text().includes('Hi! Ready when you are.'), 'it saying hi')
+  expect((await peer.call<{ default: { model?: string } }>('agent.models', {})).default.model).toBe('mine/qwen3:32b')
 })

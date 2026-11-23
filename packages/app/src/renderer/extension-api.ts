@@ -42,7 +42,7 @@ export type BehaviourSlot =
   | 'overlay'
   /**
    * On first-run setup, among what was found on the machine: a `SetupRow` for what yours offers to run models with,
-   * and `use` once it's ready (a profile new threads start with).
+   * and `use` once it's ready (`{ label, detail, model }`: your kind of agent's model, made the machine's default).
    */
   | 'onboarding'
 

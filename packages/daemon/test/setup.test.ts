@@ -141,9 +141,34 @@ it('tries a key before signing in with it, and takes back one the provider refus
   await expect(peer.call('model.test', { model: 'mock/qwen3:32b' })).rejects.toMatchObject({ kind: 'rejected' })
 
   const taken = await signIn(peer, 'mock', 'good-key')
-  expect(taken).toContainEqual({ type: 'progress', message: 'Checking the key with qwen3:32b…' })
+  expect(taken).toContainEqual({ type: 'progress', message: 'Trying it on qwen3:32b…' })
   expect(taken.at(-1)).toEqual({ type: 'done' })
   expect(stored()).toEqual({ type: 'api_key', key: 'good-key' })
+})
+
+it("cancels a provider's unfinished sign-in when another starts, so the new one isn't stuck behind it", async () => {
+  // ChatGPT's listens on a fixed port: one left running (its row closed) kept the next from starting.
+  const peer = await open()
+  const events = new Map<string, AuthEvent[]>()
+  peer.on('auth.event', ({ flow, event }: Notifications['auth.event']) => events.set(flow, [...events.get(flow) ?? [], event]))
+  const signIn = () => peer.call<{ flow: string }>('auth.signIn', { provider: 'github-copilot', type: 'oauth' })
+  const first = await signIn()
+  await until(() => Boolean(events.get(first.flow)?.some((e) => e.type === 'prompt')))
+  const second = await signIn()
+  await until(() => events.get(first.flow)?.at(-1)?.type === 'failed')
+  expect(events.get(first.flow)!.at(-1)).toEqual({ type: 'failed', message: 'Cancelled' })
+  await until(() => Boolean(events.get(second.flow)?.some((e) => e.type === 'prompt')))
+  await peer.call('auth.cancel', { flow: second.flow })
+})
+
+it("doesn't ask Copilot's GitHub when the caller says which", async () => {
+  const peer = await open()
+  const events: AuthEvent[] = []
+  peer.on('auth.event', ({ event }: Notifications['auth.event']) => events.push(event))
+  // A domain that can't resolve: the flow goes straight to asking it for a code, and fails there, offline too.
+  await peer.call('auth.signIn', { provider: 'github-copilot', type: 'oauth', domain: 'github.invalid' })
+  await until(() => events.some((e) => e.type === 'failed'))
+  expect(events.filter((e) => e.type === 'prompt')).toEqual([])
 })
 
 it("refuses a first message no model can answer, and makes no thread", async () => {

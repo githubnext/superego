@@ -7,6 +7,7 @@
 // as it's tried first) and out again.
 import { createServer } from 'node:http'
 import { afterEach, beforeEach, expect, it } from 'vitest'
+import { defineWindowAction } from '../src/renderer/actions.tsx'
 import { defineUiExtension } from '../src/renderer/sdk-ui.ts'
 import { mountUi, testDaemon, type TestDaemon, type TestWindow } from '../../sdk/src/testing.ts'
 
@@ -66,12 +67,9 @@ it('splits the app’s settings over General, Appearance and Hotkeys, an extensi
 
 it('opens on the tab a link names, from whichever it was left on', async () => {
   await go('Hotkeys')
-  // Setup's way to the providers it doesn't list: Settings, at the machine's Providers.
-  await ui.dispatch('app.setup')
-  await ui.until(() => $$('button').some((b) => b.textContent === 'Add another provider'), 'setup, on the model that works')
-  $$('button').find((b) => b.textContent === 'Add another provider')!.click()
-  await ui.until(() => $$('button').some((b) => b.textContent === 'Another provider'), 'setup’s ways in')
-  $$('button').find((b) => b.textContent === 'Another provider')!.click()
+  // A link to a machine's Providers (a composer's Sign in again, say): Settings, at that machine's tab.
+  ui.registry.router.register(defineWindowAction({ id: 'test.providers', title: 'Providers', run: (_p, c) => c.openSettings('local') }))
+  await ui.dispatch('test.providers')
   await ui.until(() => Boolean($('.settings__nav-machine[data-active]')?.textContent?.includes('local')) && Boolean($('.provider')), 'the machine’s Providers')
 })
 

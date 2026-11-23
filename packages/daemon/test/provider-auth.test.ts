@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { authFailure, rejectionSummary, WAITING } from '../src/provider-auth.ts'
+import { authFailure, providerWords, rejectionSummary, WAITING } from '../src/provider-auth.ts'
 
 describe('authFailure', () => {
   it.each([
@@ -95,4 +95,11 @@ it('gives a failed refresh the token endpoint\'s answer, so a run failing on it 
     agent.close()
     await rm(dir, { recursive: true, force: true })
   }
+})
+
+it("says a provider's error in its own words, without the JSON around them", () => {
+  expect(providerWords('401 {"type":"error","error":{"type":"authentication_error","message":"invalid x-api-key"},"request_id":"req_011"}')).toBe('invalid x-api-key')
+  expect(providerWords('401: {"error":{"message":"Invalid API Key","type":"invalid_request_error","code":"invalid_api_key"}}')).toBe('Invalid API Key')
+  expect(providerWords('Incorrect API key provided: sk-…')).toBe('Incorrect API key provided: sk-…')
+  expect(providerWords('500 {not json')).toBe('500 {not json')
 })

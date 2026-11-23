@@ -373,7 +373,16 @@ export function createExtensionHost(host: Host, later: { profiles(): ProfileHost
         clearTimeout(timer)
       }
     }))
-    return menus.filter((menu) => menu !== undefined)
+    const listed = menus.filter((menu) => menu !== undefined)
+    // As last listed, for what needs them at once (the Model setting's choices): told again when they change.
+    if (JSON.stringify(listed) !== JSON.stringify(menusSeen)) { menusSeen = listed; host.settings.invalidate() }
+    return listed
+  }
+  let menusSeen: AgentKindMenu[] = []
+  /** Whether `model` is another kind of agent's (`<kind>/<model>`), of a kind offered here. */
+  const kindModel = (model: string) => {
+    const slash = model.indexOf('/')
+    return slash > 0 && runnerOf(model.slice(0, slash), new Set()) !== undefined
   }
   /** The kind whose model `model` is (`<kind>/<model>`), if it's one an extension here offers. */
   async function kindOfModel(model: string) {
@@ -923,7 +932,7 @@ export function createExtensionHost(host: Host, later: { profiles(): ProfileHost
   return {
     setUp, setUpBuiltin, registerSwitches, declare, inspect, known, offer, offered: (name: string) => offered().some((e) => e.name === name),
     runnerOf,
-    publishViews, agentOf, agentMenus, kindInfoOf, kindOfModel, kindProfile, kindTitle, modelFromOf, partsFor, switchedOff, withoutFor, panesOf, factsOf, quietOf, blockedOf, appliesTo,
+    publishViews, agentOf, agentMenus, menusSeen: () => menusSeen, kindModel, kindInfoOf, kindOfModel, kindProfile, kindTitle, modelFromOf, partsFor, switchedOff, withoutFor, panesOf, factsOf, quietOf, blockedOf, appliesTo,
     /** The daemon closing: switches turned meanwhile change nothing. */
     close: () => unlisten(),
     /** Every teardown so far finished (or given up on): those of extensions torn down earlier too, a profile's reloaded. */

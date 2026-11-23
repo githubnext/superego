@@ -9,7 +9,7 @@ import { expect, it } from 'vitest'
 import { createModels } from '@earendil-works/pi-ai'
 import { BACKGROUND_CONTEXT as ctx } from '@earendil-works/chord/context'
 import { AssistantEntry, createRegistry, defineExtension, defineTask, Harness, InboxDoc, LiveDoc, MemoryStorage, placeSteers, ToolResultEntry, type ConversationId, type EntryId, type PlacedSteer } from '@earendil-works/pi-durable'
-import { defineApp, PROTOCOL_VERSION, type Hello, type ThreadInfo } from '@superego/protocol'
+import { defineApp, PROTOCOL_VERSION, type Hello, type ModelCatalog, type SettingsSnapshot, type SetupProbe, type ThreadInfo } from '@superego/protocol'
 import { connectSocket, defineDaemonExtension, listen, openDaemon } from '../src/index.ts'
 import { until } from './until.ts'
 
@@ -166,4 +166,47 @@ it('refuses to start a thread with a profile whose kind of agent no extension he
   try {
     await expect(peer.call('thread.start', {})).rejects.toThrow("Profile default runs on nobody, which isn't here")
   } finally { await close() }
+})
+
+it("takes another kind's model as the machine's default: new threads start on that kind, with its profile", async () => {
+  // As Claude Agent offers itself: a group in the model menus, and the profile its threads start with, made when first needed.
+  let dir = ''
+  const offered = defineDaemonExtension({
+    name: 'echo-agent', version: '1.0.0', api: '^5.3',
+    setup(s) {
+      s.agentKind({
+        name: 'echo-agent', runner: Echo,
+        menu: () => ({ title: 'Echo', models: [{ value: 'big', label: 'Big', thinking: [] }] }),
+        profile: {
+          name: 'echo',
+          async make() { mkdirSync(join(dir, 'profiles', 'echo'), { recursive: true }); writeFileSync(join(dir, 'profiles', 'echo', 'profile.ts'), "export default { agent: 'echo-agent' }\n") },
+        },
+      })
+    },
+  })
+  dir = await mkdtemp(join(tmpdir(), 'superego-agent-kind-'))
+  delete process.env.SUPEREGO_MODEL
+  for (const key of ['ANTHROPIC_API_KEY', 'ANTHROPIC_OAUTH_TOKEN', 'OPENAI_API_KEY']) delete process.env[key]
+  const daemon = await openDaemon({ app: defineApp({ name: 'superego', id: 'superego' }), dataDir: dir, defaultCwd: dir, agentsDir: join(dir, 'agents'), extensions: [offered], localServers: [] })
+  const server = await listen(daemon, join(dir, 'superego.sock'))
+  const { peer, socket } = await connectSocket(join(dir, 'superego.sock'))
+  try {
+    await peer.call<Hello>('hello', { client: 'test', version: PROTOCOL_VERSION })
+    expect(await peer.call<SetupProbe>('setup.probe', {})).toMatchObject({ usable: false })
+    await peer.call('settings.set', { key: 'agent.model', value: 'echo-agent/big' })
+    expect((await peer.call<ModelCatalog>('agent.models', {})).default.model).toBe('echo-agent/big')
+    expect(await peer.call<SetupProbe>('setup.probe', {})).toMatchObject({ usable: true })
+    // The Model setting shows it as chosen, among its kind's.
+    const section = (await peer.call<{ value: SettingsSnapshot }>('settings.watch', {})).value.sections.find((s) => s.id === 'model')!
+    expect(section.settings.find((s) => s.key === 'agent.model')).toMatchObject({ options: expect.arrayContaining([{ value: 'echo-agent/big', label: 'Big', group: 'Echo' }]) })
+
+    // Started with nothing named, a thread runs on that kind, with its profile (made now).
+    const thread = await peer.call<ThreadInfo>('thread.start', { prompt: 'Hello there' })
+    let info = thread
+    await until(async () => { info = (await peer.call<{ thread: ThreadInfo }>('thread.read', { thread: thread.id })).thread; return info.status.state === 'done' })
+    expect(info.status.msg).toBe('Echo: Hello there')
+    expect(info.profile?.name).toBe('echo')
+  } finally {
+    socket.destroy(); server.close(); await daemon.close(); await rm(dir, { recursive: true, force: true })
+  }
 })

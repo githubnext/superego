@@ -50,6 +50,24 @@ const AUTH = [
   new RegExp(`^${WAITING}`),
 ]
 
+/**
+ * What a provider said, in its own words without the wrapping: the message of the JSON error body it answered with
+ * (`401 {"type":"error","error":{"message":"invalid x-api-key"},"request_id":…}` says "invalid x-api-key"), else what
+ * it said as it was.
+ */
+export function providerWords(said: string): string {
+  const body = said.indexOf('{')
+  if (body < 0) return said.trim()
+  try {
+    const parsed = JSON.parse(said.slice(body)) as { error?: { message?: unknown } | string; message?: unknown }
+    const message = typeof parsed.error === 'object' ? parsed.error?.message : typeof parsed.error === 'string' ? parsed.error : parsed.message
+    if (typeof message === 'string' && message.trim()) return message.trim()
+  } catch {
+    // Not JSON after all (or cut short): said as it was.
+  }
+  return said.trim()
+}
+
 /** What happened, in a few words, by how the provider was signed in (`type`) and what it said. */
 export function rejectionSummary(name: string, type: 'api_key' | 'oauth' | undefined, error: string) {
   if (/\bProvider is not configured\b/i.test(error)) return `${name} isn't signed in`

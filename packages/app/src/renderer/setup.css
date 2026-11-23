@@ -14,10 +14,10 @@
 .setup__hello { display: flex; flex-direction: column; align-items: center; gap: var(--superego-space-2); text-align: center; }
 .setup__hello p { color: var(--superego-muted); }
 .setup__machine { margin-top: var(--superego-space-1); }
-/* Ego's dot, in a well: it closes, content, once a model says hi. */
+/* Ego's dot, in a well: it smiles once a model says hi. */
 .setup__mark { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: var(--superego-fill); }
-.setup__mark::after { content: ''; width: 14px; height: 14px; border-radius: 7px; background: var(--superego-text); transition: height .25s ease, width .25s ease; }
-.setup__mark.is-awake::after { width: 16px; height: 3px; }
+.setup__mark::after { content: ''; width: 14px; height: 14px; border-radius: 7px; background: var(--superego-text); transition: height .25s ease, width .25s ease, border-radius .25s ease, transform .25s ease; }
+.setup__mark.is-awake::after { width: 16px; height: 8px; border-radius: 0 0 8px 8px; transform: translateY(2px); }
 @media (prefers-reduced-motion: reduce) { .setup__mark::after { transition: none; } }
 
 /* Found: hidden until something is (an extension's row, a key, a server). */
@@ -35,17 +35,27 @@ button.setup__line:hover { background: var(--superego-hover); }
 .setup__way.is-open + .setup__row { border-top-color: transparent; }
 .setup__way.is-open .setup__line { background: var(--superego-fill); padding-inline: var(--superego-space-2); }
 .setup__open { padding: var(--superego-space-2) 0 var(--superego-space-3) 36px; display: flex; flex-direction: column; gap: var(--superego-space-2); }
+/* A key or an address, and its button, on one line; a key's provider between them when the key doesn't say. */
 .setup__key, .setup__local { display: flex; flex-wrap: wrap; gap: var(--superego-space-1); }
-.setup__key .superego-field[type=password], .setup__local .superego-field:nth-child(2) { flex: 1; min-width: 140px; }
-.setup__local .superego-field:first-child { width: 110px; }
+.setup__key .superego-field[type=password], .setup__local .superego-field { flex: 1; min-width: 140px; }
+.setup__key .superego-select { flex: 0 1 150px; min-width: 0; }
 .setup__local .setup__error { flex-basis: 100%; }
+/* A sign-in under its row is part of it: no box of its own, and no second heading's weight. */
+.setup .auth-flow { margin: 0; padding: 0; border: 0; background: none; }
+.setup .auth-flow__head b { font-weight: inherit; color: var(--superego-muted); }
+/* Every provider, searched: a name and its ways in, a line each. */
+.setup__more { display: flex; flex-direction: column; max-height: 320px; overflow-y: auto; }
+.setup__provider { display: flex; align-items: center; gap: var(--superego-space-2); min-height: 36px; }
+.setup__provider form { flex: 0 1 220px; }
+.setup__actions { display: flex; gap: var(--superego-space-1); }
 
 .setup__note { color: var(--superego-muted); }
 .setup__note a, .setup__link { color: var(--superego-link); }
 .setup__link { font: inherit; padding: 0; border: 0; background: none; cursor: pointer; }
 .setup__error { color: var(--superego-status-error-text); }
 .setup__ok { color: var(--superego-status-success); }
-.setup__another { align-self: center; color: var(--superego-muted); }
+.setup__bad { color: var(--superego-status-error-text); }
+.setup__another { align-self: flex-start; }
 
 .setup__model { display: flex; align-items: center; gap: var(--superego-space-1); border-radius: var(--superego-radius); }
 .setup__model.is-default { background: var(--superego-fill); }
