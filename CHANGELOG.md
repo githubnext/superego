@@ -2,94 +2,30 @@
 
 ## Unreleased
 
-- On a phone, the thread list has a search field under its title: type to find a thread by its title or project,
-  archived ones too, and tap one to open it.
-- **Upgrade (extension authors):** the `onboarding` slot's `use` takes `{ label, detail, model }` only: an extension
-  that passes `{ label, detail, profile }` names its kind's model (`<kind>/<model>`) instead.
-- **Upgrade (extension authors):** a `string` setting's `secret: true`, which only masked the field, is gone, and a
-  setting that still has it is refused. Make it `type: { type: 'secret' }` under the same key: its value moves into
-  the keychain.
-- **Upgrade (extension authors):** three CSS tokens are gone, and styles that use them fall back to nothing:
-  `--superego-composer` (use `--superego-glass`, the composer's now), and `--superego-rail-bg` and
-  `--superego-rail-tab` (use `--superego-chrome`: the rail is part of the side panel).
-- Setting up a model, reworked. Each way in says what it needs (your ChatGPT or Copilot plan, pay as you go, free on
-  your computer), every other provider (Amazon Bedrock, Google Vertex AI, Azure and more) is signed in to right there in
-  setup, and you start on the provider's recommended model, not the first one by name.
-- Paste any API key in setup: it tells whose key it is and asks only when it can't, refuses something that isn't a key
-  before sending it, and says in plain words why a provider turned one down. A line from your shell's startup file
-  works too, and a Claude subscription token is told apart from an API key at once.
-- Choosing Claude Code in setup (experimental) makes it the default for new threads, so New thread starts on it.
-- With Claude Code as the default, New thread says so when it's signed out or no longer installed, with Set up models
-  beside it, instead of starting on another provider or failing. A project's own default profile still comes first.
-- On first run, setup opens at once instead of after a wait: on the model your computer already has (a key in your
-  environment, say), saying hi with it or why it can't, or on the ways to get one.
-- GitHub Copilot signs in to github.com without asking first; GitHub Enterprise is a link under it, asking for its
-  address.
-- Closing a sign-in in setup stops it, so signing in with ChatGPT again works instead of saying its port is in use.
-- Cancelling while a pasted key is being tried stops the trying, and the key isn't kept.
-- A local model server is added by its address as you'd write it (`localhost:11434`), its models in its own order, and
-  embedding models are no longer offered as chat models.
-- Pasting a sign-in page's address is only offered when the browser didn't come back by itself.
-- An answer to a sign-in's question that doesn't go through says why, and the question is asked again, instead of the
-  sign-in sitting there.
-- Tables in answers fit a phone: a column of text keeps a readable width, a thread named in one wraps, and a table
-  too wide to fit scrolls all the way to its last column instead of cutting it off.
-- Extensions can ask for a key or token as a secret: you set it in Settings (or `superego secrets set <key>` in your own
-  terminal), it's kept in the system keychain (or encrypted in `~/.superego` where there's none), and agents, Ego and
-  `superego settings` only ever see whether it's set. Settings says where each one is kept, and what's wrong when its
-  store can't be read. A profile setting that was a masked text field moves into the keychain once its extension asks
-  for it as a secret.
-- A secret's field in Settings fits a narrow window, and on a phone, Escape while replacing one no longer closes
-  Settings too.
-- `superego extensions` shows each extension's own folder in `~/.superego/extensions`, and lists those left behind by
-  profiles that are gone, for you to delete, and their secrets, which `superego secrets` lists too, for you to clear.
-- API keys typed into a sign-in, a provider or a secret setting no longer show in the action log (`superego actions log`,
-  or the window's), on a machine still running 0.1.10 too.
-- On a phone, swipe a dialog (New thread, Settings, any other) down to close it, as on iOS: it follows your finger and
-  the app behind comes forward with it; let go short of a third of the way and it springs back. A prompt typed into
-  New thread is kept for next time; with a name, attached files or another form's unsaved changes, a swipe asks
-  before discarding them.
-- An iOS look on a phone: the bar's buttons float as glass over the thread scrolling under them, the thread and its
-  panes switch with a segmented control, the composer has a + beside it as in Messages, the thread's menu and dialogs
-  are sheets up from the bottom, New thread puts Start at the top, and Settings opens to a list of its pages. In the
-  thread list, each title has the row's full width, with its time, status and badges on a smaller line under it.
-- On a phone, swipe a thread in the list as in Mail: right to pin or unpin it, left for More (the thread's menu) and
-  Archive; swipe all the way across to do the outermost one at once.
-- What only you may do (set a secret, let outside agents in) is refused to an agent's shell and to extensions on your
-  other machines too, not only on this one. A machine still on an older Superego is passed none of it from them:
-  update it.
-- Ego, agents and extensions can no longer add a machine reached by running a command (`--via`, or `--command` over
-  ssh): you add one in Settings → Machines or with `superego machines add` yourself.
-- A new macOS look: the sidebar is an inset glass panel, the thread and its panes are rounded sheets, controls and
-  menus are softer, and Ego's button in the rail is a ring like the other icons instead of a solid dot.
-- The pane or thread you're in has a soft ring in the accent colour instead of a square border, and its tab is no
-  longer tinted.
-- Match window to theme (Settings → Appearance): the whole window in your theme's colours, not only code and the
-  terminal.
-- When your window is on another computer, agents no longer hand you `localhost` addresses (the Browser pane still
-  opens them), and when an address is needed they use this machine's real Tailscale name on your tailnet.
-- On a phone, New thread and other dialogs stay put when the keyboard comes up: they end at the keyboard with their
-  header on top, and the field you're typing in stays in sight. The prompt no longer offers to AutoFill a contact, and
-  New thread's Model and Thinking menus no longer overlap, and the Model menu fits on the screen.
-- Signing in with a code to enter (GitHub Copilot, ChatGPT through Codex, and others): the code shows large, one click
-  or reaching it with Tab selects all of it, it has a Copy button, and opening the sign-in page copies it too.
-- Signing in to GitHub Copilot with its domain left blank, as it says, goes on to github.com instead of doing nothing.
-- When GitHub stops accepting a GitHub Copilot sign-in, threads wait for you to sign in again instead of failing with an
-  error.
-- Coming back to a thread (from Settings, Ego's thread or another thread) shows its panes as you left them: a terminal
-  pane no longer takes the focus and scrolls itself into view, and the pane you had focused keeps the focus.
-- Each thread remembers how wide you made its column and its panes, as a proportion of the window: they're kept as you
-  switch threads, resize the window, restart, or open the thread in another window or on another device (a thread on
-  a machine still running 0.1.10 keeps them in the window you dragged them in). Widths you dragged in 0.1.10 aren't
-  carried over: each thread starts at its default widths once.
-- In a narrow window, Settings' tabs stay in a list down the side instead of lining up across the middle of it.
-- Settings opens each tab at its top, not scrolled as far as the last one was.
-- Narrowing the window to a phone's width (or widening it back) while you're in Settings keeps what you were doing:
-  a secret you were replacing, where you'd scrolled to, and the focus.
-- Accent colour shows the theme's accent while it's the one in use, instead of the default blue.
-- In the dark, the editor's current line and its number are drawn dark, not on a light stripe that hid the number.
-- Settings has Appearance and Hotkeys tabs of their own beside General. Extensions' app settings stay in General
-  unless they ask for another tab (`tab: 'appearance'` or `'hotkeys'`).
+## 0.2.0
+
+- **Upgrade:** a machine still on an older Superego won't take anything only you may do (setting a secret, letting
+  outside agents in) from your other machines' agents or extensions. Update it.
+- **Upgrade (extension authors):** a `string` setting's `secret: true` is gone; use `type: { type: 'secret' }`. The
+  onboarding slot's `use` takes `{ label, detail, model }` only. The CSS tokens `--superego-composer`,
+  `--superego-rail-bg` and `--superego-rail-tab` are gone: use `--superego-glass` and `--superego-chrome`.
+
+- A new macOS look: an inset glass sidebar, the thread and panes as rounded sheets, a soft accent ring on the one
+  you're in, and softer controls and menus.
+- Match window to theme (Settings → Appearance): the whole window in your theme's colours.
+- Settings has Appearance and Hotkeys tabs.
+- Improved model setup: every provider right in setup, paste any API key and it knows whose it is, recommended
+  models by default, and clear errors. Sign-in codes are easy to copy, and closing a sign-in stops it.
+- Claude Code (experimental) can be the default for new threads, and New thread says when it's signed out.
+- Secrets: extensions can ask for keys and tokens, which you set in Settings or with `superego secrets set`, kept in
+  the system keychain.
+- Each thread remembers its column and pane widths. Widths from 0.1.10 aren't carried over.
+- Safer: agents and extensions on your other machines can't do what only you may do, and agents can't add a machine
+  that runs a command.
+- On a phone: an iOS look, with glass buttons, sheets you swipe down to close, Settings as a list, and swipe actions
+  and search in the thread list; dialogs stay above the keyboard, menus fit the screen, and wide tables scroll.
+- Fixes: the dark editor's current line, Settings in narrow windows, panes restored as you left them, a maximized
+  Browser pane you can click in, GitHub Copilot sign-in, and API keys kept out of the action log.
 
 ## 0.1.10
 
@@ -172,8 +108,6 @@
 - A notification stays in Notification Center until you clear it, and clicking it there later still opens its thread.
 - The Browser pane shows a page loading: a thin line under its address bar that fills as it loads, a spinner on its
   tab and in the address, and Stop in place of Reload (Esc in the address bar stops it too). Quick loads show nothing.
-- A maximized Browser pane shows its page itself, to click and type in, with the thread kept in view, not a still of
-  it.
 - An agent's question and the box to answer it in are one card again, with no gap between its choices and the box.
 - A save to `layout.json` made just after you changed the layout in the window is no longer sometimes undone.
 
