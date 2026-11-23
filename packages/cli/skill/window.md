@@ -151,6 +151,14 @@ superego.surface('notes.page', {
   then yours, and docks it. It's listed in the sidebar like any other; the column's ↗ opens it as the thread, ✕
   undocks it. The component gets it as `thread`. How the agent works on what the surface shows is the profile's: tools
   in its daemon half, and live values the component watches.
+- **Its title.** `useSurfaceTitle(title)` (from `superego/ui`), in the component, says what it's called now (a note's
+  heading): the title bar and a thread started on it take that, remembered for when it opens again; until it says,
+  `title(params)`. `inset.right` says how much of its right side a floating thread covers (also
+  `--surface-inset-right`), to keep its own controls clear. A global profile's window views get `machine`, the one its
+  profile is on.
+- **Testing:** `mountUi({ profile: { extensions: [ui], global: true } })` mounts a global profile's UI;
+  `render({ surface: { kind, params } })` draws a surface with its thread beside it, and `window.surface()` says what
+  the main area shows (after a click on a space's row, say).
 - On a phone the surface is the whole screen; its thread opens as the thread, from the title.
 
 ### On a phone

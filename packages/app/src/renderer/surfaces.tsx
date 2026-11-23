@@ -2,7 +2,7 @@
 // profile's `superego.surface`: a notes page, a canvas), each with the thread docked to it: a column beside it, or a
 // card over its right side (`agent: 'floating'`). Which thread is docked to which surface is the window's (state.tsx);
 // with none, the column asks what to start one with.
-import { useState, type CSSProperties } from 'react'
+import { createContext, useContext, useEffect, useState, type CSSProperties } from 'react'
 import type { ThreadInfo } from '@superego/protocol'
 import { ArrowSquareOutIcon, Button, ChatCircleIcon, IconButton, StatusGlyph, TextArea, XIcon } from '@superego/ui'
 import type { MachineEntry } from '../shared/bridge.ts'
@@ -26,7 +26,27 @@ export const useSurfaceKind = (kind: string | undefined): Surface | undefined =>
   return kind ? registry.surfaces.find((s) => s.kind === kind) : undefined
 }
 
-/** What a surface is called where it's shown (the title bar, history): its kind's title for its params. */
+/** The surface a component draws in, for `useSurfaceTitle`. */
+const Drawing = createContext<SurfaceAt | undefined>(undefined)
+
+/**
+ * In a surface's component: what it's called now (a note's heading, say), for the title bar and the thread docked to
+ * it; remembered for when it opens again. Until it says, its kind's `title(params)`. Elsewhere, nothing.
+ */
+export function useSurfaceTitle(title: string | undefined) {
+  const at = useContext(Drawing)
+  const { setTitle } = useSurface()
+  const trimmed = title?.trim() || undefined
+  useEffect(() => { if (at) setTitle(at, trimmed) }, [at && JSON.stringify(at), trimmed])
+}
+
+/** What a surface is called where it's shown: what it said (`useSurfaceTitle`), else its kind's title for its params. */
+export function useTitleOf(at: SurfaceAt): string {
+  const kind = useSurfaceKind(at.kind)
+  return useSurface().titleOf(at) ?? surfaceTitle(kind, at)
+}
+
+/** Its kind's title for its params. */
 export function surfaceTitle(kind: Surface | undefined, at: SurfaceAt): string {
   if (!kind) return at.kind
   try { return typeof kind.title === 'function' ? kind.title(at.params) : kind.title } catch (error) {
@@ -52,7 +72,7 @@ export function SurfaceMain({ at, narrow }: { at: SurfaceAt; narrow: boolean }) 
     <div className={`surface ${floating ? 'is-floating' : 'is-docked'}`} data-surface={at.kind}>
       <div className="surface__body" style={{ '--surface-inset-right': `${right}px` } as CSSProperties}>
         <Contained name={whose(kind)} scope={scopeOfEntry(kind)}>
-          <Component machine={machine} kind={at.kind} params={at.params} thread={thread} open={(params) => open({ ...at, params })} inset={{ right }} />
+          <Drawing.Provider value={at}><Component machine={machine} kind={at.kind} params={at.params} thread={thread} open={(params) => open({ ...at, params })} inset={{ right }} /></Drawing.Provider>
         </Contained>
       </div>
       {agentShown && !narrow && (
@@ -72,11 +92,12 @@ export function SurfaceTitle({ at, narrow }: { at: SurfaceAt; narrow: boolean })
   const { agentShown, showAgent, docked } = useSurface()
   const { select } = useSelection()
   const Icon = kind?.icon
+  const title = useTitleOf(at)
   return (
     <span className="titlebar__crumb">
       <span className="titlebar__seg titlebar__title">
         {Icon && <Icon size={14} aria-hidden />}
-        <span className="thread__title">{surfaceTitle(kind, at)}</span>
+        <span className="thread__title">{title}</span>
         <span className="titlebar__actions">
           {narrow
             ? docked && <IconButton label="Open its thread" className="titlebar__action" onClick={() => select(docked)}><ChatCircleIcon size={14} aria-hidden /></IconButton>
@@ -108,6 +129,7 @@ function DockedThread({ machine, thread, undock }: { machine: MachineEntry; thre
 /** No thread docked yet: what to ask, which starts one (on the surface's profile, told what's open first) and docks it. */
 function AskAbout({ machine, at, kind, started }: { machine: MachineEntry; at: SurfaceAt; kind: Surface; started(thread: ThreadInfo): void }) {
   const [text, setText] = useState('')
+  const title = useTitleOf(at)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string>()
   const send = async () => {
@@ -119,7 +141,7 @@ function AskAbout({ machine, at, kind, started }: { machine: MachineEntry; at: S
     setError(undefined)
     try {
       const thread = await client(machine.id).call('thread.start', {
-        title: surfaceTitle(kind, at),
+        title,
         prompt: [about, asked].filter(Boolean).join('\n\n'),
         ...(kind.profile ? { profile: kind.profile } : {}),
       })

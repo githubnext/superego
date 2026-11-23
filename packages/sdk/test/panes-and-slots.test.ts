@@ -2,7 +2,7 @@
 // or slot the window wouldn't draw for that thread fails here too.
 import { createElement as h } from 'react'
 import { afterEach, describe, expect, it } from 'vitest'
-import { defineUiExtension, type PaneProps, type SlotProps, type ViewProps } from '../src/ui.ts'
+import { defineUiExtension, useSurfaceTitle, type PaneProps, type SlotProps, type SurfaceProps, type ViewProps } from '../src/ui.ts'
 import { fakeMachine, mountUi, testThread, type TestWindow } from '../src/testing.ts'
 
 const open: TestWindow[] = []
@@ -82,5 +82,43 @@ describe('rendering a slot', () => {
     await expect(ui.render({ slot: 'details.section' })).rejects.toThrow(/Nothing fills details.section/)
     await expect(ui.render({ slot: 'thread.badge', thread: testThread({ without: ['board'] }) })).rejects.toThrow(/1 elsewhere/)
     await expect(ui.render({ slot: 'sidebar' as never })).rejects.toThrow(/No slot sidebar/)
+  })
+})
+
+describe('rendering a surface', () => {
+  const notes = defineUiExtension({
+    name: 'notes',
+    setup(superego) {
+      superego.view('notes.list', {
+        title: 'Notes', context: 'window', fits: ['space'], default: 'space',
+        component: () => h('button', { type: 'button', onClick: () => void superego.dispatch('surface.open', { kind: 'notes.page', params: { name: 'b' } }) }, 'Open b'),
+      })
+      superego.surface('notes.page', {
+        title: (params) => `Note ${String(params.name)}`,
+        component: ({ params, open }: SurfaceProps) => {
+          useSurfaceTitle(params.name === 'a' ? 'The first note' : undefined)
+          return h('div', null, h('p', null, `Page ${String(params.name)}`), h('button', { type: 'button', onClick: () => open({ name: 'b' }) }, 'Next'))
+        },
+      })
+    },
+  })
+
+  it("draws a global profile's surface with its thread beside it, and follows where it goes", async () => {
+    const ui = keep(await mountUi({ profile: { extensions: [notes], global: true }, machines: [fakeMachine()] }))
+    const page = await ui.render({ surface: { kind: 'notes.page', params: { name: 'a' } } })
+    expect(page.text()).toContain('Page a')
+    expect(page.text()).toContain('Ask about this')
+    expect(ui.surface()).toEqual({ machine: 'local', kind: 'notes.page', params: { name: 'a' } })
+    await page.click('Next')
+    expect(page.text()).toContain('Page b')
+    expect(ui.surface()?.params).toEqual({ name: 'b' })
+    // Its space opens one too.
+    await (await ui.render({ view: 'notes.list', place: 'space' })).click('Open b')
+    expect(ui.surface()?.params).toEqual({ name: 'b' })
+  })
+
+  it("refuses a surface the window hasn't: a thread-bound profile's", async () => {
+    const ui = keep(await mountUi({ profile: { extensions: [notes] }, machines: [fakeMachine()] }))
+    await expect(ui.render({ surface: { kind: 'notes.page' } })).rejects.toThrow(/global: true/)
   })
 })

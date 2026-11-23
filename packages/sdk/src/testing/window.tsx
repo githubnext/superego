@@ -2,7 +2,7 @@
 // machines (whose methods, values and threads you give) or to test daemons (`testDaemon`), in a DOM of its own
 // (happy-dom's, laid over Node's globals while it's mounted). Draw a view or a place, click in it, press keys, change a machine (gone,
 // an older Superego) and see what it does.
-import { act, type ReactNode } from 'react'
+import { act, useEffect, useState, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import {
   defineApp, RELEASED, type ActionInfo, type AppConfig, type ExtensionManifest, type Json, type Notifications, type ProfileRef, type ThreadInfo,
@@ -10,8 +10,8 @@ import {
 import type { MachineEntry, SuperegoBridge, SuperegoEvent } from '@superego/app/shared'
 import {
   bound, closeWebViews, DescribedCall, describeRun, LAYOUT, layoutOf, linkHandler, mainKind, normalize, pageApp, PaneBody, paneKind, placedFor, PlacedViews, profileUisLoaded, provideProfileUi, RegistryProvider, resetProfileUi,
-  scopedViews, seenIn, setLocalState, Shell as Window, ShellStateProvider, Slot, toolRow, urlKind, ViewScopeProvider, useAllThreads, useMachines, useSelection, windowRegistry,
-  type BehaviourSlot, type Layout, type Place, type Registry, type SlotProps, type UiExtension, type ViewProps,
+  scopedViews, seenIn, setLocalState, Shell as Window, ShellStateProvider, Slot, SurfaceMain, toolRow, urlKind, ViewScopeProvider, useAllThreads, useMachines, useSelection, useSurface, windowRegistry,
+  type BehaviourSlot, type SurfaceAt, type Layout, type Place, type Registry, type SlotProps, type UiExtension, type ViewProps,
 } from '@superego/app/internals'
 import type { LinkHandler, LinkWhere, ToolRow, ToolRowCall } from '@superego/app/ui'
 import { onRestart, type TestDaemon } from './daemon.ts'
@@ -284,6 +284,11 @@ export type RenderWhat<S extends BehaviourSlot = BehaviourSlot> = { machine?: st
   | { slot: S; props?: Partial<SlotProps[S]> }
   /** A tool call's row in the transcript, as the extension that describes the tool says (`superego.tool`): `state` done unless given. */
   | { tool: { name: string; arguments?: Record<string, unknown>; id?: string } & Partial<Pick<ToolRowCall, 'state' | 'result' | 'live'>> }
+  /**
+   * A surface of a kind (`superego.surface`), opened with its params on `machine`, as the main area draws it, its
+   * thread beside it: what it opens next (its `open`, a link it claims) shows here, as `surface()` says.
+   */
+  | { surface: { kind: string; params?: Record<string, Json> } }
 )
 
 /** Where in the window a lookup is for: a machine (the first, unless given) and a thread, as `render` takes them. */
@@ -341,6 +346,8 @@ export type TestWindow = {
   render<S extends BehaviourSlot>(what: RenderWhat<S>): Promise<Rendered>
   /** The views the layout puts in `place` (a thread's: give the thread), as ids. */
   placed(place: Place, where?: { machine?: string; thread: string }): string[]
+  /** The surface the main area shows now (opened by `surface.open`, a link, `render({ surface })`), if one: kind, machine, params. */
+  surface(): SurfaceAt | undefined
   /**
    * How the transcript reads calls to the tool `name` in a thread (`where`: as `render`'s), as the extension that
    * describes them said (`superego.tool`, a prefix's like `mcp__*`); `{}`, the core's defaults. Draw one with
@@ -483,16 +490,20 @@ export async function mountUi(options: MountOptions = {}): Promise<TestWindow> {
   for (const { owner: _owner, ...section } of registry.appSettings) await appSide.call('settings.register', { section })
 
   // The shell's state as the window has it, for the router's context and for `select`.
-  let shell: { select(selection: { machine: string; thread: string } | undefined): void; selection?: { machine: string; thread: string }; threads: Record<string, ThreadInfo[] | undefined> } = { select() {}, threads: {} }
+  let shell: {
+    select(selection: { machine: string; thread: string } | undefined): void; selection?: { machine: string; thread: string }; threads: Record<string, ThreadInfo[] | undefined>
+    surface?: SurfaceAt; openSurface(surface: SurfaceAt | undefined): void
+  } = { select() {}, threads: {}, openSurface() {} }
   function Shell({ children }: { children: ReactNode }) {
     const { selection, select } = useSelection()
+    const { surface, open: openSurface } = useSurface()
     const all = useAllThreads()
     const list = useMachines()
-    shell = { select, ...(selection ? { selection } : {}), threads: all }
+    shell = { select, ...(selection ? { selection } : {}), threads: all, ...(surface ? { surface } : {}), openSurface }
     // The whole window drawn: its shell says what actions see, as the app's does.
     if (options.window) return <>{children}</>
     registry.router.setContext({
-      app, machines: list, selection, select, surface: undefined, openSurface() {}, hasSurface: (kind) => registry.surfaces.some((s) => s.kind === kind), openSettings() {}, newThread() {}, togglePalette() {}, toggleNavigator() {}, togglePanePicker() {}, showLog() {},
+      app, machines: list, selection, select, surface, openSurface, hasSurface: (kind) => registry.surfaces.some((s) => s.kind === kind), openSettings() {}, newThread() {}, togglePalette() {}, toggleNavigator() {}, togglePanePicker() {}, showLog() {},
       threadOf: (s) => all[s.machine]?.find((t) => t.id === s.thread), projects: [], sidebar: { pinned: [], projects: [], folded: [] }, lastThread: {}, fold() {},
       appSetting: (key) => appSide.settings.get(key) as never, toggleSidebar() {}, focusSpace() { throw new Error('No sidebar to focus: mount the whole window (window: true)') }, back() {}, forward() {}, railTabs: () => [],
     })
@@ -566,7 +577,14 @@ export async function mountUi(options: MountOptions = {}): Promise<TestWindow> {
       const given = what.thread
       if (typeof given === 'string' && !threadOf(at, given)) throw new Error(`No thread ${given} on ${at}: give it to the machine (threads), or give a ThreadInfo`)
       let node: ReactNode
-      if ('tool' in what) {
+      if ('surface' in what) {
+        const { kind, params = {} } = what.surface
+        if (!registry.surfaces.some((s) => s.kind === kind)) {
+          const theirs = registry.surfaces.map((s) => s.kind)
+          throw new Error(`No surface ${kind} in the window (a profile's are there only when it's global: mountUi({ profile: { …, global: true } })): ${theirs.join(', ') || 'none'}`)
+        }
+        node = <DrawSurface at={{ machine: at, kind, params }} narrow={narrow} />
+      } else if ('tool' in what) {
         const { name, arguments: args = {}, id = 'call-1', state = 'done', ...rest } = what.tool
         const thread = given ?? defaultThread(at)
         node = <InThread machine={at} thread={thread} draw={(machine, info) =>
@@ -610,6 +628,7 @@ export async function mountUi(options: MountOptions = {}): Promise<TestWindow> {
       const { container, root } = await draw(node)
       return rendered(container, async () => { await inAct(async () => root.unmount()); roots.delete(root); container.remove() })
     },
+    surface: () => shell.surface,
     placed(place, where) {
       const thread = where && threadOf(machineOf(where.machine), where.thread)
       const scope = thread ? { machine: machineOf(where!.machine), thread } : undefined
@@ -754,6 +773,15 @@ const KEY_NAMES: Record<string, string> = {
 const CODES: Record<string, string> = {
   '[': 'BracketLeft', ']': 'BracketRight', '/': 'Slash', '.': 'Period', ',': 'Comma', '`': 'Backquote', '\\': 'Backslash',
   ';': 'Semicolon', "'": 'Quote', '-': 'Minus', '=': 'Equal',
+}
+
+/** A surface opened as `at`, then whatever the main area shows next of it, as the window draws it. */
+function DrawSurface({ at, narrow }: { at: SurfaceAt; narrow: boolean }) {
+  const { surface, open } = useSurface()
+  // Opened once, as drawn: what it opens after is the window's.
+  const [opened, setOpened] = useState(false)
+  useEffect(() => { open(at); setOpened(true) }, [])
+  return opened && surface ? <SurfaceMain at={surface} narrow={narrow} /> : null
 }
 
 /** A view (or a place's views) as the window draws it, for the thread given, looked up live. */

@@ -82,6 +82,9 @@ type ShellState = {
   /** The thread docked to each surface, by `surfaceKey`. */
   docked: Record<string, Selection>
   dock(surface: SurfaceAt, thread: Selection | undefined): void
+  /** What each surface says it's called now (`useSurfaceTitle`), by `surfaceKey`. */
+  surfaceTitles: Record<string, string>
+  titleSurface(surface: SurfaceAt, title: string | undefined): void
   /** Whether surfaces show their thread (docked or floating), or hide it. */
   surfaceAgent: boolean
   showSurfaceAgent(shown?: boolean): void
@@ -142,9 +145,12 @@ export const surfaceKey = (surface: SurfaceAt) => `${surface.machine}\u0000${sur
  * its thread shows.
  */
 export function useSurface() {
-  const { surface, openSurface, docked, dock, surfaceAgent, showSurfaceAgent } = useShellState()
+  const { surface, openSurface, docked, dock, surfaceAgent, showSurfaceAgent, surfaceTitles, titleSurface } = useShellState()
   return {
     surface, open: openSurface,
+    /** What `at` (the open one, unless given) says it's called, if it has said. */
+    titleOf: (at = surface) => at ? surfaceTitles[surfaceKey(at)] : undefined,
+    setTitle: titleSurface,
     docked: surface ? docked[surfaceKey(surface)] : undefined,
     dock: (thread: Selection | undefined) => { if (surface) dock(surface, thread) },
     agentShown: surfaceAgent, showAgent: showSurfaceAgent,
@@ -199,6 +205,7 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
   const [surface, setSurface] = useLocalState<SurfaceAt | undefined>('surface', undefined)
   const [docked, setDocked] = useLocalState<Record<string, Selection>>('surface.docked', {})
   const [surfaceAgent, setSurfaceAgent] = useLocalState('surface.agent', true)
+  const [surfaceTitles, setSurfaceTitles] = useLocalState<Record<string, string>>('surface.titles', {})
   const [settingsTarget, setSettingsTarget] = useLocalState('settings.target', GENERAL)
   const [settingsAtTab, setSettingsAtTab] = useState(false)
   const [newThread, setNewThread] = useState<NewThreadStart>()
@@ -337,6 +344,13 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
       return thread ? { ...rest, [surfaceKey(at)]: thread } : rest
     }),
     showSurfaceAgent: (shown) => setSurfaceAgent((was) => shown ?? !was),
+    surfaceTitles,
+    titleSurface: (at, title) => setSurfaceTitles((all) => {
+      const key = surfaceKey(at)
+      if (all[key] === title) return all
+      const { [key]: _, ...rest } = all
+      return title ? { ...rest, [key]: title } : rest
+    }),
     openSettings: (open = true, atTab = false) => { setSettingsOpen(open); setSettingsAtTab(open && atTab) },
     settingsTarget,
     setSettingsTarget,
@@ -349,7 +363,7 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
       setSidebarOpen(next.open)
       setSidebarShownTight(next.shownTight)
     },
-  }), [machines, threads, rejections, selection, settingsOpen, settingsAtTab, settingsTarget, newThread, projects, sidebar, pins, lastThread, sidebarOpen, sidebarShownTight, tight, archived, hidden, hiddenAll, history, listed, threadSheet, surface, docked, surfaceAgent])
+  }), [machines, threads, rejections, selection, settingsOpen, settingsAtTab, settingsTarget, newThread, projects, sidebar, pins, lastThread, sidebarOpen, sidebarShownTight, tight, archived, hidden, hiddenAll, history, listed, threadSheet, surface, docked, surfaceAgent, surfaceTitles, registry.version])
   return (
     <Context.Provider value={value}>
       {machines.filter((m) => m.state !== 'disabled').map((m) => <MachineThreads key={m.id} machine={m} onThreads={onThreads} onHidden={onHidden} onRejections={onRejections} />)}
