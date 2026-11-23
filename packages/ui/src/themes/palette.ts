@@ -45,11 +45,9 @@ type Step = { percent: number; least?: number; most?: number }
 
 /** How far each token steps from the ground to the text, in light and in dark: Superego's own, measured. */
 const STEPS: Partial<Record<ColourToken, [light: Step, dark: Step]>> = {
-  // The window's side, the rail beside it and its tabs.
+  // The window's side, and side lists in dialogs.
   '--superego-chrome': [{ percent: 6, least: 1.08 }, { percent: 5, least: 1.08 }],
   '--superego-sidebar-bg': [{ percent: 6, least: 1.08 }, { percent: 5, least: 1.08 }],
-  '--superego-rail-bg': [{ percent: 9, least: 1.1 }, { percent: 2 }],
-  '--superego-rail-tab': [{ percent: 11, least: 1.13 }, { percent: 0 }],
   // Wells (code, output), a pane's tab, what floats, the composer.
   '--superego-surface': [{ percent: 5, least: 1.07 }, { percent: 5, least: 1.08 }],
   '--superego-pane-tab': [{ percent: 3 }, { percent: 3 }],

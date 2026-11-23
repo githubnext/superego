@@ -21,8 +21,6 @@ export const DEFAULTS: Partial<Record<ColourToken, Pair>> = {
   '--superego-chrome': ['#f2f2f4', '#262628'],
   '--superego-sidebar-bg': ['#f2f2f4', '#262628'],
   '--superego-ground': ['#ebebef', '#141416'],
-  '--superego-rail-bg': ['#ebebed', '#212123'],
-  '--superego-rail-tab': ['#e6e6e9', '#1c1c1e'],
   '--superego-surface': ['#f3f3f6', '#262629'],
   '--superego-pane-tab': ['#f9f9fb', '#232325'],
   '--superego-raised': ['#ffffff', '#2c2c2e'],

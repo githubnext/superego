@@ -10,10 +10,8 @@
   /* macOS's own: system grays, real controls; the accent is the app's (Settings → Appearance → Accent colour). */
   --superego-bg: light-dark(#ffffff, #1d1d1f);          /* the sheet: the thread, its panes, dialogs */
   --superego-sidebar-bg: light-dark(#f2f2f4, #262628);  /* headers and side lists inside dialogs */
-  --superego-chrome: light-dark(#f2f2f4, #262628);      /* the window's side: the sidebar, and the strip over it */
+  --superego-chrome: light-dark(#f2f2f4, #262628);      /* the window's side: its panel, the rail and the sidebar */
   --superego-ground: light-dark(#ebebef, #141416);      /* the window behind the thread's columns, a step under the side */
-  --superego-rail-bg: light-dark(#ebebed, #212123);     /* the rail, a shade under the sidebar beside it */
-  --superego-rail-tab: light-dark(#e6e6e9, #1c1c1e);    /* the rail's tabs behind the open one */
   /* Hairlines between columns and parts: the window's every structural line, 1px. Opaque, so a line is one colour
      whatever it runs over (the rail, the side, the sheet). */
   --superego-line: light-dark(#e3e3e6, #333336);

@@ -6,10 +6,8 @@ export const colourTokens = {
   app: {
     '--superego-bg': 'The sheet: the thread, its panes, dialogs.',
     '--superego-sidebar-bg': 'Headers and side lists inside dialogs.',
-    '--superego-chrome': "The window's side: the sidebar, and the strip over it.",
+    '--superego-chrome': "The window's side: its panel, the rail and the sidebar.",
     '--superego-ground': "The window behind the thread's columns.",
-    '--superego-rail-bg': 'The rail, a shade under the sidebar.',
-    '--superego-rail-tab': "The rail's tabs behind the open one.",
     '--superego-line': 'Hairlines between columns and parts (opaque).',
     '--superego-fill': 'Quiet fills: file heads, small buttons.',
     '--superego-card-edge': "A card's edge and shadow.",
