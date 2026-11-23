@@ -70,8 +70,9 @@ export default async function web(t, s) {
   await b.call('app.settings.set', { key: 'app.layout', value: { place: { 'threads.list': null, 'core.picker': null } } }, 'app')
   await b.until(`Boolean(document.querySelector('.app__mobilebar .app__settings')) && Boolean(document.querySelector('.app__mobilebar button.app__mobiletitle')) && !document.querySelector('.app__mobilebar [aria-label="Threads"]')`, 'a phone with no space keeps its bar and Settings')
   await b.click('.app__mobilebar .app__settings')
-  await b.until(`Boolean(document.querySelector('.settings__nav button'))`, 'Settings on a phone')
-  await b.click('.settings__nav button', 'Appearance')
+  // As iOS's Settings: a list of its tabs, a row opening its page.
+  await b.until(`Boolean(document.querySelector('.settings__groups .settings__row'))`, 'Settings on a phone, its list')
+  await b.click('.settings__row', 'Appearance')
   await b.until(`[...document.querySelectorAll('.setting[data-key="app.layout"] button')].some((b) => b.textContent === 'Edit layout…')`, 'the layout in Settings')
   await b.click('.setting[data-key="app.layout"] button', 'Edit layout…')
   await b.until(`Boolean(document.querySelector('.layout-editor__text')) && !document.querySelector('.settings')`, "the browser's layout in a dialog")

@@ -921,6 +921,13 @@ button.app__mobiletitle > .superego-status { font-size: 12px; }
   .settings--list :is(.setting, .provider, .profile-row) + :is(.setting, .provider, .profile-row)::before { content: ''; position: absolute; top: 0; right: 0; left: var(--superego-space-4); border-top: .5px solid var(--phone-separator); }
   .settings--list .setting__control .superego-select { min-height: 32px; padding-left: 0; padding-right: 22px; border-radius: 0; background-color: transparent; box-shadow: none; font-weight: 400; color: var(--superego-muted); }
 }
+/* Menus under a finger on a phone, as iOS 26's: glass, rounder, rows a finger high in Body size. */
+@media (max-width: 599px) and (pointer: coarse) {
+  .superego-menu { min-width: 250px; padding: 6px; border-radius: 26px; font-size: calc(17px * var(--superego-text-size)); }
+  .superego-menu__item { min-height: 44px; padding: 0 14px; border-radius: 20px; }
+  .superego-menu__label { margin: 8px 14px 4px; font-size: calc(13px * var(--superego-text-size)); }
+  .superego-menu__separator { margin: 6px 14px; }
+}
 /* Keys a finger has no use for: the hints at New thread's fields, its Start and the composer's Queue and Stop. A
    keyboard brings them back (touch.ts). */
 :root[data-finger] :is(.new-thread__label, .new-thread__foot, .dock__action, .dock__pill) kbd { display: none; }

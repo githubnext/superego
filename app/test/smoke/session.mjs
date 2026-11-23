@@ -264,9 +264,9 @@ export default async function session(t, s) {
   await closeBeside()
   await t.until(`!document.querySelector('.panes__tab')`, 'terminal closed')
 
-  // Attachments: a file picked with Attach (under the box) waits in the box, then goes with the message and shows under it.
+  // Attachments: a file picked with Attach (under the box; on a phone, the + beside it) waits in the box, then goes with the message and shows under it.
   await t.run(`(() => {
-    const input = document.querySelector('.dock__footer input[type=file]')
+    const input = document.querySelector('.dock input[type=file]')
     const files = new DataTransfer()
     files.items.add(new File(['# plan\\n'], 'plan.md', { type: 'text/markdown' }))
     input.files = files.files
