@@ -1,8 +1,10 @@
 # An iOS look for the phone
 
 What iOS 26 (Liquid Glass) does, and where it goes in Superego's phone UI: the web build in Safari or on the home
-screen, `.app.is-narrow` under a finger (`(max-width: 599px) and (pointer: coarse)`, media.ts's `PHONE`). The aim is
-iOS's layouts, structure and conventions, not its pixels, in the same spirit as the macOS look (77eb0686 and after).
+screen. The look is the narrow layout's (`.app.is-narrow`, media.ts's `NARROW`, `(max-width: 599px)`), whatever the
+pointer: the desktop app's window never gets that narrow, so the Mac is untouched; what's only for a finger (menu rows
+a finger high, shortcut hints hidden) also asks for `(pointer: coarse)` or `:root[data-finger]`. The aim is iOS's
+layouts, structure and conventions, not its pixels, in the same spirit as the macOS look (77eb0686 and after).
 
 Sources: Apple's Human Interface Guidelines (Toolbars, Tab bars, Sheets, Lists and tables, Segmented controls, Menus,
 Context menus, Search fields, Buttons, Typography, Color, Materials, Layout; fetched as JSON from
