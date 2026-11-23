@@ -11,7 +11,7 @@ import { useSettings, useValue } from './client.ts'
 import { Contained } from './contained.tsx'
 import { useRegistry } from './registry.tsx'
 import { settingsEntry } from './lookups.ts'
-import { COMPACT, useMedia, useNarrow } from './media.ts'
+import { useNarrow } from './media.ts'
 import { Setting } from './settings/controls.tsx'
 import { AllMachines, machineGlyph, Machines } from './settings/machines.tsx'
 import { ALL, APP_TABS, appTab, appTarget, MACHINES, openTarget, sectionTab } from './settings/tabs.ts'
@@ -58,8 +58,6 @@ export function SettingsView({ machines, onClose, pane = false }: { machines: Ma
   const narrow = useNarrow()
   const { atTab } = useSettingsDialog()
   const [paged, setPaged] = useState(atTab)
-  // Down the side, wide; across the top in a small window (app.css), where the arrow keys follow.
-  const across = useMedia(COMPACT)
   if (narrow && !pane) {
     const open = (to: string) => { setTarget(to); setPaged(true) }
     const row = (to: string, label: ReactNode) => (
@@ -86,8 +84,9 @@ export function SettingsView({ machines, onClose, pane = false }: { machines: Ma
       </Dialog>
     )
   }
+  // Down the side in the window; across the top in a dialog (app.css), where the arrow keys follow.
   const body = (
-    <BaseUI.Tabs.Root className="settings__body" orientation={across ? 'horizontal' : 'vertical'} value={target} onValueChange={(value: string) => setTarget(value)}>
+    <BaseUI.Tabs.Root className="settings__body" orientation={pane ? 'vertical' : 'horizontal'} value={target} onValueChange={(value: string) => setTarget(value)}>
       <BaseUI.Tabs.List className="settings__nav" render={<nav />}>
         {APP_TABS.map((t) => <BaseUI.Tabs.Tab key={t.tab} value={appTarget(t.tab)}>{t.title}</BaseUI.Tabs.Tab>)}
         <BaseUI.Tabs.Tab value={MACHINES}>Machines</BaseUI.Tabs.Tab>

@@ -386,23 +386,28 @@ details[open] > .row > .row__chevron { transform: rotate(90deg); }
 .profile-switch { display: flex; flex-wrap: wrap; gap: var(--superego-space-2); align-items: center; }
 .profile-switch .superego-select { width: auto; color: var(--superego-text); }
 
-.settings__body { display: grid; grid-template-columns: 180px 1fr; height: 100%; }
-.settings__nav { padding: 12px 8px; border-right: 1px solid var(--superego-line); background: var(--superego-sidebar-bg); display: flex; flex-direction: column; gap: 2px; }
+/* Settings: its tabs (the list) and what the open one holds. */
+.settings__body { display: grid; height: 100%; }
+.settings__nav { display: flex; gap: 2px; }
 .settings__nav button { font: inherit; color: inherit; text-align: left; background: none; border: 0; padding: 5px 8px; border-radius: var(--superego-radius); }
 .settings__nav button[data-active] .superego-status { color: inherit; }
 .settings__nav button:hover:not([data-active]) { background: var(--superego-hover); }
 .settings__nav button[data-active] { background: var(--superego-selected); }
-.settings__nav-label { color: var(--superego-muted); font-size: calc(11px * var(--superego-text-scale)); text-transform: uppercase; letter-spacing: .04em; padding: 12px 8px 4px; }
-.settings__content { overflow: auto; padding: 8px 28px 40px; outline: none; }
+.settings__content { overflow: auto; outline: none; }
 /* A stop of its own for the keys (Base UI's tab panel), to scroll it by: ringed inside its edge, as a region is. */
 .settings__content:focus-visible { outline: 2px solid var(--superego-ring); outline-offset: -2px; }
-/* Wide, a pane beside the rail: its list where the sidebar is, on the side's grey. */
+/* In the window (however narrow, short of a phone's), a pane beside the rail: its list down the side, in the side's
+   panel, as a sidebar's. */
 .settings--pane { flex: 1; min-height: 0; }
 .settings--pane .settings__body { grid-template-columns: var(--superego-sidebar) 1fr; }
-/* In the window, Settings' list sits in the side's panel, as a sidebar's. */
-.settings--pane .settings__nav { background: none; border-right: 0; padding: 7px 10px 18px 6px; }
+.settings--pane .settings__nav { flex-direction: column; padding: 7px 10px 18px 6px; }
 .settings--pane .settings__content { padding: 8px 40px 48px; }
 .settings--pane .settings__content > * { max-width: 760px; }
+/* On a phone, a dialog filling the screen: its list across the top. */
+.superego-dialog.settings .settings__body { grid-template-rows: auto 1fr; }
+.superego-dialog.settings .settings__nav { overflow-x: auto; padding: 8px; border-bottom: 1px solid var(--superego-line); background: var(--superego-sidebar-bg); }
+.superego-dialog.settings .settings__nav button { white-space: nowrap; }
+.superego-dialog.settings .settings__content { padding: 8px 16px 40px; }
 .settings__note { color: var(--superego-muted); font-size: calc(12px * var(--superego-text-scale)); margin: 2px 0; }
 .settings-section h2 { font-size: calc(13px * var(--superego-text-scale)); font-weight: 600; margin: 24px 0 4px; }
 .setting, .provider, .profile-row { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 10px 0; border-bottom: 1px solid var(--superego-border); }
@@ -871,7 +876,7 @@ button.app__mobiletitle > .superego-status { font-size: 12px; }
 }
 .app.is-narrow .msg--user { max-width: 88%; }
 .app.is-narrow .md pre, .app.is-narrow .step__output, .app.is-narrow .step__diff { margin-left: 0; margin-right: 0; }
-/* media.ts's COMPACT: a dialog fills the window, Settings' list goes across the top. */
+/* media.ts's COMPACT: a dialog fills the window; a setting's control goes under its label. */
 @media (max-width: 760px) {
   /* Hung from the top, not centred: a fixed box's 50% is of the whole window, which iOS doesn't shrink for the keyboard,
      so a centred one sat halfway down with its foot under the keyboard. From the top, it ends where the keyboard starts. */
@@ -884,10 +889,6 @@ button.app__mobiletitle > .superego-status { font-size: 12px; }
   /* Filling the desktop app's window, a dialog's header is its title bar: past the traffic lights, and it drags. */
   :root:has(.app:not(.is-web, .is-full-screen)) .superego-dialog__header { min-height: var(--superego-titlebar); padding-left: 84px; -webkit-app-region: drag; }
   :root:has(.app:not(.is-web)) .superego-dialog__header :is(button, a, input, select, [role="button"]) { -webkit-app-region: no-drag; }
-  .settings__body { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
-  .settings__nav { flex-direction: row; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--superego-line); padding: 8px; }
-  .settings__nav button { white-space: nowrap; }
-  .settings__content { padding: 8px 16px 40px; }
   .setting, .provider, .profile-row, .web-device, .web-pair { flex-wrap: wrap; }
 }
 

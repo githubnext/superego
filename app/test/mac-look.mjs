@@ -1,7 +1,7 @@
 // The window's look, for tuning it (run by `test/look.sh <dir> mac-look`): threads in the sidebar, one shown with
 // markdown, a code block and tool calls, the Diff pane beside it and words in the composer; a thread's menu open; and
-// the sidebar hidden (in a narrow window too), full screen; Settings. In light and dark, into $SUPEREGO_SHOWCASE_OUT as
-// main-, hidden-, hidden-narrow-, fullscreen-hidden-, fullscreen-main-, menu- and settings-<light|dark>.png.
+// the sidebar hidden (in a narrow window too), full screen; Settings, in a narrow window too. In light and dark, into $SUPEREGO_SHOWCASE_OUT as
+// main-, hidden-, hidden-narrow-, fullscreen-hidden-, fullscreen-main-, menu-, settings- and settings-narrow-<light|dark>.png.
 import { openApp } from './harness.mjs'
 import { threads } from './showcase/threads.mjs'
 
@@ -117,4 +117,10 @@ await openApp({ name: 'mac-look', timeout: 300_000 }, async (t) => {
   await until(`Boolean(document.querySelector('[data-key="app.theme.dark"]'))`, 'Settings → Appearance')
   await run(`document.querySelector('[data-key="app.theme.light"]').scrollIntoView({ block: 'center' })`)
   await both('settings')
+  // A window too narrow for the sidebar beside a thread, not a phone's: Settings' list still down the side.
+  await t.resize(700, 700)
+  await until(`(() => { const [a, b] = document.querySelectorAll('.settings__nav [role="tab"]'); return b?.getBoundingClientRect().top > a.getBoundingClientRect().bottom - 1 })()`, 'Settings’ tabs down the side')
+  const top = await run(`document.querySelector('.settings__nav [role="tab"]').getBoundingClientRect().top - document.querySelector('.settings__nav').getBoundingClientRect().top`)
+  if (top > 20) t.fail(`narrow, Settings' first tab ${top}px down its list`)
+  await both('settings-narrow')
 })

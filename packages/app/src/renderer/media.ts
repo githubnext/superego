@@ -13,5 +13,5 @@ export { NARROW, useMedia, useNarrow }
 /** A window wide enough for the rail, too tight for the sidebar beside the thread: hidden unless shown there (sidebar-mode.ts). */
 export const TIGHT = '(min-width: 600px) and (max-width: 760px)'
 
-/** A window too small to hold a dialog or Settings' list down the side: a dialog fills it, the list goes across the top. */
+/** A window too small to hold a dialog: a dialog fills it (app.css). */
 export const COMPACT = '(max-width: 760px)'
