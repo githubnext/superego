@@ -44,7 +44,6 @@
   --superego-field-bg: light-dark(#ffffff, #2a2a2c);
   --superego-field-edge: light-dark(#bdbdc2, #545458);
   --superego-track: light-dark(#d9d9de, #48484a);       /* a switch that's off, a slider's track */
-  --superego-composer: light-dark(#ffffff, #252527);    /* the composer's box */
   --superego-focus: 0 0 0 3px color-mix(in srgb, var(--superego-accent) 45%, transparent);
   --superego-status-working: var(--superego-accent);
   --superego-status-done: var(--superego-accent);

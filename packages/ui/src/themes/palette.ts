@@ -48,11 +48,10 @@ const STEPS: Partial<Record<ColourToken, [light: Step, dark: Step]>> = {
   // The window's side, and side lists in dialogs.
   '--superego-chrome': [{ percent: 6, least: 1.08 }, { percent: 5, least: 1.08 }],
   '--superego-sidebar-bg': [{ percent: 6, least: 1.08 }, { percent: 5, least: 1.08 }],
-  // Wells (code, output), a pane's tab, what floats, the composer.
+  // Wells (code, output), a pane's tab, what stands off its ground.
   '--superego-surface': [{ percent: 5, least: 1.07 }, { percent: 5, least: 1.08 }],
   '--superego-pane-tab': [{ percent: 3 }, { percent: 3 }],
   '--superego-raised': [{ percent: 0 }, { percent: 8, least: 1.12 }],
-  '--superego-composer': [{ percent: 0 }, { percent: 4 }],
   // Lines and frames.
   '--superego-line': [{ percent: 14, least: 1.3 }, { percent: 14, least: 1.35 }],
   '--superego-border': [{ percent: 21, least: 1.5 }, { percent: 20, least: 1.7 }],

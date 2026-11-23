@@ -344,12 +344,18 @@ details[open] > .row > .row__chevron { transform: rotate(90deg); }
 /* Apart from the box when something's above it: not a profile's slot that drew nothing (its scope's mark, empty). The
    test in :where(), weighing nothing, so a card that joins the box (below) still takes the gap away. */
 .dock__above:where(:not(:empty, :has(> .profile-scope:empty):not(:has(> :not(.profile-scope:empty))))) { margin-bottom: 10px; }
-/* The box: the words, what goes with them, and one button at their end. White on the sheet, a hairline and a soft shadow. */
-.dock__box { position: relative; background: var(--superego-glass); -webkit-backdrop-filter: var(--superego-glass-blur); backdrop-filter: var(--superego-glass-blur); border-radius: 20px; box-shadow: var(--superego-glass-edge), 0 8px 28px light-dark(rgb(0 0 0 / .1), rgb(0 0 0 / .35)); padding: 9px 9px 9px 16px; }
-/* Above the box, something can join it (`dock__join`: an agent's question with its options): one card, a hairline between. */
+/* The box: the words, what goes with them, and one button at their end. Glass over the thread, lit along its top, a
+   soft shadow under it. */
+.dock__box, .dock__join {
+  position: relative; background: var(--superego-glass); -webkit-backdrop-filter: var(--superego-glass-blur); backdrop-filter: var(--superego-glass-blur);
+  box-shadow: var(--superego-glass-edge), 0 8px 28px light-dark(rgb(0 0 0 / .1), rgb(0 0 0 / .35));
+}
+.dock__box { border-radius: 20px; padding: 9px 9px 9px 16px; }
+/* Above the box, something can join it (`dock__join`: an agent's question with its options): one card of the same
+   glass, a hairline between; each clipped where they meet, so neither's shadow falls on the other. */
 .dock:has(.dock__join) .dock__above { margin-bottom: 0; }
-.dock:has(.dock__join) .dock__box { border-radius: 0 0 20px 20px; clip-path: inset(0 -32px -32px -32px); }
-.dock__join { position: relative; background: var(--superego-composer); border-radius: 20px 20px 0 0; border-bottom: 1px solid var(--superego-line); box-shadow: 0 0 0 .5px light-dark(rgb(0 0 0 / .16), rgb(255 255 255 / .1)), 0 4px 16px light-dark(rgb(0 0 0 / .08), rgb(0 0 0 / .3)); clip-path: inset(-32px -32px 0 -32px); }
+.dock:has(.dock__join) .dock__box { border-radius: 0 0 20px 20px; clip-path: inset(0 -48px -48px -48px); }
+.dock__join { border-radius: 20px 20px 0 0; border-bottom: 1px solid var(--superego-line); clip-path: inset(-48px -48px 0 -48px); }
 .composer { display: flex; gap: var(--superego-space-2); align-items: flex-end; font-size: var(--superego-text-body); }
 .composer .superego-textarea { line-height: 22px; padding: 3px 0; min-height: 28px; }
 .composer .superego-textarea::placeholder { color: var(--superego-faint); }
