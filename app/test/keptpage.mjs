@@ -1,9 +1,8 @@
 // A Browser pane's page beside the thread kept in view (run by `test/look.sh <dir> keptpage`): scrolled partly under the
 // thread, a still of it in its place, under the thread; scrolled back beside it, the page itself, with the focus;
-// maximized; in front of a stack. Light and dark, the
-// whole window, into $SUPEREGO_SHOWCASE_OUT. The page is a view of its own over the window, not in its screenshots: each
-// view shown is drawn over the screenshot at its bounds, above everything, square, as the window draws it (the column's
-// foot square under it).
+// maximized; in front of a stack. Light and dark, the whole window, into $SUPEREGO_SHOWCASE_OUT. The page is a view of its
+// own over the window, not in its screenshots: each view shown is drawn over the screenshot at its bounds, above
+// everything, its four corners rounded as its box's, as the window draws it (an inset sheet in its column).
 import { webContents } from 'electron'
 import { createServer } from 'node:http'
 import { openApp } from './harness.mjs'
@@ -57,10 +56,11 @@ await openApp({ name: 'keptpage', timeout: 180_000 }, async (t) => {
         const { data } = await debug.sendCommand('Page.captureScreenshot', { format: 'png' })
         debug.detach()
         const zoom = t.contents().getZoomFactor(), b = placed().getBounds()
-        over.push({ data, x: b.x / zoom, y: b.y / zoom, width: b.width / zoom, height: b.height / zoom })
+        const radius = await run(`parseFloat(getComputedStyle(document.querySelector('.browser-frame .web-view')).borderTopLeftRadius) || 0`)
+        over.push({ data, x: b.x / zoom, y: b.y / zoom, width: b.width / zoom, height: b.height / zoom, radius })
       }
       await run(`(() => { for (const v of ${JSON.stringify(over)}) { const img = document.createElement('img'); img.className = 'look-native-view'; img.src = 'data:image/png;base64,' + v.data
-        Object.assign(img.style, { position: 'fixed', left: v.x + 'px', top: v.y + 'px', width: v.width + 'px', height: v.height + 'px', zIndex: 2147483647, pointerEvents: 'none' }); document.body.append(img) } })()`)
+        Object.assign(img.style, { position: 'fixed', left: v.x + 'px', top: v.y + 'px', width: v.width + 'px', height: v.height + 'px', borderRadius: v.radius + 'px', zIndex: 2147483647, pointerEvents: 'none' }); document.body.append(img) } })()`)
       if (over.length) await until(`[...document.querySelectorAll('.look-native-view')].every((img) => img.complete)`, 'the view drawn')
       await t.shot(`keptpage-${name}-${theme}`)
       await run(`document.querySelectorAll('.look-native-view').forEach((img) => img.remove())`)
@@ -77,11 +77,11 @@ await openApp({ name: 'keptpage', timeout: 180_000 }, async (t) => {
   await run(`window.superego.call('local', 'pane.focus', { thread: '${id}', pane: '${browser}' })`)
   await until(live, 'the page shown beside the thread')
   await until(`!document.querySelector('.web-view__still')`, 'no still')
-  // With the focus: the ring round its column, square at the foot.
+  // With the focus: the ring round its column.
   await run(`document.querySelector('.browser-frame .web-view').focus()`)
   await until(`!!document.querySelector('[data-column="${browser}"]:focus-within')`, 'the focus in the page')
   await shot('beside')
-  // Maximized, and at the front of a stack: the foot square still.
+  // Maximized, and at the front of a stack: the page an inset sheet still.
   await run(`document.querySelector('[data-column="${browser}"] .panes__maximize').click()`)
   await until(`document.querySelector('.panes > .is-maximized')?.dataset.column === '${browser}'`, 'maximized')
   await until(settledAt, 'the page shown maximized')

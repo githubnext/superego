@@ -27,7 +27,8 @@
 #   hero).
 # - `picker`: Select element in the Browser pane: the page in pick mode, the element picked in its card, its chip in the composer.
 # - `keptpage`: a Browser pane's page scrolled partly under the thread kept in view (a still of it, under the thread),
-#   beside it (the page itself, with the focus), maximized, and in front of a stack: its column's foot square.
+#   beside it (the page itself, with the focus), maximized, and in front of a stack: the page an inset, rounded sheet in
+#   its column.
 # - `providers`: Settings → Providers (signed in, added, searched, the add form), Favourite models, ⌘N's model menu.
 # - `setup`: first-run setup on a fresh home with no model: what it finds (a stand-in Ollama and `claude`), a key's
 #   field, a composer's card when sending failed, a model saying hi, Claude Code used.

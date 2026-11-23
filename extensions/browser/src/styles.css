@@ -1,12 +1,9 @@
 /* A page in a pane: the page (the app's WebView) fills the column under its header; what it asks for, and what it did
    (a file saved, something refused), show above it until answered or dismissed. */
 .browser-frame { flex: 1; display: flex; flex-direction: column; min-height: 0; }
-/* Its column's foot is square: the page is a view of its own over the window, which can round all its corners or none,
-   so it's square, and fills the column to its edge. Its top corners stay as every column's. */
-.panes:not(.panes--narrow) > .panes__column:has(.browser-frame) { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
 /* Its toolbar, a browser's at its quietest: of a piece with the pane's tab above it (its tint), with a line where the
-   page starts, the page being anyone's colours and its scrolling out of the pane's sight. One fixed height, so the
-   page under it never moves as what's in it changes. */
+   page starts (wide, the page's own edge, below), the page being anyone's colours and its scrolling out of the pane's
+   sight. One fixed height, so the page under it never moves as what's in it changes. */
 .browser-toolbar {
   position: relative; flex: none; display: flex; align-items: center; gap: 2px; height: 36px; box-sizing: border-box; padding: 0 var(--superego-space-2);
   background: var(--superego-pane-tab);
@@ -79,6 +76,14 @@ a.superego-icon-button { text-decoration: none; }
 .browser-size-field[aria-invalid="true"] { box-shadow: 0 0 0 1px var(--superego-status-error); }
 /* Where the page goes: all of it, or (at a size) a box of that size centred on a quiet backdrop, scaled down to fit. */
 .browser-stage { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+/* Wide, the page is a sheet of its own in the column, on the toolbar's tint, which runs on round it (no line between):
+   inset a little all round, its corners concentric with the column's, all four (a view of its own over the window
+   rounds all or none), its edge a hairline as the column's. Framed (Web access), the frame and its line under it are
+   that sheet. Narrow, the page fills the column, as the device's corners round it. */
+.panes:not(.panes--narrow) .browser-frame { --page-inset: var(--superego-space-1); --page-radius: calc(var(--side-radius) - var(--page-inset)); }
+.panes:not(.panes--narrow) .browser-toolbar { border-bottom-color: transparent; }
+.panes:not(.panes--narrow) .browser-stage:not(.is-sized) { padding: var(--page-inset); background: var(--superego-pane-tab); }
+.panes:not(.panes--narrow) .browser-stage:not(.is-sized) .web-view { border-radius: var(--page-radius); box-shadow: 0 0 0 .5px var(--superego-line); }
 .browser-page { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .browser-stage.is-sized { background: var(--superego-chrome); }
 .browser-stage.is-sized > .browser-page { position: absolute; transform-origin: 0 0; box-shadow: 0 0 0 1px var(--superego-line); }

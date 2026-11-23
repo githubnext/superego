@@ -70,7 +70,7 @@ export default async function browser(t) {
   await t.until(`document.querySelector('.panes__column:has(.web-view) .browser-address__text')?.textContent === ${JSON.stringify(`${appUrl}/`)}`, 'back again')
 
   // At a size: picked from the toolbar, the page laid out that wide (its media queries see it), kept in the pane's params;
-  // wider than the pane, drawn smaller to fit, still that wide; a reload keeps it; Full is the pane's width again.
+  // wider than the pane, drawn smaller to fit, still that wide; a reload keeps it; Full is its box's width again.
   const sizeOf = async () => (await t.call('thread.list')).find((x) => x.id === thread).panes.find((p) => p.kind === 'browser').params?.viewport
   const innerWidth = () => page()?.executeJavaScript('innerWidth')
   const pickSize = async (label) => {
@@ -93,7 +93,7 @@ export default async function browser(t) {
   await t.until(async () => page()?.isLoading() === false && await title() === 'signed in as mikker' && await innerWidth() === 1280, 'still 1280 wide after a reload')
   await pickSize('Full')
   await t.until(async () => await sizeOf() === undefined, 'Full: no size kept')
-  const paneWidth = await t.run(`document.querySelector('.panes__column:has(.web-view) .browser-stage').clientWidth`)
+  const paneWidth = await t.run(`document.querySelector('.panes__column:has(.web-view) .web-view').offsetWidth`)
   await t.until(async () => Math.abs(await innerWidth() - paneWidth * t.contents().getZoomFactor()) <= 1, "the page the pane's width again")
 
   // A page that takes its time: a line along the toolbar's foot, a spinner on its tab and in the address, and Stop; stopped,

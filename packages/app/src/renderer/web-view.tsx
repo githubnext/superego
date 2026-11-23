@@ -432,7 +432,10 @@ export function placeOf(host: HTMLElement, sized = false): { rect: WebViewRect; 
   }
   if (!seen || seen.right - seen.left < 1 || seen.bottom - seen.top < 1) return null
   const whole = seen.left <= box.left + 0.5 && seen.top <= box.top + 0.5 && seen.right >= box.right - 0.5 && seen.bottom >= box.bottom - 0.5
-  return { rect: { x: box.left, y: box.top, width: box.width, height: box.height, ...(sized ? { layout: { width: host.offsetWidth, height: host.offsetHeight } } : {}) }, whole }
+  // Its corners, as its box draws them (its own border-radius, one for all four: all a view can have), drawn smaller
+  // with it by a CSS transform.
+  const radius = (parseFloat(getComputedStyle(host).borderTopLeftRadius) || 0) * (host.offsetWidth ? box.width / host.offsetWidth : 1)
+  return { rect: { x: box.left, y: box.top, width: box.width, height: box.height, ...(radius ? { radius } : {}), ...(sized ? { layout: { width: host.offsetWidth, height: host.offsetHeight } } : {}) }, whole }
 }
 
 /** Whether anything the window draws over its panes is over `rect` (one the pane itself is in, a dialog's, isn't). */
