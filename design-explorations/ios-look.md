@@ -75,7 +75,7 @@ theme still colours the phone.
   the leading edge (16, or aligned with the text past an icon). Grouped lists put sections on a grey ground with
   headers in Footnote (13), secondary colour.
 - Superego: the drawer keeps its place (ChatGPT's pattern) but reads as an iOS list: the ground systemGrouped-ish,
-  rows 44 high in Body size, the selected thread a rounded fill, project names as section headers; its foot (other
+  rows 44 high in Body size, a long title running onto a second line before it's cut short (Mail's, Messages'), the selected thread a rounded fill, project names as section headers; its foot (other
   spaces, Settings) as glass circle buttons.
 
 ### Sheets → the thread's menu, New thread, Settings, every phone dialog
@@ -145,5 +145,6 @@ theme still colours the phone.
 ### Keyboard shortcuts
 
 - iOS without a hardware keyboard shows none.
+- Superego: New thread's checkboxes (an extension's "In a worktree of its own") are switches on rows of their own.
 - Superego: hints like Ctrl+1 and ⌘⏎ (New thread's fields, Start) are hidden while a finger works the phone
   (`:root[data-finger]`); a keyboard brings them back.
