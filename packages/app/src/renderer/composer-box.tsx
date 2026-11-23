@@ -1,15 +1,17 @@
 // The box a message is written in, wherever it goes: a thread's composer (composer-view.tsx) and the New thread
 // dialog's prompt. What's typed (the caller keeps it), files to go with it (picked, dropped on it or pasted into it),
 // completions extensions offer for the word at the caret (`$co` → a skill, see composer.ts), and one button at its end.
-// Under it, Attach at the left and what the caller adds at the right.
+// Under it, Attach at the left and what the caller adds at the right. On a phone, as Messages has it: Attach a + at the
+// box's leading edge instead, the box a capsule.
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type KeyboardEvent, type ReactNode, type Ref } from 'react'
 import type { Attachment } from '@superego/protocol'
-import { Button, FileIcon, HoverCard, PaperclipIcon, TextArea } from '@superego/ui'
+import { Button, FileIcon, HoverCard, IconButton, PaperclipIcon, PlusIcon, TextArea } from '@superego/ui'
 import type { HeldItem } from './composer-items.ts'
 import { useRegistry } from './registry.tsx'
 import { completionsIn } from './lookups.ts'
 import { readAttachment } from './attachments.ts'
 import { askFor, complete, completing, menuFor, type Completion, type ComposerWhere, type Offered } from './composer.ts'
+import { useNarrow } from './media.ts'
 
 export type ComposerBoxProps = {
   where: ComposerWhere
@@ -53,6 +55,7 @@ export function ComposerBox({ where, className, text, setText, files, setFiles, 
   }
   const [dragging, setDragging] = useState(false)
   const picker = useRef<HTMLInputElement>(null)
+  const narrow = useNarrow()
   const attach = async (list: FileList | File[]) => {
     try {
       const read = await Promise.all([...list].map(readAttachment))
@@ -99,55 +102,65 @@ export function ComposerBox({ where, className, text, setText, files, setFiles, 
     onKeyDown(event)
   }
 
+  // The box: the words, what goes with them, and the one button at their end.
+  const box = (
+    <div className="dock__box">
+      {(files.length > 0 || items.length > 0) && open && (
+        <div className="composer__files">
+          {files.map((file, index) => (
+            <span key={`${file.name}-${index}`} className="attachment">
+              {file.mimeType.startsWith('image/') ? <img src={`data:${file.mimeType};base64,${file.data}`} alt="" /> : <span className="attachment__icon"><FileIcon size={14} aria-hidden /></span>}
+              <span className="attachment__name">{file.name}</span>
+              <button type="button" className="attachment__remove" aria-label={`Remove ${file.name}`} onClick={() => setFiles((was) => was.filter((_, i) => i !== index))}>×</button>
+            </span>
+          ))}
+          {items.map((item) => <ItemChip key={item.id} item={item} onRemove={() => onRemoveItem?.(item.id)} />)}
+        </div>
+      )}
+      {error && <div className="composer__error">{error}</div>}
+      {menu && (
+        <div className="completions" role="listbox" aria-label={found!.provider.title}>
+          {menu.map((item, index) => (
+            <div key={`${item.label}-${index}`} role="option" aria-selected={index === pick} className={`completions__item ${index === pick ? 'is-active' : ''}`}
+              onMouseEnter={() => setPick(index)} onMouseDown={(e) => { e.preventDefault(); take(item) }}>
+              {item.icon && <span className="completions__icon" aria-hidden>{item.icon}</span>}
+              <span className="completions__label">{item.label}</span>
+              {item.detail && <span className="completions__detail">{item.detail}</span>}
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="composer">
+        <TextArea ref={setInput} rows={1} value={text} disabled={disabled} aria-label={aria['aria-label']} autoFocus={autoFocus} autoComplete="off"
+          onChange={(e) => setText(e.target.value)} onKeyDown={keyDown} onSelect={(e) => setCaret(e.currentTarget.selectionStart)}
+          onPaste={(e) => { if (open && e.clipboardData.files.length) { e.preventDefault(); void attach(e.clipboardData.files) } }}
+          placeholder={placeholder} />
+        {action}
+      </div>
+    </div>
+  )
+
   return (
     <div className={`composer-box ${className} ${dragging ? 'is-dropping' : ''}`}
       onDragOver={(e) => { if (open && !disabled && e.dataTransfer.types.includes('Files')) { e.preventDefault(); setDragging(true) } }}
       onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragging(false) }}
       onDrop={(e) => { setDragging(false); if (open && !disabled && e.dataTransfer.files.length) { e.preventDefault(); void attach(e.dataTransfer.files) } }}>
       {children}
-      <div className="dock__box">
-        {(files.length > 0 || items.length > 0) && open && (
-          <div className="composer__files">
-            {files.map((file, index) => (
-              <span key={`${file.name}-${index}`} className="attachment">
-                {file.mimeType.startsWith('image/') ? <img src={`data:${file.mimeType};base64,${file.data}`} alt="" /> : <span className="attachment__icon"><FileIcon size={14} aria-hidden /></span>}
-                <span className="attachment__name">{file.name}</span>
-                <button type="button" className="attachment__remove" aria-label={`Remove ${file.name}`} onClick={() => setFiles((was) => was.filter((_, i) => i !== index))}>×</button>
-              </span>
-            ))}
-            {items.map((item) => <ItemChip key={item.id} item={item} onRemove={() => onRemoveItem?.(item.id)} />)}
+      {narrow
+        ? (
+          <div className="dock__row">
+            {open && footer && <IconButton label="Attach" className="composer__plus" disabled={disabled} onClick={() => picker.current?.click()}><PlusIcon size={20} aria-hidden /></IconButton>}
+            {box}
           </div>
-        )}
-        {error && <div className="composer__error">{error}</div>}
-        {menu && (
-          <div className="completions" role="listbox" aria-label={found!.provider.title}>
-            {menu.map((item, index) => (
-              <div key={`${item.label}-${index}`} role="option" aria-selected={index === pick} className={`completions__item ${index === pick ? 'is-active' : ''}`}
-                onMouseEnter={() => setPick(index)} onMouseDown={(e) => { e.preventDefault(); take(item) }}>
-                {item.icon && <span className="completions__icon" aria-hidden>{item.icon}</span>}
-                <span className="completions__label">{item.label}</span>
-                {item.detail && <span className="completions__detail">{item.detail}</span>}
-              </div>
-            ))}
-          </div>
-        )}
-        <div className="composer">
-          <TextArea ref={setInput} rows={1} value={text} disabled={disabled} aria-label={aria['aria-label']} autoFocus={autoFocus} autoComplete="off"
-            onChange={(e) => setText(e.target.value)} onKeyDown={keyDown} onSelect={(e) => setCaret(e.currentTarget.selectionStart)}
-            onPaste={(e) => { if (open && e.clipboardData.files.length) { e.preventDefault(); void attach(e.clipboardData.files) } }}
-            placeholder={placeholder} />
-          {action}
-        </div>
-      </div>
+        )
+        : box}
+      {open && footer && <input ref={picker} type="file" multiple hidden onChange={(e) => { if (e.target.files?.length) void attach(e.target.files); e.target.value = '' }} />}
       {footer && (
         <div className="dock__footer">
-          {open && (
-            <>
-              <Button variant="ghost" className="dock__action composer__attach" disabled={disabled} onClick={() => picker.current?.click()}>
-                <PaperclipIcon size={13} aria-hidden />Attach
-              </Button>
-              <input ref={picker} type="file" multiple hidden onChange={(e) => { if (e.target.files?.length) void attach(e.target.files); e.target.value = '' }} />
-            </>
+          {open && !narrow && (
+            <Button variant="ghost" className="dock__action composer__attach" disabled={disabled} onClick={() => picker.current?.click()}>
+              <PaperclipIcon size={13} aria-hidden />Attach
+            </Button>
           )}
           <span className="dock__footer-end">{footer.end}</span>
         </div>

@@ -6,7 +6,7 @@
 import { useEffect, useRef, useState, type ComponentType } from 'react'
 import { createPortal } from 'react-dom'
 import type { SettingsSnapshot, ThreadInfo } from '@superego/protocol'
-import { ArrowLeftIcon, ArrowRightIcon, BaseUI, Button, CaretDownIcon, GearSixIcon, IconButton, ListIcon, NotePencilIcon, PlusIcon, popupFocus, Select, StatusGlyph } from '@superego/ui'
+import { ArrowLeftIcon, ArrowRightIcon, BaseUI, Button, CaretDownIcon, GearSixIcon, IconButton, ListIcon, NotePencilIcon, popupFocus, Select, StatusGlyph } from '@superego/ui'
 import type { MachineEntry } from '../shared/bridge.ts'
 import { APP, INTERFACE_FONT, KEYMAP, MONO_FONT, TEXT_SIZE, textScale } from '../shared/app-settings.ts'
 import { useThemeStyle } from './themes.tsx'
@@ -213,18 +213,21 @@ export function Shell() {
           {narrow && (
             <BaseUI.Drawer.Root open={drawer && spaces.length > 0} onOpenChange={setDrawer} swipeDirection="left">
             {/* With no space there's no drawer: what stands in for one (the title bar's: the thread picker) and Settings. */}
+            {/* As iOS draws a navigation bar: the drawer's button at the leading edge, the title in the middle (a menu:
+                the thread's sheet), compose at the trailing edge, each button a circle of glass; no ground of its own,
+                what's under it scrolling up beneath, fading out (app.css). */}
             <div className="app__mobilebar">
               {spaces.length > 0
-                ? <BaseUI.Drawer.Trigger render={<Button aria-label={space?.title} />}><ListIcon size={16} aria-hidden /></BaseUI.Drawer.Trigger>
+                ? <BaseUI.Drawer.Trigger render={<Button className="app__barbutton" aria-label={space?.title} />}><ListIcon size={20} aria-hidden /></BaseUI.Drawer.Trigger>
                 : <PlacedViews place="titlebar" frame={withContextMenu('titlebar')} />}
               {thread && machine
                 ? (
                   <BaseUI.Drawer.Trigger handle={sheetHandle} className="app__mobiletitle" aria-label={`${thread.title}: the thread's tools`}>
-                    <StatusGlyph status={thread.status} quiet={thread.quiet} /><span className="app__mobiletitle-text">{thread.title}</span><CaretDownIcon size={12} aria-hidden />
+                    <StatusGlyph status={thread.status} quiet={thread.quiet} /><span className="app__mobiletitle-text">{thread.title}</span><CaretDownIcon size={11} weight="bold" aria-hidden />
                   </BaseUI.Drawer.Trigger>
                 )
                 : <span className="app__mobiletitle">{registry.app.name}</span>}
-              {spaces.length > 0 || !placed.titlebar.length ? <Button onClick={() => openNewThread()} aria-label="New thread"><PlusIcon size={16} aria-hidden /></Button> : null}
+              {spaces.length > 0 || !placed.titlebar.length ? <Button className="app__barbutton" onClick={() => openNewThread()} aria-label="New thread"><NotePencilIcon size={20} aria-hidden /></Button> : null}
               {!spaces.length && settingsButton}
             </div>
             {spaces.length > 0 && <>

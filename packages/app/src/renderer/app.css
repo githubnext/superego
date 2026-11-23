@@ -656,18 +656,35 @@ code { font-family: var(--superego-mono); font-size: .92em; }
 /* On a phone (the narrow layout's width, media.ts's NARROW, under a finger) text reads 15% bigger, on top of the Text
    size setting; not in a narrow window on a desktop. Set on the root, where the type tokens are worked out. */
 @media (max-width: 599px) and (pointer: coarse) { :root { --superego-text-device: 1.15; } }
-/* The bar is fixed at the top, the column under it, and runs up under the status bar (index.html's black-translucent):
+/* The bar, as iOS 26 draws a navigation bar: no ground or hairline of its own; what's under it scrolls up beneath it and
+   the status bar, and fades out there (iOS's scroll edge effect: the sheet's colour at the top edge, thinning and
+   blurring what's under it toward the bar's foot). Its buttons are circles of glass, 44 across; the title in the
+   middle, Headline (17, semibold). Fixed at the top, running up under the status bar (index.html's black-translucent):
    Safari (iOS 26) samples a fixed bar at the top edge for the page's colour there and leaves out the blur it otherwise
-   draws under the status bar, over whatever's at the page's top. */
-.app { --mobilebar: calc(env(safe-area-inset-top) + 49px); }
-.app__mobilebar { position: fixed; z-index: 10; top: 0; left: 0; right: 0; height: var(--mobilebar); display: flex; align-items: center; gap: var(--superego-space-2); padding: env(safe-area-inset-top) max(var(--superego-space-3), env(safe-area-inset-right)) 0 max(var(--superego-space-3), env(safe-area-inset-left)); border-bottom: 1px solid var(--superego-line); background: var(--superego-sidebar-bg); }
-.app.is-narrow .app__main { padding-top: var(--mobilebar); }
-.app__mobiletitle { flex: 1; min-width: 0; text-align: center; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-/* The thread's title opens its sheet: the status, the title, a caret that says there's more. */
-button.app__mobiletitle { display: flex; align-items: center; justify-content: center; gap: 6px; height: 32px; padding: 0 6px; border: 0; border-radius: 8px; background: none; color: var(--superego-text); font: inherit; font-weight: 600; cursor: default; }
-button.app__mobiletitle:active, button.app__mobiletitle[aria-expanded="true"] { background: var(--superego-hover); }
+   draws under the status bar, over whatever's at the page's top. Under it, the thread's and its panes' segmented
+   control (.strip--narrow) on the same ground: --phone-top is where what's under them starts. */
+.app { --mobilebar: calc(env(safe-area-inset-top) + 52px); --phone-strip: 0px; --phone-top: calc(var(--mobilebar) + var(--phone-strip)); }
+.app.is-narrow:has(.strip--narrow) { --phone-strip: 44px; }
+.app__mobilebar { position: fixed; z-index: 10; top: 0; left: 0; right: 0; height: var(--mobilebar); display: flex; align-items: center; gap: var(--superego-space-2); padding: env(safe-area-inset-top) max(var(--superego-space-4), env(safe-area-inset-right)) 0 max(var(--superego-space-4), env(safe-area-inset-left)); }
+.app__mobilebar::before {
+  content: ''; position: absolute; z-index: -1; top: 0; left: 0; right: 0; height: calc(100% + var(--phone-strip) + 28px); pointer-events: none;
+  background: linear-gradient(to bottom, var(--superego-bg) env(safe-area-inset-top), color-mix(in srgb, var(--superego-bg) 72%, transparent) 72%, transparent);
+  -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+  -webkit-mask-image: linear-gradient(to bottom, #000 75%, transparent); mask-image: linear-gradient(to bottom, #000 75%, transparent);
+}
+.app.is-narrow .app__main { padding-top: 0; }
+.app__mobiletitle { flex: 1; min-width: 0; text-align: center; font-size: calc(17px * var(--superego-text-size)); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The thread's title opens its sheet: the status, the title, a chevron that says there's more, as iOS's title menus. */
+button.app__mobiletitle { display: flex; align-items: center; justify-content: center; gap: 6px; height: 44px; padding: 0 4px; border: 0; background: none; color: var(--superego-text); font-family: inherit; cursor: default; -webkit-tap-highlight-color: transparent; transition: opacity .15s; }
+button.app__mobiletitle:active, button.app__mobiletitle[aria-expanded="true"] { opacity: .45; transition: none; }
 .app__mobiletitle-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-button.app__mobiletitle > svg { flex: none; color: var(--superego-faint); }
+button.app__mobiletitle > svg { flex: none; color: var(--superego-muted); }
+button.app__mobiletitle > .superego-status { font-size: 12px; }
+/* Bar buttons: glass circles a finger wide, an icon in the text's colour; pressed, they swell a little and brighten. */
+.app__mobilebar .superego-button { flex: none; width: 44px; min-width: 44px; height: 44px; min-height: 44px; padding: 0; border-radius: 50%; color: var(--superego-text);
+  background: var(--superego-glass); -webkit-backdrop-filter: var(--superego-glass-blur); backdrop-filter: var(--superego-glass-blur);
+  box-shadow: var(--superego-glass-edge), 0 2px 10px light-dark(rgb(0 0 0 / .06), rgb(0 0 0 / .35)); -webkit-tap-highlight-color: transparent; transition: transform .2s cubic-bezier(.3, 1.6, .5, 1), background-color .2s; }
+.app__mobilebar .superego-button:active:not(:disabled) { transform: scale(1.08); background: color-mix(in srgb, var(--superego-glass) 70%, var(--superego-bg)); transition-duration: .08s; }
 /* The drawer's foot: the spaces to switch to and the drawer's views, Settings at the end. */
 .app__drawer-bar { flex: 1 0 100%; display: flex; align-items: center; gap: 6px; }
 .app__drawer-bar .app__rail-button { width: 40px; height: 40px; min-height: 40px; }
@@ -712,9 +729,6 @@ button.app__mobiletitle > svg { flex: none; color: var(--superego-faint); }
 .thread-sheet__host { position: absolute; inset: 0; display: flex; align-items: center; padding: 0 10px; overflow: hidden; visibility: hidden; pointer-events: none; }
 .thread-sheet__beside { margin: 0 calc(-1 * var(--superego-space-2)); border-top: 1px solid var(--superego-border); }
 .thread-sheet__beside:not(:has(> .placed-view > :not(.view-menu__button, .profile-scope:empty))) { display: none; }
-/* Its buttons are icons on the bar, as a phone's are: no box, a tint while pressed. */
-.app__mobilebar .superego-button { min-width: 36px; min-height: 32px; padding: 0 8px; border-radius: 8px; background: none; box-shadow: none; color: var(--superego-text); }
-.app__mobilebar .superego-button:active:not(:disabled) { background: var(--superego-hover); }
 .app__scrim { position: fixed; inset: 0; z-index: 20; background: rgb(0 0 0 / .3); }
 .app.is-narrow { background: var(--superego-bg); }
 .app.is-narrow .app__main { border-radius: 0; box-shadow: none; }
@@ -736,12 +750,37 @@ button.app__mobiletitle > svg { flex: none; color: var(--superego-faint); }
 /* Where a swipe from the left edge pulls it out: a strip down the thread's margin (at the start of the row of columns,
    Shell.tsx), under the composer; on a finger-sized device only (with a mouse it would only eat clicks). */
 .app__swipe-edge { display: none; position: absolute; z-index: 1; top: 0; bottom: 0; left: 0; width: var(--superego-space-4); }
-.app__main > .app__swipe-edge { top: var(--mobilebar); }
+.app__main > .app__swipe-edge { top: var(--phone-top); }
 @media (pointer: coarse) { .app__swipe-edge { display: block; } }
-.app.is-narrow .thread__column { width: auto; max-width: none; padding: var(--superego-space-4) var(--superego-space-4) calc(var(--dock, 100px) + 50px); }
-.app.is-narrow .dock { left: var(--superego-space-2); right: var(--superego-space-2); bottom: calc(env(safe-area-inset-bottom) + var(--superego-space-1)); width: auto; max-width: none; transform: none; }
+.app.is-narrow .thread__scroll { scroll-padding-top: var(--phone-top); }
+.app.is-narrow .thread__column { width: auto; max-width: none; padding: calc(var(--phone-top) + var(--superego-space-4)) var(--superego-space-4) calc(var(--dock, 100px) + 50px); }
+/* A pane starts under the bar and the segmented control: it doesn't scroll under them as the thread does (its head
+   is its own bar). */
+.panes--narrow > .panes__column:not(.panes__column--thread) { padding-top: var(--phone-top); }
+.app.is-narrow .app__empty { padding-top: var(--phone-top); }
+.app.is-narrow .dock { isolation: isolate; left: var(--superego-space-2); right: var(--superego-space-2); bottom: calc(env(safe-area-inset-bottom) + var(--superego-space-1)); width: auto; max-width: none; transform: none; }
 /* Over the keyboard (viewport.ts), the home indicator is under it: the composer sits on the keyboard. */
 :root[data-keyboard] .app.is-narrow .dock { bottom: var(--superego-space-1); }
+/* The composer, as Messages has it: a + of glass at the leading edge (Attach), then the box, a capsule of glass with
+   the words in Body size (17) and send, a filled circle, inside at its trailing edge; growing into a rounded box as
+   the words run onto more lines. The quiet bar under it only while there's something in it (Queue, Stop). */
+/* At the foot, the same edge effect as under the bar: what scrolls down under the composer fades out toward the screen's
+   edge. */
+.app.is-narrow .dock::before { content: ''; position: absolute; z-index: -1; left: calc(-1 * var(--superego-space-2)); right: calc(-1 * var(--superego-space-2)); top: -28px; bottom: calc(-1 * env(safe-area-inset-bottom) - var(--superego-space-1)); pointer-events: none;
+  background: linear-gradient(to top, var(--superego-bg) env(safe-area-inset-bottom), color-mix(in srgb, var(--superego-bg) 72%, transparent) 60%, transparent); }
+.dock__row { display: flex; align-items: flex-end; gap: var(--superego-space-2); }
+.dock__row > .dock__box { flex: 1; min-width: 0; }
+.composer__plus { width: 44px; height: 44px; min-height: 44px; border-radius: 50%; color: var(--superego-text); background: var(--superego-glass); -webkit-backdrop-filter: var(--superego-glass-blur); backdrop-filter: var(--superego-glass-blur);
+  box-shadow: var(--superego-glass-edge), 0 2px 10px light-dark(rgb(0 0 0 / .06), rgb(0 0 0 / .35)); -webkit-tap-highlight-color: transparent; transition: transform .2s cubic-bezier(.3, 1.6, .5, 1); }
+.composer__plus:active:not(:disabled) { transform: scale(1.08); transition-duration: .08s; }
+.app.is-narrow .dock__box { min-height: 44px; border-radius: 22px; padding: 6px 6px 6px 16px; }
+.app.is-narrow .dock:has(.dock__join) .dock__box { border-radius: 0 0 22px 22px; }
+.app.is-narrow .composer { align-items: flex-end; font-size: calc(17px * var(--superego-text-size)); }
+.app.is-narrow .composer .superego-textarea { line-height: 22px; padding: 3px 0; min-height: 28px; }
+.app.is-narrow .composer__send { width: 32px; height: 32px; min-height: 32px; }
+.app.is-narrow .composer__send:disabled { background: none; color: var(--superego-faint); }
+.app.is-narrow .composer__steer, .app.is-narrow .composer__unarchive { height: 32px; min-height: 32px; }
+.app.is-narrow .dock__footer:has(> .dock__footer-end:empty):not(:has(> .composer__attach)) { display: none; }
 /* On a phone: the status bar's actions and the queued rows' buttons get room for a finger. */
 @media (pointer: coarse) {
   .app.is-narrow .dock__footer { margin-top: 2px; }
@@ -1133,11 +1172,15 @@ a.pane-header__url:hover { color: var(--superego-link); }
   .strip__tab.is-failed { animation: none; }
 }
 /* Narrow: a switcher, one column at a time. */
-.strip--narrow { height: 40px; border-bottom: 0; padding: 0 8px; }
-.strip--narrow .strip__tabs { padding: 2px; border-radius: 7px; background: var(--superego-fill); }
-.strip--narrow .strip__tab { flex: 1 1 0; justify-content: center; }
+/* Narrow, the strip is iOS's segmented control, under the bar's title on its ground: a capsule track, the chosen
+   segment a raised capsule; the segments share the width, and with more than fit, it scrolls sideways. */
+.strip--narrow { position: fixed; z-index: 10; top: var(--mobilebar); left: 0; right: 0; height: var(--phone-strip); border-bottom: 0; padding: 0 max(var(--superego-space-4), env(safe-area-inset-right)) 8px max(var(--superego-space-4), env(safe-area-inset-left)); }
+.strip--narrow .strip__tabs { height: 36px; padding: 2px; gap: 0; border-radius: 999px; overflow-x: auto; scrollbar-width: none; background: light-dark(rgb(118 118 128 / .12), rgb(118 118 128 / .24)); -webkit-backdrop-filter: var(--superego-glass-blur); backdrop-filter: var(--superego-glass-blur); }
+.strip--narrow .strip__tabs::-webkit-scrollbar { display: none; }
+.strip--narrow .strip__tab { flex: 1 0 auto; justify-content: center; height: 32px; padding: 0 12px; border-radius: 999px; font-size: calc(14px * var(--superego-text-size)); font-weight: 500; color: var(--superego-text); -webkit-tap-highlight-color: transparent; }
+.strip--narrow .strip__tab:hover { background: none; }
 .strip--narrow .strip__tab svg, .strip--narrow .strip__away { display: none; }
-.strip--narrow .strip__tab.is-focused { background: var(--superego-bg); color: var(--superego-text); box-shadow: 0 0 0 .5px rgb(0 0 0 / .12), 0 1px 2px rgb(0 0 0 / .08); }
+.strip--narrow .strip__tab.is-focused { background: light-dark(#fff, #636366); font-weight: 600; box-shadow: 0 3px 8px rgb(0 0 0 / .12), 0 3px 1px rgb(0 0 0 / .04); }
 
 /* What the agent said along the way, inside the fold with its work. */
 .step__note { font-size: var(--superego-text-ui); color: var(--superego-muted); margin: 2px 0 var(--superego-space-2); }
