@@ -1,6 +1,9 @@
 /* A page in a pane: the page (the app's WebView) fills the column under its header; what it asks for, and what it did
    (a file saved, something refused), show above it until answered or dismissed. */
 .browser-frame { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+/* Its column's foot is square: the page is a view of its own over the window, which can round all its corners or none,
+   so it's square, and fills the column to its edge. Its top corners stay as every column's. */
+.panes:not(.panes--narrow) > .panes__column:has(.browser-frame) { border-bottom-left-radius: 0; border-bottom-right-radius: 0; }
 /* Its toolbar, a browser's at its quietest: of a piece with the pane's tab above it (its tint), with a line where the
    page starts, the page being anyone's colours and its scrolling out of the pane's sight. One fixed height, so the
    page under it never moves as what's in it changes. */
