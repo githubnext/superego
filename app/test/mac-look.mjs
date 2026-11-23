@@ -113,6 +113,7 @@ await openApp({ name: 'mac-look', timeout: 300_000 }, async (t) => {
   await until(`!document.querySelector('.superego-menu')`, 'the menu closed')
   // Settings → Appearance.
   await run(`document.querySelector('.app__settings').click()`)
+  await t.click('.settings__nav button', 'Appearance')
   await until(`Boolean(document.querySelector('[data-key="app.theme.dark"]'))`, 'Settings → Appearance')
   await run(`document.querySelector('[data-key="app.theme.light"]').scrollIntoView({ block: 'center' })`)
   await both('settings')
