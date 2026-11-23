@@ -208,7 +208,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
 
   // The core's own, then the bundled ones: for the daemon's life, each giving every thread its agent parts unless the
   // thread goes without it.
-  // This machine's tailnet names, for an agent whose user is on another computer: read once one is, and kept fresh.
+  // This machine's tailnet names, for an agent whose user is on another computer: read now, and kept fresh.
   const tailnets = watchTailnets()
   const remote = () => { const { elsewhere, browser } = clients.windows(); return elsewhere.length > 0 || browser }
   daemonLife.add(clients.watch(() => { if (remote()) tailnets() }))

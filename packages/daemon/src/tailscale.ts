@@ -207,9 +207,9 @@ export async function tailnetsHere(failed: (socket: string | undefined, error: E
 }
 
 /**
- * The tailnets this machine is on, as last read: asked of tailscaled in the background, at most once in `every` ms, so
- * reading it is free and never waits (the agent's prompt asks on every request). The first ask starts reading; until
- * that's done, none.
+ * The tailnets this machine is on, as last read: asked of tailscaled in the background as it's made, then again at most
+ * once in `every` ms as it's asked, so reading it is free and never waits (the agent's prompt asks on every request).
+ * Read from the start, so the first prompt has them as every later one does (a prompt that changes loses its cache).
  */
 export function watchTailnets(every = 60_000, read = tailnetsHere): () => Tailnet[] {
   let known: Tailnet[] = []
@@ -229,5 +229,6 @@ export function watchTailnets(every = 60_000, read = tailnetsHere): () => Tailne
     at = Date.now()
     read(failed).then((next) => { known = next }, (error: Error) => failed(undefined, error)).finally(() => { reading = false })
   }
+  refresh()
   return () => { refresh(); return known }
 }

@@ -95,10 +95,12 @@ it('names this machine as it is on its tailnets, and which is theirs, never the 
     .toContain('If they need an address beyond the browser pane, ask how they reach this machine')
 })
 
-it('reads the tailnets in the background, at most once a while, and gives what it last read without waiting', async () => {
+it('reads the tailnets in the background from the start, at most once a while, and gives what it last read without waiting', async () => {
   let reads = 0
   let finish: (t: Tailnet[]) => void = () => {}
   const tailnets = watchTailnets(60_000, () => { reads++; return new Promise((resolve) => { finish = resolve }) })
+  // Asked as it's made: the first prompt that needs them has them.
+  expect(reads).toBe(1)
   expect(tailnets()).toEqual([])
   expect(tailnets()).toEqual([])
   expect(reads).toBe(1)
