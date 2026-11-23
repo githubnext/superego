@@ -256,4 +256,10 @@ it("lets an extension change the list (superego.machines): added, renamed, switc
   expect(machines.list()).toEqual([])
   await expect(machines.remove(added.id)).rejects.toMatchObject({ kind: 'not_found' })
   await expect(machines.add({ target: '-oProxyCommand=x' })).rejects.toMatchObject({ kind: 'invalid' })
+  // One reached by running a command is the user's to add, in Settings or their own terminal.
+  await expect(machines.add({ via: 'nc box 22' })).rejects.toMatchObject({ kind: 'consent' })
+  await expect(machines.add({ target: 'me@box', command: 'sh -c x' })).rejects.toMatchObject({ kind: 'consent' })
+  const box = await machines.add({ target: 'me@box' })
+  await expect(machines.update(box.id, { command: 'sh -c x' })).rejects.toMatchObject({ kind: 'consent' })
+  expect(JSON.parse(await readFile(join(dataDir, 'machines.json'), 'utf8'))).toEqual([expect.not.objectContaining({ command: expect.anything() })])
 })

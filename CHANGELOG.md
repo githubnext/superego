@@ -41,6 +41,8 @@
 - What only you may do (set a secret, let outside agents in) is refused to an agent's shell and to extensions on your
   other machines too, not only on this one. A machine still on an older Superego is passed none of it from them:
   update it.
+- Ego, agents and extensions can no longer add a machine reached by running a command (`--via`, or `--command` over
+  ssh): you add one in Settings → Machines or with `superego machines add` yourself.
 - A new macOS look: the sidebar is an inset glass panel, the thread and its panes are rounded sheets, controls and
   menus are softer, and Ego's button in the rail is a ring like the other icons instead of a solid dot.
 - The pane or thread you're in has a soft ring in the accent colour instead of a square border, and its tab is no

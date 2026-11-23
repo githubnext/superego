@@ -88,6 +88,10 @@ describe("Ego's tools", () => {
       remove: async (id) => { list = list.filter((m) => m.id !== id) },
     }
     const { tools = [] } = egoTools({ dir: '/data', ...on(createRouter()), snapshot, machines, threads: threads() })
+    // One reached by running a command is the user's to add: not a parameter here.
+    await expect(run(tools, 'superego_machines', { op: 'add', via: 'nc box 22' })).rejects.toThrow(/via/)
+    await expect(run(tools, 'superego_machines', { op: 'add', target: 'me@box', command: 'sh -c x' })).rejects.toThrow(/command/)
+    expect(list).toEqual([])
     await run(tools, 'superego_machines', { op: 'add', target: 'me@box', name: 'box' })
     await run(tools, 'superego_machines', { op: 'rename', machine: 'box', name: 'Build box' })
     await run(tools, 'superego_machines', { op: 'disable', machine: 'Build box' })

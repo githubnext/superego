@@ -243,19 +243,20 @@ export function egoTools({ dir, secrets = () => [], dispatch, actions, snapshot,
   ]
   if (machines) tools.push(defineTool({
     name: 'superego_machines',
-    description: 'The machines this computer reaches besides itself, as the app keeps them: list; add (by ssh target, or `via` any command piping stdio to the far side, with an optional name and the command to run there); rename; enable; disable; remove. The app connects to an added machine on its own; it needs superego installed there.',
+    description: 'The machines this computer reaches besides itself, as the app keeps them: list; add (by ssh target, with an optional name); rename; enable; disable; remove. The app connects to an added machine on its own; it needs superego installed there. ' +
+      'A machine reached through a command instead (`via`, or another command run over ssh) runs that command on this computer: only the user adds one, in Settings → Machines or with `superego machines add` in their own terminal.',
     parameters: obj({
       op: union([lit('list'), lit('add'), lit('rename'), lit('enable'), lit('disable'), lit('remove')]),
       machine: opt(str({ description: 'Which one, by id or name (not for list or add)' })),
       target: opt(str({ description: 'add: an ssh target, user@host or a Host from ~/.ssh/config' })),
-      via: opt(str({ description: 'add: instead of ssh, a command whose stdio reaches the far side' })),
-      command: opt(str({ description: 'add: what to run there instead of `superego connect --start`' })),
       name: opt(str({ description: 'add, rename: what to call it' })),
     }),
-    async execute({ op, machine, target, via, command, name }) {
+    async execute(params) {
+      const { op, machine, target, name } = params
+      if ('via' in params || 'command' in params) throw new Error('A machine reached through a command (via, or a command run over ssh) runs that command on this computer: only the user adds one, in Settings → Machines or with `superego machines add` in their own terminal.')
       const list = () => machines.list().map(briefMachine)
       if (op === 'list') return json(list())
-      if (op === 'add') return json(briefMachine(await machines.add({ ...(target ? { target } : {}), ...(via ? { via } : {}), ...(command ? { command } : {}), ...(name ? { label: name } : {}) })))
+      if (op === 'add') return json(briefMachine(await machines.add({ ...(target ? { target } : {}), ...(name ? { label: name } : {}) })))
       const all = machines.list()
       const found = all.find((m) => m.id === machine) ?? all.filter((m) => m.label.toLowerCase() === machine?.toLowerCase()).at(0)
       if (!found) throw new Error(`No machine ${machine ?? '(none given)'}: ${all.map((m) => m.label).join(', ') || 'none added yet'}`)

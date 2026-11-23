@@ -617,6 +617,7 @@ export type DaemonApi = {
     /**
      * Add one: reached with ssh (`target`, `user@host` or a Host of `~/.ssh/config`; `command`, what runs there instead
      * of Superego's own), or `via` any command piping stdio to it. The daemon and the app link to it on their own.
+     * With `via` or `command` it's refused (`consent`): running a command to reach one is the user's to allow.
      */
     add(machine: MachineDraft): Promise<MachineEntry>
     /** Change one, by id: its name (`label`), whether it's linked to (`enabled`), or how it's reached. */

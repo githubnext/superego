@@ -8,7 +8,7 @@ import type { BrowserWindow } from 'electron'
 import { daemonStarting, socketPath, spawnDaemon } from '@superego/daemon/client'
 import { installServiceOn, Link, loginInTerminal, MachineLinks, MachineStore, openLocal, runUpdate, UiAllowStore } from '@superego/client'
 import {
-  arr, AUTH_REJECTED, compareVersions, defineAction, int, lit, obj, opt, RpcError, str, union, bool,
+  arr, AUTH_REJECTED, compareVersions, defineAction, int, lit, machineConsent, obj, opt, RpcError, str, union, bool,
   type AppConfig, type Notifications, type ProfileRef, type ProviderRejection, type Router, type ThreadInfo,
 } from '@superego/protocol'
 import type { MachineConfig, MachineEntry, MachineUpdate, SuperegoEvent } from '../shared/bridge.ts'
@@ -197,11 +197,13 @@ export function createMachines({ app: appConfig, dataDir, headless, broadcast, o
     router.register(defineAction({
       id: 'machine.add', title: 'Add a machine', runs: 'app', expose: ['ui', 'cli'],
       params: obj({ label: opt(str()), target: opt(str()), command: opt(str()), via: opt(str()) }),
+      consentIn: machineConsent,
       run: (params) => store.add(params),
     }))
     router.register(defineAction({
       id: 'machine.edit', title: 'Change a machine', runs: 'app', expose: ['ui', 'cli'],
       params: obj({ id: str(), label: opt(str()), target: opt(str()), command: opt(str()), via: opt(str()), enabled: opt(bool()) }),
+      consentIn: machineConsent,
       async run({ id, ...patch }) { await store.update(id, patch as Partial<MachineConfig>); return null },
     }))
     router.register(defineAction({

@@ -55,7 +55,10 @@ export type ActionDef<P = any, R = unknown, C = unknown> = ActionInfo & {
 
 /** Define an action; with a pi-schema `params`, `run` gets them typed. */
 export function defineAction<S extends JsonSchema | undefined, R, C = any>(
-  def: Omit<ActionInfo, 'params' | 'expose'> & { params?: S; expose?: Exposure[]; run(params: S extends JsonSchema ? Static<S> : Record<string, never>, context: C): R | Promise<R> },
+  def: Omit<ActionInfo, 'params' | 'expose'> & {
+    params?: S; expose?: Exposure[]; run(params: S extends JsonSchema ? Static<S> : Record<string, never>, context: C): R | Promise<R>
+    consentIn?(params: S extends JsonSchema ? Static<S> : Record<string, never>): string | undefined
+  },
 ): ActionDef<any, R, C> {
   return { expose: ['ui'], ...def } as ActionDef<any, R, C>
 }
@@ -185,6 +188,15 @@ export const consentRefused = (what: string) => new RpcError('consent', `${what}
 })
 
 const consentOf = (def: ActionDef<any, unknown, any>, parsed: unknown) => def.consent ? def.title : def.consentIn?.(parsed)
+
+/**
+ * What adding or changing a machine records the user's consent to, if anything: one reached by running a command (`via`
+ * any command, or ssh running `command` there instead of Superego) runs that command on this computer, as every link to
+ * it is made. The app's `machine.add` and `machine.edit` take it as their `consentIn`; an extension's
+ * `superego.machines.add`/`update` is refused it, as its `dispatch` is.
+ */
+export const machineConsent = ({ via, command }: { via?: string | undefined; command?: string | undefined }): string | undefined =>
+  via ? 'Reach a machine through a command' : command ? 'Run a command to reach a machine' : undefined
 
 /** `params` as the log keeps them: those named in `secret` (that are there) as `•••`. */
 function withoutSecrets(params: unknown, secret: string[] | undefined): unknown {

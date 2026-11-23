@@ -27,7 +27,7 @@ import {
 // The daemon itself only for `daemon run`: loading it costs every other command most of its start.
 import { appEnv, appSocketPath, connectSocket, daemonStarting, defaultDataDir, installService, isListening, readBuild, socketPath, spawnDaemon, startService, uninstallService } from '@superego/daemon/client'
 import {
-  AUTH_REJECTED, compareVersions, consentRefused, offers, driftPhrase, PROTOCOL_VERSION, RpcError, threadEnv, unreadThreads, versionOf, statusShape, statusWord, STATUS_WORDS, type ActionInfo, type AppConfig, type AuthEvent, type AuthPrompt, type Hello, type Json, type MethodName, type Params, type ProviderAuthInfo, type Result,
+  AUTH_REJECTED, compareVersions, consentRefused, machineConsent, offers, driftPhrase, PROTOCOL_VERSION, RpcError, threadEnv, unreadThreads, versionOf, statusShape, statusWord, STATUS_WORDS, type ActionInfo, type AppConfig, type AuthEvent, type AuthPrompt, type Hello, type Json, type MethodName, type Params, type ProviderAuthInfo, type Result,
   type ProfileInfo, type ProfileRef, type ProfileSourceInfo, type ProviderRejection, type ThreadInfo, type SettingInfo, type SettingsSnapshot,
 } from '@superego/protocol'
 
@@ -331,6 +331,9 @@ async function loginCommand(machine: Machine) {
 async function machinesCommand(sub: string | undefined, rest: string[], options: { name?: string; command?: string; via?: string; now?: boolean }) {
   if (!sub) return listMachines()
   if (sub === 'add') {
+    // One reached by a command runs it here: the user's to add, not an agent's.
+    const consent = machineConsent(options)
+    if (consent) userOnly(consent)
     const added = await machines.add({ target: rest[0], label: options.name, command: options.command, via: options.via })
     // Learn who answers there now, so a different machine later is refused.
     try {

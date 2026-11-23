@@ -209,6 +209,9 @@ export default defineExtension({ name: 'orders', tools: [defineTool({ name: 'fin
     await expect(agent(['profile', 'allow-ui', 'helper'])).rejects.toThrow(/the user's consent/)
     await expect(agent(['do', 'web.pair'])).rejects.toThrow(/the user's consent/)
     await expect(agent(['do', 'settings.set', '--key', 'outside.startThreads', '--value', 'true'])).rejects.toThrow(/Can start threads: that's the user's consent/)
+    // A machine reached by running a command runs it here.
+    await expect(agent(['machines', 'add', '--via', 'nc box 22'])).rejects.toThrow(/Reach a machine through a command: that's the user's consent/)
+    await expect(agent(['machines', 'add', 'me@box', '--command', 'sh -c x'])).rejects.toThrow(/the user's consent/)
     // The window's alone, from any command line.
     await expect(agent(['do', 'mcp-servers.allow', '--name', 'any'])).rejects.toThrow(/mcp-servers\.allow can't be run from cli/)
     await expect(superego(['do', 'mcp-servers.allow', '--name', 'any'])).rejects.toThrow(/mcp-servers\.allow can't be run from cli/)

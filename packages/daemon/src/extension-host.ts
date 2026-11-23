@@ -5,7 +5,7 @@ import { chmodSync, existsSync, mkdirSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { defineExtension, type Extension, hook, ToolTask } from '@earendil-works/pi-durable'
 import {
-  type ChannelAcceptor, Channels, compareVersion, contractProblem, dataViewProblem, EXTENSION_API, FEATURES, Lifetime, manifestOf, paramsParser,
+  type ChannelAcceptor, Channels, compareVersion, consentRefused, contractProblem, dataViewProblem, machineConsent, EXTENSION_API, FEATURES, Lifetime, manifestOf, paramsParser,
   parseVersion, RpcError, UNVERSIONED, DATA_VIEWS, type DataViewInfo, type ExtensionAbout, type ExtensionReport, type ExtensionsReport, type Json,
   type AgentKindMenu, type RpcPeer, type ThreadInfo,
 } from '@superego/protocol'
@@ -532,6 +532,8 @@ export function createExtensionHost(host: Host, later: { profiles(): ProfileHost
     const threads = later.threads()
     /** Its folder, once made (`dir`). */
     let made: string | undefined
+    /** What records the user's consent (`what`, if anything) is never an extension's to give. */
+    const refuseConsent = (what: string | undefined) => { if (what) throw consentRefused(what) }
     const ownSecret = (key: string) => {
       if (!key.startsWith(`${extension.name}.`)) throw new Error(`Extension ${extension.name} reads its own secrets, "${extension.name}.<key>", not "${key}"`)
       return key
@@ -746,8 +748,9 @@ export function createExtensionHost(host: Host, later: { profiles(): ProfileHost
         list: () => later.relay().entries().slice(1),
         // For this extension: refused there what records the user's consent, as its `dispatch` is here.
         call: (machine, method, params) => later.relay().call(machine, method, params ?? {}, { extension: extension.name }),
-        add: (machine) => later.relay().list.add(machine),
-        update: (id, patch) => later.relay().list.update(id, patch),
+        // One reached by running a command is the user's consent to give, as `dispatch` is refused it.
+        add: async (machine) => { refuseConsent(machineConsent(machine)); return later.relay().list.add(machine) },
+        update: async (id, patch) => { refuseConsent(machineConsent(patch)); return later.relay().list.update(id, patch) },
         remove: (id) => later.relay().list.remove(id),
       },
     }
