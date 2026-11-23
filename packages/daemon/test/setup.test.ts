@@ -176,3 +176,30 @@ it("refuses a first message no model can answer, and makes no thread", async () 
   await expect(peer.call('thread.start', { cwd: dir, prompt: 'Say hi' })).rejects.toMatchObject({ kind: 'no_model' })
   expect(await peer.call('thread.list', {})).toEqual([])
 })
+
+it('stops trying a key when its sign-in is cancelled, and keeps nothing of it', async () => {
+  // A provider that lists its models, and holds every chat until the request goes away.
+  let gone = false
+  const server = createServer((request, response) => {
+    if (request.url === '/v1/models') {
+      response.writeHead(200, { 'content-type': 'application/json' })
+      return response.end(JSON.stringify({ object: 'list', data: [{ id: 'slow-1', object: 'model' }] }))
+    }
+    request.resume()
+    response.on('close', () => { gone = true })
+  })
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+  closing.push(() => new Promise((resolve) => { server.closeAllConnections(); server.close(resolve) }))
+  const peer = await open()
+  await peer.call('providers.save', { name: 'Slow', baseUrl: `http://127.0.0.1:${(server.address() as { port: number }).port}/v1`, models: ['slow-1'] })
+  const events: AuthEvent[] = []
+  peer.on('auth.event', ({ event }: Notifications['auth.event']) => events.push(event))
+  const { flow } = await peer.call<{ flow: string }>('auth.signIn', { provider: 'slow', type: 'api_key', key: 'a-good-key-it-would-be', check: true })
+  await until(() => events.some((e) => e.type === 'progress' && e.message.startsWith('Trying it on')))
+  await peer.call('auth.cancel', { flow })
+  await until(() => events.at(-1)?.type === 'failed')
+  expect(events.at(-1)).toEqual({ type: 'failed', message: 'Cancelled' })
+  await until(() => gone)
+  const stored = existsSync(join(dir, 'auth.json')) ? JSON.parse(readFileSync(join(dir, 'auth.json'), 'utf8')).slow : undefined
+  expect(stored).toBeUndefined()
+})

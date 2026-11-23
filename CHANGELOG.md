@@ -25,6 +25,7 @@
   environment, say), saying hi with it or why it can't, or on the ways to get one.
 - GitHub Copilot signs in to github.com without asking first; GitHub Enterprise is a link under it.
 - Closing a sign-in in setup stops it, so signing in with ChatGPT again works instead of saying its port is in use.
+- Cancelling while a pasted key is being tried stops the trying, and the key isn't kept.
 - A local model server is added by its address as you'd write it (`localhost:11434`), its models in its own order, and
   embedding models are no longer offered as chat models.
 - Pasting a sign-in page's address is only offered when the browser didn't come back by itself.

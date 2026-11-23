@@ -489,8 +489,11 @@ export async function createAgentSettings(settings: SettingsRegistry, dataDir: s
   const loginEnvRead = options.loginEnv?.().then((read) => { shellEnv = read; return refreshAuth() })
     .catch((error: Error) => console.error(`Reading the login shell's environment: ${error.message}`)) ?? Promise.resolve()
 
-  /** Ask a model to say hi: what it said and how long it took, else what its provider said, as an RpcError. */
-  async function tryModel(ref: ModelRef): Promise<ModelTest> {
+  /**
+   * Ask a model to say hi: what it said and how long it took, else what its provider said, as an RpcError. `signal`
+   * stops the request (a sign-in cancelled while its key is tried): it rejects as `cancelled` then.
+   */
+  async function tryModel(ref: ModelRef, signal?: AbortSignal): Promise<ModelTest> {
     const model = models.getModel(ref.provider, ref.modelId)
     const provider = models.getProvider(ref.provider)
     if (!model || !provider) throw new RpcError('invalid', `No model ${ref.provider}/${ref.modelId} here`)
@@ -498,12 +501,13 @@ export async function createAgentSettings(settings: SettingsRegistry, dataDir: s
     trying.set(ref.provider, (trying.get(ref.provider) ?? 0) + 1)
     let answer: Awaited<ReturnType<Models['completeSimple']>>
     try {
-      answer = await models.completeSimple(model, { messages: [{ role: 'user', content: SAY_HI, timestamp: started }] }, { maxTokens: 256, signal: AbortSignal.timeout(TEST_TIMEOUT) })
+      answer = await models.completeSimple(model, { messages: [{ role: 'user', content: SAY_HI, timestamp: started }] }, { maxTokens: 256, signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(TEST_TIMEOUT)]) : AbortSignal.timeout(TEST_TIMEOUT) })
     } catch (error) {
       answer = { ...fauxAssistantMessage('', { stopReason: 'error', errorMessage: (error as Error).message }) } as typeof answer
     } finally {
       trying.set(ref.provider, trying.get(ref.provider)! - 1)
     }
+    if (signal?.aborted) throw new RpcError('cancelled', 'Cancelled')
     if (answer.stopReason === 'error' || answer.stopReason === 'aborted') {
       const said = answer.errorMessage ?? (answer.stopReason === 'aborted' ? `No answer in ${TEST_TIMEOUT / 1000}s` : 'It failed without saying why')
       if (authFailure(said)) throw new RpcError('rejected', `${rejectionSummary(provider.name, authed.get(provider.id)?.type, said)}: ${providerWords(said)}`)
@@ -639,10 +643,11 @@ export async function createAgentSettings(settings: SettingsRegistry, dataDir: s
         if (trial) {
           flow.emit({ type: 'progress', message: `Trying it on ${models.getModel(trial.provider, trial.modelId)?.name ?? trial.modelId}…` })
           try {
-            await tryModel(trial)
+            await tryModel(trial, flow.signal)
           } catch (error) {
-            // Refused: what was there before is put back. Anything else (the network, a model it can't have) isn't the key's fault.
-            if ((error as RpcError).kind !== 'rejected') {
+            // Refused, or cancelled before it was known: what was there before is put back. Anything else (the network,
+            // a model it can't have) isn't the key's fault.
+            if ((error as RpcError).kind !== 'rejected' && !flow.signal.aborted) {
               flow.emit({ type: 'info', message: `Signed in, but the test request failed: ${(error as Error).message}` })
             } else {
               if (before) await credentials.modify(provider, async () => before)
