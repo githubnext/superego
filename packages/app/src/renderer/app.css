@@ -29,12 +29,11 @@
 }
 .app__titlebar, .app__body > * { position: relative; z-index: 1; }
 .app__rail { position: relative; flex: none; width: var(--superego-rail); display: flex; flex-direction: column; justify-content: space-between; align-items: center; padding: 9px 0 18px var(--side-inset); -webkit-app-region: drag; }
-.app__rail-group { display: flex; flex-direction: column; align-items: center; gap: 4px; -webkit-app-region: no-drag; }
+.app__rail-group { display: flex; flex-direction: column; align-items: center; gap: 6px; -webkit-app-region: no-drag; }
 .app__rail-button { position: relative; width: 34px; height: 34px; min-height: 34px; border-radius: 10px; color: var(--superego-muted); box-shadow: none; background: none; }
 .app__rail-button:hover { color: var(--superego-text); background: var(--superego-hover); }
 .app__rail-button.is-on { color: var(--superego-accent); background: var(--superego-selected); }
 /* In the rail: the spaces and Settings, the open one lit in the accent on a quiet fill, as a sidebar's icons. */
-.app__rail .app__rail-group { gap: 6px; }
 .app__rail[data-tab="settings"] .app__rail-button.is-on { color: var(--superego-muted); background: none; }
 .app__rail[data-tab="settings"] .app__settings { color: var(--superego-accent); background: var(--superego-selected); }
 .app__rail :is(.app__rail-button, .app__settings) svg { width: 17px; height: 17px; }
@@ -880,7 +879,7 @@ button.app__mobiletitle > .superego-status { font-size: 12px; }
 @media (max-width: 760px) {
   /* Hung from the top, not centred: a fixed box's 50% is of the whole window, which iOS doesn't shrink for the keyboard,
      so a centred one sat halfway down with its foot under the keyboard. From the top, it ends where the keyboard starts. */
-  .superego-dialog { inset: 0 auto auto 0; transform: none; width: 100vw !important; max-width: 100vw; height: var(--superego-viewport-height, 100dvh) !important; max-height: var(--superego-viewport-height, 100dvh); border-radius: 0; }
+  .superego-dialog { inset: 0 auto auto 0; transform: none; width: 100vw; max-width: 100vw; height: var(--superego-viewport-height, 100dvh); max-height: var(--superego-viewport-height, 100dvh); border-radius: 0; }
   .superego-dialog[data-starting-style], .superego-dialog[data-ending-style] { transform: translateY(6px); }
   /* Filling a phone's screen: clear of the status bar, the notch at its side and the home indicator. */
   .superego-dialog__frame { max-height: var(--superego-viewport-height, 100dvh); padding-bottom: env(safe-area-inset-bottom); }
@@ -1078,7 +1077,6 @@ button.app__mobiletitle > .superego-status { font-size: 12px; }
 .panes__column.is-behind { visibility: hidden; }
 /* Maximized: one pane over the whole of the thread's area; the rest stay as they were (their places, their sizes, the
    row's scroll) under it, out of sight. */
-.sheet { position: relative; }
 .panes.has-maximized > :not(.is-maximized) { visibility: hidden; }
 .panes > .panes__column.is-maximized { position: absolute; inset: 0; z-index: 1; }
 .panes:not(.panes--narrow) > .panes__column.is-maximized { inset: var(--row-top) var(--side-inset) var(--side-inset); }
@@ -1308,24 +1306,22 @@ a.pane-header__url:hover { color: var(--superego-link); }
    paint over it; the sidebar's is round the side's panel, and its selected row is lit in the accent while it has it.
    Narrow, a region fills the screen, with no room around it: its ring is its own border, always there, clear until
    then, so nothing moves, and outside what's in it, which it clips, so nothing paints over it. Nothing inside a region
-   wears a ring of its own, but a small control reached from the keyboard (see @superego/ui's styles). */
-.panes:not(.panes--narrow) > .panes__column:focus-within { --column-ring: var(--superego-region-ring); }
+   wears a ring of its own, but a small control reached from the keyboard (see @superego/ui's styles).
+   None of it while a finger works the window (touch.ts, :root[data-finger]): what's tapped is where you are. A mouse
+   or a keyboard brings it back, on a phone or an iPad too. */
+:root:not([data-finger]) .panes:not(.panes--narrow) > .panes__column:focus-within { --column-ring: var(--superego-region-ring); }
 /* The sidebar's only once it's worked from the keyboard (:focus-visible): a click in it hands the focus on (a thread
    opened takes it to its prompt), and its ring would show for the moment between the press and that. */
-.app:not(.is-narrow):has(.app__sidebar :focus-visible) { --side-ring: var(--superego-region-ring); }
-.app:not(.is-narrow) .app__sidebar:has(:focus-visible) .superego-list-item.is-selected,
-.app.is-narrow .app__sidebar:focus-within .superego-list-item.is-selected { background: color-mix(in srgb, var(--superego-accent) 16%, transparent); }
+:root:not([data-finger]) .app:not(.is-narrow):has(.app__sidebar :focus-visible) { --side-ring: var(--superego-region-ring); }
+:root:not([data-finger]) :is(.app:not(.is-narrow) .app__sidebar:has(:focus-visible), .app.is-narrow .app__sidebar:focus-within) .superego-list-item.is-selected {
+  background: color-mix(in srgb, var(--superego-accent) 16%, transparent);
+}
 .app.is-narrow .app__sidebar, .panes--narrow > .panes__column { border: 2px solid transparent; }
-:is(.app.is-narrow .app__sidebar, .panes--narrow > .panes__column):focus-within { border-color: var(--superego-ring); }
-/* None while a finger works it (touch.ts): what's tapped is where you are. A mouse or a keyboard brings it back, on a
-   phone or an iPad too. */
-:root[data-finger] :is(.app, .panes > .panes__column) { --column-ring: 0 0 #0000; --side-ring: 0 0 #0000; }
-:root[data-finger] :is(.app__sidebar, .panes > .panes__column) { border-color: transparent; }
-:root[data-finger] .app .app__sidebar .superego-list-item.is-selected { background: var(--superego-selected); }
+:root:not([data-finger]) :is(.app.is-narrow .app__sidebar, .panes--narrow > .panes__column):focus-within { border-color: var(--superego-ring); }
 
 /* Over the row: a tab for the thread and each pane (the focused one tinted, those out of view faint, with which way
    they are), the row in small, and + for another pane. */
-.sheet { flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.sheet { position: relative; flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 .strip { flex: none; display: flex; align-items: center; gap: 2px; height: 36px; padding: 0 6px; border-bottom: 1px solid var(--superego-line); }
 .strip__tabs { flex: 1; min-width: 0; display: flex; align-items: center; gap: 2px; overflow: hidden; }
 .strip__tab { display: inline-flex; align-items: center; gap: 6px; flex: 0 1 auto; min-width: 0; height: 24px; padding: 0 8px; border: 0; border-radius: 6px; background: none; font: inherit; font-size: var(--superego-text-sm); color: var(--superego-text); white-space: nowrap; cursor: default; }
