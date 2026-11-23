@@ -149,9 +149,9 @@ export function Shell() {
   const setup = useSetup()
 
   const settingsButton = (
-    <IconButton label="Settings" className={`app__settings ${tab === 'settings' ? 'is-on' : ''}`} onClick={() => openSettings()}>
+    <RailButton label="Settings" className="app__settings" on={tab === 'settings'} onClick={() => openSettings()}>
       <GearSixIcon size={18} aria-hidden />
-    </IconButton>
+    </RailButton>
   )
   const sideOpen = spaces.length > 0 && (narrow ? drawer : !sidebar.hidden && tab === 'space')
   // The notices: wide, in the rail above Settings, each a mark that opens to all it says; on a phone, at the drawer's foot.
