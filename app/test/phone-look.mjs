@@ -1,6 +1,7 @@
 // The phone's look, for tuning it (run by `test/look.sh <dir> phone-look`): the web build in a browser window made an
 // iPhone's (402×874 CSS px at 3×, a finger, the status bar's and home indicator's safe areas), paired by Web access to
-// this home. The drawer open; a thread with markdown, a code block and tool calls, words in the composer; the same with
+// this home. The drawer open (its rows' states dressed on their way to the phone: one working on a branch of its own,
+// one asking, one done, the rest quiet at their times); a thread with markdown, a code block and tool calls, words in the composer; the same with
 // the keyboard up; the thread's menu; the New thread sheet; the Diff pane's tab; Settings' list and a page of it. In light and dark, into
 // $SUPEREGO_SHOWCASE_OUT as drawer-, thread-, answer-, keyboard-, menu-, new-thread-, pane-, settings- and settings-page-<light|dark>.png.
 import { BrowserWindow } from 'electron'
@@ -33,7 +34,7 @@ await openApp({ name: 'phone-look', timeout: 300_000 }, async (t) => {
     await turnOn(id, thread.prompt)
     for (const text of thread.followUps) await turnOn(id, text)
   }
-  for (const title of ['Group spending by category', 'Retry the bank sync with backoff']) {
+  for (const title of ['Group spending by category', 'Retry the bank sync with backoff', 'Reconcile the ledger against the bank’s monthly CSV statements']) {
     await run(`window.superego.call('local', 'thread.start', { cwd: ${JSON.stringify(project)}, title: ${JSON.stringify(title)} })`)
   }
   const id = ids[0]
@@ -57,6 +58,38 @@ await openApp({ name: 'phone-look', timeout: 300_000 }, async (t) => {
   await cdp.sendCommand('Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 })
   await cdp.sendCommand('Emulation.setUserAgentOverride', { userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 26_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Mobile/15E148 Safari/604.1' })
   await cdp.sendCommand('Emulation.setSafeAreaInsetsOverride', { insets: { top: PHONE.top, bottom: PHONE.bottom, left: 0, right: 0 } })
+  // The threads' states as the drawer shows them, by title, dressed in every message from the daemon (a scripted model
+  // can't hold a thread working or asking while the shots are taken).
+  await cdp.sendCommand('Page.enable')
+  await cdp.sendCommand('Page.addScriptToEvaluateOnNewDocument', { source: `(() => {
+    const m = 60000, now = Date.now()
+    const DRESS = {
+      'Retry the bank sync with backoff': { status: { state: 'working' }, facts: { worktrees: { branch: 'retry-backoff', path: '/home/me/ledger-retry-backoff' } } },
+      'Group spending by category': { status: { state: 'blocked', kind: 'question', msg: 'Monthly or weekly?' }, ago: 3 * m },
+      'Reconcile the ledger against the bank’s monthly CSV statements': { status: { state: 'done', msg: 'Reconciled' }, ago: 12 * m },
+      'Add a --dry-run flag to the import command': { ago: 95 * m },
+    }
+    const dress = (value) => {
+      if (Array.isArray(value)) return value.map((each) => {
+        const as = each && typeof each === 'object' && typeof each.title === 'string' && each.status && DRESS[each.title]
+        if (!as) return dress(each)
+        const { ago = 0, facts, ...rest } = as
+        return { ...each, ...rest, facts: { ...each.facts, ...facts }, activeAt: now - ago }
+      })
+      if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([key, each]) => [key, dress(each)]))
+      return value
+    }
+    const Native = WebSocket
+    window.WebSocket = class extends Native {
+      set onmessage(listen) {
+        super.onmessage = (message) => {
+          let data = message.data
+          try { data = JSON.stringify(dress(JSON.parse(data))) } catch { /* not JSON: passed on as it came */ }
+          listen({ data })
+        }
+      }
+    }
+  })()` })
   await phone.loadURL(link)
   await p.until(`window.superego?.web === true && matchMedia('(pointer: coarse)').matches && Boolean(document.querySelector('.app.is-narrow'))`, 'the phone’s page, narrow, under a finger')
   // The status bar and the home indicator aren't in a screenshot of the page: stand-ins where the system draws them,

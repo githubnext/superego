@@ -360,7 +360,7 @@ function Archived({ machines, live }: { machines: MachineEntry[]; live: Project[
               <ListItem key={`${machine.id}/${thread.id}`} trailing={ago(thread.activeAt)}
                 selected={selection?.machine === machine.id && selection.thread === thread.id}
                 onClick={() => select({ machine: machine.id, thread: thread.id })}>
-                {thread.title}
+                <span className="threads-archived__title">{thread.title}</span>
                 <em className="threads-archived__where">{thread.project.name}{machine.id !== 'local' ? ` · ${machine.label}` : ''}</em>
               </ListItem>
             ))}

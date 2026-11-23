@@ -15,7 +15,8 @@
 - API keys typed into a sign-in no longer show in the action log (`superego actions log`).
 - An iOS look on a phone: the bar's buttons float as glass over the thread scrolling under them, the thread and its
   panes switch with a segmented control, the composer has a + beside it as in Messages, the thread's menu and dialogs
-  are sheets up from the bottom, New thread puts Start at the top, and Settings opens to a list of its pages.
+  are sheets up from the bottom, New thread puts Start at the top, and Settings opens to a list of its pages. In the
+  thread list, each title has the row's full width, with its time, status and badges on a smaller line under it.
 - A new macOS look: the sidebar is an inset glass panel, the thread and its panes are rounded sheets, and controls and
   menus are softer.
 - The pane or thread you're in has a soft ring in the accent colour instead of a square border, and its tab is no
