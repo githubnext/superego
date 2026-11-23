@@ -1,5 +1,5 @@
 // Panes beside a thread in a git repo: the changes, the editor (Live and Rendered, its links and images), an artifact
-// that runs, the room between columns, the focus and ⌘W, the pane menu, ⌘P and the tree, and the editor keeping its place.
+// that runs, the room between columns (kept with each thread), the focus and ⌘W, the pane menu, ⌘P and the tree, and the editor keeping its place.
 import { execFileSync } from 'node:child_process'
 import { mkdirSync, renameSync, writeFileSync } from 'node:fs'
 import { nativeTheme } from 'electron'
@@ -71,6 +71,34 @@ export default async function panes(t, s) {
     window.dispatchEvent(new PointerEvent('pointerup', { clientX: x + 60, clientY: 300 }))
   })()`)
   await t.until(`(() => { const w = [...document.querySelectorAll('.panes > [data-column]')].map((c) => Math.round(c.getBoundingClientRect().width)); return Math.abs(w[0] - ${threadBefore} - 60) <= 2 && Math.abs(w[1] - ${firstBefore}) <= 2 })()`, 'the gap resized the thread, not the pane')
+  // Its width is kept with the thread, once let go: a factor of the window's width. The window wider, the thread's
+  // column is as wide a part of it; the same thread in another window (a reload, here) the same again.
+  const columns = `[...document.querySelectorAll('.panes > [data-column]')].map((c) => c.getBoundingClientRect().width)`
+  const threadShare = `(${columns}[0] / window.innerWidth)`
+  const keptWidth = async (id = paned) => (await t.call('thread.list')).find((x) => x.id === id).width
+  const dragged = (threadBefore + 60) / await t.run('window.innerWidth')
+  await t.until(async () => Math.abs((await keptWidth() ?? 0) - dragged) < 0.003, 'the thread kept its width, a factor of the window')
+  const [contentWidth, contentHeight] = t.win().getContentSize()
+  t.win().setContentSize(contentWidth + 300, contentHeight)
+  await t.until(`window.innerWidth >= ${contentWidth + 250} && Math.abs(${threadShare} - ${dragged}) < 0.004`, 'the window wider, the thread as wide a part of it')
+  t.win().setContentSize(contentWidth, contentHeight)
+  await t.until(`window.innerWidth < ${contentWidth + 50} && Math.abs(${threadShare} - ${dragged}) < 0.004`, 'and back')
+  t.contents().reload()
+  await t.until(`document.querySelector('.thread__title')?.textContent === 'panes' && document.querySelectorAll('.panes > [data-column]').length === 4 && Math.abs(${threadShare} - ${dragged}) < 0.004`, 'the width kept across a reload')
+  // Each thread has its own: another, with a pane of its own, starts at the default, and this one's is back as it's shown again.
+  const elsewhere = (await t.call('thread.start', { cwd: repo, title: 'widths elsewhere' })).id
+  const opened = await t.call('pane.open', { thread: elsewhere, kind: 'editor', params: { path: 'notes.md' } })
+  await openRow(t, 'widths elsewhere')
+  await t.until(`document.querySelector('.thread__title')?.textContent === 'widths elsewhere' && document.querySelectorAll('.panes > [data-column]').length === 2`, 'another thread, with a pane')
+  await t.check(`Math.abs(${columns}[0] - ${threadBefore + 60}) > 20`, "another thread took this one's width")
+  if (await keptWidth(elsewhere) !== undefined || opened.width !== undefined) t.fail('a new thread or pane had a width kept')
+  await openRow(t, 'panes')
+  await t.until(`document.querySelector('.thread__title')?.textContent === 'panes' && Math.abs(${threadShare} - ${dragged}) < 0.004`, "the thread's own width, shown again")
+  await t.call('thread.archive', { thread: elsewhere })
+  // A double click on the handle puts it back as it was, and keeps that.
+  await t.run(`document.querySelector('.panes__gap').dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))`)
+  await t.until(`Math.abs(${columns}[0] - ${threadBefore}) <= 2`, 'a double click put the thread back')
+  await t.until(async () => await keptWidth() === undefined, 'and kept it so')
   await t.call('app.settings.set', { key: 'app.panes.keepThread', value: true }, 'app')
   // Opened from outside the window (as the agent opens them), they open beside and the focus stays put. ⌘W closes the
   // one with the focus, from inside the page too: the window takes its shortcuts before a frame.

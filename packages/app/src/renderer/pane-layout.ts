@@ -1,6 +1,6 @@
 // The pane row's arithmetic (see panes.tsx): how wide each column is, in either layout, and which pane a stack shows.
 
-/** A column's width (a share of the row) until it's dragged, unless its kind says otherwise. */
+/** A column's width (a share of the room) until it's dragged, unless its kind says otherwise. */
 export const DEFAULT_SHARE = 0.5
 /** Wide, the room after each column (the last too): its handle, to drag it wider or narrower. */
 export const GAP = 8
@@ -13,6 +13,26 @@ export const SNAP = 12
 
 /** The room `columns` columns share in a row `rowWidth` wide: the row less the gap after each. */
 export const roomFor = (rowWidth: number, columns: number) => Math.max(0, rowWidth - GAP * columns)
+
+/**
+ * How wide a column is, as the thread keeps it (`pane.resize`): factors of the window's width, so it's the same
+ * proportion in any window. A pane's `lastWidth` is its own while it's the last one.
+ */
+export type SavedWidth = { width?: number | undefined; lastWidth?: number | undefined }
+
+/**
+ * Each column's share of the room `room` (what the layouts take), from the widths the thread keeps (`saved`: the
+ * thread's, then each pane's), factors of the window's width `windowWidth`. One not kept takes its default
+ * (`defaults`), but the last (at `last`), which takes the room the others leave until its own is kept. What doesn't
+ * fit is the layout's to clamp: what's kept stays as it is.
+ */
+export function columnShares(saved: SavedWidth[], defaults: number[], last: number, windowWidth: number, room: number): (number | undefined)[] {
+  const share = (factor: number | undefined) => factor === undefined ? undefined : factor * windowWidth / Math.max(1, room)
+  return saved.map((column, i) => i === last ? share(column.lastWidth) : share(column.width) ?? defaults[i] ?? DEFAULT_SHARE)
+}
+
+/** A column `width` px wide, as the factor of the window's width the thread keeps: rounded, so what's kept and what's shown agree. */
+export const windowFactor = (width: number, windowWidth: number) => Math.min(1, Math.max(0.0001, Math.round((width / Math.max(1, windowWidth)) * 10_000) / 10_000))
 
 /**
  * Scrolled: each column its share of the room, no narrower than MIN_COLUMN nor wider than the room. The last one's

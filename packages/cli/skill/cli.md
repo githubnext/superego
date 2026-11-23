@@ -70,6 +70,7 @@ Useful ones:
 | `pane.open` `thread kind title? params?` | open a pane beside a thread (`editor`, `thread`; `diff` from git, `browser` (`{ url }` or `{ path }`) from browser; a profile's own) |
 | `pane.close` `thread pane`, `pane.focus` `thread pane?` | |
 | `pane.move` `thread pane to` | move a pane to another place beside the thread (`to`: 0 first) |
+| `pane.resize` `thread pane? width? last?` | how wide the thread's column (no `pane`) or a pane's is, a factor of the window's width (no `width`: the default) |
 | `profile.list` `cwd? user?`, `profile.allow` `cwd? name?` | `user`: yours only, wherever they come from |
 | `profile.sources`, `profile.install` `source`, `profile.remove` `source`, `profile.update` `source?` | profile sources (`install` is the user's consent) |
 | `ego.ask` `prompt?` | ask Ego, Superego's own agent (one hidden thread per machine): it answers, changes settings and machines, and starts threads for any other work |

@@ -44,6 +44,8 @@ export type ThreadMeta = {
   /** The panes open beside it, and the one in front. */
   panes?: Pane[]
   pane?: string
+  /** Its own column's width, a factor of the window's: beside its panes, and with none (see ThreadInfo's). */
+  width?: number; lastWidth?: number
   /** Its project: the folder it belongs to (a repository's main checkout, or where it started). */
   root?: string
   /** In no list: an extension's own thread, opened by id. */

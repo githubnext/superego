@@ -3,7 +3,7 @@
 import { randomUUID } from 'node:crypto'
 import type { ConversationId, Harness, SubmissionId } from '@earendil-works/pi-durable'
 import { InboxDoc } from '@earendil-works/pi-durable'
-import { arr, bool, consentRefused, int, lit, obj, opt, RpcError, str, union, unknown, type Json, type MachineInfo, type Pane } from '@superego/protocol'
+import { arr, bool, consentRefused, int, lit, num, obj, opt, RpcError, str, union, unknown, type Json, type MachineInfo, type Pane } from '@superego/protocol'
 import { ATTACHMENT } from './attachments.ts'
 import { defineAction } from './extension.ts'
 import type { threadFiles } from './files.ts'
@@ -171,6 +171,25 @@ export function registerCoreActions(host: Host, { harness, machine, threads, fil
         const moved = clone(panes[from]!)
         panes.splice(from, 1)
         panes.splice(at, 0, moved)
+      })
+      if (!found) throw new RpcError('not_found', `No pane ${pane}`)
+      return null
+    },
+  }))
+  router.register(defineAction({
+    id: 'pane.resize', title: 'Resize a pane', expose: ['ui', 'cli'], ...thread,
+    description: "Set how wide the thread's own column (no `pane`) or a pane's is, as a factor of the window's width (0.42): the same proportion in any window. `last`: its width while it's the last column (the thread with no panes); left as it is, that one takes the room the others leave. No `width`: back to its default.",
+    params: obj({ thread: str(), pane: opt(str()), width: opt(num({ exclusiveMinimum: 0, maximum: 1 })), last: opt(bool()) }),
+    async run({ thread: id, pane, width, last }) {
+      await threads.get(id)
+      let found = !pane
+      await threads.updateMeta(id, (meta) => {
+        const target = pane ? meta.panes?.find((p) => p.id === pane) : meta
+        if (!target) return
+        found = true
+        const key = last ? 'lastWidth' : 'width'
+        if (width === undefined) delete target[key]
+        else target[key] = width
       })
       if (!found) throw new RpcError('not_found', `No pane ${pane}`)
       return null

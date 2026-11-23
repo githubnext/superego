@@ -169,6 +169,7 @@ export function createThreads(host: Host, { harness, extensions, profiles }: { h
     ...(m.meta.profile ? { profile: m.meta.profile } : {}),
     ...extensions.modelFromOf(id, m.meta),
     ...(m.meta.panes?.length ? { panes: m.meta.panes, ...(m.meta.pane ? { pane: m.meta.pane } : {}) } : {}),
+    ...(m.meta.width !== undefined ? { width: m.meta.width } : {}), ...(m.meta.lastWidth !== undefined ? { lastWidth: m.meta.lastWidth } : {}),
     project: { root: rootOf(m), name: basename(rootOf(m)) },
     ...extensions.factsOf(id, m.meta, without),
     ...extensions.quietOf(id, m.meta, without),

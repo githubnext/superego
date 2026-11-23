@@ -44,9 +44,10 @@ export const linkTo = (thread: Pick<ThreadInfo, 'id' | 'title'>) => `[${thread.t
  * connection to a port on its loopback (forward.ts). `image-read`: the `image.read` method, and transcripts whose images
  * come without their pixels (`ImageStub`). `file-locate`: the `file.locate` method. `pane-move`: the `pane.move` action.
  * `artifact-read`: the `artifact.read` method. `model-setup`: the `setup.probe` and `model.test` methods, and
- * `auth.signIn`'s `check`. `secrets`: the `secrets.set` action, and settings of type `secret`.
+ * `auth.signIn`'s `check`. `secrets`: the `secrets.set` action, and settings of type `secret`. `pane-resize`: the
+ * `pane.resize` action, and the column widths kept with a thread (`ThreadInfo.width`, `Pane.width`).
  */
-export const FEATURES = ['thread-read', 'forward', 'image-read', 'file-locate', 'pane-move', 'artifact-read', 'model-setup', 'secrets'] as const
+export const FEATURES = ['thread-read', 'forward', 'image-read', 'file-locate', 'pane-move', 'artifact-read', 'model-setup', 'secrets', 'pane-resize'] as const
 export type Feature = (typeof FEATURES)[number]
 
 export type ThreadId = string
@@ -103,6 +104,12 @@ export type ThreadInfo = {
   panes?: Pane[]
   /** The id of the pane in front. */
   pane?: string
+  /**
+   * How wide its own column is, as the user left it (`pane.resize`): a factor of the window's width (0.42), so it's the
+   * same proportion in any window. `width` beside its panes, `lastWidth` with none (which, left as it is, takes the
+   * row). Unset: the default.
+   */
+  width?: number; lastWidth?: number
   /** The profile it runs with: one of the project's, or one of the user's. Absent: plain Superego. */
   profile?: ProfileRef
   /** The project it belongs to, on its machine: a repository (by its main checkout, worktrees included) or a folder. */
@@ -184,7 +191,15 @@ export type AgentKindMenu = {
  * it shows is its agent's choice (`pane_open`), until the user opens or changes it themselves. What would load from
  * the web on it (a page anywhere) waits for the user to say so: its address could carry what the agent read.
  */
-export type Pane = { id: string; kind: string; title?: string; params?: Json; by?: 'agent' }
+export type Pane = {
+  id: string; kind: string; title?: string; params?: Json; by?: 'agent'
+  /**
+   * How wide its column is, as the user left it (`pane.resize`), a factor of the window's width (0.42): `width` with
+   * panes after it, `lastWidth` while it's the last (which, left as it is, takes the room the others leave). Unset: its
+   * kind's default.
+   */
+  width?: number; lastWidth?: number
+}
 
 /**
  * A profile: the user's (`~/.superego/profiles/<name>`, or a profile source's `profiles/<name>`) or a project's

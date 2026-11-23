@@ -405,6 +405,23 @@ describe('record and replay', () => {
     expect(await order()).toEqual([diff.id, folder.id])
     expect((await threads(peer)).find((s) => s.id === thread.id)!.pane).toBe(diff.id)
     await expect(peer.call('pane.move', { thread: thread.id, pane: 'nope', to: 0 })).rejects.toMatchObject({ kind: 'not_found' })
+    // Resized: the thread's column and each pane's, as a factor of the window's width, a pane's apart while it's last;
+    // kept as it moves, and back to the default without a width.
+    const current = async () => (await threads(peer)).find((s) => s.id === thread.id)!
+    await peer.call('pane.resize', { thread: thread.id, width: 0.42 })
+    await peer.call('pane.resize', { thread: thread.id, width: 0.6, last: true })
+    await peer.call('pane.resize', { thread: thread.id, pane: folder.id, width: 0.3 })
+    await peer.call('pane.resize', { thread: thread.id, pane: folder.id, width: 0.25, last: true })
+    await peer.call('pane.move', { thread: thread.id, pane: folder.id, to: 0 })
+    expect(await current()).toMatchObject({ width: 0.42, lastWidth: 0.6 })
+    expect((await current()).panes?.find((p) => p.id === folder.id)).toMatchObject({ width: 0.3, lastWidth: 0.25 })
+    await peer.call('pane.resize', { thread: thread.id, pane: folder.id, last: true })
+    await peer.call('pane.resize', { thread: thread.id })
+    expect((await current()).width).toBeUndefined()
+    expect((await current()).panes?.find((p) => p.id === folder.id)).toMatchObject({ width: 0.3 })
+    expect((await current()).panes?.find((p) => p.id === folder.id)?.lastWidth).toBeUndefined()
+    await expect(peer.call('pane.resize', { thread: thread.id, pane: 'nope', width: 0.3 })).rejects.toMatchObject({ kind: 'not_found' })
+    await expect(peer.call('pane.resize', { thread: thread.id, width: 1.5 })).rejects.toBeDefined()
     await peer.call('pane.close', { thread: thread.id, pane: folder.id })
     // Params sent as a string of JSON, as models sometimes do, are kept as what they say.
     const note = await peer.call<{ params: unknown }>('pane.open', { thread: thread.id, kind: 'editor', params: '{"path": "a.md"}' })

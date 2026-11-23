@@ -665,5 +665,28 @@
       "baseUrl"
     ],
     "additionalProperties": false
+  },
+  "pane.resize": {
+    "type": "object",
+    "properties": {
+      "thread": {
+        "type": "string"
+      },
+      "pane": {
+        "type": "string"
+      },
+      "width": {
+        "type": "number",
+        "exclusiveMinimum": 0,
+        "maximum": 1
+      },
+      "last": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "thread"
+    ],
+    "additionalProperties": false
   }
 }

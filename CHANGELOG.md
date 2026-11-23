@@ -23,6 +23,8 @@
   error.
 - Coming back to a thread (from Settings, Ego's thread or another thread) shows its panes as you left them: a terminal
   pane no longer takes the focus and scrolls itself into view, and the pane you had focused keeps the focus.
+- Each thread remembers how wide you made its column and its panes, as a proportion of the window: they're kept as you
+  switch threads, resize the window, restart, or open the thread in another window or on another device.
 
 ## 0.1.10
 

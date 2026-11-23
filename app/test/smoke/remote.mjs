@@ -1,6 +1,6 @@
 // The second machine's profile UI: the thread works without it, and the window asks; it runs once allowed here, stops
 // when its sources change, and is taken out when revoked, with a reload offered. A Browser pane at its localhost, forwarded
-// here. Then Ego on each machine.
+// here, its width kept there. Then Ego on each machine.
 import { readFileSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { home, openNotice, openRow, pageAt } from './common.mjs'
@@ -20,6 +20,15 @@ export default async function remote(t, s) {
   const forwarded = await t.run(`document.querySelector('.panes__column:has(.web-view) a[aria-label="Open in browser"]').href`)
   await t.until(() => pageAt(forwarded)?.isLoading() === false && pageAt(forwarded).getTitle() === 'on second', "the second machine's page, through the forward")
   const previewPane = (await t.call('thread.list', {}, s.second)).find((x) => x.id === onSecond).panes.find((p) => p.kind === 'browser').id
+  // Its width, dragged at its end, is kept with the thread on the second machine.
+  await t.run(`(() => {
+    const gap = document.querySelector('.panes__gap:not(.panes__gap--thread)')
+    const x = gap.getBoundingClientRect().left + 4
+    gap.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, clientX: x, clientY: 300 }))
+    window.dispatchEvent(new PointerEvent('pointermove', { clientX: x - 80, clientY: 300 }))
+    window.dispatchEvent(new PointerEvent('pointerup', { clientX: x - 80, clientY: 300 }))
+  })()`)
+  await t.until(async () => (await t.call('thread.list', {}, s.second)).find((x) => x.id === onSecond).panes.find((p) => p.id === previewPane).lastWidth > 0, "the pane's width kept on the second machine")
   await t.call('pane.close', { thread: onSecond, pane: previewPane }, s.second)
   devServer.close()
   await t.until(`document.querySelector('.profile-ui-notice')?.textContent.includes('Second’s profile default has UI code')`, 'asked to allow the remote profile UI')
