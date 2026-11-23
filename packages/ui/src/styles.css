@@ -304,6 +304,7 @@ button, summary { -webkit-user-select: none; user-select: none; }
 .superego-dialog__header { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 10px 10px 16px; border-bottom: 1px solid var(--superego-border); background: var(--superego-sidebar-bg); }
 .superego-dialog__title { font-size: calc(13px * var(--superego-text-scale)); font-weight: 600; margin: 0; }
 .superego-dialog__actions { display: flex; gap: 4px; align-items: center; }
+.superego-dialog__extra { display: contents; }
 .superego-dialog__body { flex: 1; min-height: 0; overflow: auto; }
 /* A dialog's search: the field that fills its top (a picker's), borderless, a hairline under it. It wears no ring (see
    Focus below). */

@@ -663,6 +663,19 @@ code { font-family: var(--superego-mono); font-size: .92em; }
    Safari (iOS 26) samples a fixed bar at the top edge for the page's colour there and leaves out the blur it otherwise
    draws under the status bar, over whatever's at the page's top. Under it, the thread's and its panes' segmented
    control (.strip--narrow) on the same ground: --phone-top is where what's under them starts. */
+/* iOS's roles for the phone, from the theme's tokens: the grouped lists' grey ground (systemGroupedBackground: the
+   side's grey in the light, the sheet's near-black in the dark), a group's card on it (secondarySystemGroupedBackground),
+   the hairline between rows (separator), a row pressed, and a card's and the screen's corners (iOS 26's inset groups;
+   an iPhone 16 Pro's screen, as a sheet inset from its edges follows it). On the root: dialogs are drawn outside the
+   window's element. */
+:root {
+  --phone-grouped: light-dark(var(--superego-chrome), var(--superego-bg));
+  --phone-cell: var(--superego-raised);
+  --phone-separator: var(--superego-line);
+  --phone-pressed: light-dark(rgb(0 0 0 / .1), rgb(255 255 255 / .1));
+  --phone-card-radius: 22px;
+  --phone-radius: 56px;
+}
 .app { --mobilebar: calc(env(safe-area-inset-top) + 52px); --phone-strip: 0px; --phone-top: calc(var(--mobilebar) + var(--phone-strip)); }
 .app.is-narrow:has(.strip--narrow) { --phone-strip: 44px; }
 .app__mobilebar { position: fixed; z-index: 10; top: 0; left: 0; right: 0; height: var(--mobilebar); display: flex; align-items: center; gap: var(--superego-space-2); padding: env(safe-area-inset-top) max(var(--superego-space-4), env(safe-area-inset-right)) 0 max(var(--superego-space-4), env(safe-area-inset-left)); }
@@ -699,35 +712,44 @@ button.app__mobiletitle > .superego-status { font-size: 12px; }
 .app__scrim--sheet:is([data-starting-style], [data-ending-style]) { opacity: 0; }
 /* As tall as what's visible (viewport.ts): above the keyboard while the title is edited in it. */
 .app__sheet { position: fixed; inset: 0 0 auto; height: var(--superego-viewport-height, 100dvh); z-index: 31; display: flex; flex-direction: column; justify-content: flex-end; }
-.thread-sheet { max-height: calc(var(--superego-viewport-height, 100dvh) * .85); overflow: auto; overscroll-behavior: contain; outline: none; padding: var(--superego-space-2) var(--superego-space-2) calc(env(safe-area-inset-bottom) + var(--superego-space-2)); background: var(--superego-raised); border-radius: 14px 14px 0 0; box-shadow: var(--superego-shadow-float); display: flex; flex-direction: column; font-size: var(--superego-text-ui);
+.thread-sheet { max-height: calc(var(--superego-viewport-height, 100dvh) - env(safe-area-inset-top) - var(--superego-space-2)); overflow: auto; overscroll-behavior: contain; outline: none;
+  /* iOS 26's sheet at its resting height: floating, inset from the screen's edges, its corners concentric with the
+     screen's (--phone-radius, less the inset); its ground the grouped lists' grey, as glass. */
+  margin: 0 var(--superego-space-2) var(--superego-space-2); padding: 0 var(--superego-space-4) var(--superego-space-4); border-radius: calc(var(--phone-radius) - var(--superego-space-2));
+  background: color-mix(in srgb, var(--phone-grouped) 90%, transparent); -webkit-backdrop-filter: var(--superego-glass-blur); backdrop-filter: var(--superego-glass-blur);
+  box-shadow: var(--superego-glass-edge), 0 18px 60px rgb(0 0 0 / .3); display: flex; flex-direction: column; font-size: calc(17px * var(--superego-text-size));
   transform: translate3d(0, var(--drawer-swipe-movement-y, 0px), 0); transition: transform .4s cubic-bezier(.32, .72, 0, 1); will-change: transform; }
 .thread-sheet:is([data-starting-style], [data-ending-style]) { transform: translate3d(0, calc(100% + 24px), 0); }
 .thread-sheet[data-ending-style], .app__scrim--sheet[data-ending-style] { transition-duration: calc(var(--drawer-swipe-strength, 1) * 400ms); }
 .thread-sheet[data-swiping], .app__scrim--sheet[data-swiping] { transition-duration: 0s; }
-:root[data-keyboard] .thread-sheet { padding-bottom: var(--superego-space-2); }
 @media (prefers-reduced-motion: reduce) { .thread-sheet, .app__scrim--sheet { transition: none; } }
-/* A menu's: its title over a line, then its rows in groups, a line between; a row a finger high, its icon, what it says
-   and a detail at its end (thread-sheet.tsx). */
-.thread-sheet__head { padding: 6px 10px 8px; min-width: 0; }
+/* Its grabber (36 by 5, 5 under the top), its title and project in the middle, then its rows in iOS's inset groups: a
+   card each, rows 48 high in Body size, their icon, what they say and a detail at their end, hairlines between them
+   from past the icon; a group's header over it in Footnote size (thread-sheet.tsx). */
+.thread-sheet__grabber { flex: none; width: 36px; height: 5px; margin: 5px auto 0; border-radius: 3px; background: var(--superego-faint); opacity: .7; }
+.thread-sheet__head { padding: 10px 8px 14px; min-width: 0; text-align: center; }
 .thread-sheet__title { font-weight: 600; overflow: hidden; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
-.thread-sheet__field { display: block; width: calc(100% + 14px); margin: -3px -7px 2px; padding: 2px 6px; font: inherit; font-weight: 600; color: inherit; border: 1px solid var(--superego-field-edge); border-radius: 6px; background: var(--superego-field-bg); outline: none; }
+.thread-sheet__field { display: block; width: 100%; padding: 6px 12px; font: inherit; font-weight: 600; text-align: center; color: inherit; border: 0; border-radius: 12px; background: var(--phone-cell); outline: none; }
 .thread-sheet__field:focus { box-shadow: var(--superego-focus); }
-.thread-sheet__project { font-size: var(--superego-text-xs); color: var(--superego-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.thread-sheet__group { padding: 4px 0; border-top: 1px solid var(--superego-border); }
+.thread-sheet__project { margin-top: 2px; font-size: calc(13px * var(--superego-text-size)); color: var(--superego-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.thread-sheet__header { margin: 4px 16px 6px; font-size: calc(13px * var(--superego-text-size)); color: var(--superego-muted); }
+.thread-sheet__group { flex: none; margin-bottom: 20px; border-radius: var(--phone-card-radius); background: var(--phone-cell); overflow: hidden; }
+.thread-sheet__group:last-child { margin-bottom: 0; }
 .thread-sheet__group:not(:has(> :not([hidden]))) { display: none; }
-.thread-sheet__group > .superego-menu__label { margin: 4px 10px 2px; }
-.thread-sheet__item { width: 100%; min-height: 44px; padding: 0 10px; border: 0; background: none; color: inherit; font: inherit; text-align: left; -webkit-tap-highlight-color: transparent; }
-.thread-sheet__item:active:not(:disabled), .thread-sheet__item:focus-visible { background: var(--superego-hover); }
-.thread-sheet__label { flex: 1; display: flex; align-items: center; gap: 12px; }
-.thread-sheet__label > svg { flex: none; color: var(--superego-muted); }
-.thread-sheet__blank { flex: none; width: 18px; }
+.thread-sheet__item { position: relative; width: 100%; min-height: 48px; padding: 0 16px; border: 0; border-radius: 0; background: none; color: inherit; font: inherit; text-align: left; -webkit-tap-highlight-color: transparent; }
+.thread-sheet__item:active:not(:disabled), .thread-sheet__item:focus-visible { background: var(--phone-pressed); }
+.thread-sheet__group > :not([hidden]) ~ :is(.thread-sheet__item, .thread-sheet__hosted:not([hidden])) .thread-sheet__item::before,
+.thread-sheet__group > :not([hidden]) ~ .thread-sheet__item::before { content: ''; position: absolute; top: 0; right: 0; left: calc(16px + 22px + 14px); border-top: .5px solid var(--phone-separator); }
+.thread-sheet__label { flex: 1; display: flex; align-items: center; gap: 14px; }
+.thread-sheet__label > svg { flex: none; width: 22px; height: 22px; color: var(--superego-text); }
+.thread-sheet__blank { flex: none; width: 22px; }
 .thread-sheet__words { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.thread-sheet__hint { min-width: 0; max-width: 55%; font-family: inherit; font-size: var(--superego-text-sm); }
+.thread-sheet__hint { min-width: 0; max-width: 55%; font-family: inherit; font-size: calc(17px * var(--superego-text-size)); color: var(--superego-muted); }
 .thread-sheet__detail { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* What a row stands for, drawn as the title bar draws it, under the row: hidden, there for its popover to open from. */
 .thread-sheet__hosted { position: relative; }
-.thread-sheet__host { position: absolute; inset: 0; display: flex; align-items: center; padding: 0 10px; overflow: hidden; visibility: hidden; pointer-events: none; }
-.thread-sheet__beside { margin: 0 calc(-1 * var(--superego-space-2)); border-top: 1px solid var(--superego-border); }
+.thread-sheet__host { position: absolute; inset: 0; display: flex; align-items: center; padding: 0 16px; overflow: hidden; visibility: hidden; pointer-events: none; }
+.thread-sheet__beside { flex: none; margin-top: 20px; border-radius: var(--phone-card-radius); background: var(--phone-cell); overflow: hidden; }
 .thread-sheet__beside:not(:has(> .placed-view > :not(.view-menu__button, .profile-scope:empty))) { display: none; }
 .app__scrim { position: fixed; inset: 0; z-index: 20; background: rgb(0 0 0 / .3); }
 .app.is-narrow { background: var(--superego-bg); }
@@ -747,6 +769,25 @@ button.app__mobiletitle > .superego-status { font-size: 12px; }
 .app__drawer > .app__sidebar[data-ending-style], .app__scrim--drawer[data-ending-style] { transition-duration: calc(var(--drawer-swipe-strength, 1) * 400ms); }
 .app__drawer > .app__sidebar[data-swiping], .app__scrim--drawer[data-swiping] { transition-duration: 0s; }
 @media (prefers-reduced-motion: reduce) { .app__drawer > .app__sidebar, .app__scrim--drawer { transition: none; } }
+/* In it, the space reads as an iOS list (as ChatGPT's and Claude's apps slide theirs in): its name a large title (34,
+   bold), its groups' names as section headers, rows 44 high in Body size (17), the open thread a rounded fill; at its
+   foot, the other spaces and Settings as glass circles over what scrolls under them. */
+.app__drawer > .app__sidebar { width: min(86vw, 340px); padding: env(safe-area-inset-top) 10px 0 max(10px, env(safe-area-inset-left)); background: var(--phone-grouped); font-size: calc(17px * var(--superego-text-size)); }
+.app__drawer > .app__sidebar .app__drag { height: 8px; }
+.app__drawer > .app__sidebar .threads__head { height: 52px; padding: 0 0 0 8px; font-size: calc(34px * var(--superego-text-size)); font-weight: 700; letter-spacing: -.01em; color: var(--superego-text); }
+.app__drawer > .app__sidebar .threads__actions { gap: var(--superego-space-2); }
+.app__drawer > .app__sidebar :is(.threads__actions .superego-icon-button, .threads-project .threads__new) { width: 36px; height: 36px; min-height: 36px; border-radius: 50%; color: var(--superego-accent); }
+.app__drawer > .app__sidebar .threads-project { margin-top: 22px; }
+.app__drawer > .app__sidebar .threads-project__head { min-height: 32px; padding: 0 0 2px 8px; }
+.app__drawer > .app__sidebar .threads-project__name { font-size: calc(15px * var(--superego-text-size)); color: var(--superego-muted); }
+.app__drawer > .app__sidebar .superego-list-item { height: auto; min-height: 44px; padding: 0 12px; border-radius: 12px; -webkit-tap-highlight-color: transparent; }
+.app__drawer > .app__sidebar .superego-list-item:active { background: var(--phone-pressed); }
+.app__drawer > .app__sidebar .superego-list-item__trailing { font-size: calc(15px * var(--superego-text-size)); }
+.app__drawer > .app__sidebar .app__footer { margin-inline: -10px; padding: 12px 16px calc(env(safe-area-inset-bottom) + 8px); background: linear-gradient(to top, var(--phone-grouped) 60%, transparent); }
+.app__drawer > .app__sidebar .app__drawer-bar .superego-icon-button { width: 44px; height: 44px; min-height: 44px; border-radius: 50%; color: var(--superego-text);
+  background: var(--superego-glass); -webkit-backdrop-filter: var(--superego-glass-blur); backdrop-filter: var(--superego-glass-blur); box-shadow: var(--superego-glass-edge), 0 2px 10px light-dark(rgb(0 0 0 / .06), rgb(0 0 0 / .35)); }
+.app__drawer > .app__sidebar .app__drawer-bar .superego-icon-button.is-on { color: var(--superego-accent); }
+.app__drawer > .app__sidebar .app__drawer-sep { display: none; }
 /* Where a swipe from the left edge pulls it out: a strip down the thread's margin (at the start of the row of columns,
    Shell.tsx), under the composer; on a finger-sized device only (with a mouse it would only eat clicks). */
 .app__swipe-edge { display: none; position: absolute; z-index: 1; top: 0; bottom: 0; left: 0; width: var(--superego-space-4); }
@@ -780,7 +821,7 @@ button.app__mobiletitle > .superego-status { font-size: 12px; }
 .app.is-narrow .composer__send { width: 32px; height: 32px; min-height: 32px; }
 .app.is-narrow .composer__send:disabled { background: none; color: var(--superego-faint); }
 .app.is-narrow .composer__steer, .app.is-narrow .composer__unarchive { height: 32px; min-height: 32px; }
-.app.is-narrow .dock__footer:has(> .dock__footer-end:empty):not(:has(> .composer__attach)) { display: none; }
+.dock__row ~ .dock__footer:has(> .dock__footer-end:empty) { display: none; }
 /* On a phone: the status bar's actions and the queued rows' buttons get room for a finger. */
 @media (pointer: coarse) {
   .app.is-narrow .dock__footer { margin-top: 2px; }
@@ -809,6 +850,80 @@ button.app__mobiletitle > .superego-status { font-size: 12px; }
   .settings__content { padding: 8px 16px 40px; }
   .setting, .provider, .profile-row, .web-device, .web-pair { flex-wrap: wrap; }
 }
+
+/* On a phone (media.ts's NARROW), a dialog is iOS's sheet at its large detent: up from the foot, a step below the status
+   bar, its top corners round; the app behind steps back, smaller and rounded, on black, as iOS's card stack. Still as
+   tall as what's visible: it ends where the keyboard starts (viewport.ts). Its bar is iOS's: ✕ (a glass circle) at the
+   leading edge, the title in the middle in Headline size, what it does (New thread's Start) at the trailing edge,
+   tinted; no line under it. */
+@media (max-width: 599px) {
+  .superego-dialog {
+    top: calc(env(safe-area-inset-top) + 10px); height: calc(var(--superego-viewport-height, 100dvh) - env(safe-area-inset-top) - 10px) !important; max-height: none;
+    border-radius: calc(var(--phone-radius) - 18px) calc(var(--phone-radius) - 18px) 0 0; box-shadow: 0 -1px 0 light-dark(transparent, rgb(255 255 255 / .1)), 0 0 40px rgb(0 0 0 / .25);
+    transition: transform .45s cubic-bezier(.32, .72, 0, 1), opacity .2s;
+  }
+  .superego-dialog[data-starting-style], .superego-dialog[data-ending-style] { opacity: 1; transform: translateY(100%); }
+  .superego-dialog__frame { max-height: none; }
+  .superego-dialog__backdrop { background: rgb(0 0 0 / .32); }
+  :root:has(.superego-dialog) body { background: #000; }
+  :root:has(.superego-dialog) #root { transform: translateY(calc(env(safe-area-inset-top) - 6px)) scale(.92); transform-origin: top center; border-radius: calc(var(--phone-radius) - 18px); overflow: hidden; transition: transform .45s cubic-bezier(.32, .72, 0, 1), border-radius .45s; }
+  #root { transition: transform .45s cubic-bezier(.32, .72, 0, 1); }
+  .superego-dialog__header { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: var(--superego-space-2); min-height: 60px; padding: 8px max(12px, env(safe-area-inset-right)) 4px max(12px, env(safe-area-inset-left)); border-bottom: 0; background: none; }
+  .superego-dialog__title { grid-area: 1 / 2; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: center; font-size: calc(17px * var(--superego-text-size)); }
+  .superego-dialog__actions { display: contents; }
+  .superego-dialog__close { grid-area: 1 / 1; justify-self: start; }
+  .superego-dialog__extra { grid-area: 1 / 3; justify-self: end; display: flex; gap: var(--superego-space-2); }
+  .superego-dialog__header :is(.superego-dialog__close, .superego-dialog__extra > .superego-button) { height: 44px; min-height: 44px; border-radius: 999px; font-size: calc(17px * var(--superego-text-size)); -webkit-tap-highlight-color: transparent;
+    box-shadow: var(--superego-glass-edge), 0 2px 10px light-dark(rgb(0 0 0 / .06), rgb(0 0 0 / .35)); }
+  .superego-dialog__close { width: 44px; background: var(--superego-glass); color: var(--superego-text); }
+  .superego-dialog__extra > .superego-button { padding: 0 18px; font-weight: 600; }
+  .superego-dialog__extra > .superego-button:not(.superego-button--primary) { background: var(--superego-glass); }
+  /* New thread as iOS's form: the fields in inset groups on the grouped grey, a row each, its label at the leading
+     edge and its value at the trailing; the prompt a card of its own under a header; no foot (Start is in the bar). */
+  .new-thread { background: var(--phone-grouped); }
+  .new-thread__body { padding: var(--superego-space-2) var(--superego-space-4) var(--superego-space-6); gap: 22px; font-size: calc(17px * var(--superego-text-size)); }
+  .new-thread__where, .new-thread__how { display: flex; flex-direction: column; gap: 0; border-radius: var(--phone-card-radius); background: var(--phone-cell); overflow: hidden; }
+  :is(.new-thread__where, .new-thread__how) > .new-thread__field, .new-thread__body > .new-thread__field[data-field="name"] {
+    position: relative; flex-direction: row; align-items: center; gap: var(--superego-space-3); min-height: 48px; padding: 0 var(--superego-space-4); }
+  .new-thread__body > .new-thread__field[data-field="name"] { border-radius: var(--phone-card-radius); background: var(--phone-cell); }
+  :is(.new-thread__where, .new-thread__how) > .new-thread__field + .new-thread__field::before { content: ''; position: absolute; top: 0; right: 0; left: var(--superego-space-4); border-top: .5px solid var(--phone-separator); }
+  .new-thread__field > .new-thread__label { flex: none; font-size: inherit; font-weight: 400; }
+  .new-thread__field[data-field="prompt"] > .new-thread__label { margin: 0 var(--superego-space-4); font-size: calc(13px * var(--superego-text-size)); color: var(--superego-muted); }
+  .new-thread__field > :not(.new-thread__label) { flex: 1; min-width: 0; }
+  /* A value at the row's end, as iOS's menus in a form show theirs: no box, the muted value and its chevrons. */
+  :is(.new-thread__where, .new-thread__how) :is(.superego-select, .model-picker__button) { width: 100%; min-height: 44px; padding-left: 0; text-align: right; text-align-last: right; direction: ltr; border: 0; border-radius: 0; background-color: transparent; box-shadow: none; font-weight: 400; color: var(--superego-muted); }
+  .new-thread__body :is(.new-thread__folder, [data-field="name"]) .superego-field { min-height: 44px; padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; text-align: right; }
+  .new-thread__body :is(.new-thread__folder, [data-field="name"]) .superego-field:focus { outline: none; }
+  .new-thread__composer .dock__box { border-radius: var(--phone-card-radius); background: var(--phone-cell); box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
+  .new-thread__composer:focus-within .dock__box { outline: none; }
+  .new-thread__composer .composer__plus { background: var(--phone-cell); -webkit-backdrop-filter: none; backdrop-filter: none; box-shadow: none; }
+  .new-thread__composer .composer .superego-textarea { min-height: calc(3 * 22px + 6px); }
+  /* Settings as iOS's: its tabs in inset groups, each row opening its page (SettingsView.tsx); a page's sections as
+     inset groups too, the section's title over its card and its settings rows in it, a hairline between them. */
+  .settings { background: var(--phone-grouped); }
+  .superego-dialog__back { grid-area: 1 / 1; justify-self: start; display: inline-flex; align-items: center; gap: 2px; height: 44px; padding: 0 16px 0 10px; border: 0; border-radius: 999px; font: inherit; font-size: calc(17px * var(--superego-text-size)); color: var(--superego-text);
+    background: var(--superego-glass); box-shadow: var(--superego-glass-edge), 0 2px 10px light-dark(rgb(0 0 0 / .06), rgb(0 0 0 / .35)); -webkit-tap-highlight-color: transparent; }
+  .superego-dialog__header.has-back .superego-dialog__close { grid-area: 1 / 3; justify-self: end; }
+  .settings__groups { display: flex; flex-direction: column; gap: 28px; padding: var(--superego-space-2) var(--superego-space-4) var(--superego-space-6); }
+  .settings__group { display: flex; flex-direction: column; border-radius: var(--phone-card-radius); background: var(--phone-cell); overflow: hidden; }
+  .settings__row { position: relative; display: flex; align-items: center; gap: var(--superego-space-3); min-height: 48px; padding: 0 var(--superego-space-4); border: 0; background: none; font: inherit; font-size: calc(17px * var(--superego-text-size)); color: var(--superego-text); text-align: left; -webkit-tap-highlight-color: transparent; }
+  .settings__row:active { background: var(--phone-pressed); }
+  .settings__row + .settings__row::before { content: ''; position: absolute; top: 0; right: 0; left: var(--superego-space-4); border-top: .5px solid var(--phone-separator); }
+  .settings__row-label { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .settings__row > svg { flex: none; color: var(--superego-faint); }
+  .settings--list .settings__content { padding: 0 var(--superego-space-4) var(--superego-space-6); font-size: calc(17px * var(--superego-text-size)); }
+  .settings--list .settings-section h2 { margin: 26px var(--superego-space-4) 6px; font-size: calc(13px * var(--superego-text-size)); font-weight: 400; color: var(--superego-muted); }
+  .settings--list .settings-section > .settings__note { margin: 0 var(--superego-space-4) 8px; font-size: calc(13px * var(--superego-text-size)); }
+  .settings--list :is(.setting, .provider, .profile-row) { position: relative; flex-wrap: nowrap; min-height: 48px; padding: 10px var(--superego-space-4); border-bottom: 0; background: var(--phone-cell); }
+  .settings--list .setting__label { flex: 1; }
+  .settings--list :is(.setting, .provider, .profile-row):not(:is(.setting, .provider, .profile-row) + *) { border-top-left-radius: var(--phone-card-radius); border-top-right-radius: var(--phone-card-radius); }
+  .settings--list :is(.setting, .provider, .profile-row):not(:has(+ :is(.setting, .provider, .profile-row))) { border-bottom-left-radius: var(--phone-card-radius); border-bottom-right-radius: var(--phone-card-radius); }
+  .settings--list :is(.setting, .provider, .profile-row) + :is(.setting, .provider, .profile-row)::before { content: ''; position: absolute; top: 0; right: 0; left: var(--superego-space-4); border-top: .5px solid var(--phone-separator); }
+  .settings--list .setting__control .superego-select { min-height: 32px; padding-left: 0; padding-right: 22px; border-radius: 0; background-color: transparent; box-shadow: none; font-weight: 400; color: var(--superego-muted); }
+}
+/* Keys a finger has no use for: the hints at New thread's fields, its Start and the composer's Queue and Stop. A
+   keyboard brings them back (touch.ts). */
+:root[data-finger] :is(.new-thread__label, .new-thread__foot, .dock__action, .dock__pill) kbd { display: none; }
 
 .thread__tools { display: inline-flex; align-items: center; gap: var(--superego-space-2); flex: 0 1 auto; min-width: 0; }
 .thread__tools > * { flex: none; }

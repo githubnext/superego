@@ -39,7 +39,10 @@ type ShellState = {
   selection: Selection | undefined
   select(selection: Selection | undefined): void
   settingsOpen: boolean
-  openSettings(open?: boolean): void
+  /** Whether Settings was opened at a tab of its own asking (a machine's Providers), not as it was left: on a phone it
+   * then opens on that tab, not on its list of them. */
+  settingsAtTab: boolean
+  openSettings(open?: boolean, atTab?: boolean): void
   /** The tab Settings shows (see settings/tabs.ts), kept from last time. */
   settingsTarget: string
   setSettingsTarget(target: string): void
@@ -130,19 +133,19 @@ export function useShell() {
     /** Settings: at a tab (its target, see settings/tabs.ts), or as it was left. */
     openSettings: (at?: string) => {
       if (at !== undefined) setSettingsTarget(at)
-      openSettings(true)
+      openSettings(true, at !== undefined)
     },
     /** Settings, on a machine's Providers, at `provider`: to sign in to it again. */
     signIn: (machine: string, provider: string) => {
       setSettingsTarget(machine)
       focusProvider(machine, provider)
-      openSettings(true)
+      openSettings(true, true)
     },
     /** Settings, on a machine's Providers. */
     providers: (machine: string) => {
       setSettingsTarget(machine)
       focusProvider(machine, '')
-      openSettings(true)
+      openSettings(true, true)
     },
     /** The New thread dialog, optionally starting on a machine or folder. */
     newThread: (start: NewThreadStart = {}) => openNewThread(start),
@@ -156,6 +159,7 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
   const [selection, setSelection] = useLocalState<Selection | undefined>('selection', undefined)
   const [settingsOpen, setSettingsOpen] = useLocalState('settings.open', false)
   const [settingsTarget, setSettingsTarget] = useLocalState('settings.target', GENERAL)
+  const [settingsAtTab, setSettingsAtTab] = useState(false)
   const [newThread, setNewThread] = useState<NewThreadStart>()
   const [sidebarOpen, setSidebarOpen] = useLocalState('sidebar.open', true)
   const [sidebarShownTight, setSidebarShownTight] = useState(false)
@@ -264,7 +268,7 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
   const exists = (p: Place) => 'settings' in p || Boolean(hiddenAll[p.thread.machine]?.some((t) => t.id === p.thread.thread))
     || Boolean(threads[p.thread.machine]?.some((t) => t.id === p.thread.thread))
   const value = useMemo<ShellState>(() => ({
-    machines, threads, rejections, selection, settingsOpen, newThread, projects, sidebar, pins, hold, fold, lastThread, sidebarHidden: sidebarIsHidden(sidebarMode, tight), archived, hidden, hiddenAll, listed,
+    machines, threads, rejections, selection, settingsOpen, settingsAtTab, newThread, projects, sidebar, pins, hold, fold, lastThread, sidebarHidden: sidebarIsHidden(sidebarMode, tight), archived, hidden, hiddenAll, listed,
     canBack: Boolean(step(history, -1, place, exists)),
     canForward: Boolean(step(history, 1, place, exists)),
     go: (by) => {
@@ -277,7 +281,7 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
       setSelection(to.place.thread)
     },
     select: (next) => { setSettingsOpen(false); setNewThread(undefined); setSelection(next) },
-    openSettings: (open = true) => setSettingsOpen(open),
+    openSettings: (open = true, atTab = false) => { setSettingsOpen(open); setSettingsAtTab(open && atTab) },
     settingsTarget,
     setSettingsTarget,
     openNewThread: (start = {}) => setNewThread(start === false ? undefined : start),
@@ -286,7 +290,7 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
       setSidebarOpen(next.open)
       setSidebarShownTight(next.shownTight)
     },
-  }), [machines, threads, rejections, selection, settingsOpen, settingsTarget, newThread, projects, sidebar, pins, lastThread, sidebarOpen, sidebarShownTight, tight, archived, hidden, hiddenAll, history, listed])
+  }), [machines, threads, rejections, selection, settingsOpen, settingsAtTab, settingsTarget, newThread, projects, sidebar, pins, lastThread, sidebarOpen, sidebarShownTight, tight, archived, hidden, hiddenAll, history, listed])
   return (
     <Context.Provider value={value}>
       {machines.filter((m) => m.state !== 'disabled').map((m) => <MachineThreads key={m.id} machine={m} onThreads={onThreads} onHidden={onHidden} onRejections={onRejections} />)}
@@ -347,8 +351,8 @@ export function useNewThreadDialog() {
 
 /** For the shell: whether Settings is open (a pane beside the rail; a dialog on a phone), and closing it. */
 export function useSettingsDialog() {
-  const { settingsOpen, openSettings } = useShellState()
-  return { open: settingsOpen, close: () => openSettings(false) }
+  const { settingsOpen, settingsAtTab, openSettings } = useShellState()
+  return { open: settingsOpen, atTab: settingsAtTab, close: () => openSettings(false) }
 }
 
 /** For Settings: the tab it shows (its target, see settings/tabs.ts), as kept, and going to another. */

@@ -20,6 +20,7 @@ import { ComposerBox } from './composer-box.tsx'
 import { ModelPicker, withFavourites } from './model-picker.tsx'
 import { FolderField, recentFolders, type FolderFieldHandle } from './folder-field.tsx'
 import { NoModel } from './Setup.tsx'
+import { useNarrow } from './media.ts'
 
 /** The machine the last thread started from here was on. Every window's. */
 type Last = { machine?: string }
@@ -106,6 +107,7 @@ export function NewThreadDialog({ start: asked, onClose }: { start: NewThreadSta
   const [profiles, setProfiles] = useState<ProfileInfo[] | Failure>()
   const [profile, setProfile] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const narrow = useNarrow()
   /** What extensions' fields are set to, by extension. */
   const [options, setOptions] = useState<Record<string, Json>>(start.options ?? {})
   // Those the machine picked has (an optional one may be off there).
@@ -247,7 +249,9 @@ export function NewThreadDialog({ start: asked, onClose }: { start: NewThreadSta
   }
 
   return (
-    <Dialog onClose={onClose} title="New thread" size="medium" className="new-thread">
+    // On a phone, Start at the bar's trailing edge, as iOS puts a sheet's confirming action, and no foot.
+    <Dialog onClose={onClose} title="New thread" size="medium" className="new-thread"
+      actions={narrow && <Button variant="primary" className="new-thread__start" disabled={!machine || busy} onClick={() => void create()}>Start</Button>}>
       <div ref={body} className="new-thread__body" onKeyDown={onKeyDown}>
         {!machine ? <p className="new-thread__note">No machine is connected.</p> : <>
           <div className="new-thread__where">
@@ -321,10 +325,12 @@ export function NewThreadDialog({ start: asked, onClose }: { start: NewThreadSta
           </div>
         )}
       </div>
-      <footer className="new-thread__foot">
-        <Button onClick={onClose}>Cancel</Button>
-        <Button variant="primary" disabled={!machine || busy} onClick={() => void create()}>Start <kbd>{keyLabel('mod+enter')}</kbd></Button>
-      </footer>
+      {!narrow && (
+        <footer className="new-thread__foot">
+          <Button onClick={onClose}>Cancel</Button>
+          <Button variant="primary" disabled={!machine || busy} onClick={() => void create()}>Start <kbd>{keyLabel('mod+enter')}</kbd></Button>
+        </footer>
+      )}
     </Dialog>
   )
 }

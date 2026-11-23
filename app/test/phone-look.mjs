@@ -1,8 +1,8 @@
 // The phone's look, for tuning it (run by `test/look.sh <dir> phone-look`): the web build in a browser window made an
 // iPhone's (402×874 CSS px at 3×, a finger, the status bar's and home indicator's safe areas), paired by Web access to
 // this home. The drawer open; a thread with markdown, a code block and tool calls, words in the composer; the same with
-// the keyboard up; the thread's menu; the New thread sheet; the Diff pane's tab; Settings. In light and dark, into
-// $SUPEREGO_SHOWCASE_OUT as drawer-, thread-, keyboard-, menu-, new-thread-, pane- and settings-<light|dark>.png.
+// the keyboard up; the thread's menu; the New thread sheet; the Diff pane's tab; Settings' list and a page of it. In light and dark, into
+// $SUPEREGO_SHOWCASE_OUT as drawer-, thread-, answer-, keyboard-, menu-, new-thread-, pane-, settings- and settings-page-<light|dark>.png.
 import { BrowserWindow } from 'electron'
 import { writeFileSync } from 'node:fs'
 import { openApp } from './harness.mjs'
@@ -76,8 +76,14 @@ await openApp({ name: 'phone-look', timeout: 300_000 }, async (t) => {
     step(name)
     await p.run(chrome)
     await p.settled()
-    // Beyond the viewport, which makes a frame: a hidden window draws none of its own to take.
-    const { data } = await cdp.sendCommand('Page.captureScreenshot', { format: 'png', captureBeyondViewport: true })
+    // A hidden window draws a frame only now and then: asked for one and given none in a while, asked again for one
+    // beyond the viewport, which makes it draw.
+    let data
+    for (const params of [{}, { captureBeyondViewport: true }, {}, { captureBeyondViewport: true }]) {
+      data = await Promise.race([cdp.sendCommand('Page.captureScreenshot', { format: 'png', ...params }).then((r) => r.data), new Promise((resolve) => setTimeout(resolve, 3000))])
+      if (data) break
+    }
+    if (!data) t.fail(`${name}: no frame to take`)
     writeFileSync(`${process.env.SUPEREGO_SHOWCASE_OUT}/${name}.png`, Buffer.from(data, 'base64'))
   }
   const both = async (name, before) => {
@@ -134,7 +140,6 @@ await openApp({ name: 'phone-look', timeout: 300_000 }, async (t) => {
   await p.run(`document.querySelector('.app__mobilebar [aria-label="New thread"]').click()`)
   await p.until(`Boolean(document.querySelector('.new-thread .composer textarea'))`, 'the New thread sheet')
   await both('new-thread', `document.activeElement?.blur()`)
-  await p.run(`document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`)
   await p.run(`document.querySelector('.new-thread')?.closest('.superego-dialog')?.querySelector('[aria-label="Close"]')?.click()`)
   await p.until(`!document.querySelector('.new-thread')`, 'New thread closed')
   // The Diff pane, from its tab.
@@ -146,8 +151,12 @@ await openApp({ name: 'phone-look', timeout: 300_000 }, async (t) => {
   await p.run(`document.querySelector('.app__mobilebar button').click()`)
   await p.until(`!!document.querySelector('.app__drawer .app__settings')`, 'the drawer')
   await p.run(`document.querySelector('.app__drawer .app__settings').click()`)
-  await p.until(`!!document.querySelector('.settings__nav')`, 'Settings')
+  await p.until(`!!document.querySelector('.settings__groups')`, 'Settings’ list')
   await both('settings')
+  // A page of it: General's.
+  await tap('.settings__row', 'General')
+  await p.until(`!!document.querySelector('.settings--list .settings-section .setting')`, 'Settings → General')
+  await both('settings-page')
   phone.destroy()
   await run(`window.superego.call('local', 'settings.set', { key: 'web.access', value: 'off' })`)
 })

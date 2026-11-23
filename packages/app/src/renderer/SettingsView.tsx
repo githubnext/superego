@@ -1,9 +1,9 @@
 // Settings, drawn generically from what each endpoint registers: the app's own settings (on its three tabs, see
 // settings/tabs.ts) and every machine's. Sections may name a custom component (`ui`) drawn below their settings; the
 // Providers section is one.
-import { Fragment, useEffect } from 'react'
+import { Fragment, useEffect, useState, type ReactNode } from 'react'
 import type { Json, SectionInfo, SettingsSnapshot } from '@superego/protocol'
-import { BaseUI, Dialog, Glyph } from '@superego/ui'
+import { BaseUI, CaretRightIcon, Dialog, Glyph } from '@superego/ui'
 import { ACCENT, APP } from '../shared/app-settings.ts'
 import type { MachineEntry } from '../shared/bridge.ts'
 import { THEME_WINDOW } from '../shared/themes.ts'
@@ -11,14 +11,17 @@ import { useSettings, useValue } from './client.ts'
 import { Contained } from './contained.tsx'
 import { useRegistry } from './registry.tsx'
 import { settingsEntry } from './lookups.ts'
-import { COMPACT, useMedia } from './media.ts'
+import { COMPACT, useMedia, useNarrow } from './media.ts'
 import { Setting } from './settings/controls.tsx'
 import { AllMachines, machineGlyph, Machines } from './settings/machines.tsx'
 import { ALL, APP_TABS, appTab, appTarget, MACHINES, openTarget, sectionTab } from './settings/tabs.ts'
-import { useSettingsTarget } from './state.tsx'
+import { useSettingsDialog, useSettingsTarget } from './state.tsx'
 import { ThemeTools, useChosenThemes } from './themes.tsx'
 
-/** Settings: wide, a pane beside the rail (Escape goes back); on a phone, a dialog. */
+/**
+ * Settings: wide, a pane beside the rail (Escape goes back); in a small window, a dialog, its tabs across the top; on a
+ * phone, as iOS's Settings: a list of its tabs, each opening its page in the sheet, ‹ Settings going back.
+ */
 export function SettingsView({ machines, onClose, pane = false }: { machines: MachineEntry[]; onClose(): void; pane?: boolean }) {
   const [kept, setTarget] = useSettingsTarget()
   const target = openTarget(kept, machines)
@@ -42,8 +45,47 @@ export function SettingsView({ machines, onClose, pane = false }: { machines: Ma
     .filter((section) => section.ui || section.settings.some((s) => !s.hidden))
   const tabTitle = APP_TABS.find((t) => t.tab === tab)?.title
 
-  // Down the side, wide; across the top on a phone (app.css), where the arrow keys follow.
+  const content = target === MACHINES ? <Machines machines={machines} onOpen={setTarget} />
+    : target === ALL ? <AllMachines machines={editable} />
+    : !connected ? <p className="settings__note">{machine?.label} is {machine?.state}. Its settings live on it, so they show once it is back.</p>
+    : !sections ? <p className="settings__note">Loading…</p>
+    : sections.map((section) => (
+      // Its heading goes where the tab already says it (Appearance under Appearance).
+      <Section key={section.id} machine={machine} target={endpoint} section={section} values={snapshot!.values} heading={section.title !== tabTitle} />
+    ))
+
+  // On a phone: the list, or a tab's page (opened there when Settings was asked for at one).
+  const narrow = useNarrow()
+  const { atTab } = useSettingsDialog()
+  const [paged, setPaged] = useState(atTab)
+  // Down the side, wide; across the top in a small window (app.css), where the arrow keys follow.
   const across = useMedia(COMPACT)
+  if (narrow && !pane) {
+    const open = (to: string) => { setTarget(to); setPaged(true) }
+    const row = (to: string, label: ReactNode) => (
+      <button key={to} type="button" className="settings__row" onClick={() => open(to)}>
+        <span className="settings__row-label">{label}</span><CaretRightIcon size={14} weight="bold" aria-hidden />
+      </button>
+    )
+    const title = tabTitle ?? (target === MACHINES ? 'Machines' : target === ALL ? 'All machines' : machine?.label ?? 'Settings')
+    return (
+      <Dialog title={paged ? title : 'Settings'} size="large" onClose={onClose} className="settings settings--list"
+        {...(paged ? { back: { label: 'Settings', onBack: () => setPaged(false) } } : {})}>
+        {paged
+          ? <div key={target} className="settings__content">{content}</div>
+          : (
+            <nav className="settings__groups" aria-label="Settings">
+              <div className="settings__group">{APP_TABS.map((t) => row(appTarget(t.tab), t.title))}</div>
+              <div className="settings__group">
+                {row(MACHINES, 'Machines')}
+                {editable.length > 1 && row(ALL, 'All machines')}
+                {machines.filter((m) => m.state !== 'disabled').map((m) => row(m.id, <><Glyph shape={machineGlyph(m.state)} /> {m.label}</>))}
+              </div>
+            </nav>
+          )}
+      </Dialog>
+    )
+  }
   const body = (
     <BaseUI.Tabs.Root className="settings__body" orientation={across ? 'horizontal' : 'vertical'} value={target} onValueChange={(value: string) => setTarget(value)}>
       <BaseUI.Tabs.List className="settings__nav" render={<nav />}>
@@ -56,16 +98,7 @@ export function SettingsView({ machines, onClose, pane = false }: { machines: Ma
           </BaseUI.Tabs.Tab>
         ))}
       </BaseUI.Tabs.List>
-      <BaseUI.Tabs.Panel value={target} className="settings__content">
-        {target === MACHINES ? <Machines machines={machines} onOpen={setTarget} />
-          : target === ALL ? <AllMachines machines={editable} />
-          : !connected ? <p className="settings__note">{machine?.label} is {machine?.state}. Its settings live on it, so they show once it is back.</p>
-          : !sections ? <p className="settings__note">Loading…</p>
-          : sections.map((section) => (
-            // Its heading goes where the tab already says it (Appearance under Appearance).
-            <Section key={section.id} machine={machine} target={endpoint} section={section} values={snapshot!.values} heading={section.title !== tabTitle} />
-          ))}
-      </BaseUI.Tabs.Panel>
+      <BaseUI.Tabs.Panel value={target} className="settings__content">{content}</BaseUI.Tabs.Panel>
     </BaseUI.Tabs.Root>
   )
   return pane

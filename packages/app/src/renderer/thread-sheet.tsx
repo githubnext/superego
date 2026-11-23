@@ -1,5 +1,5 @@
-// A phone's thread sheet: what the title bar holds wide, as a menu up from the foot. One row each, an icon and what it
-// says (and a detail after, where there's one): the thread's own (its profile, where it came from, extensions' chips and
+// A phone's thread sheet: what the title bar holds wide, as a menu up from the foot, its rows in iOS's inset groups. One
+// row each, an icon and what it says (and a detail after, where there's one): the thread's own (its profile, where it came from, extensions' chips and
 // header views), renaming (the title at its top becomes a field), pinning and archiving, the panes to open beside it; under them, the views the layout puts beside the
 // thread, which are panels, not rows.
 import { useLayoutEffect, useRef, useState, type ComponentType, type ReactNode } from 'react'
@@ -59,6 +59,8 @@ export function ThreadSheet({ machine, thread, open, onOpenChange, handle, conta
             initialFocus={popupFocus(popup)}
             finalFocus={() => { const back = !opened.current; opened.current = false; return back }}>
             <BaseUI.Drawer.Content className="app__drawer-content">
+              {/* iOS's grabber: it drags (the whole sheet does). */}
+              <div className="thread-sheet__grabber" aria-hidden />
               <div className="thread-sheet__head">
                 {renaming
                   ? <TitleField machine={machine} thread={thread} className="thread-sheet__field" source="sheet" onEnter={close} />
@@ -99,10 +101,12 @@ export function ThreadSheet({ machine, thread, open, onOpenChange, handle, conta
                 </div>
               )}
               {kinds.length > 0 && (
-                <div className="thread-sheet__group" role="group" aria-labelledby="thread-sheet-panes">
-                  <div className="superego-menu__label" id="thread-sheet-panes">Open beside</div>
-                  {kinds.map(({ kind, title, icon }) => <SheetItem key={kind} id={`pane:${kind}`} icon={icon} onClick={() => openPane(kind)}>{title}</SheetItem>)}
-                </div>
+                <>
+                  <div className="thread-sheet__header" id="thread-sheet-panes">Open beside</div>
+                  <div className="thread-sheet__group" role="group" aria-labelledby="thread-sheet-panes">
+                    {kinds.map(({ kind, title, icon }) => <SheetItem key={kind} id={`pane:${kind}`} icon={icon} onClick={() => openPane(kind)}>{title}</SheetItem>)}
+                  </div>
+                </>
               )}
               {besides.length > 0 && <div className="thread-sheet__beside"><PlacedViews place="beside" machine={machine} thread={thread} frame={withMenuButton('beside', where)} /></div>}
             </BaseUI.Drawer.Content>
