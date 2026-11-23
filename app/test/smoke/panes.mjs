@@ -133,7 +133,8 @@ export default async function panes(t, s) {
   if (!await t.run(`Boolean(document.querySelector('.superego-menu__item[data-view="diff"]'))`)) await t.click('.thread__panes')
   await t.until(`Boolean(document.querySelector('.superego-menu__item[data-view="diff"]'))`, 'pane menu open again')
   await t.click('.superego-menu__item', 'Changes')
-  await t.until(`document.querySelector('.panes__tab')?.textContent.startsWith('Changes')`, 'pane menu opened Changes')
+  // Opened from the window, it takes the focus a frame or so after it's drawn: ⌘W closes the pane with the focus.
+  await t.until(`document.querySelector('.panes__tab.is-active')?.textContent.startsWith('Changes') && Boolean(document.activeElement?.closest('[data-column]:not([data-column="thread"])'))`, 'pane menu opened Changes, focused')
   t.key('w')
   await t.until(`!document.querySelector('.panes__tab')`, 'menu pane closed')
 
