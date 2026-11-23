@@ -5,9 +5,9 @@
 // tools for (mcp-servers: superego_mcp_servers). Any other work it hands to a new, ordinary thread (thread_start): its
 // child, so its report comes back to Ego (thread-reports), yet top-level in its project, since Ego's thread is in no
 // list. Ego names that thread, and once it reports, tells the user what it built.
-import { readdir } from 'node:fs/promises'
+import { readdir, realpath } from 'node:fs/promises'
 import { homedir } from 'node:os'
-import { basename, dirname, resolve } from 'node:path'
+import { basename, dirname, join, resolve } from 'node:path'
 import { defineExtension, defineTool } from '@earendil-works/pi-durable'
 import { createReadTool } from '@earendil-works/pi-durable/tools'
 import { listTool, readTool, type ThreadsHost } from '@superego/thread-tools/tools'
@@ -137,6 +137,14 @@ may: you don't read them.`
  * Ego's tools: they read, except those for setup, which is Ego's own to change (superego_set_setting,
  * superego_machines), and thread_start, which hands any other work to a thread.
  */
+/** `path` (absolute) with every link in it followed: of one that isn't there, those of the folders it would be in. */
+async function real(path: string): Promise<string> {
+  try { return await realpath(path) } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT' || dirname(path) === path) throw error
+    return join(await real(dirname(path)), basename(path))
+  }
+}
+
 export function egoTools({ dir, secrets = () => [], dispatch, actions, snapshot, machines, threads, refuseStart }: {
   /** Ego's own folder, the data folder: where relative paths start. */
   dir: string
@@ -160,13 +168,15 @@ export function egoTools({ dir, secrets = () => [], dispatch, actions, snapshot,
   const tools = [
     {
       ...read,
-      execute(params: { path: string }, ...rest: unknown[]) {
-        const at = folder(params.path)
-        if (dirname(at) === resolve(dir) && [...CORE_SECRETS, ...secrets()].includes(basename(at))) throw new Error(`${basename(at)} holds sign-ins and keys: not for reading here.`)
+      async execute(params: { path: string }, ...rest: unknown[]) {
+        // Where it really is, links followed (a link elsewhere to auth.json is auth.json), and that path is what's read.
+        const at = await real(folder(params.path))
+        const home = await real(resolve(dir))
+        if (dirname(at) === home && [...CORE_SECRETS, ...secrets()].includes(basename(at))) throw new Error(`${basename(at)} holds sign-ins and keys: not for reading here.`)
         // Extensions' own folders (`superego.dir`) may keep credentials no list names: none of them is read.
-        const extensions = resolve(dir, 'extensions')
+        const extensions = join(home, 'extensions')
         if (at.startsWith(`${extensions}/`)) throw new Error(`${at.slice(extensions.length + 1).split('/')[0]}'s folder is its own, and may hold its credentials: not for reading here.`)
-        return (read.execute as (...args: unknown[]) => unknown)(params, ...rest)
+        return (read.execute as (...args: unknown[]) => unknown)({ ...params, path: at }, ...rest)
       },
     } as typeof read,
     defineTool({
@@ -202,10 +212,8 @@ export function egoTools({ dir, secrets = () => [], dispatch, actions, snapshot,
       description: "Change one of this machine's settings, by its key (superego_settings lists them, with their types and choices).",
       parameters: obj({ key: str({ minLength: 1 }), value: unknown() }),
       async execute({ key, value }) {
-        // What lets outside agents or devices in is the user's consent to give (one could be asking): theirs to change.
-        const { sections } = await snapshot()
-        const section = sections.find((s) => s.settings.some((setting) => setting.key === key && setting.consent))
-        if (section) throw new Error(`Only the user changes ${key}, in Settings → ${section.title}: it's their consent to give.`)
+        // What lets outside agents or devices in is the user's consent to give (one could be asking): the router refuses
+        // it to an extension's dispatch, with a hint for the user.
         await dispatch('settings.set', { key, value: (value ?? null) as Json })
         return text(`Set ${key} to ${JSON.stringify(value ?? null)}.`)
       },

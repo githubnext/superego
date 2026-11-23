@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
@@ -15,8 +15,8 @@ const run = async (tools: readonly unknown[], name: string, params: unknown) => 
 const thread = (id: string, title: string, extra: Partial<ThreadInfo> = {}): ThreadInfo =>
   ({ id, title, cwd: '/p', createdAt: 0, activeAt: 0, project: { root: '/p', name: 'p' }, status: { state: 'idle' }, ...extra })
 
-/** What the tools run actions with: `router`'s, as the daemon gives an extension its own. */
-const on = (router: Router) => ({ dispatch: (id: string, params: unknown) => router.dispatch(id, params, {}, { source: 'ego' }), actions: router.list.bind(router) })
+/** What the tools run actions with: `router`'s, as the daemon gives an extension its own (refused the user's consent). */
+const on = (router: Router) => ({ dispatch: (id: string, params: unknown) => router.dispatch(id, params, {}, { source: 'ego', extension: 'ego' }), actions: router.list.bind(router) })
 
 describe("Ego's tools", () => {
   const snapshot = async (): Promise<SettingsSnapshot> => ({
@@ -41,7 +41,11 @@ describe("Ego's tools", () => {
       const router = createRouter()
       router.register(defineAction({ id: 'echo.say', title: 'Say', runs: 'machine', expose: ['cli'], params: obj({ text: str() }), run: ({ text }) => ({ said: text }) }))
       const set: unknown[] = []
-      router.register(defineAction({ id: 'settings.set', title: 'Set', runs: 'machine', expose: ['cli'], params: obj({ key: str(), value: unknown() }), run: (params) => { set.push(params); return null } }))
+      const consent: Record<string, string> = { 'outside.startThreads': 'Can start threads', 'web.access': 'Serve the app' }
+      router.register(defineAction({
+        id: 'settings.set', title: 'Set', runs: 'machine', expose: ['cli'], params: obj({ key: str(), value: unknown() }),
+        consentIn: ({ key }) => consent[key], run: (params) => { set.push(params); return null },
+      }))
       router.register(defineAction({ id: 'profile.list', title: 'Profiles', runs: 'machine', expose: ['cli'], params: obj({ cwd: opt(str()) }), run: ({ cwd }) => [{ name: 'default', dir: cwd }] }))
       const box: MachineEntry = { id: 'm1', label: 'box', state: 'connected', remote: { route: 'ssh me@box superego connect --start', enabled: true, ssh: true } }
       const machines: EgoMachines = { list: () => [box], add: async () => box, update: async () => box, remove: async () => {} }
@@ -53,9 +57,10 @@ describe("Ego's tools", () => {
       for (const mutating of ['write', 'edit', 'bash', 'superego_run', 'thread_send']) expect(names).not.toContain(mutating)
       expect(await text(tools, 'superego_set_setting', { key: 'agent.model', value: 'faux/faux-2' })).toBe('Set agent.model to "faux/faux-2".')
       expect(set).toEqual([{ key: 'agent.model', value: 'faux/faux-2' }])
-      // Not what records the user's consent (letting outside agents or devices in): an agent may be asking.
-      await expect(run(tools, 'superego_set_setting', { key: 'outside.startThreads', value: true })).rejects.toThrow(/Only the user changes outside.startThreads, in Settings → Outside agents/)
-      await expect(run(tools, 'superego_set_setting', { key: 'web.access', value: 'local' })).rejects.toThrow(/Only the user changes web.access, in Settings → Web access/)
+      // Not what records the user's consent (letting outside agents or devices in): an agent may be asking. The router
+      // refuses it, as it does any extension.
+      await expect(run(tools, 'superego_set_setting', { key: 'outside.startThreads', value: true })).rejects.toThrow(/Can start threads: that's the user's consent to give, not an agent's/)
+      await expect(run(tools, 'superego_set_setting', { key: 'web.access', value: 'local' })).rejects.toThrow(/Serve the app: that's the user's consent/)
       expect(set).toHaveLength(1)
       // What it reads.
       expect((await run(tools, 'superego_actions', {}) as { id: string }[]).map((a) => a.id)).toEqual(['echo.say', 'settings.set', 'profile.list'])
@@ -126,6 +131,16 @@ describe("Ego's tools", () => {
       await mkdir(join(dir, 'extensions', 'mail'), { recursive: true })
       await writeFile(join(dir, 'extensions', 'mail', 'oauth.json'), '{"refresh":"r-x"}')
       await expect(Promise.resolve().then(() => read.execute({ path: 'extensions/mail/oauth.json' }, api, { cwd: dir }))).rejects.toThrow(/mail's folder is its own/)
+      // Nor through a link to one, from anywhere.
+      const elsewhere = await mkdtemp(join(tmpdir(), 'superego-ego-link-'))
+      try {
+        await symlink(join(dir, 'auth.json'), join(elsewhere, 'notes.json'))
+        await symlink(join(dir, 'extensions', 'mail'), join(elsewhere, 'mail'))
+        await expect(Promise.resolve().then(() => read.execute({ path: join(elsewhere, 'notes.json') }, api, { cwd: dir }))).rejects.toThrow(/auth\.json holds sign-ins and keys/)
+        await expect(Promise.resolve().then(() => read.execute({ path: join(elsewhere, 'mail', 'oauth.json') }, api, { cwd: dir }))).rejects.toThrow(/mail's folder is its own/)
+      } finally {
+        await rm(elsewhere, { recursive: true, force: true })
+      }
     } finally {
       await rm(dir, { recursive: true, force: true })
     }
