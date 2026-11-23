@@ -7,34 +7,39 @@ move Superego to Applications. It updates itself after that.
 
 ## Set up a model
 
-Superego needs a model provider to run agents. On first run, the main window opens on model setup, which lists what it
-found on the computer:
+Superego needs a model to run agents. On first run, the main window opens on model setup. It also opens if a model it
+finds doesn't answer, such as a key in your environment that has been revoked. Setup lists what it found on the
+computer:
 
 - an API key in your environment or your shell's startup files, such as `OPENAI_API_KEY` in `~/.zshrc`;
 - Ollama or LM Studio running at its default address, with its models;
-- Claude Code, if it's installed and signed in. Choosing it creates a profile named `claude` whose threads run on your
-  Claude Code. Superego doesn't read or store Claude Code's sign-in.
+- Claude Code, if it's installed and signed in (experimental). Choosing it makes Claude Code the default for new
+  threads: they run on your Claude Code with a profile named `claude`. Superego doesn't read or store Claude Code's
+  sign-in. If it isn't signed in yet, run `claude`, then `/login`, and choose Check again.
 
-You can also connect a provider in one of these ways:
+You can also connect one of these ways. Each says what it needs:
 
-- Sign in with ChatGPT, GitHub Copilot or OpenRouter in your browser.
-- Paste an API key for Anthropic, OpenAI, Google or another provider. Superego sends a test request with the key before
-  saving it, so a wrong key fails at once.
-- Enter the address of a local model server that speaks the OpenAI API.
+- Sign in with ChatGPT (your ChatGPT plan), GitHub Copilot (your Copilot plan) or OpenRouter (pay as you go) in your
+  browser. Copilot signs in to github.com; for GitHub Enterprise, choose Signing in to GitHub Enterprise? under it.
+- Paste an API key. Setup tells whose key it is from the key itself, and asks only when it can't. Superego sends a test
+  request with the key before saving it, so a wrong key fails at once.
+- Enter the address of a local model server that speaks the OpenAI API, such as `localhost:11434`.
+- More providers lists every other provider, such as Amazon Bedrock, Google Vertex AI and Azure, and lets you add an
+  OpenAI-compatible endpoint of your own.
 
-Once a provider works, pick the default model and star the models you use most. Starred models come first in every
-model menu. Test sends a short request and shows the reply. Start a thread opens the New thread dialog, where you pick a
-folder and say what to work on.
+Once a provider works, setup makes its recommended model the default and sends a short test request. Pick another
+default if you like, and star the models you use most: starred models come first in every model menu. Start a thread
+opens the New thread dialog, where you pick a folder and say what to work on.
 
-To open setup again, use Set up models… in Settings → Providers or in ⌘K. Settings → Providers also lists every other
-provider, such as Amazon Bedrock, Google Vertex AI and Azure. If a message can't be sent because no model is set up, the
-message box offers Set up models… and returns you to the thread afterwards.
+To open setup again, use Set up models… in Settings → Providers or in ⌘K. If a message can't be sent because no model
+is set up, the message box offers Set up models… and returns you to the thread afterwards.
 
 ### On another machine
 
 Each machine you add in Settings → Machines runs its own agents with its own providers. Open Set up models… on that
 machine's page in Settings, or pick the machine at the top of setup. Setup then looks for keys, Ollama and Claude Code on
-that machine.
+that machine. Signing in in your browser works the same: the app catches the browser's return on this computer and
+passes it on. If it doesn't, open Browser didn't come back? and paste the address the browser ended on.
 
 ## Your first thread
 

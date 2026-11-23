@@ -4,6 +4,19 @@
 
 - On a phone, the thread list has a search field under its title: type to find a thread by its title or project,
   archived ones too, and tap one to open it.
+- Setting up a model, reworked. Each way in says what it needs (your ChatGPT or Copilot plan, pay as you go, free on
+  your computer), every other provider (Amazon Bedrock, Google Vertex AI, Azure and more) is signed in to right there in
+  setup, and you start on the provider's recommended model, not the first one by name.
+- Paste any API key in setup: it tells whose key it is and asks only when it can't, refuses something that isn't a key
+  before sending it, and says in plain words why a provider turned one down.
+- Choosing Claude Code in setup (experimental) makes it the default for new threads, so New thread starts on it.
+- On first run, a key found in your environment is tried first: one that no longer works brings you to setup instead of
+  your first message failing.
+- GitHub Copilot signs in to github.com without asking first; GitHub Enterprise is a link under it.
+- Closing a sign-in in setup stops it, so signing in with ChatGPT again works instead of saying its port is in use.
+- A local model server is added by its address as you'd write it (`localhost:11434`), its models in its own order, and
+  embedding models are no longer offered as chat models.
+- Pasting a sign-in page's address is only offered when the browser didn't come back by itself.
 - Tables in answers fit a phone: a column of text keeps a readable width, a thread named in one wraps, and a table
   too wide to fit scrolls all the way to its last column instead of cutting it off.
 - Extensions can ask for a key or token as a secret: you set it in Settings (or `superego secrets set <key>` in your own
