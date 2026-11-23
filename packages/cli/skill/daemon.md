@@ -139,7 +139,7 @@ void reconnect()
 **Where it's kept.** On a Mac, in the login keychain (`security`; a generic password whose service is
 `superego-secrets-<hash of the data folder>`, account the key). On Linux with a Secret Service (`secret-tool`, GNOME
 Keyring or KWallet), there. Where neither answers (a headless Linux machine, a daemon run with `SUPEREGO_SECRETS=file`),
-encrypted (AES-256-GCM) in `~/.superego/secrets.json` with the key in `~/.superego/secrets.key`, both 0600.
+encrypted (AES-256-GCM, each value bound to its key) in `~/.superego/secrets.json` with the key in `~/.superego/secrets.key`, both 0600.
 `secrets.json` also says which keys are set and where each is, so nothing asks the keychain to show a snapshot.
 
 **What it protects against:** agents and tools reading settings, snapshots, `superego settings` or the data folder

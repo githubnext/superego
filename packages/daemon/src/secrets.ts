@@ -4,7 +4,8 @@
 // Where a value goes, tried in order as it's set:
 //   - the OS keychain: macOS's (`security`), or the Secret Service on Linux (`secret-tool`, libsecret), when there is one
 //     and it answers;
-//   - else `<dataDir>/secrets.json`, encrypted (AES-256-GCM) with a key in `<dataDir>/secrets.key`, both 0600: the
+//   - else `<dataDir>/secrets.json`, encrypted (AES-256-GCM, each value bound to its key as additional data, so entries
+//     can't be swapped) with a key in `<dataDir>/secrets.key`, both 0600: the
 //     headless Linux case, and a daemon told to keep secrets in its data folder (`secrets: 'file'`, `<ID>_SECRETS=file`).
 // `secrets.json` is also the index: each key set, and where its value is. So whether a key is set is known without
 // touching the keychain, and a key keeps reading from where it went even if a keychain appears or goes later.
@@ -207,7 +208,7 @@ export class FileSecretStore implements SecretStore {
     if (cached !== undefined) return cached
     const at = this.#changes.get(key) ?? 0
     let value: string | undefined
-    if (entry.in === 'file') value = await this.#decrypt(entry)
+    if (entry.in === 'file') value = await this.#decrypt(key, entry)
     else {
       if (!this.#keychain || this.#keychain.name !== entry.in) throw new Error(`The secret ${key} is in the ${entry.in}, which this daemon doesn't use: set it again`)
       value = await this.#keychain.get(key)
@@ -237,7 +238,7 @@ export class FileSecretStore implements SecretStore {
             }
           }
         }
-        entry ??= await this.#encrypt(value)
+        entry ??= await this.#encrypt(key, value)
       }
       const secrets = { ...this.#index.secrets }
       if (entry) secrets[key] = entry
@@ -283,16 +284,19 @@ export class FileSecretStore implements SecretStore {
     return this.#key()
   }
 
-  async #encrypt(value: string): Promise<Entry> {
+  /** `value`, encrypted for `key` alone: its key is the cipher's additional data, so no other key's entry reads it. */
+  async #encrypt(key: string, value: string): Promise<Entry> {
     const iv = randomBytes(12)
     const cipher = createCipheriv('aes-256-gcm', await this.#keyToEncrypt(), iv)
+    cipher.setAAD(Buffer.from(key, 'utf8'))
     const data = Buffer.concat([cipher.update(value, 'utf8'), cipher.final()])
     return { in: 'file', iv: iv.toString('base64'), tag: cipher.getAuthTag().toString('base64'), data: data.toString('base64') }
   }
 
-  async #decrypt(entry: Extract<Entry, { in: 'file' }>): Promise<string> {
+  async #decrypt(key: string, entry: Extract<Entry, { in: 'file' }>): Promise<string> {
     try {
       const decipher = createDecipheriv('aes-256-gcm', await this.#key(), Buffer.from(entry.iv, 'base64'))
+      decipher.setAAD(Buffer.from(key, 'utf8'))
       decipher.setAuthTag(Buffer.from(entry.tag, 'base64'))
       return Buffer.concat([decipher.update(Buffer.from(entry.data, 'base64')), decipher.final()]).toString('utf8')
     } catch (error) {

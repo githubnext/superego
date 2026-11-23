@@ -59,6 +59,18 @@ it("says a secret in the file can't be read once its key is gone, and makes no n
   expect(await new FileSecretStore({ app, dataDir: dir, where: 'file' }).get('mail.token')).toBe('fmu1-anew')
 })
 
+it("reads a secret in the file only under its own key: entries swapped in secrets.json don't read", async () => {
+  const store = new FileSecretStore({ app, dataDir: dir, where: 'file' })
+  await store.set('mail.token', 'fmu1-mail')
+  await store.set('chat.token', 'fmu1-chat')
+  const index = JSON.parse(await readFile(join(dir, 'secrets.json'), 'utf8'))
+  const { 'mail.token': mail, 'chat.token': chat } = index.secrets
+  await writeFile(join(dir, 'secrets.json'), JSON.stringify({ ...index, secrets: { 'mail.token': chat, 'chat.token': mail } }))
+  const swapped = new FileSecretStore({ app, dataDir: dir, where: 'file' })
+  await expect(swapped.get('mail.token')).rejects.toThrow(/can't be read .*set it again/)
+  await expect(swapped.get('chat.token')).rejects.toThrow(/can't be read .*set it again/)
+})
+
 it('puts a secret in the keychain when it takes it, and takes it out when it goes elsewhere or is cleared', async () => {
   const keychain = fakeKeychain()
   const store = new FileSecretStore({ app, dataDir: dir, keychain })
