@@ -258,25 +258,28 @@ export class FileSecretStore implements SecretStore {
         }
       }
     })
+    // The next change waits for this one, failed or not: its failure is the caller's, through `work`.
     this.#queue = work.catch(() => {})
     return work
   }
 
   #check() { if (this.#broken) throw new Error(this.#broken) }
 
-  /** The file's key: made the first time a secret goes in the file, 0600, and kept. */
-  async #key(): Promise<Buffer> {
-    const read = async () => Buffer.from((await readFile(this.keyPath, 'utf8')).trim(), 'base64')
-    try { return await read() } catch (error) {
+  /** The file's key, as it is. */
+  async #key(): Promise<Buffer> { return Buffer.from((await readFile(this.keyPath, 'utf8')).trim(), 'base64') }
+
+  /** The file's key to encrypt with: made the first time a secret goes in the file, 0600, and kept. */
+  async #keyToEncrypt(): Promise<Buffer> {
+    try { return await this.#key() } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
     }
     await writeOnce(this.keyPath, randomBytes(32).toString('base64') + '\n')
-    return read()
+    return this.#key()
   }
 
   async #encrypt(value: string): Promise<Entry> {
     const iv = randomBytes(12)
-    const cipher = createCipheriv('aes-256-gcm', await this.#key(), iv)
+    const cipher = createCipheriv('aes-256-gcm', await this.#keyToEncrypt(), iv)
     const data = Buffer.concat([cipher.update(value, 'utf8'), cipher.final()])
     return { in: 'file', iv: iv.toString('base64'), tag: cipher.getAuthTag().toString('base64'), data: data.toString('base64') }
   }

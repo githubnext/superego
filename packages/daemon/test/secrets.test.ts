@@ -47,6 +47,18 @@ it('keeps a secret encrypted in the data folder when there is no keychain, only 
   expect(await again.get('mail.token')).toBeUndefined()
 })
 
+it("says a secret in the file can't be read once its key is gone, and makes no new key reading it", async () => {
+  const store = new FileSecretStore({ app, dataDir: dir, where: 'file' })
+  await store.set('mail.token', 'fmu1-hush-hush')
+  await rm(join(dir, 'secrets.key'))
+  const again = new FileSecretStore({ app, dataDir: dir, where: 'file' })
+  await expect(again.get('mail.token')).rejects.toThrow(/can't be read with .*secrets\.key.*set it again/)
+  await expect(stat(join(dir, 'secrets.key'))).rejects.toMatchObject({ code: 'ENOENT' })
+  // Set again, it's read again.
+  await again.set('mail.token', 'fmu1-anew')
+  expect(await new FileSecretStore({ app, dataDir: dir, where: 'file' }).get('mail.token')).toBe('fmu1-anew')
+})
+
 it('puts a secret in the keychain when it takes it, and takes it out when it goes elsewhere or is cleared', async () => {
   const keychain = fakeKeychain()
   const store = new FileSecretStore({ app, dataDir: dir, keychain })
