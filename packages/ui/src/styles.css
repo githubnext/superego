@@ -142,8 +142,9 @@
   --superego-window-radius: 16px;
   --superego-shadow-float: 0 0 0 .5px light-dark(rgb(0 0 0 / .1), rgb(0 0 0 / .6)), 0 16px 40px -10px light-dark(rgb(0 0 0 / .22), rgb(0 0 0 / .5)), 0 2px 8px light-dark(rgb(0 0 0 / .06), rgb(0 0 0 / .2));
   /* Glass (macOS's Liquid Glass, as a page can draw it): what floats over the content and works it (menus, popovers,
-     the composer) is a translucent sheet that blurs what's under it, lit along its top edge. */
-  --superego-glass: light-dark(rgb(250 250 252 / .86), rgb(44 44 48 / .84));
+     the composer) is a translucent sheet that blurs what's under it, lit along its top edge. Its tint is what's raised
+     (a theme's, with the window matching it). */
+  --superego-glass: light-dark(color-mix(in srgb, var(--superego-raised) 86%, transparent), color-mix(in srgb, var(--superego-raised) 84%, transparent));
   --superego-glass-edge: inset 0 .5px 0 light-dark(rgb(255 255 255 / .95), rgb(255 255 255 / .16)), 0 0 0 .5px light-dark(rgb(0 0 0 / .1), rgb(255 255 255 / .1));
   --superego-glass-blur: blur(24px) saturate(1.8);
 }
