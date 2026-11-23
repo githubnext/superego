@@ -35,10 +35,6 @@
 .app__rail[data-tab="settings"] .app__rail-button.is-on { color: var(--superego-muted); background: none; }
 .app__rail[data-tab="settings"] .app__settings { color: var(--superego-accent); background: var(--superego-selected); }
 .app__rail :is(.app__rail-button, .app__settings) svg { width: 17px; height: 17px; }
-/* Between the rail and the list beside it in the panel, a hairline, short of the panel's ends. */
-.app:not(.is-narrow):is(:has(.app__sidebar:not(:empty)), :has(.settings--pane)) .app__rail::after {
-  content: ''; position: absolute; top: 4px; bottom: 18px; right: 0; width: 1px; background: var(--superego-line); pointer-events: none;
-}
 /* The notices, wide (rail-notice.tsx): above Settings, a quiet icon with a dot in its tone; quiet (put off), no dot.
    Opened, all it says in a popover beside the rail. */
 .rail-notice { position: relative; display: grid; place-items: center; width: 30px; height: 30px; padding: 0; border: 0; border-radius: 8px; background: none; color: var(--superego-muted); -webkit-app-region: no-drag; }
@@ -1054,15 +1050,18 @@ a.pane-header__url:hover { color: var(--superego-link); }
    then, so nothing moves, and outside what's in it, which it clips, so nothing paints over it. Nothing inside a region
    wears a ring of its own, but a small control reached from the keyboard (see @superego/ui's styles). */
 .panes:not(.panes--narrow) > .panes__column:focus-within { --column-ring: var(--superego-region-ring); }
-.app:not(.is-narrow):has(.app__sidebar:focus-within) { --side-ring: var(--superego-region-ring); }
-.app__sidebar:focus-within .superego-list-item.is-selected { background: color-mix(in srgb, var(--superego-accent) 16%, transparent); }
+/* The sidebar's only once it's worked from the keyboard (:focus-visible): a click in it hands the focus on (a thread
+   opened takes it to its prompt), and its ring would show for the moment between the press and that. */
+.app:not(.is-narrow):has(.app__sidebar :focus-visible) { --side-ring: var(--superego-region-ring); }
+.app:not(.is-narrow) .app__sidebar:has(:focus-visible) .superego-list-item.is-selected,
+.app.is-narrow .app__sidebar:focus-within .superego-list-item.is-selected { background: color-mix(in srgb, var(--superego-accent) 16%, transparent); }
 .app.is-narrow .app__sidebar, .panes--narrow > .panes__column { border: 2px solid transparent; }
 :is(.app.is-narrow .app__sidebar, .panes--narrow > .panes__column):focus-within { border-color: var(--superego-ring); }
 /* None while a finger works it (touch.ts): what's tapped is where you are. A mouse or a keyboard brings it back, on a
    phone or an iPad too. */
 :root[data-finger] :is(.app, .panes > .panes__column) { --column-ring: 0 0 #0000; --side-ring: 0 0 #0000; }
 :root[data-finger] :is(.app__sidebar, .panes > .panes__column) { border-color: transparent; }
-:root[data-finger] .app__sidebar .superego-list-item.is-selected { background: var(--superego-selected); }
+:root[data-finger] .app .app__sidebar .superego-list-item.is-selected { background: var(--superego-selected); }
 
 /* Over the row: a tab for the thread and each pane (the focused one tinted, those out of view faint, with which way
    they are), the row in small, and + for another pane. */

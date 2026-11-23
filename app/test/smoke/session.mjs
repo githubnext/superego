@@ -162,11 +162,26 @@ export default async function session(t, s) {
   await t.until(`document.querySelector('.thread__title')?.textContent === 'elsewhere'`, 'back to a listed thread')
   await t.until(`Boolean(document.querySelector('.app__sidebar .superego-list-item.is-selected')) && ${threadsTab}.classList.contains('is-on')`, 'the sidebar back, Threads in front')
 
+  // A thread's row pressed with the mouse: the sidebar takes the focus, and hands it on to the thread opened, without
+  // wearing its ring in between.
+  const sideRing = `getComputedStyle(document.querySelector('.app')).getPropertyValue('--side-ring').trim()`
+  {
+    const at = await t.run(`(() => { const r = document.querySelector('.app__sidebar .superego-list-item:not(.is-selected)').getBoundingClientRect(); return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) } })()`)
+    t.contents().sendInputEvent({ type: 'mouseDown', button: 'left', clickCount: 1, ...at })
+    await t.until(`document.activeElement?.matches('.app__sidebar .superego-list-item')`, 'a row pressed: the focus in the sidebar')
+    if (await t.run(sideRing)) t.fail('a row pressed with the mouse: the sidebar ringed')
+    t.contents().sendInputEvent({ type: 'mouseUp', button: 'left', clickCount: 1, ...at })
+    await t.until(`document.activeElement?.matches('.composer textarea') && document.querySelector('.thread__title')?.textContent !== 'elsewhere'`, 'a row clicked: the focus on to its thread')
+    await t.run(`[...document.querySelectorAll('.app__sidebar .superego-list-item')].find((li) => li.textContent.includes('elsewhere')).click()`)
+    await t.until(`document.querySelector('.thread__title')?.textContent === 'elsewhere'`, 'back to the thread before')
+  }
+
   // Focus: ⌘⌥← from the prompt goes to the sidebar, on the selected thread; ↓ moves along it; ⌘⌥→ comes back to the
   // thread itself; ⌃I goes to the prompt from anywhere, and esc leaves it for the thread. Wherever it is, it's drawn.
   await t.run(`document.querySelector('.composer textarea').focus()`)
   t.key('Left', ['meta', 'alt'])
   await t.until(`document.activeElement?.matches('.app__sidebar .superego-list-item.is-selected')`, 'focus to the sidebar, on the selected thread')
+  await t.until(sideRing, 'the sidebar ringed, reached from the keyboard')
   const ring = await t.run(`getComputedStyle(document.activeElement).outlineStyle`)
   t.key('Down', [])
   await t.until(`document.activeElement?.matches('.app__sidebar .superego-list-item:not(.is-selected)')`, 'down the sidebar')
