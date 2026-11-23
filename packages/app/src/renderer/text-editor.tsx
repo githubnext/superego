@@ -8,7 +8,7 @@ import { history, historyKeymap, redo, standardKeymap, undo } from '@codemirror/
 import { markdown as markdownSupport, markdownLanguage } from '@codemirror/lang-markdown'
 import { foldGutter, HighlightStyle, LanguageDescription, syntaxHighlighting } from '@codemirror/language'
 import { languages } from '@codemirror/language-data'
-import { Annotation, Compartment, type Extension } from '@codemirror/state'
+import { Annotation, Compartment, EditorState, type Extension } from '@codemirror/state'
 import { drawSelection, EditorView, highlightActiveLine, highlightActiveLineGutter, highlightSpecialChars, keymap, lineNumbers, placeholder as placeholderText } from '@codemirror/view'
 import { closeSearchPanel, findNext, findPrevious, openSearchPanel } from '@codemirror/search'
 import { tags } from '@lezer/highlight'
@@ -53,6 +53,8 @@ export type TextEditorProps = {
   onProblem?(problem: string): void
   /** Shown while it's empty. */
   placeholder?: string
+  /** Read, not edited (the text gone from where it was kept, say): `value` still goes in. */
+  readOnly?: boolean
   /** Below the text, scrolling with it: a note's backlinks, say. */
   children?: ReactNode
 }
@@ -117,7 +119,7 @@ function goToLine(view: EditorView, line: number, scroller: HTMLElement | null) 
 
 /** Text to edit (see the top of this file). */
 export function TextEditor({
-  value, onChange, revision = 0, markdown, mode = 'live', path, line, place, links = {}, images, onSave, onProblem, placeholder, children,
+  value, onChange, revision = 0, markdown, mode = 'live', path, line, place, links = {}, images, onSave, onProblem, placeholder, readOnly = false, children,
 }: TextEditorProps) {
   const isMarkdown = markdown ?? (path ? isMarkdownPath(path) : true)
   /** The editor in live preview: shown, or kept behind the rendered text. */
@@ -131,6 +133,8 @@ export function TextEditor({
   const modeSlot = useRef(new Compartment())
   const languageSlot = useRef(new Compartment())
   const darkSlot = useRef(new Compartment())
+  const readOnlySlot = useRef(new Compartment())
+  const readOnlyOf = (on: boolean) => [EditorState.readOnly.of(on), EditorView.editable.of(!on)]
   const registry = useRegistry()
   // What its callbacks are now, for the editor made once.
   const latest = useRef({ onChange, onSave, onProblem, links, place })
@@ -174,6 +178,7 @@ export function TextEditor({
         modeSlot.current.of(modeExtensions(live)),
         languageSlot.current.of([]),
         darkSlot.current.of(EditorView.darkTheme.of(darkRef.current)),
+        readOnlySlot.current.of(readOnlyOf(readOnly)),
         // What comes in from outside (the agent's edit, say) flashes as it arrives.
         arrivals(fromOutside),
         EditorView.updateListener.of((update) => {
@@ -236,6 +241,8 @@ export function TextEditor({
     const mine = editor.state.doc.toString()
     if (mine !== value) editor.dispatch({ changes: minimalChange(mine, value), annotations: fromOutside.of(true) })
   }, [value, revision])
+
+  useEffect(() => { view.current?.dispatch({ effects: readOnlySlot.current.reconfigure(readOnlyOf(readOnly)) }) }, [readOnly])
 
   // Asked for another line.
   useEffect(() => { if (line && view.current) goToLine(view.current, line, scroller.current) }, [line])
