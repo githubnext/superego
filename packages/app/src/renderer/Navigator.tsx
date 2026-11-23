@@ -6,16 +6,14 @@
 import { Fragment, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { ArchiveIcon, autoFocusOnOpen, Dialog, PushPinIcon, StatusGlyph } from '@superego/ui'
 import { unread, type Status, type ThreadInfo } from '@superego/protocol'
-import { score } from './score.ts'
+import { listArchived, search, threadPath, type ArchivedThreads } from './thread-search.ts'
 import { useRegistry } from './registry.tsx'
 import { paneTitle, shownPanes } from './lookups.ts'
 import { useMachines, useSelection, useProjects } from './state.tsx'
 import { showProject } from './actions.tsx'
 import type { Project } from './projects.ts'
 import { focusColumn } from './focus.ts'
-import { call } from './client.ts'
 import { keyLabel } from './keys.ts'
-import type { MachineEntry } from '../shared/bridge.ts'
 
 type Kind = 'project' | 'thread' | 'pane'
 type Row = {
@@ -45,9 +43,6 @@ type Row = {
   go(): void
 }
 
-/** The archived threads, each machine's (or why it couldn't say). */
-type Archived = { threads: { machine: MachineEntry; thread: ThreadInfo }[]; failed: { machine: MachineEntry; message: string }[] }
-
 const KINDS: Record<string, Kind> = { p: 'project', t: 'thread', g: 'pane' }
 const FILTERS: { kind: Kind; label: string; keys: string }[] = [
   { kind: 'project', label: 'Projects', keys: 'ctrl+p' }, { kind: 'thread', label: 'Threads', keys: 'ctrl+t' }, { kind: 'pane', label: 'Panes', keys: 'ctrl+g' },
@@ -64,21 +59,6 @@ export function navigatorToggle(event: Pick<KeyboardEvent, 'key' | 'code' | 'ctr
   return undefined
 }
 
-/** Every connected machine's archived threads, newest first; a machine that fails says so. */
-async function listArchived(machines: MachineEntry[]): Promise<Archived> {
-  const answers = await Promise.all(machines.filter((m) => m.state === 'connected').map((machine) =>
-    call<ThreadInfo[]>(machine.id, 'thread.list', { archived: true }).then(
-      (list) => ({ machine, list }),
-      (error: unknown) => {
-        console.error(`Listing ${machine.label}'s archived threads`, error)
-        return { machine, message: error instanceof Error ? error.message : String(error) }
-      })))
-  return {
-    threads: answers.flatMap((a) => 'list' in a ? a.list.map((thread) => ({ machine: a.machine, thread })) : []).sort((a, b) => b.thread.activeAt - a.thread.activeAt),
-    failed: answers.flatMap((a) => 'message' in a ? [{ machine: a.machine, message: a.message }] : []),
-  }
-}
-
 export function Navigator({ onClose }: { onClose(): void }) {
   const registry = useRegistry()
   const machines = useMachines()
@@ -87,7 +67,7 @@ export function Navigator({ onClose }: { onClose(): void }) {
   const [query, setQuery] = useState('')
   const [only, setOnly] = useState<Kind>()
   const [withArchived, setWithArchived] = useState(false)
-  const [archived, setArchived] = useState<Archived>()
+  const [archived, setArchived] = useState<ArchivedThreads>()
   const dispatch = registry.router.dispatch
   // Asked the first time they're shown, then kept while the navigator's open.
   const asked = useRef(false)
@@ -119,7 +99,7 @@ export function Navigator({ onClose }: { onClose(): void }) {
         {
           key, kind: 'thread', depth, title: thread.title, status: thread.status, quiet: Boolean(thread.quiet), unread: unread(thread), pinned, again,
           ...(detail ? { detail } : {}),
-          path: `${project.name} ${thread.title}`, current: isOn && !thread.pane,
+          path: threadPath(project.name, thread.title), current: isOn && !thread.pane,
           go: go(() => {
             show()
             if (thread.pane) void dispatch('pane.focus', { thread: thread.id }, { machine: project.machine.id, source: 'navigator' })
@@ -140,7 +120,7 @@ export function Navigator({ onClose }: { onClose(): void }) {
     const archivedRows = (withArchived ? archived?.threads ?? [] : []).map(({ machine, thread }): Row => ({
       key: `archived:${machine.id}/${thread.id}`, kind: 'thread', depth: 0, title: thread.title, archived: true, group: 'Archived',
       detail: [thread.project.name, several || machine.id !== 'local' ? machine.label : undefined].filter(Boolean).join(' · '),
-      path: `${thread.project.name} ${thread.title}`, current: machine.id === selection?.machine && thread.id === selection.thread,
+      path: threadPath(thread.project.name, thread.title), current: machine.id === selection?.machine && thread.id === selection.thread,
       // As the sidebar's Archived does: shown, read only, to unarchive from its title bar.
       go: go(() => void dispatch('thread.select', { machine: machine.id, thread: thread.id }, { source: 'navigator' })),
     }))
@@ -162,9 +142,7 @@ export function Navigator({ onClose }: { onClose(): void }) {
   const shown = useMemo(() => {
     const kept = rows.filter((r) => !only || r.kind === only)
     if (!query.trim()) return kept
-    // The archived after the rest, however well they match.
-    return kept.filter((row) => !row.again).map((row) => ({ row, rank: score(row.path, query) })).filter(({ rank }) => rank > 0)
-      .sort((a, b) => Number(Boolean(a.row.archived)) - Number(Boolean(b.row.archived)) || b.rank - a.rank).map(({ row }) => row)
+    return search(kept.filter((row) => !row.again), query)
   }, [rows, query, only])
 
   const [active, setActive] = useState(() => Math.max(0, rows.findIndex((r) => r.current)))

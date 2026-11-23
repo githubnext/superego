@@ -76,6 +76,7 @@ export { StopIcon } from '@phosphor-icons/react/dist/csr/Stop'
 export { TerminalIcon } from '@phosphor-icons/react/dist/csr/Terminal'
 export { WrenchIcon } from '@phosphor-icons/react/dist/csr/Wrench'
 export { XIcon } from '@phosphor-icons/react/dist/csr/X'
+export { XCircleIcon } from '@phosphor-icons/react/dist/csr/XCircle'
 export type { Icon, IconProps, IconWeight } from '@phosphor-icons/react'
 
 /**

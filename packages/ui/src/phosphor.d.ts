@@ -93,3 +93,4 @@ declare module '@phosphor-icons/react/dist/csr/Terminal' { export const Terminal
 declare module '@phosphor-icons/react/dist/csr/Warning' { export const WarningIcon: import('@phosphor-icons/react').Icon }
 declare module '@phosphor-icons/react/dist/csr/Wrench' { export const WrenchIcon: import('@phosphor-icons/react').Icon }
 declare module '@phosphor-icons/react/dist/csr/X' { export const XIcon: import('@phosphor-icons/react').Icon }
+declare module '@phosphor-icons/react/dist/csr/XCircle' { export const XCircleIcon: import('@phosphor-icons/react').Icon }

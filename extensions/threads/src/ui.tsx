@@ -8,19 +8,20 @@
 //   pointed at; ⌃T puts the keyboard in it, on the selected thread's row (and again, back in the prompt). A row's title is followed by other extensions' marks (the `thread.badge` slot: a worktree's branch,
 //   say); a right-click on it pins or unpins it, or archives it. Pinned rows are dragged to reorder them, and a
 //   project's row dragged among them is pinned there. Pointed at or focused for a moment, a row (or a rail's dot) shows
-//   a card of its thread (card.tsx)
+//   a card of its thread (card.tsx). On a phone, a search field under its title narrows it to the threads that match,
+//   archived ones too, as ⌘L finds them
 // - details (`threads.details`): what the thread runs with, spent and touched, then what other extensions say of it (the
 //   `details.section` slot: its MCP servers, say); beside it or not, ⌘I
 // - the model (`threads.model`), in the title bar: its provider's mark, a button that shows or hides the details, and
 //   pointed at, a card of the model (whose it is, its thinking, whose choice, what the thread has spent)
 // It also draws the thread tools' rows and `thread:` links (rows.tsx); the tools themselves are thread-tools'.
-import { Fragment, useEffect, useMemo, useState, type CSSProperties, type DragEvent, type KeyboardEvent } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type KeyboardEvent } from 'react'
 import {
-  call, defineAction, defineUiExtension, fold, isPinned, MachineDrift, shownRows, useFold, RailButton, SHOW_PINNED, showProject, Slot, SORT, unreadList, useAppSetting, useDispatch, useLocalState, useMachines, usePlacement, useSelection, useProjects, useThreadView, useShell, useShortcut, useRailShortcut,
-  type MachineEntry, type Pin, type Project, type ShownRow, type ShownSection, type Sort, type SpaceRailProps, type WindowContext,
+  call, defineAction, defineUiExtension, fold, isPinned, listArchived, MachineDrift, search, shownRows, threadPath, useFold, useNarrow, RailButton, SHOW_PINNED, showProject, Slot, SORT, unreadList, useAppSetting, useDispatch, useLocalState, useMachines, usePlacement, useSelection, useProjects, useThreadView, useShell, useShortcut, useRailShortcut,
+  type ArchivedThreads, type MachineEntry, type Pin, type Project, type ShownRow, type ShownSection, type Sort, type SpaceRailProps, type WindowContext,
 } from '@superego/app/ui'
 import { rollup, statusLabel, statusShape, unread, type ThreadInfo } from '@superego/protocol'
-import { CaretRightIcon, ChatsIcon, ContextMenu, DotsThreeIcon, Glyph, HOVER_DELAY, HoverCard, IconButton, List, ListItem, Menu, PlusIcon, ProviderMark, providerOf, PushPinIcon, SparkleIcon, StatusGlyph, StatusWord, Tooltip, TooltipProvider } from '@superego/ui'
+import { CaretRightIcon, ChatsIcon, ContextMenu, DotsThreeIcon, Glyph, HOVER_DELAY, HoverCard, IconButton, List, ListItem, MagnifyingGlassIcon, Menu, PlusIcon, ProviderMark, providerOf, PushPinIcon, SparkleIcon, StatusGlyph, StatusWord, Tooltip, TooltipProvider, XCircleIcon } from '@superego/ui'
 import './styles.css'
 import { ago } from './ago.ts'
 import { ThreadCard } from './card.tsx'
@@ -86,6 +87,25 @@ function Threads() {
     : several || project.machine.id !== 'local' ? project.machine.label : undefined
   const local = machines.find((m) => m.id === 'local')
   const ready = local?.state === 'connected'
+  // On a phone, a search field under the title, as iOS lists have one: typed in, the list is the threads that match,
+  // as ⌘L finds them (thread-search.ts), the archived after the rest (asked of each machine the first time it's
+  // focused, for as long as the drawer's open).
+  const narrow = useNarrow()
+  const [query, setQuery] = useState('')
+  const [archived, setArchived] = useState<ArchivedThreads>()
+  const asked = useRef(false)
+  const askArchived = () => {
+    if (asked.current) return
+    asked.current = true
+    void listArchived(machines).then(setArchived)
+  }
+  const found = useMemo(() => search([
+    ...projects.flatMap((project) => project.threads.map((thread) => ({ machine: project.machine, thread, project, path: threadPath(project.name, thread.title), title: thread.title }))),
+    ...(archived?.threads ?? [])
+      .filter(({ machine, thread }) => !projects.some((p) => p.machine.id === machine.id && p.threads.some((t) => t.id === thread.id)))
+      .map(({ machine, thread }) => ({ machine, thread, archived: true, path: threadPath(thread.project.name, thread.title), title: thread.title })),
+  ], query), [projects, archived, query])
+  const searching = narrow && query.trim() !== ''
 
   return (
     <div className={`threads ${ready ? 'is-ready' : ''}`} data-focus-scope onPointerEnter={() => hold(true)} onPointerLeave={() => hold(false)}>
@@ -97,6 +117,13 @@ function Threads() {
           <NewThreadButton label="New thread…" />
         </span>
       </div>
+      {narrow && projects.length > 0 && (
+        <SearchField query={query} onQuery={setQuery} onFocus={askArchived}
+          onGo={() => { const first = found[0]; if (first) select({ machine: first.machine.id, thread: first.thread.id }) }} />
+      )}
+      {searching
+        ? <Found query={query} found={found} archived={archived} where={(project) => [project.name, where(project)].filter(Boolean).join(' · ')} />
+        : <>
       {projects.length === 0 && <div className="threads__empty">{ready ? 'Start a thread in a folder to see its project here.' : local?.state === 'connecting' || !local?.error ? 'Connecting…' : local.error}</div>}
       {sidebar.pinned.length > 0 && <Pinned section={shown.pinned} where={(project) => [project.name, where(project)].filter(Boolean).join(' · ')} />}
       {shown.projects.map(({ project, ...section }) => (
@@ -121,7 +148,79 @@ function Threads() {
         </section>
       ))}
       <Archived machines={machines} live={projects} />
+      </>}
     </div>
+  )
+}
+
+/**
+ * The phone's search field, as iOS draws one: a rounded, filled field with a magnifier and "Search"; typed in, a clear
+ * button (×) at its end; while it's in use, Cancel beside it, which empties it and puts the keyboard away. Enter (the
+ * keyboard's Search) opens the first match; Escape is Cancel. Always shown, under the title: iOS hides a list's field
+ * until it's pulled down, but the drawer is short, and a field that's always there is one a reach finds.
+ */
+function SearchField({ query, onQuery, onFocus, onGo }: { query: string; onQuery(query: string): void; onFocus(): void; onGo(): void }) {
+  const input = useRef<HTMLInputElement>(null)
+  const [focused, setFocused] = useState(false)
+  const active = focused || query !== ''
+  const cancel = () => { onQuery(''); setFocused(false); input.current?.blur() }
+  // Pressed, the buttons leave the keyboard where it is: the field keeps the focus until they've done their work.
+  const keepFocus = (event: { preventDefault(): void }) => event.preventDefault()
+  return (
+    <div className={`threads-search ${active ? 'is-active' : ''}`}>
+      <label className="threads-search__field">
+        <MagnifyingGlassIcon className="threads-search__glass" size={17} weight="bold" aria-hidden />
+        <input ref={input} type="search" className="threads-search__input" placeholder="Search" aria-label="Search threads" value={query}
+          enterKeyHint="search" autoComplete="off" autoCorrect="off" autoCapitalize="off" spellCheck={false}
+          onFocus={() => { setFocused(true); onFocus() }} onBlur={() => setFocused(false)} onChange={(event) => onQuery(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') { event.preventDefault(); onGo() }
+            // Escape cancels the search, not the drawer.
+            else if (event.key === 'Escape' && active) { event.preventDefault(); event.stopPropagation(); cancel() }
+          }} />
+        {query && (
+          <button type="button" className="threads-search__clear" aria-label="Clear" onMouseDown={keepFocus}
+            onClick={() => { onQuery(''); input.current?.focus() }}><XCircleIcon size={17} weight="fill" aria-hidden /></button>
+        )}
+      </label>
+      {active && <button type="button" className="threads-search__cancel" onMouseDown={keepFocus} onClick={cancel}>Cancel</button>}
+    </div>
+  )
+}
+
+type Match = { machine: MachineEntry; thread: ThreadInfo; project?: Project; archived?: boolean }
+
+/**
+ * What a search found, best first: the threads in use as the list has them, saying where each is; then the archived,
+ * under their heading, to open read only. Nothing found, iOS's empty search: no results, and what was searched for.
+ */
+function Found({ query, found, archived, where }: { query: string; found: Match[]; archived: ArchivedThreads | undefined; where(project: Project): string }) {
+  const { selection } = useSelection()
+  const live = found.filter((match) => !match.archived)
+  const put = found.filter((match) => match.archived)
+  return (
+    <section className="threads-found" aria-label="Search results">
+      {live.length > 0 && (
+        <List>
+          {live.map(({ machine, thread, project }) => (
+            <ThreadRow key={`${machine.id}/${thread.id}`} machine={machine} thread={thread} where={where(project!)}
+              selected={selection?.machine === machine.id && selection.thread === thread.id} />
+          ))}
+        </List>
+      )}
+      {put.length > 0 && (
+        <div className="threads-archived is-open">
+          <div className="threads-found__head">Archived</div>
+          <List>{put.map(({ machine, thread }) => <ArchivedRow key={`${machine.id}/${thread.id}`} machine={machine} thread={thread} />)}</List>
+        </div>
+      )}
+      {archived?.failed.map(({ machine, message }) => (
+        <div key={machine.id} className="threads__empty threads-archived__error" role="alert">Couldn’t search {machine.label}’s archived threads: {message}</div>
+      ))}
+      {found.length === 0 && (archived
+        ? <div className="threads-found__none" role="status"><strong>No Results for “{query.trim()}”</strong>Check the spelling or try a new search.</div>
+        : <div className="threads-found__none" role="status">Searching…</div>)}
+    </section>
   )
 }
 
@@ -320,7 +419,6 @@ function GoKeys() {
  */
 function Archived({ machines, live }: { machines: MachineEntry[]; live: Project[] }) {
   const [open, setOpen] = useLocalState('threads.archived.open', false)
-  const { selection, select } = useSelection()
   const [threads, setThreads] = useState<{ machine: MachineEntry; thread: ThreadInfo }[]>()
   // The machines that couldn't say theirs, and why: said where the list is, the rest listed.
   const [failed, setFailed] = useState<{ machine: MachineEntry; error: string }[]>([])
@@ -356,17 +454,22 @@ function Archived({ machines, live }: { machines: MachineEntry[]; live: Project[
         ? !failed.length && <div className="threads__empty">Nothing archived.</div>
         : (
           <List>
-            {(threads ?? []).map(({ machine, thread }) => (
-              <ListItem key={`${machine.id}/${thread.id}`} trailing={ago(thread.activeAt)}
-                selected={selection?.machine === machine.id && selection.thread === thread.id}
-                onClick={() => select({ machine: machine.id, thread: thread.id })}>
-                <span className="threads-archived__title">{thread.title}</span>
-                <em className="threads-archived__where">{thread.project.name}{machine.id !== 'local' ? ` · ${machine.label}` : ''}</em>
-              </ListItem>
-            ))}
+            {(threads ?? []).map(({ machine, thread }) => <ArchivedRow key={`${machine.id}/${thread.id}`} machine={machine} thread={thread} />)}
           </List>
         ))}
     </section>
+  )
+}
+
+/** An archived thread's row: its title, where it was, when it was last active; picked, shown read only. */
+function ArchivedRow({ machine, thread }: { machine: MachineEntry; thread: ThreadInfo }) {
+  const { selection, select } = useSelection()
+  return (
+    <ListItem trailing={ago(thread.activeAt)} selected={selection?.machine === machine.id && selection.thread === thread.id}
+      onClick={() => select({ machine: machine.id, thread: thread.id })}>
+      <span className="threads-archived__title">{thread.title}</span>
+      <em className="threads-archived__where">{thread.project.name}{machine.id !== 'local' ? ` · ${machine.label}` : ''}</em>
+    </ListItem>
   )
 }
 

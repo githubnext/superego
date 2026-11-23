@@ -13,6 +13,7 @@ export { fold, groupProjects, shownRows, SORT, unreadList, type PinnedThread, ty
 export { isPinned, SHOW_PINNED, type Pin } from './pins.ts'
 export { useLocalState } from './local-state.ts'
 export { score } from './score.ts'
+export { listArchived, search, threadPath, type ArchivedThreads, type Searchable } from './thread-search.ts'
 export { channel, useThreadView } from './client.ts'
 export type { BridgeChannel } from '../shared/bridge.ts'
 export { askText, thisComputer } from '../shared/site-permissions.ts'

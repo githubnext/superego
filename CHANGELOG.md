@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- On a phone, the thread list has a search field under its title: type to find a thread by its title or project,
+  archived ones too, and tap one to open it.
 - Tables in answers fit a phone: a column of text keeps a readable width, a thread named in one wraps, and a table
   too wide to fit scrolls all the way to its last column instead of cutting it off.
 - Extensions can ask for a key or token as a secret: you set it in Settings (or `superego secrets set <key>` in your own

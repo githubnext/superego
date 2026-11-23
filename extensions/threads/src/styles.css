@@ -82,6 +82,23 @@
 .threads-details dd { margin: 0; overflow-wrap: anywhere; }
 .threads-details__file { font: var(--superego-text-sm)/1.7 var(--superego-mono); overflow-wrap: anywhere; }
 
+/* The phone's search field, under the drawer's title (only there): iOS's, a capsule of the fill with a magnifier and
+   "Search", a clear button at its end once typed in, and Cancel beside it while it's in use. */
+.threads-search { display: flex; align-items: center; gap: 12px; margin: 2px 0 6px 2px; }
+.threads-search__field { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; height: 36px; padding: 0 8px 0 10px; border-radius: 999px; background: var(--phone-fill); color: var(--superego-muted); cursor: text; }
+.threads-search__glass { flex: none; }
+.threads-search__input { flex: 1; min-width: 0; height: 100%; padding: 0; border: 0; outline: none; background: none; color: var(--superego-text); font: inherit; font-size: calc(17px * var(--superego-text-size)); -webkit-appearance: none; appearance: none; }
+.threads-search__input::placeholder { color: var(--superego-muted); }
+.threads-search__input::-webkit-search-cancel-button, .threads-search__input::-webkit-search-decoration { display: none; -webkit-appearance: none; }
+.threads-search__clear { flex: none; display: grid; place-items: center; width: 28px; height: 28px; margin-right: -4px; padding: 0; border: 0; background: none; color: var(--superego-faint); -webkit-tap-highlight-color: transparent; }
+.threads-search__cancel { flex: none; height: 36px; padding: 0 2px; border: 0; background: none; color: var(--superego-accent); font: inherit; font-size: calc(17px * var(--superego-text-size)); -webkit-tap-highlight-color: transparent; }
+.threads-search__cancel:active { opacity: .5; }
+/* What it found: the rows as the list's, the archived under their heading; nothing, iOS's empty search, in the middle. */
+.threads-found { margin-top: 8px; }
+.threads-found__head { padding: 0 0 2px 8px; min-height: 32px; display: flex; align-items: center; font-size: calc(15px * var(--superego-text-size)); font-weight: 600; color: var(--superego-muted); }
+.threads-found__none { display: grid; gap: 6px; justify-items: center; padding: 72px 24px; text-align: center; font-size: calc(15px * var(--superego-text-size)); color: var(--superego-muted); }
+.threads-found__none strong { font-size: calc(20px * var(--superego-text-size)); font-weight: 700; color: var(--superego-text); overflow-wrap: anywhere; }
+
 /* Archived: one list across projects and machines, closed at the end of the sidebar. */
 .threads-archived { margin-top: 14px; }
 .threads-archived__head { display: flex; align-items: center; gap: 6px; width: 100%; border: 0; background: none; padding: 0 8px; min-height: 24px; font: inherit; font-size: var(--superego-text-sm); font-weight: 400; color: var(--superego-faint); text-align: left; cursor: default; }

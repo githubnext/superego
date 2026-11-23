@@ -1,9 +1,9 @@
 // The phone's look, for tuning it (run by `test/look.sh <dir> phone-look`): the web build in a browser window made an
 // iPhone's (402×874 CSS px at 3×, a finger, the status bar's and home indicator's safe areas), paired by Web access to
 // this home. The drawer open (its rows' states dressed on their way to the phone: one working on a branch of its own,
-// one asking, one done, the rest quiet at their times); a thread with markdown, a code block and tool calls, words in the composer; the same with
+// one asking, one done, the rest quiet at their times); its search in use, empty, with matches and with none, the keyboard up; a thread with markdown, a code block and tool calls, words in the composer; the same with
 // the keyboard up; the thread's menu; the New thread sheet; the Diff pane's tab; Settings' list and a page of it. In light and dark, into
-// $SUPEREGO_SHOWCASE_OUT as drawer-, thread-, answer-, keyboard-, menu-, new-thread-, pane-, settings- and settings-page-<light|dark>.png.
+// $SUPEREGO_SHOWCASE_OUT as drawer-, search-empty-, search-results-, search-none-, thread-, answer-, keyboard-, menu-, new-thread-, pane-, settings- and settings-page-<light|dark>.png.
 import { BrowserWindow } from 'electron'
 import { writeFileSync } from 'node:fs'
 import { openApp } from './harness.mjs'
@@ -37,6 +37,9 @@ await openApp({ name: 'phone-look', timeout: 300_000 }, async (t) => {
   for (const title of ['Group spending by category', 'Retry the bank sync with backoff', 'Reconcile the ledger against the bank’s monthly CSV statements']) {
     await run(`window.superego.call('local', 'thread.start', { cwd: ${JSON.stringify(project)}, title: ${JSON.stringify(title)} })`)
   }
+  // One put away, for the drawer's search to find among the archived.
+  const put = await run(`window.superego.call('local', 'thread.start', { cwd: ${JSON.stringify(project)}, title: 'Import the bank’s CSV export' })`)
+  await run(`window.superego.call('local', 'thread.archive', { thread: '${put.id}' })`)
   const id = ids[0]
   for (const each of ids) await run(`window.superego.call('local', 'thread.seen', { thread: '${each}' })`)
   await run(`window.superego.call('local', 'pane.open', { thread: '${id}', kind: 'diff' })`)
@@ -133,6 +136,37 @@ await openApp({ name: 'phone-look', timeout: 300_000 }, async (t) => {
   await p.run(`document.querySelector('.app__mobilebar button').click()`)
   await p.until(`[...document.querySelectorAll('.app__sidebar .superego-list-item')].some((li) => li.textContent.includes('Group spending'))`, 'the drawer, its threads')
   await both('drawer')
+  // Its search: focused with the keyboard up (the field where it was, not slid away), empty; then typed, with matches
+  // (the archived among them); then with none.
+  const field = `document.querySelector('.app__drawer .threads-search__input')`
+  const fieldTop = () => p.run(`Math.round(${field}.getBoundingClientRect().top)`)
+  const typeIn = (text) => `(() => {
+    const input = ${field}
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, ${JSON.stringify(text)})
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+  })()`
+  const before = await fieldTop()
+  await cdp.sendCommand('Emulation.setFocusEmulationEnabled', { enabled: true })
+  await p.run(`${field}.focus()`)
+  await p.until(`Boolean(document.querySelector('.app__drawer .threads-search__cancel'))`, 'the search field in use')
+  await metrics(PHONE.height - KEYBOARD)
+  await p.until(`document.documentElement.hasAttribute('data-keyboard')`, 'the keyboard up over the drawer')
+  const after = await fieldTop()
+  if (after !== before) t.fail(`the search field moved with the keyboard up: ${before} → ${after}`)
+  await p.run(`document.getElementById('phone-home')?.remove()`)
+  await both('search-empty')
+  await p.run(typeIn('bank'))
+  await p.until(`document.querySelectorAll('.app__drawer .threads-found .superego-list-item').length >= 3`, 'the matches')
+  await both('search-results')
+  await p.run(typeIn('zebra'))
+  await p.until(`Boolean(document.querySelector('.app__drawer .threads-found__none strong'))`, 'nothing found')
+  await both('search-none')
+  await p.run(`document.querySelector('.app__drawer .threads-search__cancel').click()`)
+  await p.until(`!document.querySelector('.app__drawer .threads-search__cancel')`, 'the search put away')
+  await cdp.sendCommand('Emulation.setFocusEmulationEnabled', { enabled: false })
+  await metrics(PHONE.height)
+  await p.until(`!document.documentElement.hasAttribute('data-keyboard')`, 'the keyboard down')
+  await p.run(`document.getElementById('phone-chrome')?.remove()`)
   // A thread: a task opened with its tool calls (an edit, a command), the answer's code block under it; words in the composer.
   await p.run(`[...document.querySelectorAll('.app__sidebar .superego-list-item')].find((li) => li.textContent.includes(${JSON.stringify(title)}.slice(0, 12))).click()`)
   await p.until(`!document.querySelector('.app__drawer') && document.querySelectorAll('.transcript .msg').length >= 2`, 'the thread')

@@ -119,7 +119,14 @@ theme still colours the phone.
 
 - iOS 26: search sits in a capsule field (36 high, tertiary fill, a magnifier) in the bar, or at the foot of the
   screen within thumb's reach.
-- Superego: the phone has no search of its own yet (⌘K and ⌘L are the keyboard's). Not added; noted as a question.
+- iOS hides a list's search field under its large title until the list is pulled down, and shows it again at the top.
+  While in use, a clear button (×) at its end once typed in, and Cancel beside it; nothing found, "No Results for
+  '…'" in the middle of the list.
+- Superego: the drawer has the field under its "Threads" title, shown all the time rather than pulled down for: the
+  pull would have to start the list scrolled past the field, fight the drawer's own swipes and the keyboard's sliding
+  of the page, and isn't found by anyone who doesn't know it's there; the list can spare the field's 36 points. Typed in, the list is the threads that match, as ⌘L finds them (one search: thread-search.ts, a thread's
+  project and title, best first), the archived after the rest; Cancel and × as iOS's. Focused, the keyboard comes up
+  without moving it; the drawer ends at the keyboard and puts its foot away (viewport.ts).
 
 ### Toolbars and tab bars
 

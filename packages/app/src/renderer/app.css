@@ -665,7 +665,7 @@ code { font-family: var(--superego-mono); font-size: .92em; }
    control (.strip--narrow) on the same ground: --phone-top is where what's under them starts. */
 /* iOS's roles for the phone, from the theme's tokens: the grouped lists' grey ground (systemGroupedBackground: the
    side's grey in the light, the sheet's near-black in the dark), a group's card on it (secondarySystemGroupedBackground),
-   the hairline between rows (separator), a row pressed, and a card's and the screen's corners (iOS 26's inset groups;
+   the hairline between rows (separator), a row pressed, a search field's fill (tertiarySystemFill), and a card's and the screen's corners (iOS 26's inset groups;
    an iPhone 16 Pro's screen, as a sheet inset from its edges follows it). On the root: dialogs are drawn outside the
    window's element. */
 :root {
@@ -673,6 +673,7 @@ code { font-family: var(--superego-mono); font-size: .92em; }
   --phone-cell: var(--superego-raised);
   --phone-separator: var(--superego-line);
   --phone-pressed: light-dark(rgb(0 0 0 / .1), rgb(255 255 255 / .1));
+  --phone-fill: light-dark(rgb(118 118 128 / .12), rgb(118 118 128 / .24));
   --phone-card-radius: 22px;
   --phone-radius: 56px;
 }
@@ -758,7 +759,10 @@ button.app__mobiletitle > .superego-status { font-size: 12px; }
 /* The drawer (Base UI's, see Shell.tsx): the sidebar out from the left over a scrim. Under a finger it follows the
    swipe (`--drawer-swipe-movement-x`, the scrim `--drawer-swipe-progress`); let go, it slides the rest of the way, the
    quicker the flick, the quicker. */
-.app__drawer { position: fixed; inset: 0; z-index: 21; display: flex; }
+/* As tall as what's visible: with the keyboard up (its search field focused), it ends at the keyboard, its foot put away
+   for the rows (viewport.ts). */
+.app__drawer { position: fixed; inset: 0 0 auto; height: var(--superego-viewport-height, 100dvh); z-index: 21; display: flex; }
+:root[data-keyboard] .app__drawer .app__footer { display: none; }
 /* Base UI's mark for what's pressed, not dragged, in a drawer or sheet (Shell.tsx): no box of its own. */
 .app__drawer-content { display: contents; }
 .app__drawer > .app__sidebar { width: min(85vw, 320px); height: 100%; margin: 0; border-radius: 0; background: var(--superego-sidebar-bg); box-shadow: var(--superego-shadow-float); padding-top: env(safe-area-inset-top); outline: none; overscroll-behavior: contain;
