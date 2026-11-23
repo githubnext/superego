@@ -117,18 +117,19 @@ export function fromVsCode(json: unknown, fallbackName: string): ImportedTheme {
     const colour = keys.map((key) => colors[key]).find(isColor)
     if (colour) terminal[role] = colour
   }
+  // The workbench's: the first of `keys` given. A transparent one (`#00000000`, often a border turned off) says nothing.
+  const workbench = (keys: string[]) => keys.map((key) => colors[key]).find((c) => isColor(c) && !/^#([0-9a-f]{3}0|[0-9a-f]{6}00)$/i.test(c)) as string | undefined
   const ui: Theme['ui'] = {}
   for (const [role, keys] of Object.entries(UI_KEYS) as [UiRole, string[]][]) {
-    // A transparent one (`#00000000`, often a border turned off) says nothing.
-    const colour = keys.map((key) => colors[key]).find((c) => isColor(c) && !/^#([0-9a-f]{3}0|[0-9a-f]{6}00)$/i.test(c))
-    if (colour) ui[role] = colour as string
+    const colour = workbench(keys)
+    if (colour) ui[role] = colour
   }
   if (!Object.keys(syntax).length && !Object.keys(terminal).length) throw new Error('No colours found: neither tokenColors nor terminal colours')
   const type = theme.type
   const appearance: Appearance = type === 'light' || type === 'hcLight' ? 'light' : type === 'dark' || type === 'hc' ? 'dark' : appearanceOf(terminal.bg)
   const name = typeof theme.name === 'string' && theme.name.trim() ? theme.name.trim() : fallbackName
   // The accent: its primary buttons'.
-  const accent = [colors['button.background']].find(isColor)
+  const accent = workbench(['button.background'])
   return {
     name, appearance, ...(Object.keys(syntax).length ? { syntax } : {}), ...(Object.keys(terminal).length ? { terminal } : {}),
     ...(Object.keys(ui).length ? { ui } : {}), ...(accent ? { accent } : {}),

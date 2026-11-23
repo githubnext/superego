@@ -534,7 +534,7 @@ export function createExtensionHost(host: Host, later: { profiles(): ProfileHost
         if (made) return made
         const dir = extensionDir(extension.name)
         mkdirSync(dir, { recursive: true, mode: 0o700 })
-        // Made before with other permissions (by hand, an older build): only the user's, as it says.
+        // Already there with other permissions (made by hand, say): only the user's, as it says.
         chmodSync(dir, 0o700)
         return made = dir
       },

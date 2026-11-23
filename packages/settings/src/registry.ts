@@ -318,14 +318,17 @@ export class SettingsRegistry {
     for (const section of this.#sections.values()) {
       const settings = section.settings.map((spec): SettingInfo => {
         const disabled = spec.disabled?.()
+        const secret = isSecret(spec)
+        const note = secret ? this.#secrets!.about?.(spec.key) : undefined
+        const problem = this.#problems.get(spec.key)
         return {
-          ...resolveType(spec), key: spec.key, title: spec.title, default: isSecret(spec) ? false : spec.default,
+          ...resolveType(spec), key: spec.key, title: spec.title, default: secret ? false : spec.default,
           ...(spec.description ? { description: spec.description } : {}),
           ...(disabled ? { disabled } : {}),
           ...(spec.hidden?.() ? { hidden: true } : {}),
-          ...(spec.consent || isSecret(spec) ? { consent: true as const } : {}),
-          ...(isSecret(spec) && this.#secrets?.about?.(spec.key) ? { note: this.#secrets.about(spec.key)! } : {}),
-          ...(this.#problems.has(spec.key) ? { problem: this.#problems.get(spec.key)! } : {}),
+          ...(spec.consent || secret ? { consent: true as const } : {}),
+          ...(note ? { note } : {}),
+          ...(problem ? { problem } : {}),
         }
       })
       const data = await section.data?.()

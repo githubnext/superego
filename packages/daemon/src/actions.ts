@@ -181,7 +181,6 @@ export function registerCoreActions(host: Host, { harness, machine, threads, fil
     description: "Set how wide the thread's own column (no `pane`) or a pane's is, as a factor of the window's width (0.42): the same proportion in any window. `last`: its width while it's the last column (the thread with no panes); left as it is, that one takes the room the others leave. No `width`: back to its default.",
     params: obj({ thread: str(), pane: opt(str()), width: opt(num({ exclusiveMinimum: 0, maximum: 1 })), last: opt(bool()) }),
     async run({ thread: id, pane, width, last }) {
-      await threads.get(id)
       let found = !pane
       await threads.updateMeta(id, (meta) => {
         const target = pane ? meta.panes?.find((p) => p.id === pane) : meta
