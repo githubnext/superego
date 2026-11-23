@@ -61,11 +61,14 @@ import type { ExtensionAbout } from './app.ts'
  * 5.8: the daemon half's `secrets` (`get`, `onChange`: the values of its `secret` settings, a setting type that keeps
  * them in the machine's secret store, which only the user sets) and `dir` (its own folder in the data folder);
  * 'superego/testing''s `setSecret`.
+ * 5.9: the `onboarding` slot's `use({ label, detail, model })`: your kind of agent's model (`<kind>/<model>`), made the
+ * machine's default (the model setting may name another kind's model; new threads given none start on it). `use` still
+ * takes `{ label, detail, profile }`, making that profile's kind's first model the default.
  * Minor: something added (an extension that uses it asks for `^3.<minor>`); major: something an extension could rely
  * on changed or went, from 2.5 on without exception. An extension whose `api` range this doesn't satisfy is refused
  * when it's set up.
  */
-export const EXTENSION_API = '5.8.0'
+export const EXTENSION_API = '5.9.0'
 
 /** What a machine says of an extension set up there: `hello.extensions` and `features.changed` carry one each. */
 export type ExtensionManifest = Pick<ExtensionAbout, 'name' | 'version' | 'api'>

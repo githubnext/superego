@@ -3,7 +3,7 @@
 import type { ExtensionAbout, Json } from '@superego/protocol'
 
 export const about = {
-  name: 'claude-agent', version: '0.4.0', api: '^5.7', title: 'Claude Agent',
+  name: 'claude-agent', version: '0.4.0', api: '^5.9', title: 'Claude Agent',
   description: 'Runs your Claude Code, in threads started on its models or with a profile that picks it (agent: \'claude-agent\').',
 } satisfies ExtensionAbout
 
