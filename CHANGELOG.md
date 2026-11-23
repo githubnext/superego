@@ -7,6 +7,9 @@
 - **Upgrade (extension authors):** a `string` setting's `secret: true`, which only masked the field, is gone, and a
   setting that still has it is refused. Make it `type: { type: 'secret' }` under the same key: its value moves into
   the keychain.
+- **Upgrade (extension authors):** three CSS tokens are gone, and styles that use them fall back to nothing:
+  `--superego-composer` (use `--superego-glass`, the composer's now), and `--superego-rail-bg` and
+  `--superego-rail-tab` (use `--superego-chrome`: the rail is part of the side panel).
 - Setting up a model, reworked. Each way in says what it needs (your ChatGPT or Copilot plan, pay as you go, free on
   your computer), every other provider (Amazon Bedrock, Google Vertex AI, Azure and more) is signed in to right there in
   setup, and you start on the provider's recommended model, not the first one by name.
