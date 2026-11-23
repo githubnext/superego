@@ -28,6 +28,7 @@ import { codeHighlight } from './code-highlight.ts'
 import { folderOf } from './markdown-html.ts'
 import { linkAt, livePreview } from './live-markdown.ts'
 import { arrivals } from './arrivals.ts'
+import { useAppDark } from './appearance.ts'
 import { filePath } from './short-path.ts'
 import { ImageFile, isImageFile } from './image-file.tsx'
 
@@ -152,6 +153,13 @@ function TextEditor({ machine, thread, path, line, actions, children, onOpenFile
     : [lineNumbers(), highlightActiveLineGutter(), foldGutter(), highlightActiveLine(), syntaxHighlighting(codeHighlight), ...(isMarkdown ? [markdown({ base: markdownLanguage, codeLanguages: languages })] : [])]
   // Any other file's language, once loaded.
   const languageSlot = useRef(new Compartment())
+  // Light or dark as the window is, for CodeMirror's own styles (the active line and its number, the cursor, the
+  // selection, the search panel): told, or it draws its light ones whatever the window.
+  const dark = useAppDark()
+  const darkSlot = useRef(new Compartment())
+  const darkRef = useRef(dark)
+  darkRef.current = dark
+  useEffect(() => { view.current?.dispatch({ effects: darkSlot.current.reconfigure(EditorView.darkTheme.of(dark)) }) }, [dark])
 
   const save = async () => {
     clearTimeout(timer.current)
@@ -205,6 +213,7 @@ function TextEditor({ machine, thread, path, line, actions, children, onOpenFile
           EditorView.lineWrapping,
           modeSlot.current.of(modeExtensions(live)),
           languageSlot.current.of([]),
+          darkSlot.current.of(EditorView.darkTheme.of(darkRef.current)),
           // What the agent (or anyone) changes on disk flashes as it arrives.
           arrivals(fromDisk),
           EditorView.updateListener.of((update) => {

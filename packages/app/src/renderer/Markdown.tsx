@@ -16,6 +16,7 @@ import { ImageFrame, imageSourceOf, loadWebImages, onImageChange, onWeb, useWebI
 import { Lightbox } from './lightbox.tsx'
 import { CheckIcon, CopyIcon } from '@superego/ui'
 import { copyText } from './copy-text.ts'
+import { useAppDark } from './appearance.ts'
 import { useOptionalRegistry } from './registry.tsx'
 import { linkHandler, linkSchemes } from './lookups.ts'
 import { Claimed, LinkPlace, WIKILINK, wikilinks } from './links.tsx'
@@ -136,20 +137,6 @@ function Highlighted({ code, name, className }: { code: string; name: string; cl
   )
 }
 
-/** Whether the app is dark: its own color-scheme if it sets just one, else the system's. */
-function appDark() {
-  const scheme = getComputedStyle(document.documentElement).colorScheme
-  const dark = /\bdark\b/.test(scheme), light = /\blight\b/.test(scheme)
-  return dark !== light ? dark : matchMedia('(prefers-color-scheme: dark)').matches
-}
-function watchTheme(changed: () => void) {
-  const query = matchMedia('(prefers-color-scheme: dark)')
-  query.addEventListener('change', changed)
-  const observer = new MutationObserver(changed)
-  observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class', 'style', 'data-theme'] })
-  return () => { query.removeEventListener('change', changed); observer.disconnect() }
-}
-const useAppDark = () => useSyncExternalStore(watchTheme, appDark, () => false)
 
 type ImageProps = { src?: string; srcSet?: string; alt?: string; title?: string; width?: string | number; height?: string | number }
 
