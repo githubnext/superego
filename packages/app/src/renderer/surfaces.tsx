@@ -2,7 +2,7 @@
 // profile's `superego.surface`: a notes page, a canvas), each with the thread docked to it: a column beside it, or a
 // card over its right side (`agent: 'floating'`). Which thread is docked to which surface is the window's (state.tsx);
 // with none, the column asks what to start one with.
-import { useState } from 'react'
+import { useState, type CSSProperties } from 'react'
 import type { ThreadInfo } from '@superego/protocol'
 import { ArrowSquareOutIcon, Button, ChatCircleIcon, IconButton, StatusGlyph, TextArea, XIcon } from '@superego/ui'
 import type { MachineEntry } from '../shared/bridge.ts'
@@ -16,6 +16,9 @@ import { useAllThreads, useMachines, useSelection, useSurface } from './state.ts
 import { ThreadBody } from './thread-body.tsx'
 
 type Surface = Owned<SurfaceKind & { kind: string }>
+
+/** What a floating thread covers of a surface's right side: its width (340px) and its 12px off the edge (app.css). */
+const FLOATING_COVERS = 352
 
 /** The surface of `kind` this window has, if any. */
 export const useSurfaceKind = (kind: string | undefined): Surface | undefined => {
@@ -43,11 +46,13 @@ export function SurfaceMain({ at, narrow }: { at: SurfaceAt; narrow: boolean }) 
   if (!machine) return <div className="app__empty">{at.machine} isn't one of this window's machines.</div>
   const Component = kind.component
   const floating = kind.agent === 'floating'
+  // A floating card covers the surface's right side by its width and the room right of it (app.css).
+  const right = floating && agentShown && !narrow ? FLOATING_COVERS : 0
   return (
     <div className={`surface ${floating ? 'is-floating' : 'is-docked'}`} data-surface={at.kind}>
-      <div className="surface__body">
+      <div className="surface__body" style={{ '--surface-inset-right': `${right}px` } as CSSProperties}>
         <Contained name={whose(kind)} scope={scopeOfEntry(kind)}>
-          <Component machine={machine} kind={at.kind} params={at.params} thread={thread} open={(params) => open({ ...at, params })} />
+          <Component machine={machine} kind={at.kind} params={at.params} thread={thread} open={(params) => open({ ...at, params })} inset={{ right }} />
         </Contained>
       </div>
       {agentShown && !narrow && (

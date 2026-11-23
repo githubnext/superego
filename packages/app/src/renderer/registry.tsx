@@ -15,6 +15,7 @@ import { PLACES, THREAD_PLACES } from '../shared/layout.ts'
 import type { CompletionProvider, SentWith } from './composer.ts'
 import { dataIcon, DataViewBody } from './data-views.tsx'
 import { addStyle } from './profile-style.ts'
+import { onMachine } from './machine-view.tsx'
 import { checkTheme, type Theme } from '@superego/ui/themes'
 import type {
   BehaviourSlot, EntryProps, LinkHandler, NewThreadField, PaneKind, PaneProps, SettingsComponentProps, SlotProps, SurfaceKind, ToolCallProps, ToolRow, UiApi,
@@ -269,7 +270,10 @@ export function createRegistry(app: AppConfig, extensions: UiExtension[], core: 
       if (view.fits.some((place) => !PLACES.includes(place))) console.warn(`Extension ${extension.name}: view ${id} fits a place there isn't (${view.fits.join(', ')})`)
       const fits = profile ? view.fits.filter((place) => THREAD_PLACES.includes(place)) : view.fits
       if (!fits.length) return console.warn(`Profile extension ${extension.name}: view ${id} fits no place a profile's UI draws in`)
-      unique(registry.views, 'id', { ...view, fits, id }, 'view')
+      // A global profile's window view is told the machine its profile is on.
+      const on = global && scope && view.context === 'window' ? scope.slice(0, scope.indexOf('\u0000')) : undefined
+      const component = on ? onMachine(on, view.component as ComponentType<ViewProps>) : view.component
+      unique(registry.views, 'id', { ...view, fits, id, component }, 'view')
     }
     const api: UiApi = {
       app,

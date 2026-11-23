@@ -70,7 +70,7 @@ export type ViewContext = 'window' | 'thread'
  */
 export type ViewProps<C extends ViewContext = ViewContext> = C extends 'thread'
   ? { place: Place; machine: MachineEntry; thread: ThreadInfo }
-  : { place: Place }
+  : { place: Place; /** A global profile's view: the machine its profile is on. */ machine?: MachineEntry }
 
 /**
  * What a space draws in the rail instead of the button that opens it: whether it's the open one; whether the sidebar is
@@ -149,6 +149,11 @@ export type SurfaceProps = {
   thread: ThreadInfo | undefined
   /** Show another of this kind in its place (a link from one note to another): back returns here. */
   open(params: Record<string, Json>): void
+  /**
+   * How much of its right side its thread covers, in px (a floating card's; 0 docked or hidden): keep controls clear
+   * of it. Also the CSS variable `--surface-inset-right` on its box.
+   */
+  inset: { right: number }
 }
 
 /**
