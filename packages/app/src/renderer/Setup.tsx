@@ -571,15 +571,16 @@ function Chosen({ machine, provider, name, detail, catalog, onCatalog, onTalks }
 }
 
 /**
- * Where sending failed for lack of a model (the composer, ⌘N): setup for that machine, coming back to `back` once
- * it's done; an older machine's Providers instead. `before` runs first (⌘N closing).
+ * Where sending failed for lack of a model (the composer, ⌘N), or the default couldn't run (`said`: Claude Code signed
+ * out): setup for that machine, coming back to `back` once it's done; an older machine's Providers instead. `before`
+ * runs first (⌘N closing).
  */
-export function NoModel({ machine, back, before }: { machine: MachineEntry; back?: Selection; before?(): void }) {
+export function NoModel({ machine, back, before, said }: { machine: MachineEntry; back?: Selection; before?(): void; said?: string }) {
   const { select } = useSelection()
   const shell = useShell()
   return (
     <span className="setup-card">
-      No model is set up on {placeName(machine)}.{' '}
+      {said ? `${said}.` : `No model is set up on ${placeName(machine)}.`}{' '}
       <Button variant="primary" onClick={() => {
         before?.()
         if (!has(machine, 'model-setup')) return shell.providers(machine.id)

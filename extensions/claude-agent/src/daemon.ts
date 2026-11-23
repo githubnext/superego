@@ -338,13 +338,14 @@ export function claudeAgent({ skills = [], executable, env = () => claudeEnv(), 
 
       superego.agentKind({
         name: about.name,
-        // Offered where Claude Code is installed; its models picked only once it's signed in.
+        // Offered where Claude Code is installed; its models picked only once it's signed in. What it says when they
+        // can't be is what a thread started on them by default is refused with.
         async menu() {
           // Looked at once before it's offered; after that, again behind the menu when it's old.
           const found = claude.get() ?? await check()
           if (Date.now() - checked > CHECK_STALE_MS) void check().catch((error: unknown) => console.error('Claude Agent: looking at Claude Code here failed:', error))
-          if (!found?.installed) return undefined
-          const unavailable = found.loggedIn ? undefined : found.error ? "Couldn't tell whether Claude Code is signed in" : 'Not signed in: run claude, then /login'
+          if (!found?.installed) return { unavailable: "Claude Code isn't installed here" }
+          const unavailable = found.loggedIn ? undefined : found.error ? "Couldn't tell whether Claude Code is signed in here" : "Claude Code isn't signed in here: run claude, then /login"
           return { title: about.title, description: 'Runs your Claude Code', models: MODELS.map((m) => ({ ...m, thinking: [...m.thinking] })), ...(unavailable ? { unavailable } : {}) }
         },
         profile: { name: PROFILE_NAME, make: makeProfile },

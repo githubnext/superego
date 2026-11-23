@@ -275,10 +275,12 @@ export type AgentKind = {
   runner: AnyTask
   /**
    * Its group in the model menus (`ModelCatalog.agents`), as it is now (asked each time the models are listed, and
-   * left out of that list when it takes over 3s: keep it quick), or nothing while it isn't offered (not installed here, say). Its models are named `<name>/<model>`.
-   * Offered with a `profile` only.
+   * left out of that list when it takes over 3s: keep it quick), or, while it isn't offered, why not (`{ unavailable }`:
+   * "Claude Code isn't installed here") or nothing. Its models are named `<name>/<model>`. Offered with a `profile`
+   * only. A model of it made the machine's default runs new threads only while its menu lists it, available: else
+   * they're refused with its `unavailable`.
    */
-  menu?(): Omit<AgentKindMenu, 'kind' | 'profile'> | undefined | Promise<Omit<AgentKindMenu, 'kind' | 'profile'> | undefined>
+  menu?(): AgentKindOffer | Promise<AgentKindOffer>
   /**
    * The profile a thread started on one of its models runs with when it's given none of this kind (`name`), and what
    * makes it when it isn't there yet (`make`). Without it, such a thread needs a profile of this kind named.
@@ -291,6 +293,9 @@ export type AgentKind = {
    */
   describe?(thread: AgentKindThread): AgentKindDescription | undefined
 }
+
+/** What an agent kind's `menu` says: its group in the model menus, or why it isn't offered here, if it says. */
+export type AgentKindOffer = Omit<AgentKindMenu, 'kind' | 'profile'> | { unavailable: string } | undefined
 
 /** A thread of an agent kind, as its `describe` sees it. */
 export type AgentKindThread = {

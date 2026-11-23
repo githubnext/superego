@@ -210,3 +210,64 @@ it("takes another kind's model as the machine's default: new threads start on th
     socket.destroy(); server.close(); await daemon.close(); await rm(dir, { recursive: true, force: true })
   }
 })
+
+it("checks another kind's default each time: refused while that kind can't run, never another provider instead; a project's own profile first", async () => {
+  // As Claude Code is: signed in, signed out, gone (saying so, or saying nothing).
+  let state: 'in' | 'out' | 'gone' | 'silent' = 'in'
+  let dir = ''
+  const offered = defineDaemonExtension({
+    name: 'echo-agent', version: '1.0.0', api: '^5.9',
+    setup(s) {
+      s.agentKind({
+        name: 'echo-agent', runner: Echo,
+        menu: () => state === 'gone' ? { unavailable: "Echo isn't installed here" } : state === 'silent' ? undefined
+          : { title: 'Echo', models: [{ value: 'big', label: 'Big', thinking: [] }], ...(state === 'out' ? { unavailable: "Echo isn't signed in here" } : {}) },
+        profile: {
+          name: 'echo',
+          async make() { mkdirSync(join(dir, 'profiles', 'echo'), { recursive: true }); writeFileSync(join(dir, 'profiles', 'echo', 'profile.ts'), "export default { agent: 'echo-agent' }\n") },
+        },
+      })
+    },
+  })
+  dir = await mkdtemp(join(tmpdir(), 'superego-agent-kind-'))
+  // Another provider works here: what a thread would have fallen back on.
+  process.env.SUPEREGO_MODEL = 'faux'
+  const daemon = await openDaemon({ app: defineApp({ name: 'superego', id: 'superego' }), dataDir: dir, defaultCwd: dir, agentsDir: join(dir, 'agents'), extensions: [offered], localServers: [] })
+  const server = await listen(daemon, join(dir, 'superego.sock'))
+  const { peer, socket } = await connectSocket(join(dir, 'superego.sock'))
+  const runsOn = async (params: object) => {
+    const thread = await peer.call<ThreadInfo>('thread.start', { prompt: 'Hi', ...params })
+    let info = thread
+    await until(async () => { info = (await peer.call<{ thread: ThreadInfo }>('thread.read', { thread: thread.id })).thread; return info.status.state === 'done' })
+    return info
+  }
+  try {
+    await peer.call<Hello>('hello', { client: 'test', version: PROTOCOL_VERSION })
+    await peer.call('settings.set', { key: 'agent.model', value: 'echo-agent/big' })
+    expect(await peer.call<SetupProbe>('setup.probe', {})).toMatchObject({ usable: true })
+    expect((await runsOn({})).status.msg).toBe('Echo: Hi')
+
+    for (const [now, said] of [['out', "Echo isn't signed in here"], ['gone', "Echo isn't installed here"], ['silent', "echo-agent isn't available here"]] as const) {
+      state = now
+      expect(await peer.call<SetupProbe>('setup.probe', {})).toMatchObject({ usable: false })
+      await expect(peer.call('thread.start', { prompt: 'Hi' })).rejects.toMatchObject({ kind: 'model_unavailable', message: said })
+      // Its default stays what was picked: the window says what it can't run on.
+      expect((await peer.call<ModelCatalog>('agent.models', {})).default.model).toBe('echo-agent/big')
+    }
+    // A model asked for by name runs as before.
+    expect((await runsOn({ model: 'faux/' + (await peer.call<ModelCatalog>('agent.models', {})).models.find((m) => m.value.startsWith('faux/'))!.value.slice(5) })).status.msg).toMatch(/^echo: /)
+
+    // A project with a default profile of its own: its threads start on that, not on the machine's default.
+    state = 'in'
+    const project = join(dir, 'project')
+    mkdirSync(join(project, '.superego', 'profiles', 'default'), { recursive: true })
+    writeFileSync(join(project, '.superego', 'profiles', 'default', 'profile.ts'), 'export default {}\n')
+    await peer.call('profile.allow', { cwd: project })
+    const own = await runsOn({ cwd: project })
+    expect(own.profile).toMatchObject({ name: 'default', scope: 'project' })
+    expect(own.status.msg).toMatch(/^echo: /)
+  } finally {
+    delete process.env.SUPEREGO_MODEL
+    socket.destroy(); server.close(); await daemon.close(); await rm(dir, { recursive: true, force: true })
+  }
+})

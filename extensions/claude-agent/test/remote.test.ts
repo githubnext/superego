@@ -104,7 +104,7 @@ it.skipIf(!claude)("runs a thread on another machine with that machine's claude,
   expect(await relay<ClaudeCheck>(peer, added.id, 'action.run', { id: CHECK, params: {} })).toMatchObject({ installed: true, path: boxClaude, loggedIn: true })
   expect(await peer.call<ClaudeCheck>('action.run', { id: CHECK, params: {} })).toMatchObject({ installed: true, path: hubClaude, loggedIn: false })
   expect((await relay<ModelCatalog>(peer, added.id, 'agent.models', {})).agents?.[0]?.unavailable).toBeUndefined()
-  expect((await peer.call<ModelCatalog>('agent.models', {})).agents?.[0]?.unavailable).toBe('Not signed in: run claude, then /login')
+  expect((await peer.call<ModelCatalog>('agent.models', {})).agents?.[0]?.unavailable).toBe("Claude Code isn't signed in here: run claude, then /login")
 
   // A thread there, on Claude Agent's model, calling one of Superego's tools.
   const cwd = mkdtempSync(join(dir, 'work-'))

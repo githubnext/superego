@@ -327,7 +327,9 @@ export function NewThreadDialog({ start: asked, onClose }: { start: NewThreadSta
         )}
         {error && (
           <div className="new-thread__error" role="alert">
-            {error.kind === 'no_model' && machine ? <NoModel machine={machine} before={onClose} /> : <p>{error.message}</p>}
+            {error.kind === 'no_model' && machine ? <NoModel machine={machine} before={onClose} />
+              : error.kind === 'model_unavailable' && machine ? <NoModel machine={machine} before={onClose} said={error.message} />
+              : <p>{error.message}</p>}
             {error.kind === 'profile_not_allowed' && <Button onClick={() => void create({ allow: true })}>Allow and start</Button>}
           </div>
         )}

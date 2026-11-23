@@ -353,31 +353,40 @@ export function createExtensionHost(host: Host, later: { profiles(): ProfileHost
     return { model, thinkingLevel, extensions, instructions, without }
   }
 
-  /** The kinds of agent offered here (their extension on), each with its group in the model menus, if it gives one now. */
-  async function agentMenus(): Promise<AgentKindMenu[]> {
+  /**
+   * The kinds of agent here (their extension on, with a menu and a profile), each as its menu says now: its group in
+   * the model menus, or why it isn't offered (its own words, else that it said nothing, failed or took too long).
+   */
+  async function offers(): Promise<{ kind: string; menu?: AgentKindMenu; unavailable?: string }[]> {
     const on = new Set(offered().map((e) => e.name))
-    const menus = await Promise.all([...kinds].map(async ([kind, found]): Promise<AgentKindMenu | undefined> => {
-      if (!on.has(found.owner) || !found.menu || !found.profile) return undefined
+    const listed = await Promise.all([...kinds].filter(([, found]) => on.has(found.owner) && found.menu && found.profile).map(async ([kind, found]) => {
       let timer: ReturnType<typeof setTimeout> | undefined
       try {
-        const menu = await Promise.race([
+        const offer = await Promise.race([
           Promise.resolve().then(() => found.menu!()),
           new Promise<'late'>((resolve) => { timer = setTimeout(() => resolve('late'), MENU_LIMIT) }),
         ])
-        if (menu === 'late') { console.warn(`Extension ${found.owner}: the model menu of ${kind} took over ${MENU_LIMIT / 1000}s; left out`); return undefined }
-        return menu && { ...menu, kind, profile: found.profile.name, models: menu.models.map((m) => ({ ...m, value: `${kind}/${m.value}` })) }
+        if (offer === 'late') {
+          console.warn(`Extension ${found.owner}: the model menu of ${kind} took over ${MENU_LIMIT / 1000}s; left out`)
+          return { kind, unavailable: `${kindTitle(kind)} didn't say in ${MENU_LIMIT / 1000}s whether it can run here` }
+        }
+        if (!offer) return { kind, unavailable: `${kindTitle(kind)} isn't available here` }
+        if (!('models' in offer)) return { kind, unavailable: offer.unavailable }
+        return { kind, menu: { ...offer, kind, profile: found.profile!.name, models: offer.models.map((m) => ({ ...m, value: `${kind}/${m.value}` })) } }
       } catch (error) {
         console.error(`Extension ${found.owner}: the model menu of ${kind} failed:`, error)
-        return undefined
+        return { kind, unavailable: `${kindTitle(kind)} failed to say whether it can run here: ${(error as Error).message}` }
       } finally {
         clearTimeout(timer)
       }
     }))
-    const listed = menus.filter((menu) => menu !== undefined)
+    const menus = listed.flatMap((offer) => offer.menu ?? [])
     // As last listed, for what needs them at once (the Model setting's choices): told again when they change.
-    if (JSON.stringify(listed) !== JSON.stringify(menusSeen)) { menusSeen = listed; host.settings.invalidate() }
+    if (JSON.stringify(menus) !== JSON.stringify(menusSeen)) { menusSeen = menus; host.settings.invalidate() }
     return listed
   }
+  /** The kinds of agent offered here, each with its group in the model menus. */
+  const agentMenus = async () => (await offers()).flatMap((offer) => offer.menu ?? [])
   let menusSeen: AgentKindMenu[] = []
   /** Whether `model` is another kind of agent's (`<kind>/<model>`), of a kind offered here. */
   const kindModel = (model: string) => {
@@ -387,6 +396,18 @@ export function createExtensionHost(host: Host, later: { profiles(): ProfileHost
   /** The kind whose model `model` is (`<kind>/<model>`), if it's one an extension here offers. */
   async function kindOfModel(model: string) {
     return (await agentMenus()).find((menu) => menu.models.some((m) => m.value === model))?.kind
+  }
+  /**
+   * Why another kind's model (`<kind>/<model>`) can't run a thread here now, if it can't: its kind's menu doesn't list
+   * it, or says it's unavailable (not installed, not signed in), in the kind's own words where it gave them.
+   */
+  async function kindUnavailable(model: string): Promise<string | undefined> {
+    const kind = model.slice(0, Math.max(model.indexOf('/'), 0))
+    const offer = (await offers()).find((o) => o.kind === kind)
+    if (!offer) return `${kindTitle(kind)} isn't on here`
+    if (!offer.menu) return offer.unavailable
+    if (!offer.menu.models.some((m) => m.value === model)) return `${offer.menu.title} has no model ${model.slice(kind.length + 1)}`
+    return offer.menu.unavailable
   }
   /** The profile a thread started on one of `kind`'s models runs with when it's given none of that kind: its name, and what makes it. */
   const kindProfile = (kind: string) => kinds.get(kind)?.profile
@@ -938,7 +959,7 @@ export function createExtensionHost(host: Host, later: { profiles(): ProfileHost
   return {
     setUp, setUpBuiltin, registerSwitches, declare, inspect, known, offer, offered: (name: string) => offered().some((e) => e.name === name),
     runnerOf,
-    publishViews, agentOf, agentMenus, menusSeen: () => menusSeen, kindModel, kindInfoOf, kindOfModel, kindProfile, kindTitle, modelFromOf, partsFor, switchedOff, withoutFor, panesOf, factsOf, quietOf, blockedOf, appliesTo,
+    publishViews, agentOf, agentMenus, menusSeen: () => menusSeen, kindModel, kindUnavailable, kindInfoOf, kindOfModel, kindProfile, kindTitle, modelFromOf, partsFor, switchedOff, withoutFor, panesOf, factsOf, quietOf, blockedOf, appliesTo,
     /** The daemon closing: switches turned meanwhile change nothing. */
     close: () => unlisten(),
     /** Every teardown so far finished (or given up on): those of extensions torn down earlier too, a profile's reloaded. */

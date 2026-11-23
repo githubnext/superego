@@ -593,10 +593,13 @@ export function createThreads(host: Host, { harness, extensions, profiles }: { h
     // Uploads are inline again by now (see connection.ts).
     const dir = folderOf(cwd)
     if (!(await stat(dir).then((s) => s.isDirectory(), () => false))) throw new RpcError('invalid', `No folder ${dir} on ${hostname()}`)
-    // Given neither a model nor a profile, the machine's default: another kind's (Claude Agent's, picked in setup) starts
-    // it on that kind, while that kind is here.
-    const fallback = !given && !profileName?.trim() && !hidden ? agent.kindDefault() : undefined
-    const ownModel = given ?? (fallback && await extensions.kindOfModel(fallback) ? fallback : undefined)
+    // Given neither a model nor a profile, the machine's default: another kind's (Claude Code's, picked in setup) starts
+    // it on that kind, unless the project has a default profile of its own. Refused while that kind can't run here,
+    // never started on another provider instead.
+    const plain = !given && !profileName?.trim() && !hidden
+    const kindDefault = plain && findProfile(dir, profileSources.roots())?.scope !== 'project' ? await agent.kindDefault() : undefined
+    if (kindDefault?.unavailable) throw new RpcError('model_unavailable', kindDefault.unavailable, { hint: 'Pick another model with Set up models.' })
+    const ownModel = given ?? kindDefault?.model
     // Another kind of agent's model (Claude Agent's): the thread runs on that kind, with a profile of it.
     const modelKind = ownModel ? await extensions.kindOfModel(ownModel) : undefined
     if (ownModel && !modelKind && !agent.catalog().models.some((m) => m.value === ownModel)) throw new RpcError('invalid', `No model ${ownModel} here; sign in to its provider first`)

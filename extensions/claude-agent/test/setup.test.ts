@@ -83,8 +83,16 @@ it('offers Claude Agent in the model menus where Claude Code is installed, its m
 
   // Signed out: there, but its models can't be picked, saying why.
   const signedOut = fakeClaude({ loggedIn: false, authMethod: 'none' })
-  daemon = await testDaemon({ extensions: [claudeAgent({ executable: async () => signedOut })] })
-  expect((await daemon.call<ModelCatalog>('agent.models', {})).agents).toMatchObject([{ kind: 'claude-agent', unavailable: 'Not signed in: run claude, then /login' }])
+  let installed: string | undefined = signedOut
+  daemon = await testDaemon({ extensions: [claudeAgent({ executable: async () => installed })] })
+  expect((await daemon.call<ModelCatalog>('agent.models', {})).agents).toMatchObject([{ kind: 'claude-agent', unavailable: "Claude Code isn't signed in here: run claude, then /login" }])
+  // Made the default in setup, before it was signed out: new threads are refused, saying why.
+  await daemon.call('settings.set', { key: 'agent.model', value: 'claude-agent/sonnet' })
+  await expect(daemon.call('thread.start', {})).rejects.toMatchObject({ kind: 'model_unavailable', message: "Claude Code isn't signed in here: run claude, then /login" })
+  // Then uninstalled.
+  installed = undefined
+  await daemon.dispatch(CHECK)
+  await expect(daemon.call('thread.start', {})).rejects.toMatchObject({ kind: 'model_unavailable', message: "Claude Code isn't installed here" })
   await daemon.close()
 
   // Not installed: not offered, and its models aren't anyone's.

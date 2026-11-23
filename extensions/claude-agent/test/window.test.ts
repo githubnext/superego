@@ -80,7 +80,7 @@ it("doesn't let Claude Agent's models be picked while Claude Code isn't signed i
   await ui!.until(() => $('.new-thread [aria-label="Model"]')?.textContent !== 'Loading…', 'the models')
   $('.new-thread [aria-label="Model"]')!.click()
   await ui!.until(() => $$('.model-picker__heading').some((h) => h.textContent?.startsWith('Claude Agent')), 'the Claude Agent group')
-  expect($$('.model-picker__heading').find((h) => h.textContent?.startsWith('Claude Agent'))!.textContent).toContain('Not signed in: run claude, then /login')
+  expect($$('.model-picker__heading').find((h) => h.textContent?.startsWith('Claude Agent'))!.textContent).toContain("Claude Code isn't signed in here: run claude, then /login")
   expect($$('.model-picker__item.is-unavailable').map((row) => row.textContent)).toEqual(['Opus', 'Sonnet', 'Haiku'])
 })
 

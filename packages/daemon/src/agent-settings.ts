@@ -186,8 +186,11 @@ function echoProvider() {
   return { ...faux, provider }
 }
 
-/** Other kinds of agent's models, as the model menus last listed them, and whether a model is one (`<kind>/<model>`). */
-export type KindModels = { menus(): readonly AgentKindMenu[]; known(model: string): boolean }
+/**
+ * Other kinds of agent's models: as the model menus last listed them, whether a model is one (`<kind>/<model>`), and
+ * why one can't run here now, if it can't (extension-host.ts's `kindUnavailable`).
+ */
+export type KindModels = { menus(): readonly AgentKindMenu[]; known(model: string): boolean; unavailable(model: string): Promise<string | undefined> }
 
 export type AgentSettings = {
   models: Models
@@ -206,8 +209,12 @@ export type AgentSettings = {
    * once the extensions are there (extension-host.ts).
    */
   useKinds(kinds: KindModels): void
-  /** The default model when it's another kind of agent's (`<kind>/<model>`): new threads given none start on it. */
-  kindDefault(): string | undefined
+  /**
+   * The default model when it's another kind of agent's (`<kind>/<model>`), which new threads given none start on, and
+   * why it can't run here now, if it can't (its kind not installed, or not signed in): then they're refused, never
+   * started on another provider instead.
+   */
+  kindDefault(): Promise<{ model: string; unavailable?: string } | undefined>
   /**
    * Sign in to a provider, as a flow of `flows` (auth-flows.ts): its id. `key`: the key a key's sign-in asks for.
    * `check`: a key is tried on one of its models before the flow is done, and the credentials it had before are put
@@ -338,17 +345,24 @@ export async function createAgentSettings(settings: SettingsRegistry, dataDir: s
   }
   /** The sign-in going on for each provider, by its flow's id. */
   const signingIn = new Map<string, string>()
-  let kinds: KindModels = { menus: () => [], known: () => false }
+  let kinds: KindModels = { menus: () => [], known: () => false, unavailable: async () => undefined }
   /** The default model set, when it's another kind of agent's. */
-  function kindDefault() {
+  function kindSet() {
     const set = settings.get<string | null>(KEYS.model)
     return set && kinds.known(set) ? set : undefined
+  }
+  /** The default when it's another kind's, and why it can't run here now, if it can't: the one word on it. */
+  async function kindDefault() {
+    const model = kindSet()
+    if (!model) return undefined
+    const unavailable = await kinds.unavailable(model)
+    return { model, ...(unavailable ? { unavailable } : {}) }
   }
   /** The chosen model; with none chosen, `<ID>_MODEL`, else the preferred model of the first provider signed in. */
   function chosen(): ModelRef | undefined {
     const builtIn = model === 'faux' ? `faux/${models.getModels('faux')[0]?.id}` : model?.startsWith('replay:') ? 'replay/replay' : model
     // Another kind's model is that kind's threads' default: Superego's own threads pick theirs as if none were set.
-    const explicit = (kindDefault() ? undefined : parse(settings.get<string | null>(KEYS.model))) ?? parse(builtIn)
+    const explicit = (kindSet() ? undefined : parse(settings.get<string | null>(KEYS.model))) ?? parse(builtIn)
     if (explicit) return explicit
     for (const provider of ordered()) {
       const [model] = recommendedOf(provider.id, usable(provider.id))
@@ -583,7 +597,7 @@ export async function createAgentSettings(settings: SettingsRegistry, dataDir: s
         }
       }
       const ref = chosen()
-      const own = kindDefault() ?? (ref ? `${ref.provider}/${ref.modelId}` : undefined)
+      const own = kindSet() ?? (ref ? `${ref.provider}/${ref.modelId}` : undefined)
       return {
         models: list, favourites: favourites(),
         default: { ...(own ? { model: own } : {}), thinking: settings.get<string | null>(KEYS.thinking) },
@@ -670,7 +684,9 @@ export async function createAgentSettings(settings: SettingsRegistry, dataDir: s
           return []
         }
       }))).flat()
-      return { usable: works() || Boolean(kindDefault()), fromEnv, local }
+      // Another kind's default is what new threads start on: usable only while that kind can run.
+      const kind = await kindDefault()
+      return { usable: kind ? !kind.unavailable : works(), fromEnv, local }
     },
     async logout(provider) {
       await models.logout(provider)

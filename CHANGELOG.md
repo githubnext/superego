@@ -16,6 +16,8 @@
 - Paste any API key in setup: it tells whose key it is and asks only when it can't, refuses something that isn't a key
   before sending it, and says in plain words why a provider turned one down.
 - Choosing Claude Code in setup (experimental) makes it the default for new threads, so New thread starts on it.
+- With Claude Code as the default, New thread says so when it's signed out or no longer installed, with Set up models
+  beside it, instead of starting on another provider or failing. A project's own default profile still comes first.
 - On first run, a key found in your environment is tried first: one that no longer works brings you to setup instead of
   your first message failing.
 - GitHub Copilot signs in to github.com without asking first; GitHub Enterprise is a link under it.
