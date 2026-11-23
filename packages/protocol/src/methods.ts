@@ -159,7 +159,8 @@ export type SetupProbe = {
 export type ModelTest = { model: string; label: string; text: string; ms: number }
 
 export type ModelCatalog = {
-  models: { value: string; label: string; group: string; thinking: string[] }[]
+  /** Every model that can be used here; `recommended`: one of the few its provider is best started on (setup lists them first). */
+  models: { value: string; label: string; group: string; thinking: string[]; recommended?: boolean }[]
   default: { model?: string; thinking: string | null }
   /**
    * The models shown first in a model menu, in the user's order (the `agent.favourites` setting; until it's set, the

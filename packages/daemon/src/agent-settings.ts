@@ -23,6 +23,7 @@ import { wrapStreams } from './provider-streams.ts'
 import { withoutSubscriptionAuth, withoutSubscriptionEnv } from './claude-subscription.ts'
 import { writeAtomic } from './write-atomic.ts'
 import type { AuthFlowEvent, AuthFlows } from './auth-flows.ts'
+import { FIRST, RECOMMENDED, recommendedOf } from './recommended.ts'
 import { builtins, checkBaseUrl, customProvider, fetchModelIds, idFor, keyOf, keyShape, modelsFile, OAUTH, type CustomProviderConfig } from './providers.ts'
 
 /** A local model server, as setup looks for one: at its usual address, unless told otherwise (tests). */
@@ -53,11 +54,6 @@ export type AgentSettingsOptions = {
 // statically, for it to use instead (pi's hook for bundles; "Bun" only by name). app/test/oauth.sh checks the build.
 registerBunOAuthFlows()
 
-/**
- * The model each provider starts on when it is the first one signed in, these providers first, in this order: with
- * several signed in, one of these rather than the first of the rest alphabetically.
- */
-const PREFERRED: Record<string, string> = { anthropic: 'claude-opus-5-5', openai: 'gpt-6.1-sol' }
 /** Providers with a fast mode: OpenAI's priority service tier. */
 const FAST = new Set(['openai'])
 
@@ -301,7 +297,7 @@ export async function createAgentSettings(settings: SettingsRegistry, dataDir: s
 
   /** The providers in the order a default is picked from: the preferred ones first, then the rest by name. */
   const ordered = () => {
-    const rank = (id: string) => { const at = Object.keys(PREFERRED).indexOf(id); return at < 0 ? Infinity : at }
+    const rank = (id: string) => { const at = FIRST.indexOf(id); return at < 0 ? Infinity : at }
     return [...models.getProviders()].sort((a, b) => rank(a.id) - rank(b.id) || a.name.localeCompare(b.name))
   }
   /** Which providers can be used, refreshed after every sign-in and sign-out; option lists are built from it. */
@@ -335,8 +331,7 @@ export async function createAgentSettings(settings: SettingsRegistry, dataDir: s
     const explicit = parse(settings.get<string | null>(KEYS.model)) ?? parse(builtIn)
     if (explicit) return explicit
     for (const provider of ordered()) {
-      const list = usable(provider.id)
-      const model = list.find((m) => m.id === PREFERRED[provider.id]) ?? list[0]
+      const [model] = recommendedOf(provider.id, usable(provider.id))
       if (model) return { provider: provider.id, modelId: model.id }
     }
     return undefined
@@ -352,7 +347,7 @@ export async function createAgentSettings(settings: SettingsRegistry, dataDir: s
     const ref = chosen()
     const seeded = [...new Set([
       ...(ref ? [`${ref.provider}/${ref.modelId}`] : []),
-      ...Object.entries(PREFERRED).filter(([provider, id]) => usable(provider).some((m) => m.id === id)).map(([provider, id]) => `${provider}/${id}`),
+      ...ordered().filter((provider) => RECOMMENDED[provider.id]).flatMap((provider) => recommendedOf(provider.id, usable(provider.id)).slice(0, 1).map((m) => `${provider.id}/${m.id}`)),
     ])]
     const set = settings.get<string[] | null>(KEYS.favourites)
     return (set ?? seeded).flatMap((value) => {
@@ -485,8 +480,7 @@ export async function createAgentSettings(settings: SettingsRegistry, dataDir: s
   const testModelOf = (provider: string): ModelRef | undefined => {
     const ref = chosen()
     if (ref?.provider === provider && usable(provider).some((m) => m.id === ref.modelId)) return ref
-    const list = usable(provider)
-    const model = list.find((m) => m.id === PREFERRED[provider]) ?? list[0]
+    const [model] = recommendedOf(provider, usable(provider))
     return model && { provider, modelId: model.id }
   }
   /** Whether the default model can be used now: its provider signed in, and offering it. */
@@ -557,8 +551,13 @@ export async function createAgentSettings(settings: SettingsRegistry, dataDir: s
     catalog() {
       const list: ModelCatalog['models'] = []
       for (const provider of [...models.getProviders()].sort((a, b) => a.name.localeCompare(b.name))) {
-        for (const model of usable(provider.id)) {
-          list.push({ value: `${provider.id}/${model.id}`, label: model.name, group: provider.name, thinking: model.reasoning ? getSupportedThinkingLevels(model) : [] })
+        const offered = usable(provider.id)
+        const best = new Set(recommendedOf(provider.id, offered).map((m) => m.id))
+        for (const model of offered) {
+          list.push({
+            value: `${provider.id}/${model.id}`, label: model.name, group: provider.name, thinking: model.reasoning ? getSupportedThinkingLevels(model) : [],
+            ...(best.has(model.id) ? { recommended: true } : {}),
+          })
         }
       }
       const ref = chosen()

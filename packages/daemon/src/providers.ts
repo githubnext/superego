@@ -9,6 +9,7 @@ import { builtinProviders } from '@earendil-works/pi-ai/providers/all'
 import { lazyApi } from '@earendil-works/pi-ai/api/lazy'
 import { openAICompletionsApi } from '@earendil-works/pi-ai/api/openai-completions.lazy'
 import { RpcError } from '@superego/protocol'
+import { notForChat } from './recommended.ts'
 import { writeAtomic } from './write-atomic.ts'
 
 /**
@@ -141,14 +142,18 @@ const trimSlash = (url: string) => url.replace(/\/+$/, '')
 
 /** Checks a base URL as the user typed it: an http(s) address. */
 export function checkBaseUrl(baseUrl: string): string {
-  const url = trimSlash(baseUrl.trim())
+  // An address typed without its scheme (localhost:11434) is a local server's, over http.
+  const url = trimSlash(/^[a-z][a-z0-9+.-]*:\/\//i.test(baseUrl.trim()) ? baseUrl.trim() : `http://${baseUrl.trim()}`)
   let parsed: URL
   try { parsed = new URL(url) } catch { throw new RpcError('invalid', `${baseUrl} is not a URL`) }
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') throw new RpcError('invalid', `${baseUrl} is not an http(s) URL`)
   return url
 }
 
-/** The models an OpenAI-compatible endpoint lists at `<baseUrl>/models`, by id. */
+/**
+ * The chat models an OpenAI-compatible endpoint lists at `<baseUrl>/models`, by id, in its order (Ollama's: the most
+ * recently pulled first); not its embedding models and the like (`notForChat`).
+ */
 export async function fetchModelIds(baseUrl: string, key: string | undefined, signal?: AbortSignal): Promise<string[]> {
   const url = `${checkBaseUrl(baseUrl)}/models`
   let response: Response
@@ -160,7 +165,7 @@ export async function fetchModelIds(baseUrl: string, key: string | undefined, si
   if (!response.ok) throw new RpcError('unreachable', `${url} answered ${response.status} ${response.statusText}`.trim())
   const body = await response.json().catch(() => undefined) as { data?: { id?: unknown }[] } | undefined
   if (!Array.isArray(body?.data)) throw new RpcError('unreachable', `${url} didn't list models as OpenAI's API does ({ data: [{ id }] })`)
-  return body.data.map((m) => m.id).filter((id): id is string => typeof id === 'string').sort()
+  return body.data.map((m) => m.id).filter((id): id is string => typeof id === 'string' && !notForChat(id))
 }
 
 /** The pi provider for one the user added: OpenAI's chat completions API at its base URL. */

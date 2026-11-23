@@ -7,7 +7,7 @@ import { createServer, type Server } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
-import { defineApp, PROTOCOL_VERSION, type AuthEvent, type Notifications, type RpcPeer, type SetupProbe } from '@superego/protocol'
+import { defineApp, PROTOCOL_VERSION, type AuthEvent, type Notifications, type ModelCatalog, type RpcPeer, type SetupProbe } from '@superego/protocol'
 import { connectSocket, listen, openDaemon, type DaemonOptions } from '../src/index.ts'
 import { readLoginEnv } from '../src/login-env.ts'
 import { until } from './until.ts'
@@ -48,7 +48,7 @@ async function mockServer(key?: string) {
     }
     if (request.url === '/v1/models') {
       response.writeHead(200, { 'content-type': 'application/json' })
-      return response.end(JSON.stringify({ object: 'list', data: [{ id: 'qwen3:32b', object: 'model' }, { id: 'llama3.1:8b', object: 'model' }] }))
+      return response.end(JSON.stringify({ object: 'list', data: [{ id: 'qwen3:32b', object: 'model' }, { id: 'nomic-embed-text:latest', object: 'model' }, { id: 'llama3.1:8b', object: 'model' }] }))
     }
     if (request.url === '/v1/chat/completions') {
       request.resume()
@@ -93,6 +93,15 @@ it('finds a key in the login shell, and signs in with it', async () => {
   expect(probe.usable).toBe(true)
 })
 
+it('starts a provider on its best model, not its first by name', async () => {
+  // Google's first by name is a deep-research preview, Groq's an 8B model.
+  const peer = await open({ loginEnv: async () => ({ GEMINI_API_KEY: 'gemini-from-zshrc' }) })
+  expect((await peer.call<SetupProbe>('setup.probe', {})).fromEnv.map((f) => f.provider)).toEqual(['google'])
+  const catalog = await peer.call<ModelCatalog>('agent.models', {})
+  expect(catalog.default.model).toBe('google/gemini-pro-latest')
+  expect(catalog.models.filter((m) => m.recommended).map((m) => m.value)).toEqual(['google/gemini-flash-latest', 'google/gemini-pro-latest'])
+})
+
 it("reads the login shell's environment, whatever its startup files print", async () => {
   const shell = join(dir, 'shell')
   await writeFile(shell, '#!/bin/sh\n# As zsh -ilc: its startup files print, and export a key.\necho "welcome back"\nshift\nOPENAI_API_KEY="sk-multi\nline" exec /bin/sh -c "$1"\n')
@@ -102,17 +111,22 @@ it("reads the login shell's environment, whatever its startup files print", asyn
   expect(await readLoginEnv({ shell: join(dir, 'no-such-shell') })).toEqual({})
 })
 
-it('finds a local model server, which works once added', async () => {
+it('finds a local model server, its chat models in its own order, which works once added', async () => {
   const baseUrl = await mockServer()
   const peer = await open({ localServers: [{ id: 'ollama', name: 'Ollama', baseUrl }, { id: 'lmstudio', name: 'LM Studio', baseUrl: NOWHERE }] })
   let probe = await peer.call<SetupProbe>('setup.probe', {})
-  expect(probe).toEqual({ usable: false, fromEnv: [], local: [{ id: 'ollama', name: 'Ollama', baseUrl, models: ['llama3.1:8b', 'qwen3:32b'] }] })
+  // As Ollama lists them (the most recently pulled first), without its embedding model.
+  expect(probe).toEqual({ usable: false, fromEnv: [], local: [{ id: 'ollama', name: 'Ollama', baseUrl, models: ['qwen3:32b', 'llama3.1:8b'] }] })
 
   await peer.call('providers.save', { name: 'Ollama', baseUrl, models: probe.local[0]!.models })
   probe = await peer.call<SetupProbe>('setup.probe', {})
   expect(probe.usable).toBe(true)
   expect(probe.local[0]!.provider).toBe('ollama')
-  expect(await peer.call('model.test', { model: 'ollama/qwen3:32b' })).toMatchObject({ model: 'ollama/qwen3:32b', label: 'qwen3:32b', text: 'Hi! Ready when you are.' })
+  expect((await peer.call<ModelCatalog>('agent.models', {})).default.model).toBe('ollama/qwen3:32b')
+  expect(await peer.call('model.test', {})).toMatchObject({ model: 'ollama/qwen3:32b', label: 'qwen3:32b', text: 'Hi! Ready when you are.' })
+  // Typed without its scheme, as a local server's address often is.
+  await peer.call('providers.save', { name: 'Again', baseUrl: baseUrl.replace('http://', '') })
+  expect((await peer.call<ModelCatalog>('agent.models', {})).models.filter((m) => m.group === 'Again').map((m) => m.label)).toEqual(['qwen3:32b', 'llama3.1:8b'])
 })
 
 it('tries a key before signing in with it, and takes back one the provider refuses', async () => {

@@ -134,15 +134,15 @@ it('shows on first run with no model, uses the Ollama it finds, says hi, and goe
   await start({ ollama: await mockOllama() })
   await mount()
   await until(() => text().includes('Set up a model') && Boolean(rowOf('Ollama')), 'the page, with Ollama found')
-  expect(rowOf('Ollama')!.textContent).toContain('llama3.1:8b, qwen3:32b')
+  expect(rowOf('Ollama')!.textContent).toContain('qwen3:32b, llama3.1:8b')
 
   await click(rowOf('Ollama')!.querySelector('button')!)
   await until(() => text().includes('Hi! Ready when you are.'), 'it saying hi')
   expect((await peer.call<{ default: { model?: string } }>('agent.models', {})).default.model).toMatch(/^ollama\//)
 
   // A star, as the model menus have it.
-  await click(button('Star qwen3:32b'))
-  await until(async () => ((await value('agent.favourites')) as string[] | null)?.includes('ollama/qwen3:32b') ?? false, 'starred')
+  await click(button('Star llama3.1:8b'))
+  await until(async () => ((await value('agent.favourites')) as string[] | null)?.includes('ollama/llama3.1:8b') ?? false, 'starred')
 
   await click(button('Done'))
   await until(() => !page(), 'the page gone')
