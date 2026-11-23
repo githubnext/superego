@@ -101,7 +101,7 @@ export async function openWebAccess({ options, settings, router, clients, relay,
           tailscale: () => served && { ...served, whois: nodeAt },
           origin: () => chosen().origin,
           artifact: async (thread, path, elsewhere) => elsewhere
-            ? Buffer.from((await relay.call(elsewhere, 'artifact.read', { thread, path }) as { content: string }).content, 'base64')
+            ? Buffer.from((await relay.call(elsewhere, 'artifact.read', { thread, path }, {}) as { content: string }).content, 'base64')
             : readArtifact(await cwdOf(thread), path) })
       } catch (error) {
         webError = (error as Error).message

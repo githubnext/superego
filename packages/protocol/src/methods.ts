@@ -34,6 +34,12 @@ export const MESSAGE_ENTRY = 'superego.message'
  */
 export type MessageOrigin = { by?: string; from?: ThreadId; exposure?: Exposure }
 
+/**
+ * Who a call is for, beyond the connection it came on: the thread whose agent's shell asks (`from`, as `hello` says it),
+ * or the extension asking (its `dispatch`, `superego.machines.call`). Neither may give the user's consent.
+ */
+export type Caller = { from?: ThreadId; extension?: string }
+
 /** A thread as a link in a message, `[its title](thread:<id>)`: what a window shows as one, and what agents are told to write. */
 export const linkTo = (thread: Pick<ThreadInfo, 'id' | 'title'>) => `[${thread.title.replace(/[[\]]/g, '')}](thread:${thread.id})`
 
@@ -45,9 +51,10 @@ export const linkTo = (thread: Pick<ThreadInfo, 'id' | 'title'>) => `[${thread.t
  * come without their pixels (`ImageStub`). `file-locate`: the `file.locate` method. `pane-move`: the `pane.move` action.
  * `artifact-read`: the `artifact.read` method. `model-setup`: the `setup.probe` and `model.test` methods, and
  * `auth.signIn`'s `check`. `secrets`: the `secrets.set` action, and settings of type `secret`. `pane-resize`: the
- * `pane.resize` action, and the column widths kept with a thread (`ThreadInfo.width`, `Pane.width`).
+ * `pane.resize` action, and the column widths kept with a thread (`ThreadInfo.width`, `Pane.width`). `relay-as`: the
+ * `relay.as` method, so a call passed on from another machine is refused the user's consent as its caller is there.
  */
-export const FEATURES = ['thread-read', 'forward', 'image-read', 'file-locate', 'pane-move', 'artifact-read', 'model-setup', 'secrets', 'pane-resize'] as const
+export const FEATURES = ['thread-read', 'forward', 'image-read', 'file-locate', 'pane-move', 'artifact-read', 'model-setup', 'secrets', 'pane-resize', 'relay-as'] as const
 export type Feature = (typeof FEATURES)[number]
 
 export type ThreadId = string
@@ -533,6 +540,12 @@ export type Methods = {
    * connection as `relay.event`, and watches it opened there end when this connection does.
    */
   'relay.call': { params: { machine: string; method: string; params?: unknown }; result: unknown }
+  /**
+   * Call a method of this daemon for `caller`, as a daemon passing on its own client's call (`relay.call`) says it:
+   * what the call does is refused the user's consent when its caller is a thread's shell (`from`) or an extension, as
+   * it would be on the caller's own machine. The connection's own `from` stays: a caller only ever takes away.
+   */
+  'relay.as': { params: { caller: Caller; method: string; params?: unknown }; result: unknown }
   /** Drop a link and connect again, as after a login or a reinstall there. */
   'machine.reconnect': { params: { id: string }; result: null }
 }

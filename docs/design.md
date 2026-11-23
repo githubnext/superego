@@ -52,7 +52,9 @@ transport, and the daemon hangs up on one that stops.
 `MachineLinks` from `packages/client` the app uses: identity remembered, a machine reached twice refused, never
 itself). Its clients reach them through it: `machines.watch` lists them (itself as `local`), `relay.call` passes a
 call on, and their notifications come back as `relay.event`. A browser and agents (`thread_*` with `machine`) go
-through the hub, which therefore holds every machine's access: pair browsers with care.
+through the hub, which therefore holds every machine's access: pair browsers with care. A call goes on with who it's
+for (`relay.as`: a thread's shell, an extension), so the far machine refuses it the user's consent as the hub would; to
+an older daemon without `relay.as`, the hub passes on nothing for them that could be consent.
 
 ```
 browser ──ws── daemon (hub) ──ssh/via── daemon (box)        agent on the hub ─ thread_start {machine: box}

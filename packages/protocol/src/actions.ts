@@ -30,8 +30,8 @@ export type ActionInfo = {
   /**
    * It records the user's consent: to run a command or a project's code, to let a device or outside agents in. Only the
    * user gives it, in a window or in their own terminal, never an agent nor an extension: it's refused for a client that
-   * said it runs in a thread's shell (`hello`'s `from`) and to an extension's `dispatch`, and it can't be exposed to
-   * `outside`.
+   * said it runs in a thread's shell (`hello`'s `from`) and to an extension's `dispatch`, on this machine or passed on
+   * from another (`relay.as`), and it can't be exposed to `outside`.
    */
   consent?: true
   /** Its parameters by these names hold secrets (a key, a token): the action log keeps them as `•••`, never their values. */
@@ -99,6 +99,11 @@ export type Router<C = unknown> = {
    */
   dispatch(id: string, params: unknown, context: C, options?: { source?: string; exposure?: Exposure; from?: string; extension?: string; client?: ActionLogEntry['client'] }): Promise<unknown>
   /**
+   * What dispatching `id` with `params` records the user's consent to (`consent`'s title, or what `consentIn` says), if
+   * anything: what `dispatch` refuses to `from` and `extension`. Nothing for an action it doesn't hold.
+   */
+  consentOf(id: string, params: unknown): string | undefined
+  /**
    * Time and log work done elsewhere for an action this router doesn't hold (a window forwarding to a daemon).
    * `client`: who dispatched it. `secret`: the params it logs as `•••` (`ActionInfo.secret`) for one it doesn't hold, or
    * `'all'` to log none (an action it knows nothing of, which may take a secret); one it holds says its own.
@@ -133,11 +138,15 @@ export function createRouter<C = unknown>({ logSize = 500 }: { logSize?: number 
         if (exposure && !action.def.expose.includes(exposure)) throw new RpcError('not_exposed', `${id} can't be run from ${exposure}`)
         const parsed = action.parse(params)
         if (from || extension) {
-          const consent = action.def.consent ? action.def.title : action.def.consentIn?.(parsed)
+          const consent = consentOf(action.def, parsed)
           if (consent) throw consentRefused(consent)
         }
         return action.def.run(parsed, context)
       }, client ? { client } : {})
+    },
+    consentOf(id, params) {
+      const action = actions.get(id)
+      return action && consentOf(action.def, action.parse(params))
     },
     async track(id, params, source, run, { client, secret } = {}) {
       const started = Date.now()
@@ -174,6 +183,8 @@ export function createRouter<C = unknown>({ logSize = 500 }: { logSize?: number 
 export const consentRefused = (what: string) => new RpcError('consent', `${what}: that's the user's consent to give, not an agent's`, {
   hint: 'Ask the user to do it themselves: in the window (Settings), or in their own terminal.',
 })
+
+const consentOf = (def: ActionDef<any, unknown, any>, parsed: unknown) => def.consent ? def.title : def.consentIn?.(parsed)
 
 /** `params` as the log keeps them: those named in `secret` (that are there) as `•••`. */
 function withoutSecrets(params: unknown, secret: string[] | undefined): unknown {

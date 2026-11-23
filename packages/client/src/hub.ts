@@ -30,6 +30,7 @@ export function machineHub({ app, dataDir, self, store = new MachineStore(dataDi
       if (!link) throw new RpcError('disconnected', `${store.get(machine)?.label ?? machine} is turned off`)
       return link.call(method, params)
     },
+    offers: (machine, feature) => links.get(machine)?.has(feature) ?? false,
     async add(draft) {
       const added = await store.add(draft)
       return entryOf(added.id)

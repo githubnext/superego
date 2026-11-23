@@ -5,9 +5,9 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
-import { connectSocket, defineDaemonExtension, listen, openDaemon, type DaemonApi, type MachineReach } from '@superego/daemon'
+import { connectSocket, defineDaemonExtension, listen, openDaemon, type DaemonApi, type DaemonExtension, type MachineReach } from '@superego/daemon'
 import threadTools from '../../../extensions/thread-tools/src/daemon.ts'
-import { defineApp, PROTOCOL_VERSION, type Json, type MachineEntry, type Notifications, type RpcPeer, type ThreadInfo } from '@superego/protocol'
+import { defineApp, PROTOCOL_VERSION, type ActionLogEntry, type Json, type MachineEntry, type Notifications, type RpcPeer, type ThreadInfo } from '@superego/protocol'
 import { machineHub, MachineStore, upload } from '../src/index.ts'
 
 const hubApp = defineApp({ name: 'hub', id: 'hubtest' })
@@ -38,10 +38,10 @@ const until = async (check: () => boolean | Promise<boolean>, ms = 10_000) => {
 }
 
 /** A daemon on a socket of its own. */
-async function start(app: typeof hubApp, name: string, reach?: (self: Parameters<typeof machineHub>[0]['self']) => MachineReach) {
+async function start(app: typeof hubApp, name: string, reach?: (self: Parameters<typeof machineHub>[0]['self']) => MachineReach, extensions: DaemonExtension[] = []) {
   const dataDir = join(dir, name)
   // The thread tools are the threads extension's: the hub's agent starts a thread on the box with them.
-  const daemon = await openDaemon({ app, dataDir, defaultCwd: dir, agentsDir: join(dir, 'agents'), extensions: [threadTools], ...(reach ? { reach } : {}) })
+  const daemon = await openDaemon({ app, dataDir, defaultCwd: dir, agentsDir: join(dir, 'agents'), extensions: [threadTools, ...extensions], ...(reach ? { reach } : {}) })
   const socket = join(dir, `${name}.sock`)
   const server = await listen(daemon, socket)
   cleanups.push(async () => { server.close(); await daemon.close() })
@@ -55,11 +55,11 @@ async function viaTo(socket: string) {
   return `'${process.execPath}' '${script}' '${socket}'`
 }
 
-/** A client of the hub that keeps what it hears. */
-async function client(socket: string) {
+/** A client of the hub that keeps what it hears: `from`, one in that thread's shell. */
+async function client(socket: string, from?: string) {
   const { peer, socket: conn } = await connectSocket(socket)
   cleanups.push(() => conn.destroy())
-  await peer.call('hello', { client: 'test', version: PROTOCOL_VERSION })
+  await peer.call('hello', { client: 'test', version: PROTOCOL_VERSION, ...(from ? { from } : {}) })
   const events: Notifications['relay.event'][] = []
   peer.on('relay.event', (params: Notifications['relay.event']) => events.push(params))
   let machines: MachineEntry[] = []
@@ -69,8 +69,8 @@ async function client(socket: string) {
   return { peer, conn, events, machines: () => machines }
 }
 
-/** A hub that reaches `box`, its calls on the way recorded. */
-async function hubReaching(box: { socket: string }, extra: { label: string; via: string }[] = []) {
+/** A hub that reaches `box`, its calls on the way recorded. `older`: the box's daemon passes for one without `relay.as`. */
+async function hubReaching(box: { socket: string }, extra: { label: string; via: string }[] = [], { extensions = [], older = false }: { extensions?: DaemonExtension[]; older?: boolean } = {}) {
   const hubDir = join(dir, 'hub')
   const store = new MachineStore(hubDir)
   const added = await store.add({ label: 'Box', via: await viaTo(box.socket) })
@@ -79,8 +79,11 @@ async function hubReaching(box: { socket: string }, extra: { label: string; via:
   const calls: { machine: string; method: string; params: unknown }[] = []
   const hub = await start(hubApp, 'hub', (self) => {
     const reach = machineHub({ app: hubApp, dataDir: hubDir, self })
-    return { ...reach, call: (machine, method, params) => { calls.push({ machine, method, params }); return reach.call(machine, method, params) } }
-  })
+    return {
+      ...reach, call: (machine, method, params) => { calls.push({ machine, method, params }); return reach.call(machine, method, params) },
+      offers: (machine, feature) => !(older && feature === 'relay-as') && reach.offers(machine, feature),
+    }
+  }, extensions)
   return { ...hub, box: added.id, calls }
 }
 
@@ -184,6 +187,58 @@ it('lets an agent start a thread on another machine', async () => {
   expect(transcript).toContain(`Started \\"Remote count\\" (thread ${there[0]!.id} on Box)`)
   // The box's faux model answers the child's prompt.
   await until(async () => (await call<ThreadInfo[]>(a.peer, hub.box, 'thread.list', {}))[0]?.status.state === 'done')
+})
+
+it("refuses the user's consent to a thread's shell and an extension calling another machine, there as here", async () => {
+  let machines!: DaemonApi['machines']
+  const asker = defineDaemonExtension({ name: 'asker', setup(superego) { machines = superego.machines } })
+  const box = await start(boxApp, 'box')
+  const hub = await hubReaching(box, [], { extensions: [asker] })
+  const user = await client(hub.socket)
+  const shell = await client(hub.socket, '7')
+  await until(() => user.machines().find((m) => m.id === hub.box)?.state === 'connected')
+  const secret = { key: 'mail.token', value: 'x' }
+  const consent = { kind: 'consent' }
+  // The user's own call is theirs: it reaches the box's router (which has no such secret).
+  await expect(call(user.peer, hub.box, 'secrets.set', secret)).rejects.toMatchObject({ kind: 'unknown_setting' })
+  // A thread's shell, by the action's id or through action.run, and a setting that records consent.
+  await expect(call(shell.peer, hub.box, 'secrets.set', secret)).rejects.toMatchObject(consent)
+  await expect(call(shell.peer, hub.box, 'action.run', { id: 'secrets.set', params: secret })).rejects.toMatchObject(consent)
+  await expect(call(shell.peer, hub.box, 'settings.set', { key: 'outside.startThreads', value: true })).rejects.toMatchObject(consent)
+  // An extension, as its dispatch is here.
+  await expect(machines.call(hub.box, 'secrets.set', secret)).rejects.toMatchObject(consent)
+  await expect(machines.call(hub.box, 'action.run', { id: 'settings.set', params: { key: 'outside.startThreads', value: true } })).rejects.toMatchObject(consent)
+  expect(box.daemon.settings.get('outside.startThreads')).toBe(false)
+  // What isn't consent goes through for both, as it did: the box's action log says whose it was.
+  expect(await call(shell.peer, hub.box, 'thread.list', {})).toEqual([])
+  expect(await machines.call(hub.box, 'thread.list', {})).toEqual([])
+  await call(shell.peer, hub.box, 'thread.start', { title: 'From a shell' })
+  const log = await call<ActionLogEntry[]>(user.peer, hub.box, 'action.log', {})
+  expect(log.find((e) => e.id === 'thread.start')?.client).toMatchObject({ kind: 'hubtest-daemon', from: '7' })
+})
+
+it("passes on to an older machine, for a thread's shell or an extension, nothing that could be the user's consent", async () => {
+  let machines!: DaemonApi['machines']
+  const asker = defineDaemonExtension({ name: 'asker', setup(superego) { machines = superego.machines } })
+  const box = await start(boxApp, 'box')
+  const hub = await hubReaching(box, [], { extensions: [asker], older: true })
+  const user = await client(hub.socket)
+  const shell = await client(hub.socket, '7')
+  await until(() => user.machines().find((m) => m.id === hub.box)?.state === 'connected')
+  const secret = { key: 'mail.token', value: 'x' }
+  const consent = { kind: 'consent', message: expect.stringContaining('older Superego') }
+  await expect(call(shell.peer, hub.box, 'secrets.set', secret)).rejects.toMatchObject(consent)
+  await expect(call(shell.peer, hub.box, 'action.run', { id: 'settings.set', params: { key: 'outside.startThreads', value: true } })).rejects.toMatchObject(consent)
+  await expect(machines.call(hub.box, 'secrets.set', secret)).rejects.toMatchObject(consent)
+  // An extension's action or method there, which this machine can't judge, and a call passed on again.
+  await expect(call(shell.peer, hub.box, 'mail.send', {})).rejects.toMatchObject(consent)
+  await expect(call(shell.peer, hub.box, 'action.run', { id: 'mail.send' })).rejects.toMatchObject(consent)
+  await expect(call(shell.peer, hub.box, 'relay.call', { machine: 'x', method: 'secrets.set', params: secret })).rejects.toMatchObject(consent)
+  expect(hub.calls.filter((c) => c.method !== 'hello' && c.method !== 'unwatch')).toEqual([])
+  // Reads and the core's other actions still go, and the user's own calls as ever.
+  expect(await call(shell.peer, hub.box, 'thread.list', {})).toEqual([])
+  expect(await machines.call(hub.box, 'thread.list', {})).toEqual([])
+  await expect(call(user.peer, hub.box, 'secrets.set', secret)).rejects.toMatchObject({ kind: 'unknown_setting' })
 })
 
 it("lets an extension change the list (superego.machines): added, renamed, switched off and removed, in machines.json", async () => {

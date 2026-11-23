@@ -38,6 +38,9 @@
   thread list, each title has the row's full width, with its time, status and badges on a smaller line under it.
 - On a phone, swipe a thread in the list as in Mail: right to pin or unpin it, left for More (the thread's menu) and
   Archive; swipe all the way across to do the outermost one at once.
+- What only you may do (set a secret, let outside agents in) is refused to an agent's shell and to extensions on your
+  other machines too, not only on this one. A machine still on an older Superego is passed none of it from them:
+  update it.
 - A new macOS look: the sidebar is an inset glass panel, the thread and its panes are rounded sheets, controls and
   menus are softer, and Ego's button in the rail is a ring like the other icons instead of a solid dot.
 - The pane or thread you're in has a soft ring in the accent colour instead of a square border, and its tab is no

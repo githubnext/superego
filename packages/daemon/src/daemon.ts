@@ -202,7 +202,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   const relay = createRelay(options.reach?.(machine), () => ({
     id: 'local', label: machine.hostname, state: 'connected', machine: { id: machine.id, hostname: machine.hostname }, ...extensions.offer(),
     keepsRunning: kept(),
-  }))
+  }), host.router)
   daemonLife.add(() => relay.close())
   const { outsideMayStart } = registerCoreActions(host, { harness, machine, threads, files, relay })
 

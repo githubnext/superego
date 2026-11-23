@@ -744,7 +744,8 @@ export function createExtensionHost(host: Host, later: { profiles(): ProfileHost
       threads: threads.apiFor(extension.name),
       machines: {
         list: () => later.relay().entries().slice(1),
-        call: (machine, method, params) => later.relay().call(machine, method, params ?? {}),
+        // For this extension: refused there what records the user's consent, as its `dispatch` is here.
+        call: (machine, method, params) => later.relay().call(machine, method, params ?? {}, { extension: extension.name }),
         add: (machine) => later.relay().list.add(machine),
         update: (id, patch) => later.relay().list.update(id, patch),
         remove: (id) => later.relay().list.remove(id),

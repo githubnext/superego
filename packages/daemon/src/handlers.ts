@@ -3,7 +3,7 @@
 // call is `invalid_params`, as an action's is. What it watches ends with it.
 import { randomUUID } from 'node:crypto'
 import {
-  arr, bool, EXTENSION_API, lit, num, obj, opt, paramsParser, PROTOCOL_VERSION, RpcError, str, union, unknown, type ExtensionAbout, type JsonSchema, type KeepsRunning,
+  arr, bool, EXTENSION_API, lit, num, obj, opt, paramsParser, PROTOCOL_VERSION, RpcError, str, union, unknown, type Caller, type ExtensionAbout, type JsonSchema, type KeepsRunning,
   type MachineInfo, type Methods, type Notifications, type RpcPeer,
 } from '@superego/protocol'
 import { serveSettings } from '@superego/settings'
@@ -29,6 +29,7 @@ const params = (properties: Parameters<typeof obj>[0]) => obj(properties, { open
 const PARAMS: Record<string, JsonSchema> = {
   'client.perform': params({ client: str(), action: str(), params: opt(unknown()) }),
   'relay.call': params({ machine: str(), method: str(), params: opt(unknown()) }),
+  'relay.as': params({ caller: params({ from: opt(str()), extension: opt(str()) }), method: str(), params: opt(unknown()) }),
   'thread.list': params({ archived: opt(bool()), hidden: opt(bool()) }),
   'file.read': params({ thread, path: str(), base64: opt(bool()) }),
   'artifact.read': params({ thread, path: str() }),
@@ -78,15 +79,18 @@ export function serveClient(peer: RpcPeer, { via, hangUp }: { via?: Via; hangUp?
   const notify = <N extends keyof Notifications>(event: N, params: Notifications[N]) => peer.notify(event, params)
   let client = 'client'
   const self = clients.add(peer, via)
-  /** Who dispatched, for the action log. */
-  const by = () => { const info = clients.get(self); return info && { id: info.id, kind: info.kind, label: info.label, ...(info.from ? { from: info.from } : {}) } }
+  /** Who dispatched, for the action log: this connection, for `caller`. */
+  const by = (caller: Caller) => { const info = clients.get(self); return info && { id: info.id, kind: info.kind, label: info.label, ...(caller.from ? { from: caller.from } : {}) } }
   /** The thread whose agent's shell this client runs in, as its hello said: what it does is that agent's, not the user's. */
   let from: string | undefined
+  /** Who this connection's own calls are for. */
+  const own = (): Caller => from ? { from } : {}
   const relayed = relay.connect((machine, method, params) => notify('relay.event', { machine, method, params }))
   /** A new watch's id: it lasts until unwatched, or the connection ends. */
   const sub = () => randomUUID()
-  // Reads and watches; every intent is an action, served below under its id.
-  const handlers: Record<string, (params: any) => unknown> = {
+  // Reads and watches; every intent is an action, served below under its id. Each call is for a caller: the
+  // connection's own, or one another machine passes on (`relay.as`).
+  const handlers: Record<string, (params: any, caller: Caller) => unknown> = {
     async hello({ version, client: name, label, from: thread }: Methods['hello']['params']) {
       if (version !== PROTOCOL_VERSION) throw versionMismatch(options.app, machine.hostname, version)
       if (typeof name === 'string') client = name
@@ -111,7 +115,15 @@ export function serveClient(peer: RpcPeer, { via, hangUp }: { via?: Via; hangUp?
       subs.set(id, relay.watch((value) => notify('machines.changed', { sub: id, value })))
       return { sub: id, value: relay.entries() }
     },
-    'relay.call': ({ machine: target, method, params }: Methods['relay.call']['params']) => relayed.call(target, method, params),
+    'relay.call': ({ machine: target, method, params }: Methods['relay.call']['params'], caller) => relayed.call(target, method, params, caller),
+    // A daemon passing its own client's call on: for that client, never more than this connection may.
+    'relay.as': ({ caller: given, method, params }: Methods['relay.as']['params']) => {
+      if (method === 'relay.as' || method === 'hello' || method === 'ping' || method.startsWith('ch.')) throw new RpcError('invalid', `${method} isn't passed on`)
+      const run = lookup(method)
+      if (!run) throw new RpcError('unknown_method', `Unknown method ${method}`)
+      const caller: Caller = { ...own(), ...(given.from && !from ? { from: given.from } : {}), ...(given.extension ? { extension: given.extension } : {}) }
+      return run(params, caller)
+    },
     'thread.list': ({ archived, hidden }: Methods['thread.list']['params']) => threads.list({ archived: Boolean(archived), hidden: Boolean(hidden) }),
     'agent.models': async () => {
       const agents = await extensions.agentMenus()
@@ -210,8 +222,8 @@ export function serveClient(peer: RpcPeer, { via, hangUp }: { via?: Via; hangUp?
     /** Every action here, as data: id, title, params schema, who may run it; given `exposure`, those it may run now. */
     'action.list': async ({ exposure }: Methods['action.list']['params']) => router.list(exposure).filter((a) => exposure !== 'outside' || a.id !== 'thread.start' || served.outsideMayStart()),
     /** Run an action by id, as `exposure` (the command line passes `cli`); params may be strings to coerce. */
-    'action.run': ({ id, params, exposure }: Methods['action.run']['params']) =>
-      router.dispatch(id, params, { ...ctx(), ...(exposure ? { exposure } : {}) }, { source: exposure ?? client, client: by(), ...(exposure ? { exposure } : {}), ...(from ? { from } : {}) }),
+    'action.run': ({ id, params, exposure }: Methods['action.run']['params'], caller) =>
+      router.dispatch(id, params, { ...ctx(caller), ...(exposure ? { exposure } : {}) }, { source: exposure ?? caller.extension ?? client, client: by(caller), ...(exposure ? { exposure } : {}), ...caller }),
     /** The newest dispatches on this machine, oldest first. */
     'action.log': async () => router.log(),
     /** The window's extensions, as each declares itself: those without a daemon half become known here (see declare). */
@@ -219,25 +231,29 @@ export function serveClient(peer: RpcPeer, { via, hangUp }: { via?: Via; hangUp?
     'extension.inspect': ({ thread }: Methods['extension.inspect']['params']) => extensions.inspect(thread),
     ...connection.handlers,
   }
-  const ctx = (): DaemonContext => ({ notify: (event, params) => notify(event as keyof Notifications, params as never), source: client, ...(from ? { from } : {}) })
-  const open = (method: string, handler: (params: unknown) => unknown) => {
+  const ctx = (caller: Caller): DaemonContext => ({ notify: (event, params) => notify(event as keyof Notifications, params as never), source: caller.extension ?? client, ...(caller.from ? { from: caller.from } : {}) })
+  const open = (method: string, handler: (params: any, caller: Caller) => unknown) => {
     const parse = parsers.get(method)
-    return (params: unknown) => {
+    return (params: unknown, caller: Caller) => {
       if (host.state.restarting && method !== 'hello') throw new RpcError('restarting', 'The daemon is restarting. Try again in a moment.')
       clients.touch(self)
       const resolved = connection.resolve(method, params)
-      return handler(parse ? parse(resolved) : resolved)
+      return handler(parse ? parse(resolved) : resolved, caller)
     }
   }
-  const disconnect = extensions.connect(peer)
-  for (const [method, handler] of Object.entries(handlers)) peer.handle(method, open(method, handler))
-  // Actions under their ids, and extensions' methods: looked up as they're called, so a profile's registered since
-  // this connection opened are there too.
-  peer.handleOthers((method) => {
-    if (router.has(method)) return open(method, (params) => router.dispatch(method, params, ctx(), { source: client, client: by(), ...(from ? { from } : {}) }))
+  /**
+   * A method by its name: a read or watch, an action under its id, or an extension's method, looked up as it's called,
+   * so a profile's registered since this connection opened are there too.
+   */
+  function lookup(method: string): ((params: unknown, caller: Caller) => unknown) | undefined {
+    if (Object.hasOwn(handlers, method)) return open(method, handlers[method]!)
+    if (router.has(method)) return open(method, (params, caller) => router.dispatch(method, params, ctx(caller), { source: caller.extension ?? client, client: by(caller), ...caller }))
     const read = extensions.method(method)
     return read && open(method, read)
-  })
+  }
+  const disconnect = extensions.connect(peer)
+  for (const method of Object.keys(handlers)) { const run = lookup(method)!; peer.handle(method, (params) => run(params, own())) }
+  peer.handleOthers((method) => { const run = lookup(method); return run && ((params) => run(params, own())) })
   return () => {
     disconnect()
     connection.close()
