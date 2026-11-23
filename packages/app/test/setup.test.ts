@@ -306,3 +306,27 @@ it('takes what an extension found as what it is, a line on it, and the model it 
   const named: SetupFound = { label: 'Claude Code', detail: 'Signed in', profile: 'claude' }
   expect([found, named].map((f) => f.label)).toEqual(['Claude Code', 'Claude Code'])
 })
+
+it("says when an answer to a sign-in's question failed, and asks it again", async () => {
+  await start()
+  await daemon.settings.set(ONBOARDED, true)
+  const events = new Map<string, AuthEvent[]>()
+  peer.on('auth.event', ({ flow, event }: Notifications['auth.event']) => events.set(flow, [...events.get(flow) ?? [], event]))
+  let started = ''
+  await mount(undefined, async () => {
+    const answer = await peer.call<{ flow: string }>('auth.signIn', { provider: 'github-copilot', type: 'oauth' })
+    started = answer.flow
+    return answer
+  })
+  await until(() => Boolean(container.querySelector('.auth-flow__prompt input')), 'the question')
+  // Answered from another window first, say.
+  const call = window.superego.call
+  const answering = (method: string, params: unknown) => method === 'auth.respond' || (method === 'action.run' && (params as { id?: string }).id === 'auth.respond')
+  window.superego.call = (machine, method, params) => answering(method, params) ? Promise.reject(new Error('That sign-in step is no longer waiting')) : call(machine, method, params)
+  await type(container.querySelector<HTMLInputElement>('.auth-flow__prompt input')!, 'github.example.com')
+  await act(async () => { container.querySelector<HTMLFormElement>('.auth-flow__prompt')!.requestSubmit() })
+  await until(() => text().includes('That sign-in step is no longer waiting'), 'the failure')
+  expect(container.querySelector('.auth-flow__prompt input')).not.toBeNull()
+  window.superego.call = call
+  await peer.call('auth.cancel', { flow: started })
+})

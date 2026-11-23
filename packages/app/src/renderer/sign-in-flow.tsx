@@ -2,7 +2,7 @@
 // in its daemon half, an MCP server's, say). The flow runs on its machine; this follows what it says (`auth.event`),
 // opens the page it gives in the browser, asks what it asks (answered with `auth.respond`), and stops it on Cancel, or
 // once it's taken away unfinished (its row closed): nothing is left waiting on the browser, holding a port.
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react'
 import type { AuthEvent, AuthPrompt, Notifications } from '@superego/protocol'
 import { autoFocusOnOpen, Button, TextField } from '@superego/ui'
 import { copyText } from './copy-text.ts'
@@ -90,6 +90,8 @@ function FlowEvents({ flow, events, machine }: { flow?: string; events: AuthEven
   const dispatch = useRegistry().router.dispatch
   const closed = new Set(events.flatMap((e) => e.type === 'prompt_closed' ? [e.id] : []))
   const [answered, setAnswered] = useState<Set<string>>(new Set())
+  // Answers that failed (the step no longer waiting, the machine gone), by question: said under it, asked again.
+  const [refused, setRefused] = useState<Map<string, string>>(new Map())
   // A page whose redirect can be pasted: the flow's own words on it say what the fallback below does.
   const pasted = events.some((e) => e.type === 'prompt' && e.prompt.type === 'manual_code')
   return (
@@ -105,10 +107,17 @@ function FlowEvents({ flow, events, machine }: { flow?: string; events: AuthEven
           case 'prompt':
             if (closed.has(event.id) || answered.has(event.id) || !flow) return null
             const answer = (value: string) => {
-              setAnswered((set) => new Set(set).add(event.id))
-              void dispatch('auth.respond', { flow, prompt: event.id, value }, { machine, source: 'settings' })
-                .catch((error: Error) => console.error('Answering the sign-in failed', error))
+              const id = event.id
+              setAnswered((set) => new Set(set).add(id))
+              void dispatch('auth.respond', { flow, prompt: id, value }, { machine, source: 'settings' }).then(
+                () => setRefused((map) => { const next = new Map(map); next.delete(id); return next }),
+                (error: Error) => {
+                  console.error('Answering the sign-in failed', error)
+                  setRefused((map) => new Map(map).set(id, error.message))
+                  setAnswered((set) => { const next = new Set(set); next.delete(id); return next })
+                })
             }
+            const why = refused.get(event.id)
             // The browser's redirect comes back by itself (here, or caught by the app for another computer): pasting it
             // is for when it doesn't.
             if (event.prompt.type === 'manual_code') {
@@ -116,10 +125,16 @@ function FlowEvents({ flow, events, machine }: { flow?: string; events: AuthEven
                 <details key={index} className="auth-flow__fallback">
                   <summary>Browser didn't come back?</summary>
                   <PromptField prompt={{ ...event.prompt, message: 'Paste the address it ended on' }} onAnswer={answer} />
+                  {why && <p className="setting__error" role="alert">{why}</p>}
                 </details>
               )
             }
-            return <PromptField key={index} prompt={event.prompt} onAnswer={answer} />
+            return (
+              <Fragment key={index}>
+                <PromptField prompt={event.prompt} onAnswer={answer} />
+                {why && <p className="setting__error" role="alert">{why}</p>}
+              </Fragment>
+            )
           default: return null
         }
       })}

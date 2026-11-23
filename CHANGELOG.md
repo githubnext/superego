@@ -27,6 +27,8 @@
 - A local model server is added by its address as you'd write it (`localhost:11434`), its models in its own order, and
   embedding models are no longer offered as chat models.
 - Pasting a sign-in page's address is only offered when the browser didn't come back by itself.
+- An answer to a sign-in's question that doesn't go through says why, and the question is asked again, instead of the
+  sign-in sitting there.
 - Tables in answers fit a phone: a column of text keeps a readable width, a thread named in one wraps, and a table
   too wide to fit scrolls all the way to its last column instead of cutting it off.
 - Extensions can ask for a key or token as a secret: you set it in Settings (or `superego secrets set <key>` in your own
