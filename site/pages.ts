@@ -17,13 +17,15 @@ export const sections: Section[] = [
   {
     title: 'Using Superego',
     pages: [
-      { slug: '', title: 'Overview', src: 'docs/overview.md', intro: false, drop: ['Layout', 'A registry mirror'] },
-      { slug: 'getting-started', title: 'Getting started', src: 'docs/getting-started.md' },
+      { slug: '', title: 'Getting started', src: 'docs/getting-started.md' },
+      { slug: 'overview', title: 'Overview', src: 'docs/overview.md' },
+      { slug: 'machines', title: 'Machines', src: 'docs/machines.md' },
       { slug: 'cli', title: 'The command', src: 'packages/cli/skill/cli.md' },
       { slug: 'profiles', title: 'Profiles', src: 'packages/cli/skill/profiles.md' },
       { slug: 'thread-tools', title: 'Thread tools', src: 'packages/cli/skill/thread-tools.md' },
+      { slug: 'mcp', title: 'MCP servers', src: 'docs/mcp.md', drop: ['How it works'] },
       { slug: 'themes', title: 'Themes', src: 'docs/themes.md' },
-      { slug: 'mcp', title: 'MCP servers', src: 'docs/mcp.md', drop: ['Decisions', 'Decided questions', 'Future'] },
+      { slug: 'claude-agent', title: 'Claude Agent (experimental)', src: 'docs/claude-agent.md' },
     ],
   },
   {
@@ -35,12 +37,7 @@ export const sections: Section[] = [
       { slug: 'daemon', title: 'The daemon half', src: 'packages/cli/skill/daemon.md' },
       { slug: 'ui', title: 'The UI half', src: 'packages/cli/skill/ui.md' },
       { slug: 'window', title: 'The window', src: 'packages/cli/skill/window.md' },
-      {
-        slug: 'blocks',
-        title: 'Blocks',
-        src: 'docs/blocks.md',
-        drop: ['5. What gets deleted, and the migration', '6. The extension API version', '7. Lanes', 'Decisions'],
-      },
+      { slug: 'blocks', title: 'Blocks', src: 'docs/blocks.md' },
       { slug: 'lifecycle', title: 'Lifecycle and versions', src: 'packages/cli/skill/lifecycle.md' },
     ],
   },

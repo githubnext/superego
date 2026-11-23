@@ -179,7 +179,7 @@ overrides:
   '@anthropic-ai/claude-agent-sdk-win32-arm64': '-'
   '@anthropic-ai/claude-agent-sdk-win32-x64': '-'
 
-pnpmfileChecksum: sha256-8RoD5CkWTubjdo8qG3mRkX7fEgwSEWupGaaz+qEClz4=
+pnpmfileChecksum: sha256-IGR+5r5dDJ0xOYoO4D+qdoZ3wgkImwUFcoDr5EiGBLY=
 
 patchedDependencies:
   '@base-ui/react@1.9.0': ec1221bddf19669c1cd9088ce3d8f6c82b27911a68f118ba96d0a6d53ae3d568

@@ -70,32 +70,16 @@ the new app restarts it. Afterwards: `superego daemon stop` with `SUPEREGO_HOME=
 
 ## Machines on releases
 
-A machine the app reaches over ssh can run a release instead of main:
-[`scripts/install-machine.sh --release [version]`](../scripts/install-machine.sh), the newest by default.
+[`scripts/install-machine.sh --release [version]`](../scripts/install-machine.sh) puts a machine on a release (the
+newest by default): on macOS the release's app, with no checkout; on Linux a checkout at the release's tag. Users'
+side of it is in [Machines](machines.md#installing-superego-there).
 
-- **macOS:** it downloads the release's zip with `gh` (signed in there), puts
-  `Superego.app` in `~/Applications` (replacing an older one), and writes `~/.local/bin/superego` to run the app's CLI.
-  It needs no checkout, pnpm or Node.
-- **Linux** (there's no Linux build): the checkout checks out the release's tag instead of pulling main, and installs as
-  for main.
-
-Either way it restarts a running daemon, unless agents are working there: `SUPEREGO_RESTART_NOW=1` restarts it anyway
-(they resume after). Before, check with `ssh <host> '~/.local/bin/superego threads'`.
-
-To move a machine to releases, from a checkout of the repository anywhere (it reads the script from stdin; on Linux it
-installs the checkout at `~/dev/superego`, or `SUPEREGO_DIR`), or there with its own checkout's script:
-
-```sh
-ssh <host> 'bash -s -- --release' < scripts/install-machine.sh
-ssh <host> '~/dev/superego/scripts/install-machine.sh --release'
-```
-
-After a release, update each machine the same way, or with Update in the app (`superego machines update <host>`): a
-Mac on releases runs main's install-machine.sh from GitHub, a checkout at a release's tag checks out the newest tag. A
-Mac that runs the app updates itself too (see [Automatic updates](#automatic-updates)), its daemon with it. A
-Mac's ssh command stays `~/.local/bin/superego connect --start`. To bring a Linux machine back to main, run its
-install-machine.sh without `--release`.
-
+- It restarts a running daemon, unless agents are working there: `SUPEREGO_RESTART_NOW=1` restarts it anyway (they
+  resume after).
+- Update in the app (`superego machines update <host>`) on a Mac on releases runs main's install-machine.sh from
+  GitHub; on a checkout at a release's tag, it checks out the newest tag. A Mac that runs the app also updates itself
+  (see [Automatic updates](#automatic-updates)), its daemon with it.
+- To bring a Linux machine back to main, run its install-machine.sh without `--release`.
 
 ## Once per Mac
 
@@ -199,7 +183,7 @@ sg extension new foo && sg extension test foo && sg extension new bar --ui && sg
 - **pnpm won't run** (`ERR_PNPM_PNPM_ENGINE_IDENTITY_UNVERIFIABLE`): where registry.npmjs.org is blocked, pnpm
   verifies the version `packageManager` pins against the registry in its own config, not `NPM_CONFIG_REGISTRY`. Set
   the mirror there once, from outside the repo: `cd ~ && pnpm config set --global registry "$NPM_CONFIG_REGISTRY"`
-  (see [a registry mirror](overview.md#a-registry-mirror)).
+  (see [a registry mirror](development.md#a-registry-mirror)).
 - **No Developer ID / no notarytool profile**: see [Once per Mac](#once-per-mac).
 - **Notarization Invalid**: the error prints Apple's log; it names each file and what was wrong with it (usually
   something unsigned, or signed without the hardened runtime or a timestamp).

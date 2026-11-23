@@ -81,7 +81,7 @@ Then wire it in:
    its `package.json`).
 3. `app/src/renderer/main.tsx`: add the UI half to `mountApp(app, { extensions: [...] })`.
 4. Root `tsconfig.json`: add `{ "path": "extensions/orders" }` to `references`, or `pnpm typecheck` skips it.
-5. `docs/overview.md`'s Layout table: a line for it.
+5. `docs/development.md`'s table of bundled extensions: a line for it.
 
 A daemon half the app or a test configures is a factory named after it, `ordersExtension({ … })`, with the module's
 default export the one most hosts want (`export default ordersExtension()`); one nothing configures is just the default
@@ -152,4 +152,4 @@ Pure logic (parsing, dividing work, a composer provider's `word`, a `sentWith` r
 - Name your CSS classes after the extension (`.orders-list`, `.orders-list__row`). The window's own look comes through
   its components (`PaneMessage`, `PaneNote`, `PaneButton`, `HeaderChip`, `ThreadBadge`, `Chip`, `RailButton`, `DiffStat`), never its
   class names, and a fact through `factsOf<T>(thread, about)`.
-- Keep this skill (`packages/cli/skill/`) and `docs/overview.md` in step when the extension API, profiles or commands change.
+- Keep this skill (`packages/cli/skill/`) and `docs/` in step when the extension API, profiles or commands change.

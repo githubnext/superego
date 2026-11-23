@@ -1,6 +1,7 @@
 # A thread that runs the user's Claude Code: proof and design
 
-2026-11-20. A design; waves 1 to 4 (§4) are built (wave 4 on 2026-11-21).
+2026-11-20. A design; waves 1 to 4 (§4) are built (wave 4 on 2026-11-21). What a user needs is in
+[claude-agent.md](../claude-agent.md).
 
 The idea: an opt-in second agent kind for threads. The thread runs the user's own installed, unmodified `claude`
 through the TypeScript Agent SDK, signed in by the user with Claude Code's own `/login`. Superego never sees, stores

@@ -1,5 +1,5 @@
 // pnpm-lock.yaml names only the public npm registry: each registry package as an integrity hash, no tarball URL
-// (docs/overview.md#a-registry-mirror). A machine resolving through a mirror gets the mirror's metadata instead, and a
+// (docs/development.md#a-registry-mirror). A machine resolving through a mirror gets the mirror's metadata instead, and a
 // mirror that serves its tarballs from another host, with only sha1 hashes, would write those into the lockfile.
 // afterAllResolved puts each such package back as registry.npmjs.org has it, after checking that the mirror's tarball
 // is the one npm serves, or fails the install: never a lockfile that doesn't verify against npm.
@@ -31,7 +31,7 @@ export const hooks = {
       throw new Error(
         `${failures.length} of the ${mirrored.length} packages resolved through a registry mirror can't be written to ` +
           `pnpm-lock.yaml as registry.npmjs.org has them:\n  ${failures.sort().join('\n  ')}\n` +
-          'The lockfile names only npm (docs/overview.md#a-registry-mirror). Make this change against npm ' +
+          'The lockfile names only npm (docs/development.md#a-registry-mirror). Make this change against npm ' +
           `(add --registry=${NPM}), or on a machine that reaches it.`,
       )
     }

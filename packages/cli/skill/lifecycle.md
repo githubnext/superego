@@ -154,8 +154,8 @@ Three versions, each for its own question:
 
 | Version | What it versions | Where it's said | Who checks it |
 |---|---|---|---|
-| **The release** | the code a machine runs: its git commit (the packages are `0.0.0`) | `hello.machine.commit`, Settings → Machines ("an older Superego") | the user, who updates |
-| **The extension API** | what the host gives extensions: `superego.` in either half, `'superego'`, `'superego/ui'`; semver, `EXTENSION_API` (`2.5.0`; a minor version adds, a major one renames or removes) | `hello.api` | the host, setting an extension up |
+| **The release** | the code a machine runs: its build, and a checkout's git commit | `hello.machine.build` and `commit`, Settings → Machines ("an older Superego") | the user, who updates |
+| **The extension API** | what the host gives extensions: `superego.` in either half, `'superego'`, `'superego/ui'`; semver, `EXTENSION_API` in `packages/protocol/src/contract.ts` (a minor version adds, a major one renames or removes) | `hello.api` | the host, setting an extension up |
 | **The protocol** | the wire: a generation, `PROTOCOL_VERSION` (`2`), and in it the features each side announces | `hello.version`, `hello.features` | both ends, at `hello` |
 
 And each extension's own **version**, semver, which its other half, profiles and scripts rely on.
@@ -178,9 +178,7 @@ export const about = { name: 'orders', version: '1.2.0', api: '^5', title: 'Orde
   (the thread says so); a profile UI's is left out, the rest of the profile set up. Unset: any.
 
 The host's `EXTENSION_API` goes up a minor when the API grows, and a major when something an extension could rely on
-changes or goes, which also moves every bundled extension's `api`. Two went from 2.1 without one, unused by any
-extension: the daemon half's `harness`, and `capabilities` (with `has(…, 'ext:<name>#<capability>')`): ask for a
-`version` instead.
+changes or goes, which also moves every bundled extension's `api`.
 
 ### Checking them
 
@@ -216,7 +214,7 @@ What a window and a daemon of different releases do with each other:
   A generation changes for a break nothing can bridge, and starts clean: no old names, no read-throughs of old data.
 - **The same generation:** they work together. The core's methods, actions, notifications and features only grow in
   a generation: `RELEASED` (`packages/protocol/src/released.ts`) lists what generation 2 released, and a test holds
-  the daemon to answering all of it. Anything added later in the generation goes in `FEATURES` (empty so far), is
+  the daemon to answering all of it. Anything added later in the generation goes in `FEATURES`, is
   announced in `hello.features`, and is checked with `offers()` before it's used; a window reads an extension's daemon
   half's manifest in `hello.extensions`. At another major than the window's UI half, the UI half draws nothing for that
   machine's threads; a minor it relies on, it checks with `has(machine, 'ext:git@^1.2')`.

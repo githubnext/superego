@@ -20,7 +20,7 @@
 # Node comes from mise when it's there (see mise.toml), else from PATH: it needs to run TypeScript (22.18+).
 #
 # Packages come from the registry in this machine's pnpm config (registry.npmjs.org unless it names a mirror; see
-# docs/overview.md#a-registry-mirror), or SUPEREGO_REGISTRY's for this run. The install is frozen: it never rewrites
+# docs/development.md#a-registry-mirror), or SUPEREGO_REGISTRY's for this run. The install is frozen: it never rewrites
 # pnpm-lock.yaml.
 set -euo pipefail
 

@@ -9,6 +9,10 @@ everywhere:
 `superego help` lists every command; `superego <command> --help` (`superego extension test --help`, say) gives one
 command's usage, options and examples.
 
+Settings → Command line installs `superego` in `~/.local/bin`, running the CLI built into the app.
+`superego --skill` prints a skill for agents on using and extending Superego;
+`superego --skill > ~/.agents/skills/superego/SKILL.md` installs it, and `superego --skill <topic>` prints one topic.
+
 ## Threads
 
 ```sh
@@ -237,3 +241,5 @@ Its data is in `~/.superego` (`SUPEREGO_HOME`), its log in `~/.superego/daemon.l
 | `SUPEREGO_MODEL` | default model; `faux` echoes, for trying things without a provider |
 | `SUPEREGO_CWD` | default folder for new threads |
 | `SUPEREGO_AGENTS` | where skills and `AGENTS.md` live (default `~/.agents`) |
+| `SUPEREGO_CLAUDE` | the `claude` Claude Agent threads run (default: the one on the login shell's `PATH`) |
+| `SUPEREGO_SECRETS` | `file`: keep extensions' secrets encrypted in the data folder, not in the keychain |

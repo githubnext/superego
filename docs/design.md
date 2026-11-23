@@ -3,7 +3,7 @@
 One app for running agents: a desktop app, a daemon per machine, and the same window in a browser or on a phone. What
 an agent *is* comes from profiles: files in `~/.superego` or inside a project's own `.superego`, so a repo carries the
 harness it needs. What it does for the user is in [overview.md](overview.md); how to extend it is the skill
-(`packages/cli/skill/`, `superego --skill`).
+(`packages/cli/skill/`, `superego --skill`); the repository's layout is in [development.md](development.md).
 
 ## Principles
 
@@ -127,7 +127,15 @@ client agrees.
 - **The terminal:** the daemon keeping each terminal's screen with a headless emulator, so a window attaching gets
   the screen rather than raw output replayed; terminals that survive a daemon restart (a PTY holder process);
   channels relayed by the hub, so a browser reaches terminals on the machines it reaches; a tab title from the shell
-  (OSC 0/2). Native libghostty waits: [research/terminal-native.md](research/terminal-native.md).
+  (OSC 0/2). The headless emulator can be Ghostty's own (libghostty-vt, as WebAssembly in Node: tried, it works).
+  Embedding the native libghostty in Electron would be weeks of work, macOS only, on an API Ghostty doesn't offer
+  to embedders.
 - **A sandboxed tier for UI extensions**, for UI an agent writes: today a profile's UI runs with the window's full
   authority.
+- **MCP servers:** importing servers from Claude Code and Cursor configs; per-tool narrowing in profiles; code mode
+  over MCP tools; elicitation as `ask_ui`, prompts as `/` commands, resources as `@` mentions; replaying read-only
+  calls after a restart; Client ID Metadata Documents; sandboxed stdio servers for projects.
+- **The renderer's cost** (`app/test/profile.sh` measures it): sidebar rows that render only when their thread
+  changes (the shell's state as a store with selector hooks); a terminal render loop that sleeps until something
+  changed (upstream, in ghostty-web).
 - **Publishing the packages**; then extensions installed at runtime.

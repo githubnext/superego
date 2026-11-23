@@ -10,8 +10,8 @@ allowBuilds:
   '@google/genai': false
   protobufjs: false
 # No `registry` here or in a project .npmrc: the lockfile names only registry.npmjs.org, and a machine that needs a
-# mirror sets it in its own pnpm config (docs/overview.md#a-registry-mirror).
-# Resolve only versions a week old or more: a mirror that lags npm by a few days (docs/overview.md#a-registry-mirror)
+# mirror sets it in its own pnpm config (docs/development.md#a-registry-mirror).
+# Resolve only versions a week old or more: a mirror that lags npm by a few days (docs/development.md#a-registry-mirror)
 # then carries every version the lockfile names, and a compromised release has time to be caught.
 minimumReleaseAge: 10080
 minimumReleaseAgeExclude:

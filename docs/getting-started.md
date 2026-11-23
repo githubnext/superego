@@ -30,14 +30,25 @@ To open setup again, use Set up models… in Settings → Providers or in ⌘K. 
 provider, such as Amazon Bedrock, Google Vertex AI and Azure. If a message can't be sent because no model is set up, the
 message box offers Set up models… and returns you to the thread afterwards.
 
-## Another machine
+### On another machine
 
 Each machine you add in Settings → Machines runs its own agents with its own providers. Open Set up models… on that
 machine's page in Settings, or pick the machine at the top of setup. Setup then looks for keys, Ollama and Claude Code on
 that machine.
 
+## Your first thread
+
+New thread (`⌘N`) asks for a machine, a folder, a profile and a model, and what to work on. The thread keeps working
+when you close the window or quit the app: the daemon runs it. The sidebar shows each thread's status, and `⌘U` lists
+what finished, failed or needs you.
+
+In a git repository, tick In a worktree of its own and the thread works on a new branch in a worktree, apart from your
+checkout.
+
 ## Next
 
-- [Overview](overview.md) covers projects, threads, panes and the rest of the window.
-- [Profiles](../packages/cli/skill/profiles.md) describes an agent as files.
-- [The command](../packages/cli/skill/cli.md) covers `superego` in a terminal.
+- [Overview](overview.md): projects, threads, panes, Ego and the keys.
+- [Machines](machines.md): agents on other computers, and the app on a phone.
+- [The command](../packages/cli/skill/cli.md): `superego` in a terminal.
+- [Profiles](../packages/cli/skill/profiles.md): an agent as files, in your home or in a project.
+- [Claude Agent](claude-agent.md): threads that run your own Claude Code.
