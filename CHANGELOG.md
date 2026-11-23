@@ -35,7 +35,7 @@
   opens them), and when an address is needed they use this machine's real Tailscale name on your tailnet.
 - On a phone, New thread and other dialogs stay put when the keyboard comes up: they end at the keyboard with their
   header on top, and the field you're typing in stays in sight. The prompt no longer offers to AutoFill a contact, and
-  New thread's Model and Thinking menus no longer overlap.
+  New thread's Model and Thinking menus no longer overlap, and the Model menu fits on the screen.
 - Signing in with a code to enter (GitHub Copilot, ChatGPT through Codex, and others): the code shows large, one click
   or reaching it with Tab selects all of it, it has a Copy button, and opening the sign-in page copies it too.
 - Signing in to GitHub Copilot with its domain left blank, as it says, goes on to github.com instead of doing nothing.
@@ -44,8 +44,14 @@
 - Coming back to a thread (from Settings, Ego's thread or another thread) shows its panes as you left them: a terminal
   pane no longer takes the focus and scrolls itself into view, and the pane you had focused keeps the focus.
 - Each thread remembers how wide you made its column and its panes, as a proportion of the window: they're kept as you
-  switch threads, resize the window, restart, or open the thread in another window or on another device.
+  switch threads, resize the window, restart, or open the thread in another window or on another device. Widths you
+  dragged in 0.1.10 aren't carried over: each thread starts at its default widths once.
 - In a narrow window, Settings' tabs stay in a list down the side instead of lining up across the middle of it.
+- Settings opens each tab at its top, not scrolled as far as the last one was.
+- Narrowing the window to a phone's width (or widening it back) while you're in Settings keeps what you were doing:
+  a secret you were replacing, where you'd scrolled to, and the focus.
+- Accent colour shows the theme's accent while it's the one in use, instead of the default blue.
+- In the dark, the editor's current line and its number are drawn dark, not on a light stripe that hid the number.
 - Settings has Appearance and Hotkeys tabs of their own beside General. Extensions' app settings stay in General
   unless they ask for another tab (`tab: 'appearance'` or `'hotkeys'`).
 
