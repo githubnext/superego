@@ -24,7 +24,7 @@ export type AuthFlow = {
   prompt(prompt: AuthPrompt, options?: { signal?: AbortSignal }): Promise<string>
 }
 
-type Running = { abort: AbortController; prompts: Map<string, { resolve(value: string): void; close(): void }>; ended: Promise<void> }
+type Running = { abort: AbortController; why?: string; prompts: Map<string, { resolve(value: string): void; close(): void }>; ended: Promise<void> }
 
 export type AuthFlows = {
   /**
@@ -34,7 +34,8 @@ export type AuthFlows = {
   start(emit: (event: AuthEvent) => void, run: (flow: AuthFlow) => Promise<void>, signal?: AbortSignal): string
   /** Answer a flow's prompt; `not_found` when it no longer waits. */
   respond(flow: string, prompt: string, value: string): void
-  cancel(flow: string): void
+  /** Stop a flow: it fails `Cancelled`, or as `why` says (another sign-in to the same provider started). */
+  cancel(flow: string, why?: string): void
   /** Once a flow has ended, everything it held let go (a port it listened on); at once for one that's gone. */
   ended(flow: string): Promise<void>
   /** Cancel every flow: the daemon is stopping. */
@@ -79,7 +80,7 @@ export function createAuthFlows({ timeout = FLOW_TIMEOUT } = {}): AuthFlows {
         emit({ type: 'done' })
       }, (error: unknown) => {
         const message = timedOut ? `Timed out: signing in wasn't finished within ${Math.round(timeout / 60_000)} minutes`
-          : flow.abort.signal.aborted ? 'Cancelled' : error instanceof Error ? error.message : String(error)
+          : flow.abort.signal.aborted ? flow.why ?? 'Cancelled' : error instanceof Error ? error.message : String(error)
         emit({ type: 'failed', message })
       }).finally(() => {
         clearTimeout(timer)
@@ -95,8 +96,11 @@ export function createAuthFlows({ timeout = FLOW_TIMEOUT } = {}): AuthFlows {
       if (!pending) throw new RpcError('not_found', 'That sign-in step is no longer waiting')
       pending.resolve(value)
     },
-    cancel(flow) {
-      flows.get(flow)?.abort.abort()
+    cancel(flow, why) {
+      const running = flows.get(flow)
+      if (!running) return
+      if (why && !running.abort.signal.aborted) running.why = why
+      running.abort.abort()
     },
     ended: (flow) => flows.get(flow)?.ended ?? Promise.resolve(),
     close() {

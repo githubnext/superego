@@ -95,6 +95,9 @@ it("makes Claude Code the machine's default when it's used in setup: ⌘N then s
   expect(claude()!.textContent).toContain('Signed in with your Claude Max plan · experimental')
   claude()!.querySelector('button')!.click()
   await ui!.until(() => Boolean($('.setup')?.textContent?.includes('New threads run on your Claude Code')), 'Claude Code used')
+  // Named as it was found, saying once that it's experimental.
+  expect($('.setup__rows .setup__what')!.textContent).toBe('Claude CodeSigned in with your Claude Max plan · experimental')
+  expect($('.setup__models .setup__note')!.textContent).toBe('New threads run on your Claude Code.')
   expect((await daemon!.call<{ default: { model?: string } }>('agent.models', {})).default.model).toBe('claude-agent/opus')
   expect($('.setup__model.is-default')?.textContent).toContain('Opus')
 

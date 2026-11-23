@@ -156,7 +156,7 @@ it("cancels a provider's unfinished sign-in when another starts, so the new one 
   await until(() => Boolean(events.get(first.flow)?.some((e) => e.type === 'prompt')))
   const second = await signIn()
   await until(() => events.get(first.flow)?.at(-1)?.type === 'failed')
-  expect(events.get(first.flow)!.at(-1)).toEqual({ type: 'failed', message: 'Cancelled' })
+  expect(events.get(first.flow)!.at(-1)).toEqual({ type: 'failed', message: 'Signing in again elsewhere' })
   await until(() => Boolean(events.get(second.flow)?.some((e) => e.type === 'prompt')))
   await peer.call('auth.cancel', { flow: second.flow })
 })

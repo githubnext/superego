@@ -343,3 +343,15 @@ it("says when an answer to a sign-in's question failed, and asks it again", asyn
   window.superego.call = call
   await peer.call('auth.cancel', { flow: started })
 })
+
+it("asks for a GitHub Enterprise's address on its own, not blank for github.com", async () => {
+  await start()
+  await mount()
+  await until(() => Boolean(rowOf('GitHub Copilot')), 'the ways in')
+  await click(way('GitHub Copilot'))
+  await until(() => Boolean(button('Signing in to GitHub Enterprise?')), 'the Enterprise link')
+  await click(button('Signing in to GitHub Enterprise?'))
+  await until(() => Boolean(container.querySelector('input[aria-label="Your GitHub Enterprise address"]')), 'its address asked')
+  expect(text()).not.toContain('blank for github.com')
+  expect(button('Continue').disabled).toBe(true)
+})

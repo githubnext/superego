@@ -94,10 +94,16 @@ const SIGN_INS = [
 const MORE_NAMED = ['amazon-bedrock', 'google-vertex', 'azure']
 
 type Failure = { message: string }
-/** What setup has picked: a provider, or another kind of agent (`claude-agent`); its default model to choose and try. */
-type Ready = { provider: string; detail?: string }
-/** The way in being opened under its row: a sign-in (Copilot's for a GitHub Enterprise when `enterprise`), a key, a local server, any provider. */
-type Open = { kind: 'signIn'; provider: string; enterprise?: boolean } | { kind: 'key' } | { kind: 'local' } | { kind: 'more' }
+/**
+ * What setup has picked: a provider, or another kind of agent (`claude-agent`); its default model to choose and try.
+ * What an extension found is named as its row was (Claude Code), with its line.
+ */
+type Ready = { provider: string; name?: string; detail?: string }
+/**
+ * The way in being opened under its row: a sign-in (Copilot's to a GitHub Enterprise when `enterprise`, at `domain`
+ * once it's given), a key, a local server, any provider.
+ */
+type Open = { kind: 'signIn'; provider: string; enterprise?: boolean; domain?: string } | { kind: 'key' } | { kind: 'local' } | { kind: 'more' }
 
 /** How a provider is signed in, in a few words: a sign-in, the variable its key is read from, a key, a server's address. */
 function howSignedIn(info: ProviderAuthInfo | undefined): string {
@@ -189,7 +195,7 @@ export function SetupPage({ machine: machineId }: { machine: string }) {
     try {
       await dispatch('settings.set', { key: 'agent.model', value: found.model }, on)
       await Promise.all([models(), look()])
-      setReady({ provider: found.model.slice(0, found.model.indexOf('/')), detail: found.detail })
+      setReady({ provider: found.model.slice(0, found.model.indexOf('/')), name: found.label, detail: found.detail })
     } catch (error) {
       console.error(`Using ${found.label} failed`, error)
       setProblem((error as Error).message)
@@ -253,7 +259,7 @@ export function SetupPage({ machine: machineId }: { machine: string }) {
           <h1>Set up a model</h1>
           {where}
         </header>
-        <Chosen machine={machineId} provider={ready.provider} name={kind?.title ?? nameOf(ready.provider)}
+        <Chosen machine={machineId} provider={ready.provider} name={ready.name ?? kind?.title ?? nameOf(ready.provider)}
           detail={kind ? kind.unavailable ?? ready.detail ?? kind.description ?? '' : howSignedIn(providers.find((p) => p.id === ready.provider))}
           catalog={catalog} onCatalog={models} onTalks={setTalks} />
         <button type="button" className="setup__link setup__another" onClick={() => setReady(undefined)}>Add another provider</button>
@@ -274,7 +280,6 @@ export function SetupPage({ machine: machineId }: { machine: string }) {
       <header className="setup__hello">
         <span className="setup__mark" aria-hidden />
         <h1>Set up a model</h1>
-        <p>Choose what does the thinking.</p>
         {where}
       </header>
       {probe && 'message' in probe && <p className="setup__error">Couldn't look at what {placeName(machine)} has: {probe.message}</p>}
@@ -307,9 +312,10 @@ export function SetupPage({ machine: machineId }: { machine: string }) {
             const copilot = s.provider === 'github-copilot'
             return (
               <Way key={s.provider} icon={<GlobeIcon size={14} />} title={s.label} detail={s.detail} open={Boolean(signing)} onToggle={toggle(way)}>
-                {signing && <SignInFlow key={signing.enterprise ? 'enterprise' : 'github'} machine={machineId} title="Signing in…"
-                  start={() => dispatch('auth.signIn', { provider: s.provider, type: 'oauth', ...(copilot && !signing.enterprise ? { domain: '' } : {}) }, on) as Promise<{ flow: string }>}
-                  onClose={() => setOpen(undefined)} onDone={() => void useProvider(s.provider)} />}
+                {signing?.enterprise && signing.domain === undefined ? <EnterpriseForm onStart={(domain) => setOpen({ ...enterprise, domain })} />
+                  : signing && <SignInFlow key={signing.domain ?? 'github'} machine={machineId} title="Signing in…"
+                    start={() => dispatch('auth.signIn', { provider: s.provider, type: 'oauth', ...(copilot ? { domain: signing.domain ?? '' } : {}) }, on) as Promise<{ flow: string }>}
+                    onClose={() => setOpen(undefined)} onDone={() => void useProvider(s.provider)} />}
                 {copilot && signing && !signing.enterprise && (
                   <p className="setup__note"><button type="button" className="setup__link" onClick={() => setOpen(enterprise)}>Signing in to GitHub Enterprise?</button></p>
                 )}
@@ -336,6 +342,18 @@ export function SetupPage({ machine: machineId }: { machine: string }) {
 }
 
 const rank = (id: string) => { const at = FIRST_KEYS.indexOf(id); return at < 0 ? Infinity : at }
+
+/** A GitHub Enterprise's address, to sign in to Copilot there. */
+function EnterpriseForm({ onStart }: { onStart(domain: string): void }) {
+  const [typed, setTyped] = useState('')
+  const domain = typed.trim().replace(/^https?:\/\//i, '').replace(/\/.*$/, '')
+  return (
+    <form className="setup__local" onSubmit={(e) => { e.preventDefault(); if (domain) onStart(domain) }}>
+      <TextField aria-label="Your GitHub Enterprise address" autoFocus placeholder="Your GitHub Enterprise address" value={typed} onChange={(e) => setTyped(e.target.value)} />
+      <Button type="submit" variant="primary" disabled={!domain}>Continue</Button>
+    </form>
+  )
+}
 
 /**
  * A row of setup's lists, as an extension draws one among what was found (the `onboarding` slot): an icon, what it is
@@ -572,7 +590,7 @@ function Chosen({ machine, provider, name, detail, catalog, onCatalog, onTalks }
             onChange={(next) => { if (next && next !== value) change('agent.model', next) }}
             onStar={(next) => change('agent.favourites', next)} />
         )}
-        <p className="setup__note">{kind ? 'New threads run on your Claude Code. Experimental.' : 'Starred models come first in the model menus.'}</p>
+        <p className="setup__note">{kind ? 'New threads run on your Claude Code.' : 'Starred models come first in the model menus.'}</p>
         {error && <p className="setup__error" role="alert">{error}</p>}
       </section>
       {!kind && (

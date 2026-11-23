@@ -615,7 +615,7 @@ export async function createAgentSettings(settings: SettingsRegistry, dataDir: s
       // One sign-in to a provider at a time: an earlier one not finished (its window closed, say) is cancelled, and
       // this one starts once it has let go of what it held (ChatGPT's listens on a fixed port).
       const earlier = signingIn.get(provider)
-      if (earlier) flows.cancel(earlier)
+      if (earlier) flows.cancel(earlier, 'Signing in again elsewhere')
       const id = flows.start(emit, async (flow) => {
         if (earlier) await flows.ended(earlier)
         const prompt = ({ signal, ...prompt }: PiAuthPrompt) => {

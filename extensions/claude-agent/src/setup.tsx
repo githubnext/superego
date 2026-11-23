@@ -31,11 +31,11 @@ export function ClaudeFound({ machine, use }: { machine: MachineEntry; use(found
         end={<Button disabled={checking} onClick={() => check()}>{checking ? 'Checking…' : 'Check again'}</Button>} />
     )
   }
-  const detail = signedIn(status)
+  const detail = `${signedIn(status)} · experimental`
   // A Max plan has room for Opus; any other, Sonnet.
   const model = `${about.name}/${status.plan === 'max' ? 'opus' : 'sonnet'}`
   return (
-    <SetupRow icon={<TerminalIcon size={14} />} title="Claude Code" detail={`${detail} · experimental`}
+    <SetupRow icon={<TerminalIcon size={14} />} title="Claude Code" detail={detail}
       end={<Button onClick={() => use({ label: 'Claude Code', detail, model })}>Use</Button>} />
   )
 }
