@@ -48,10 +48,14 @@ await openApp({ name: 'keptpage', timeout: 180_000 }, async (t) => {
         const { data } = await debug.sendCommand('Page.captureScreenshot', { format: 'png' })
         debug.detach()
         const zoom = t.contents().getZoomFactor(), b = placed().getBounds()
-        over.push({ data, x: b.x / zoom, y: b.y / zoom, width: b.width / zoom, height: b.height / zoom })
+        // Rounded as the window rounds the view itself (web-view.tsx's footRadius): what's under its corners shows.
+        const radius = await run(`(() => { const host = document.querySelector('.web-view'), column = host?.closest('.panes__column'); if (!column) return 0
+          const r = column.getBoundingClientRect(), box = host.getBoundingClientRect(), style = getComputedStyle(column), edge = parseFloat(style.borderLeftWidth) || 0
+          return Math.abs(box.bottom - (r.bottom - edge)) < 1 ? Math.max(0, (parseFloat(style.borderBottomLeftRadius) || 0) - edge) : 0 })()`)
+        over.push({ data, x: b.x / zoom, y: b.y / zoom, width: b.width / zoom, height: b.height / zoom, radius })
       }
       await run(`(() => { for (const v of ${JSON.stringify(over)}) { const img = document.createElement('img'); img.className = 'look-native-view'; img.src = 'data:image/png;base64,' + v.data
-        Object.assign(img.style, { position: 'fixed', left: v.x + 'px', top: v.y + 'px', width: v.width + 'px', height: v.height + 'px', zIndex: 2147483647, pointerEvents: 'none' }); document.body.append(img) } })()`)
+        Object.assign(img.style, { position: 'fixed', left: v.x + 'px', top: v.y + 'px', width: v.width + 'px', height: v.height + 'px', borderRadius: v.radius + 'px', zIndex: 2147483647, pointerEvents: 'none' }); document.body.append(img) } })()`)
       if (over.length) await until(`[...document.querySelectorAll('.look-native-view')].every((img) => img.complete)`, 'the view drawn')
       await t.shot(`keptpage-${name}-${theme}`)
       await run(`document.querySelectorAll('.look-native-view').forEach((img) => img.remove())`)
