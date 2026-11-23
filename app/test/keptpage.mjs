@@ -1,5 +1,6 @@
-// A Browser pane's page beside the thread kept in view (run by `test/look.sh <dir> keptpage`): scrolled partly under the
-// thread, a still of it in its place, under the thread; scrolled back beside it, the page itself, with the focus;
+// A Browser pane's page beside the thread kept in view (run by `test/look.sh <dir> keptpage`): an editor partly under the
+// thread (the focus in the thread, then in the editor); scrolled partly under the thread, a still of it in its place,
+// under the thread; scrolled back beside it, the page itself, with the focus;
 // maximized; in front of a stack. Light and dark, the whole window, into $SUPEREGO_SHOWCASE_OUT. The page is a view of its
 // own over the window, not in its screenshots: each view shown is drawn over the screenshot at its bounds, above
 // everything, its four corners rounded as its box's, as the window draws it (an inset sheet in its column).
@@ -30,6 +31,8 @@ await openApp({ name: 'keptpage', timeout: 180_000 }, async (t) => {
   const view = await until(() => webContents.getAllWebContents().find((w) => w.getURL() === url && !w.isLoading()), "the page's view")
   await run(`window.superego.call('local', 'pane.open', { thread: '${id}', kind: 'editor', params: { path: 'README.md' } })`)
   await until(`!!document.querySelector('.file-editor .cm-content')`, 'the editor')
+  // Changes after it, so the row scrolls far enough to pass the editor under the thread.
+  await run(`window.superego.call('local', 'pane.open', { thread: '${id}', kind: 'diff' })`)
   const [browser, editor] = await run(`window.superego.call('local', 'thread.list', {}).then((l) => l.find((t) => t.id === '${id}').panes.map((p) => p.id))`)
   await run(`window.superego.call('local', 'pane.focus', { thread: '${id}', pane: '${editor}' })`)
   const scrollLeft = () => run(`document.querySelector('.panes').scrollLeft`)
@@ -67,9 +70,22 @@ await openApp({ name: 'keptpage', timeout: 180_000 }, async (t) => {
     }
   }
 
+  // A pane of the window's own (the editor) partly under the thread: it passes under the thread's card, through its
+  // handle, the thread's edge and shadow over it. The focus in the thread, then in the editor.
+  const under = (selector, by) => run(`(() => { const row = document.querySelector('.panes'), edge = document.querySelector('.panes__column--thread').getBoundingClientRect().right
+    row.scrollLeft += document.querySelector(${JSON.stringify(selector)}).getBoundingClientRect().left - edge + ${by} })()`)
+  await run(`document.querySelector('.panes__column--thread .composer textarea, .panes__column--thread [contenteditable]').focus()`)
+  await until(`!!document.querySelector('.panes__column--thread:focus-within')`, 'the focus in the thread')
+  await under(`[data-column="${editor}"]`, 160)
+  await t.settled()
+  await shot('under-editor')
+  await run(`document.querySelector('[data-column="${editor}"] .cm-content').focus()`)
+  await until(`!!document.querySelector('[data-column="${editor}"]:focus-within')`, 'the focus in the editor')
+  await under(`[data-column="${editor}"]`, 300)
+  await t.settled()
+  await shot('under-editor-focused')
   // Partly under the thread: a still in its place, the thread over it.
-  await run(`(() => { const row = document.querySelector('.panes'), edge = document.querySelector('.panes__gap--thread').getBoundingClientRect().right
-    row.scrollLeft += document.querySelector('.web-view').getBoundingClientRect().left - edge + 220 })()`)
+  await under('.web-view', 220 - 8)
   await until(() => !live(), 'the view out of sight')
   await until(`document.querySelector('.web-view__still')?.complete === true`, 'a still in its place')
   await shot('under')
