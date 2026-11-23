@@ -215,7 +215,7 @@ export class SettingsRegistry {
   }
 
   /**
-   * Set a secret (`value`), or clear it (`null`). Setting one needs it registered (a `secret` setting); clearing works
+   * Set a secret (`value`, trimmed), or clear it (`null`). Setting one needs it registered (a `secret` setting); clearing works
    * for any key that has a value, so one whose extension is gone can still be cleared. Listeners hear the key.
    */
   async setSecret(key: string, value: string | null): Promise<void> {
@@ -230,6 +230,8 @@ export class SettingsRegistry {
       const disabled = spec.disabled?.()
       if (disabled) throw new RpcError('setting_disabled', `${spec.title}: ${disabled}`)
       check(spec, value)
+      // As pasted, with the line break or spaces around it that no key or token has.
+      value = value.trim()
       // Its extension's word on it, which could quote it: never the secret itself, as errors are logged.
       const invalid = spec.validate?.(value)?.split(value).join('•••')
       if (invalid) throw new RpcError('invalid_setting', `${spec.title}: ${invalid}`)

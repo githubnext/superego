@@ -99,7 +99,7 @@ describe('upsert', () => {
     expect(settings.get('mail.token')).toBe(false)
     expect(settings.isSet('mail.token')).toBe(false)
 
-    await settings.setSecret('mail.token', 'fmu1-very-secret')
+    await settings.setSecret('mail.token', 'fmu1-very-secret\n')
     expect(secrets.values.get('mail.token')).toBe('fmu1-very-secret')
     expect(await settings.secret('mail.token')).toBe('fmu1-very-secret')
     expect(settings.get('mail.token')).toBe(true)
