@@ -97,6 +97,18 @@ theme still colours the phone.
     large-detent sheet: a gap above it under the status bar, rounded top corners, the app behind stepping back; its
     bar ✕ · title · action, the action (Start) at the trailing edge, prominent; no footer. Still as tall as what's
     visible: it ends at the keyboard (viewport.ts).
+  - Swipe to dismiss, as iOS's sheets: the phone's dialog is Base UI's Drawer (as the drawer and the thread's menu
+    are), so it follows the finger down from its bar, or from its body once that's scrolled to its top, and resists
+    going up; let go past 30% of its height (UIKit's feel; Base UI's own is half, patched) or flicked, it closes,
+    else it springs back. The scrim fades and the app behind steps forward in proportion (Base UI's
+    `Drawer.Indent`). No grabber: iOS shows one on a sheet with more than one height, not on a full-height one
+    with a bar of its own (Calendar's New Event, Mail's compose). Under reduced motion it follows the finger, and
+    lets go without sliding.
+  - Unsaved input: iOS's `isModalInPresentation`. A sheet holding changes it would lose (`unsaved` on the dialog:
+    the layout's text, an MCP server's form, New thread with a name or files) only tugs, a fifth as far, and
+    letting go asks in an action sheet: Discard Changes or Keep Editing. New thread's prompt doesn't count: it's
+    kept as a draft however the sheet is closed, there again on opening it, as Messages and Notes keep what's typed.
+    ✕ and Escape still close outright: an explicit Cancel.
 
 ### Inset-grouped lists → Settings
 

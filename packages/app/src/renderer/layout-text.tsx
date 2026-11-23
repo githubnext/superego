@@ -115,7 +115,8 @@ export function LayoutEditor() {
 function LayoutDialog({ onClose }: { onClose(): void }) {
   const [stored] = useAppSetting(LAYOUT)
   const registry = useRegistry()
-  const [text, setText] = useState(() => JSON.stringify(stored ?? {}, null, 2))
+  const [shown] = useState(() => JSON.stringify(stored ?? {}, null, 2))
+  const [text, setText] = useState(shown)
   const [problem, setProblem] = useState<string>()
   const save = () => {
     const read = parseLayout(text, layoutViews(registry.views))
@@ -123,7 +124,7 @@ function LayoutDialog({ onClose }: { onClose(): void }) {
     registry.router.dispatch('app.settings.set', { key: LAYOUT, value: read.layout }, { machine: APP, source: 'layout' }).then(onClose, (error: Error) => setProblem(error.message))
   }
   return (
-    <Dialog title="Layout" size="medium" onClose={onClose} className="layout-editor">
+    <Dialog title="Layout" size="medium" onClose={onClose} className="layout-editor" unsaved={text !== shown}>
       <TextArea className="layout-editor__text" aria-label="Layout" value={text} maxRows={20} spellCheck={false} onChange={(e) => { setText(e.target.value); setProblem(undefined) }} />
       {problem && <div className="layout-note is-problem" role="status">{problem}</div>}
       <div className="layout-editor__actions"><Button variant="primary" onClick={save}>Save</Button></div>

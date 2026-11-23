@@ -250,7 +250,9 @@ export function NewThreadDialog({ start: asked, onClose }: { start: NewThreadSta
 
   return (
     // On a phone, Start at the bar's trailing edge, as iOS puts a sheet's confirming action, and no foot.
-    <Dialog onClose={onClose} title="New thread" size="medium" className="new-thread"
+    // The prompt is kept as a draft however it's closed (`newThread.draft`); a name and attached files aren't, so with
+    // either a phone's swipe asks before throwing them away.
+    <Dialog onClose={onClose} title="New thread" size="medium" className="new-thread" unsaved={files.length > 0 || title.trim() !== ''}
       actions={narrow && <Button variant="primary" className="new-thread__start" disabled={!machine || busy} onClick={() => void create()}>Start</Button>}>
       <div ref={body} className="new-thread__body" onKeyDown={onKeyDown}>
         {!machine ? <p className="new-thread__note">No machine is connected.</p> : <>

@@ -2,8 +2,10 @@
 // iPhone's (402×874 CSS px at 3×, a finger, the status bar's and home indicator's safe areas), paired by Web access to
 // this home. The drawer open (its rows' states dressed on their way to the phone: one working on a branch of its own,
 // one asking, one done, the rest quiet at their times); its search in use, empty, with matches and with none, the keyboard up; a thread with markdown, a code block and tool calls, words in the composer; the same with
-// the keyboard up; the thread's menu; the New thread sheet; the Diff pane's tab; Settings' list and a page of it. In light and dark, into
-// $SUPEREGO_SHOWCASE_OUT as drawer-, swipe- (a row swiped open), swipe-pin-, swipe-full- (held most of the way across), search-empty-, search-results-, search-none-, thread-, answer-, keyboard-, menu-, new-thread-, pane-, settings- and settings-page-<light|dark>.png.
+// the keyboard up; the thread's menu; the New thread sheet, swiped down part way and asking to discard a name typed
+// in (after checking the swipe: it follows the finger, springs back, closes past 30%, leaves a scrolled body to
+// scroll, ends at the keyboard); the Diff pane's tab; Settings' list and a page of it. In light and dark, into
+// $SUPEREGO_SHOWCASE_OUT as drawer-, swipe- (a row swiped open), swipe-pin-, swipe-full- (held most of the way across), search-empty-, search-results-, search-none-, thread-, answer-, keyboard-, menu-, new-thread-, new-thread-swiping-, new-thread-discard-, pane-, settings- and settings-page-<light|dark>.png.
 import { BrowserWindow } from 'electron'
 import { writeFileSync } from 'node:fs'
 import { openApp } from './harness.mjs'
@@ -15,7 +17,7 @@ const PHONE = { width: 402, height: 874, scale: 3, top: 62, bottom: 34 }
 // The keyboard's height on it (English, with the predictive bar), in points.
 const KEYBOARD = 336
 
-await openApp({ name: 'phone-look', timeout: 300_000 }, async (t) => {
+await openApp({ name: 'phone-look', timeout: 420_000 }, async (t) => {
   const { run, until } = t
   const step = (what) => console.log(`phone-look: ${what}`)
   step('the window')
@@ -130,6 +132,126 @@ await openApp({ name: 'phone-look', timeout: 300_000 }, async (t) => {
     }
   }
   const tap = (selector, text) => p.click(selector, text)
+
+  // A finger on a sheet: touch events dispatched in the page, as iOS sends them (touchstart on what's under it, the
+  // moves and the end to the same target), a frame apart (a hidden window takes real touches only as it draws, every
+  // second or so: too slow to tell a slow drag from a flick). A drag moves by `dy` in `steps`; held still a moment
+  // before letting go, it's slow, not a flick; not let go, `release()` lets go later.
+  const pull = ([x, y], dy, { steps = 12, hold = true, release = true } = {}) => p.run(`(async () => {
+    const target = document.elementFromPoint(${x}, ${y})
+    const send = (type, clientY, ended) => {
+      const touch = new Touch({ identifier: 9, target, clientX: ${x}, clientY, pageX: ${x}, pageY: clientY, screenX: ${x}, screenY: clientY })
+      target.dispatchEvent(new TouchEvent(type, { bubbles: true, cancelable: true, composed: true, touches: ended ? [] : [touch], targetTouches: ended ? [] : [touch], changedTouches: [touch] }))
+    }
+    const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+    send('touchstart', ${y})
+    for (let i = 1; i <= ${steps}; i++) { await pause(16); send('touchmove', ${y} + ${dy} * i / ${steps}) }
+    if (${hold}) await pause(250)
+    window.letGo = () => send('touchend', ${y + dy}, true)
+    if (${release}) window.letGo()
+  })()`)
+  const release = () => p.run(`window.letGo()`)
+  // Where the sheet is: its top, its height, and how far back the app behind it stands (its scale, 1 at rest).
+  const sheet = () => p.run(`(() => {
+    const popup = document.querySelector('.superego-dialog--sheet')
+    const indent = document.querySelector('.app__indent')
+    const scale = new DOMMatrix(getComputedStyle(indent).transform).a
+    if (!popup) return { open: false, scale }
+    const r = popup.getBoundingClientRect()
+    return { open: true, top: r.top, height: r.height, scale, asking: Boolean(document.querySelector('.superego-discard')) }
+  })()`)
+  const bar = async () => { const s = await sheet(); return [PHONE.width / 2, Math.round(s.top + 30)] }
+  const openNew = async () => {
+    await p.run(`document.querySelector('.app__mobilebar [aria-label="New thread"]').click()`)
+    await p.until(`Boolean(document.querySelector('.new-thread .composer textarea'))`, 'the New thread sheet')
+    await p.settled()
+  }
+  // Swiping the New thread sheet down: it follows the finger (and resists going up), the app behind steps forward as
+  // it goes; let go short of 30% of its height, it springs back; past it, or flicked, it closes. Holding a name typed
+  // in, it only tugs and asks; the prompt is a draft and doesn't hold it.
+  const swipes = async () => {
+    const rest = await sheet()
+    if (!rest.open || !(rest.scale < 0.95)) t.fail(`the New thread sheet at rest, the app stepped back: ${JSON.stringify(rest)}`)
+    const from = await bar()
+    await pull(from, rest.height * 0.2, { release: false })
+    const held = await sheet()
+    const moved = held.top - rest.top
+    if (Math.abs(moved - rest.height * 0.2) > 16) t.fail(`the sheet under the finger: ${JSON.stringify({ rest, held })}`)
+    if (!(held.scale > rest.scale && held.scale < 1)) t.fail(`the app stepping forward as the sheet goes: ${JSON.stringify({ rest, held })}`)
+    for (const appearance of ['light', 'dark']) {
+      await t.theme(appearance, [p])
+      await shot(`new-thread-swiping-${appearance}`)
+    }
+    await release()
+    await p.settled()
+    const back = await sheet()
+    if (!back.open || Math.abs(back.top - rest.top) > 2) t.fail(`the sheet back where it was, let go at 20%: ${JSON.stringify({ rest, back })}`)
+    // Up, it resists: it moves much less than the finger.
+    await pull(from, -120, { release: false })
+    const up = await sheet()
+    await release()
+    if (!(rest.top - up.top < 40)) t.fail(`the sheet resisting a drag up: ${JSON.stringify({ rest, up })}`)
+    await p.settled()
+    // Short of 30%, slowly: back. Past it: closed.
+    await pull(await bar(), rest.height * 0.25)
+    await p.settled()
+    if (!(await sheet()).open) t.fail('the sheet open still, let go short of 30%')
+    await pull(await bar(), rest.height * 0.36)
+    await p.until(`!document.querySelector('.superego-dialog--sheet')`, 'the sheet closed, let go past 30%')
+    await p.until(`new DOMMatrix(getComputedStyle(document.querySelector('.app__indent')).transform).a === 1`, 'the app forward again')
+    // A flick: short and quick.
+    await openNew()
+    await pull(await bar(), 80, { steps: 5, hold: false })
+    await p.until(`!document.querySelector('.superego-dialog--sheet')`, 'the sheet closed by a flick')
+    // From the body at its top, a drag down takes the sheet; scrolled down (made long enough to), it's the body's to
+    // scroll (the page's touches don't scroll it: only that the sheet stays put is checked).
+    await openNew()
+    await pull([PHONE.width / 2, rest.top + rest.height * 0.6], rest.height * 0.4)
+    await p.until(`!document.querySelector('.superego-dialog--sheet')`, 'the sheet closed from its body')
+    await openNew()
+    await p.run(`(() => {
+      const body = document.querySelector('.superego-dialog--sheet .superego-dialog__body')
+      body.firstElementChild.style.paddingBottom = '1200px'
+      body.scrollTop = 300
+    })()`)
+    await pull([PHONE.width / 2, rest.top + rest.height * 0.6], rest.height * 0.4)
+    await p.settled()
+    const stayed = await sheet()
+    if (!stayed.open || Math.abs(stayed.top - rest.top) > 2) t.fail(`the sheet staying, its body scrolled: ${JSON.stringify({ rest, stayed })}`)
+    await p.run(`(() => {
+      const body = document.querySelector('.superego-dialog--sheet .superego-dialog__body')
+      body.firstElementChild.style.paddingBottom = ''
+      body.scrollTop = 0
+    })()`)
+    // The keyboard up: the sheet ends where it starts (viewport.ts).
+    await metrics(PHONE.height - KEYBOARD)
+    await p.until(`document.documentElement.hasAttribute('data-keyboard')`, 'the page above the keyboard')
+    await p.settled()
+    const above = await p.run(`(() => { const r = document.querySelector('.superego-dialog--sheet').getBoundingClientRect(); return { bottom: r.bottom, height: innerHeight } })()`)
+    if (Math.abs(above.bottom - above.height) > 1 || above.height > PHONE.height - KEYBOARD + 1) t.fail(`the sheet ending at the keyboard: ${JSON.stringify(above)}`)
+    await metrics(PHONE.height)
+    await p.until(`!document.documentElement.hasAttribute('data-keyboard')`, 'the keyboard down')
+    // A name typed in: a swipe asks; Keep Editing keeps it, Discard Changes closes it.
+    await p.run(`(() => {
+      const field = document.querySelector('.new-thread [data-field="name"] input')
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(field, 'Parse the bank’s dates')
+      field.dispatchEvent(new Event('input', { bubbles: true }))
+    })()`)
+    await p.until(`document.querySelector('.superego-dialog--sheet')?.hasAttribute('data-unsaved')`, 'the sheet holding a name')
+    await pull(await bar(), rest.height * 0.5, { release: false })
+    const tugged = await sheet()
+    if (!(tugged.top - rest.top < rest.height * 0.15)) t.fail(`the sheet only tugging, holding changes: ${JSON.stringify({ rest, tugged })}`)
+    await release()
+    await p.until(`Boolean(document.querySelector('.superego-discard'))`, 'asked whether to discard')
+    await both('new-thread-discard')
+    await p.run(`document.querySelector('.superego-discard__keep').click()`)
+    await p.until(`!document.querySelector('.superego-discard') && document.querySelector('.new-thread [data-field="name"] input')?.value === 'Parse the bank’s dates'`, 'kept editing')
+    await pull(await bar(), rest.height * 0.5)
+    await p.until(`Boolean(document.querySelector('.superego-discard__button--danger'))`, 'asked again')
+    await p.run(`document.querySelector('.superego-discard__button--danger').click()`)
+    await p.until(`!document.querySelector('.new-thread')`, 'New thread discarded')
+    await p.run(`document.getElementById('phone-chrome')?.remove()`)
+  }
 
   // The drawer: the threads.
   await p.until(`Boolean(document.querySelector('.app__mobilebar'))`, 'the bar')
@@ -247,8 +369,7 @@ await openApp({ name: 'phone-look', timeout: 300_000 }, async (t) => {
   await p.run(`document.querySelector('.app__mobilebar [aria-label="New thread"]').click()`)
   await p.until(`Boolean(document.querySelector('.new-thread .composer textarea'))`, 'the New thread sheet')
   await both('new-thread', `document.activeElement?.blur()`)
-  await p.run(`document.querySelector('.new-thread')?.closest('.superego-dialog')?.querySelector('[aria-label="Close"]')?.click()`)
-  await p.until(`!document.querySelector('.new-thread')`, 'New thread closed')
+  await swipes()
   // The Diff pane, from its tab.
   await p.run(`[...document.querySelectorAll('.strip__tab')].find((tab) => tab.dataset.pane)?.click()`)
   await p.until(`!!document.querySelector('.git-changes, .diff-file')`, 'the Diff pane')

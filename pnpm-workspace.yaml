@@ -39,5 +39,6 @@ overrides:
   '@anthropic-ai/claude-agent-sdk-win32-arm64': '-'
   '@anthropic-ai/claude-agent-sdk-win32-x64': '-'
 patchedDependencies:
+  '@base-ui/react@1.9.0': patches/@base-ui__react@1.9.0.patch
   '@earendil-works/pi-durable@1.6.0': patches/@earendil-works__pi-durable@1.6.0.patch
   ghostty-web@0.4.0: patches/ghostty-web@0.4.0.patch

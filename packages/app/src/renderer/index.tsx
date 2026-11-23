@@ -3,6 +3,7 @@
 // own components use the hooks and components below.
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
+import { BaseUI } from '@superego/ui'
 import '@superego/ui/styles.css'
 import './app.css'
 import { bool, obj, opt, str, type AppConfig, type SettingsSnapshot } from '@superego/protocol'
@@ -48,7 +49,13 @@ export function mountApp(app: AppConfig, { extensions = [], root = document.getE
   createRoot(root).render(
     <StrictMode>
       <RegistryProvider registry={registry}>
-        <ShellStateProvider><Shell /></ShellStateProvider>
+        {/* On a phone a dialog is a sheet (Base UI's Drawer): the window steps back behind it, and forward again as it's
+            swiped down, by the Indent's `--drawer-swipe-progress` (app.css). */}
+        <BaseUI.Drawer.Provider>
+          <BaseUI.Drawer.Indent className="app__indent">
+            <ShellStateProvider><Shell /></ShellStateProvider>
+          </BaseUI.Drawer.Indent>
+        </BaseUI.Drawer.Provider>
       </RegistryProvider>
     </StrictMode>,
   )

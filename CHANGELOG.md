@@ -15,6 +15,10 @@
 - `superego extensions` shows each extension's own folder in `~/.superego/extensions`, and lists those left behind by
   profiles that are gone, for you to delete.
 - API keys typed into a sign-in no longer show in the action log (`superego actions log`).
+- On a phone, swipe a dialog (New thread, Settings, any other) down to close it, as on iOS: it follows your finger and
+  the app behind comes forward with it; let go short of a third of the way and it springs back. A prompt typed into
+  New thread is kept for next time; with a name, attached files or another form's unsaved changes, a swipe asks
+  before discarding them.
 - An iOS look on a phone: the bar's buttons float as glass over the thread scrolling under them, the thread and its
   panes switch with a segmented control, the composer has a + beside it as in Messages, the thread's menu and dialogs
   are sheets up from the bottom, New thread puts Start at the top, and Settings opens to a list of its pages. In the

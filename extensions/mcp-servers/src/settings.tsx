@@ -194,6 +194,8 @@ function ServerDialog({ machine, editing, taken, onClose, onSignIn }: {
 }) {
   const act = useAct(machine)
   const [form, setForm] = useState<ServerForm>(() => editing ? formOf(editing.name, editing.config) : emptyForm())
+  // The form as last saved (or as it opened): differing, closing it would lose the change.
+  const [lastSaved, setLastSaved] = useState(form)
   // Whether the name is the user's own, not one filled in from the URL or package.
   const [named, setNamed] = useState(Boolean(editing))
   const [more, setMore] = useState(false)
@@ -228,6 +230,7 @@ function ServerDialog({ machine, editing, taken, onClose, onSignIn }: {
         ? { name: editing.name, server: config, ...(name !== editing.name ? { rename: name } : {}) }
         : { name, server: config }) as CheckResult
       if (Object.keys(secrets).length) result = await act(ACTIONS.setSecret, { server: name, values: secrets }) as CheckResult
+      setLastSaved(form)
       setChecked(result.server)
     } catch (e) {
       setError((e as Error).message)
@@ -238,7 +241,8 @@ function ServerDialog({ machine, editing, taken, onClose, onSignIn }: {
   const check = checked && checkText(checked)
   const entry = CATALOG.find((e) => e.name === picked)
   return (
-    <Dialog title={editing ? `Edit ${editing.name}` : 'Add an MCP server'} size="medium" onClose={onClose} className="mcp-dialog">
+    <Dialog title={editing ? `Edit ${editing.name}` : 'Add an MCP server'} size="medium" onClose={onClose} className="mcp-dialog"
+      unsaved={JSON.stringify(form) !== JSON.stringify(lastSaved)}>
       <form className="mcp-dialog__form" onSubmit={(e) => { e.preventDefault(); if (!busy) void save() }}>
         {!editing && (
           <Select aria-label="A well-known server" value={picked ?? null} nullLabel="A well-known server…" onChange={fill}

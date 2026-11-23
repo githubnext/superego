@@ -1,0 +1,30 @@
+diff --git a/drawer/viewport/DrawerViewport.js b/drawer/viewport/DrawerViewport.js
+index 58242e1e3b8db08c78999202ce5ce420da9ef011..d63e5e7aff12967478653744d5716c413c74107b 100644
+--- a/drawer/viewport/DrawerViewport.js
++++ b/drawer/viewport/DrawerViewport.js
+@@ -801,7 +801,9 @@ function getBaseSwipeSize(element, direction) {
+   return direction === 'left' || direction === 'right' ? element.offsetWidth : element.offsetHeight;
+ }
+ function getBaseSwipeThreshold(element, direction) {
+-  return Math.max(getBaseSwipeSize(element, direction) * 0.5, MIN_SWIPE_THRESHOLD);
++  // Superego: a sheet (up or down) closes past 30% of its height, as iOS's; a drawer from the side at half its width.
++  const share = direction === 'up' || direction === 'down' ? 0.3 : 0.5;
++  return Math.max(getBaseSwipeSize(element, direction) * share, MIN_SWIPE_THRESHOLD);
+ }
+ function isRangeInput(target, win) {
+   return target instanceof win.HTMLInputElement && target.type === 'range';
+diff --git a/drawer/viewport/DrawerViewport.mjs b/drawer/viewport/DrawerViewport.mjs
+index 2cbf2cf08f26493e606c5b895bbb4e556c042e63..713d0ca7b75c87a2279581e454f0bc11d620fd03 100644
+--- a/drawer/viewport/DrawerViewport.mjs
++++ b/drawer/viewport/DrawerViewport.mjs
+@@ -795,7 +795,9 @@ function getBaseSwipeSize(element, direction) {
+   return direction === 'left' || direction === 'right' ? element.offsetWidth : element.offsetHeight;
+ }
+ function getBaseSwipeThreshold(element, direction) {
+-  return Math.max(getBaseSwipeSize(element, direction) * 0.5, MIN_SWIPE_THRESHOLD);
++  // Superego: a sheet (up or down) closes past 30% of its height, as iOS's; a drawer from the side at half its width.
++  const share = direction === 'up' || direction === 'down' ? 0.3 : 0.5;
++  return Math.max(getBaseSwipeSize(element, direction) * share, MIN_SWIPE_THRESHOLD);
+ }
+ function isRangeInput(target, win) {
+   return target instanceof win.HTMLInputElement && target.type === 'range';
