@@ -53,6 +53,8 @@ export function useDispatch() {
 export function Shell() {
   const registry = useRegistry()
   const [palette, setPalette] = useState(false)
+  // Where Settings is drawn wide: the window's main area, while it shows Settings.
+  const [settingsPlace, setSettingsPlace] = useState<HTMLElement | null>(null)
   const [navigator, setNavigator] = useState(false)
   const [panePicker, setPanePicker] = useState(false)
   const sidebar = useSidebar()
@@ -211,7 +213,7 @@ export function Shell() {
             <div className="app__rail-group">{notices}{settingsButton}</div>
           </nav>
         )}
-        {tab === 'settings' && <main className="app__main"><SettingsView machines={machines} onClose={settings.close} pane /></main>}
+        {tab === 'settings' && <main className="app__main" ref={setSettingsPlace} />}
         {!narrow && tab !== 'settings' && sideOpen && <aside className="app__sidebar" data-space={space?.id}>{sidebarBody}</aside>}
         {!narrow && tab === 'space' && spaces.length > 0 && sidebarEdge.edge}
         {tab !== 'settings' && <main className="app__main">
@@ -270,7 +272,8 @@ export function Shell() {
         )}
       </div>
       {narrow && sheetMachine && sheetThread && <ThreadSheet machine={sheetMachine} thread={sheetThread} open={sheet.open} onOpenChange={setSheet} handle={sheetHandle} container={app} />}
-      {narrow && settings.open && <SettingsView machines={machines} onClose={settings.close} />}
+      {/* One Settings, wide or narrow: the window crossing between them keeps what's being done in it. */}
+      {settings.open && <SettingsView machines={machines} onClose={settings.close} place={narrow ? 'dialog' : settingsPlace} />}
       {palette && <Palette onClose={() => setPalette(false)} />}
       {navigator && <Navigator onClose={() => setNavigator(false)} />}
       {panePicker && where && <PanePicker machine={where.machine} thread={where.thread} onClose={() => setPanePicker(false)} />}

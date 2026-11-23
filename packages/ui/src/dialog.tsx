@@ -26,6 +26,8 @@ type Props = {
    * then only tugs at it, as iOS's sheet does, and asks before discarding; ✕ and Escape still close it outright.
    */
   unsaved?: boolean
+  /** What takes the focus as it opens (not under a finger): by default, the first thing in it to use. */
+  initialFocus?: () => HTMLElement | boolean | null | undefined
 }
 
 /**
@@ -44,7 +46,7 @@ export function Dialog(props: Props) {
   return useNarrow() ? <Sheet {...props} /> : <Centred {...props} />
 }
 
-function Centred({ open = true, onClose, children, className = '', size = 'medium', label, ...frame }: Props) {
+function Centred({ open = true, onClose, children, className = '', size = 'medium', label, initialFocus, ...frame }: Props) {
   const marked = usePortalAttributes()
   // Opened, the focus goes to the first thing in it to use; under a finger the dialog itself holds it (touch.ts).
   const popup = useRef<HTMLDivElement>(null)
@@ -52,7 +54,7 @@ function Centred({ open = true, onClose, children, className = '', size = 'mediu
     <Base.Root open={open} onOpenChange={(next) => { if (!next) onClose() }}>
       <Base.Portal>
         <Base.Backdrop {...marked} className="superego-dialog__backdrop" />
-        <Base.Popup {...marked} ref={popup} initialFocus={popupFocus(popup)} className={`superego-dialog superego-dialog--${size} ${className}`} aria-label={label}>
+        <Base.Popup {...marked} ref={popup} initialFocus={popupFocus(popup, initialFocus)} className={`superego-dialog superego-dialog--${size} ${className}`} aria-label={label}>
           <Frame {...frame}><div className="superego-dialog__body">{children}</div></Frame>
         </Base.Popup>
       </Base.Portal>
@@ -60,7 +62,7 @@ function Centred({ open = true, onClose, children, className = '', size = 'mediu
   )
 }
 
-function Sheet({ open = true, onClose, children, className = '', size = 'medium', label, unsaved = false, ...frame }: Props) {
+function Sheet({ open = true, onClose, children, className = '', size = 'medium', label, unsaved = false, initialFocus, ...frame }: Props) {
   const marked = usePortalAttributes()
   const popup = useRef<HTMLDivElement>(null)
   // Asked whether to discard what it holds, after a swipe or a tap outside tried to close it.
@@ -79,7 +81,7 @@ function Sheet({ open = true, onClose, children, className = '', size = 'medium'
       <Drawer.Portal>
         <Drawer.Backdrop {...marked} className="superego-dialog__backdrop" />
         <Drawer.Viewport {...marked} className="superego-dialog__viewport">
-          <Drawer.Popup {...marked} ref={popup} initialFocus={popupFocus(popup)} aria-label={label}
+          <Drawer.Popup {...marked} ref={popup} initialFocus={popupFocus(popup, initialFocus)} aria-label={label}
             className={`superego-dialog superego-dialog--${size} superego-dialog--sheet ${className}`} data-unsaved={unsaved ? '' : undefined}>
             {/* With a mouse, a drag in the body selects its text; the bar drags the sheet. */}
             <Frame {...frame}><Drawer.Content className="superego-dialog__body">{children}</Drawer.Content></Frame>

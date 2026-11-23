@@ -390,6 +390,8 @@ details[open] > .row > .row__chevron { transform: rotate(90deg); }
 .profile-switch .superego-select { width: auto; color: var(--superego-text); }
 
 /* Settings: its tabs (the list) and what the open one holds. */
+/* The box it's drawn in once, and where the pane or the dialog holds it (SettingsView's Moved): no boxes of their own. */
+.settings__box, .settings__place { display: contents; }
 .settings__body { display: grid; height: 100%; }
 .settings__nav { display: flex; gap: 2px; }
 .settings__nav button { font: inherit; color: inherit; text-align: left; background: none; border: 0; padding: 5px 8px; border-radius: var(--superego-radius); }
@@ -405,12 +407,7 @@ details[open] > .row > .row__chevron { transform: rotate(90deg); }
 .settings--pane .settings__body { grid-template-columns: var(--superego-sidebar) 1fr; }
 .settings--pane .settings__nav { flex-direction: column; padding: 7px 10px 18px 6px; }
 .settings--pane .settings__content { padding: 8px 40px 48px; }
-.settings--pane .settings__content > * { max-width: 760px; }
-/* On a phone, a dialog filling the screen: its list across the top. */
-.superego-dialog.settings .settings__body { grid-template-rows: auto 1fr; }
-.superego-dialog.settings .settings__nav { overflow-x: auto; padding: 8px; border-bottom: 1px solid var(--superego-line); background: var(--superego-sidebar-bg); }
-.superego-dialog.settings .settings__nav button { white-space: nowrap; }
-.superego-dialog.settings .settings__content { padding: 8px 16px 40px; }
+.settings--pane .settings__box > * { max-width: 760px; }
 .settings__note { color: var(--superego-muted); font-size: calc(12px * var(--superego-text-scale)); margin: 2px 0; }
 .settings-section h2 { font-size: calc(13px * var(--superego-text-scale)); font-weight: 600; margin: 24px 0 4px; }
 .setting, .provider, .profile-row { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 10px 0; border-bottom: 1px solid var(--superego-border); }
