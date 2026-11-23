@@ -517,7 +517,9 @@ details[open] > .row > .row__chevron { transform: rotate(90deg); }
 .auth-flow__row .superego-field { flex: 1; }
 .auth-flow__device { margin: 6px 0; }
 .auth-flow__device .auth-flow__row { align-items: center; }
-.auth-flow__code { padding: 3px 8px; border-radius: 6px; background: var(--superego-raised); box-shadow: var(--superego-control-edge); font: 600 var(--superego-text-body) var(--superego-mono); letter-spacing: .08em; user-select: all; -webkit-user-select: all; }
+/* A device sign-in's code: large, in mono, the whole of it selected by a click (or reaching it by the keyboard). */
+.auth-flow__code { padding: 4px 12px; border-radius: 8px; background: var(--superego-raised); box-shadow: var(--superego-control-edge); font: 600 calc(20px * var(--superego-text-scale)) var(--superego-mono); letter-spacing: .1em; user-select: all; -webkit-user-select: all; cursor: text; }
+.auth-flow__code:focus-visible { outline: 2px solid var(--superego-ring); outline-offset: 2px; }
 .settings__nav-machine { display: flex; gap: 4px; align-items: center; }
 /* A machine: one line (state, name, host, the one thing it needs, its ···), and under it, lined up with the name, what
    else there is to say. */

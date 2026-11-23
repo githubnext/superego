@@ -36,7 +36,8 @@
 - On a phone, New thread and other dialogs stay put when the keyboard comes up: they end at the keyboard with their
   header on top, and the field you're typing in stays in sight. The prompt no longer offers to AutoFill a contact, and
   New thread's Model and Thinking menus no longer overlap.
-- Signing in to GitHub Copilot: the code to enter has a Copy button, and opening GitHub's page copies it too.
+- Signing in with a code to enter (GitHub Copilot, ChatGPT through Codex, and others): the code shows large, one click
+  or reaching it with Tab selects all of it, it has a Copy button, and opening the sign-in page copies it too.
 - Signing in to GitHub Copilot with its domain left blank, as it says, goes on to github.com instead of doing nothing.
 - When GitHub stops accepting a GitHub Copilot sign-in, threads wait for you to sign in again instead of failing with an
   error.

@@ -100,8 +100,9 @@ function FlowEvents({ flow, events, machine }: { flow?: string; events: AuthEven
 }
 
 /**
- * A device sign-in's code, to enter on its page: selected whole by a click, with a button that copies it. Opening the
- * page copies it too, ready to paste where the page asks for it.
+ * A device sign-in's code, to enter on its page (every flow's, Copilot's, Codex's, Kimi's alike): large, selected whole
+ * by a click or by reaching it from the keyboard (so ⌘C copies it), with a button that copies it. Opening the page
+ * copies it too, ready to paste where the page asks for it.
  */
 function DeviceCode({ code, page }: { code: string; page: string }) {
   const [state, setState] = useState<'idle' | 'copied' | 'failed'>('idle')
@@ -119,7 +120,7 @@ function DeviceCode({ code, page }: { code: string; page: string }) {
     <div className="auth-flow__device">
       <p>Enter this code at <a href={page} target="_blank" rel="noreferrer" onClick={copy}>{page.replace(/^https:\/\//, '')}</a>:</p>
       <div className="auth-flow__row">
-        <code className="auth-flow__code">{code}</code>
+        <code className="auth-flow__code" tabIndex={0} onFocus={(e) => document.getSelection()?.selectAllChildren(e.currentTarget)}>{code}</code>
         <Button onClick={copy}>{state === 'copied' ? 'Copied' : state === 'failed' ? 'Couldn’t copy' : 'Copy'}</Button>
       </div>
     </div>
