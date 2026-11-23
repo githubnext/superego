@@ -27,3 +27,29 @@ it("refuses what can't be a key before sending it", () => {
   expect(keyProblem('sk-ant-api03-abcdefghijklmnop')).toBeUndefined()
   expect(keyProblem('')).toBeUndefined()
 })
+
+it('takes a key out of a line from a shell file: quotes, a trailing semicolon or comment, the first of several lines', () => {
+  expect(pastedKey('"sk-ant-api03-abcdefghijklmnop"').key).toBe('sk-ant-api03-abcdefghijklmnop')
+  expect(pastedKey("'sk-ant-api03-abcdefghijklmnop';").key).toBe('sk-ant-api03-abcdefghijklmnop')
+  expect(pastedKey('export OPENAI_API_KEY=sk-proj-abcdefghijklmnopqrst;')).toEqual({ key: 'sk-proj-abcdefghijklmnopqrst', variable: 'OPENAI_API_KEY' })
+  expect(pastedKey('export OPENAI_API_KEY="sk-proj-abcdefghijklmnopqrst"; # work')).toEqual({ key: 'sk-proj-abcdefghijklmnopqrst', variable: 'OPENAI_API_KEY' })
+  expect(pastedKey('MISTRAL_API_KEY=abcdefghijklmnopqrstuvwxyz  # mine').key).toBe('abcdefghijklmnopqrstuvwxyz')
+  expect(pastedKey('export MISTRAL_API_KEY=abcdefghijklmnopqrstuvwxyz\nexport OPENAI_API_KEY=sk-proj-abcdefghijklmnopqrst\n'))
+    .toEqual({ key: 'abcdefghijklmnopqrstuvwxyz', variable: 'MISTRAL_API_KEY' })
+  expect(keyProblem('export MISTRAL_API_KEY=abcdefghijklmnopqrstuvwxyz\nexport OPENAI_API_KEY=sk-proj-abcdefghijklmnopqrst')).toBeUndefined()
+})
+
+it("goes by the key's start where the variable it came with says otherwise", () => {
+  expect(keyProvider('ANTHROPIC_API_KEY=sk-proj-abcdefghijklmnopqrst', providers)).toBe('openai')
+  // A start that doesn't say: the variable does.
+  expect(keyProvider('OPENAI_API_KEY=sk-abcdefghijklmnopqrstuvwxyz', providers)).toBe('openai')
+})
+
+it("says at once that a Claude subscription token isn't an API key, without calling it Anthropic's", () => {
+  const token = 'sk-ant-oat01-abcdefghijklmnopqrstuvwxyz'
+  expect(keyProvider(token, providers)).toBeUndefined()
+  expect(keyProblem(token, { sent: false })).toBe("That's a Claude subscription token, not an API key.")
+  expect(keyProblem(`export ANTHROPIC_API_KEY=${token}`)).toBe("That's a Claude subscription token, not an API key.")
+  // Anything else is said only once it's sent.
+  expect(keyProblem('hello', { sent: false })).toBeUndefined()
+})

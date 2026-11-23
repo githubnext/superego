@@ -16,7 +16,8 @@
   your computer), every other provider (Amazon Bedrock, Google Vertex AI, Azure and more) is signed in to right there in
   setup, and you start on the provider's recommended model, not the first one by name.
 - Paste any API key in setup: it tells whose key it is and asks only when it can't, refuses something that isn't a key
-  before sending it, and says in plain words why a provider turned one down.
+  before sending it, and says in plain words why a provider turned one down. A line from your shell's startup file
+  works too, and a Claude subscription token is told apart from an API key at once.
 - Choosing Claude Code in setup (experimental) makes it the default for new threads, so New thread starts on it.
 - With Claude Code as the default, New thread says so when it's signed out or no longer installed, with Set up models
   beside it, instead of starting on another provider or failing. A project's own default profile still comes first.

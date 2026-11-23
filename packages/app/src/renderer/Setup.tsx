@@ -382,7 +382,9 @@ function KeyForm({ machine, providers, all, onDone }: { machine: string; provide
   const detected = keyProvider(text, all)
   const provider = picked ?? detected
   const nameOf = (id: string) => all.find((p) => p.id === id)?.name ?? id
-  const asking = Boolean(text.trim()) && (!detected || picked !== undefined)
+  // What's wrong with it before it's sent: a Claude subscription token.
+  const wrong = keyProblem(text, { sent: false })
+  const asking = Boolean(text.trim()) && !wrong && (!detected || picked !== undefined)
   const options = [...providers, ...provider && !providers.some((p) => p.id === provider) ? all.filter((p) => p.id === provider) : []]
   const submit = () => {
     const wrong = keyProblem(text)
@@ -396,7 +398,7 @@ function KeyForm({ machine, providers, all, onDone }: { machine: string; provide
           onChange={(e) => { setText(e.target.value); setProblem(undefined); setSigning(undefined) }} />
         {asking && <Select aria-label="Provider" value={provider ?? null} {...provider ? {} : { placeholder: 'Whose key?' }}
           options={options.map((p) => ({ value: p.id, label: p.name }))} onChange={(id) => { if (id) { setPicked(id); setSigning(undefined) } }} />}
-        <Button type="submit" variant="primary" disabled={!text.trim() || !provider}>Add</Button>
+        <Button type="submit" variant="primary" disabled={!text.trim() || !provider || Boolean(wrong)}>Add</Button>
       </form>
       {detected && picked === undefined && text.trim() && (
         <p className="setup__note">{nameOf(detected)} key · <button type="button" className="setup__link" onClick={() => setPicked(detected)}>Not {nameOf(detected)}?</button></p>
@@ -406,7 +408,7 @@ function KeyForm({ machine, providers, all, onDone }: { machine: string; provide
           <span key={id}>{i ? (i === FIRST_KEYS.length - 1 ? ' or ' : ', ') : ''}<a href={KEY_PAGES[id]} target="_blank" rel="noreferrer">{nameOf(id)}</a></span>
         ))}.</p>
       )}
-      {problem && <p className="setup__error" role="alert">{problem}</p>}
+      {(wrong ?? problem) && <p className="setup__error" role="alert">{wrong ?? problem}</p>}
       {signing && (
         <SignInFlow key={signing.n} machine={machine} title="Checking the key…"
           start={() => dispatch('auth.signIn', { provider: signing.provider, type: 'api_key', key: signing.key, check: true }, { machine, source: 'setup' }) as Promise<{ flow: string }>}

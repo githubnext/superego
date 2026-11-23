@@ -243,6 +243,12 @@ it("tells whose a pasted key is, and refuses one that can't be a key before send
   await click(button('Not OpenAI?'))
   expect(container.querySelector<HTMLSelectElement>('.setup__key select')!.value).toBe('openai')
 
+  // A Claude subscription's token: said at once, not taken for an Anthropic key.
+  await type(field, 'sk-ant-oat01-abcdefghijklmnopqrstuvwxyz')
+  expect(text()).toContain("That's a Claude subscription token, not an API key.")
+  expect(text()).not.toContain('Anthropic key')
+  expect(button('Add').disabled).toBe(true)
+
   await type(field, 'hello')
   expect(container.querySelector('.setup__key select')).not.toBeNull()
   await act(async () => { container.querySelector<HTMLFormElement>('.setup__key')!.requestSubmit() })
