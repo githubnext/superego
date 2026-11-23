@@ -20,6 +20,7 @@ import { useOptionalRegistry } from './registry.tsx'
 import { linkHandler, linkSchemes } from './lookups.ts'
 import { Claimed, LinkPlace, WIKILINK, wikilinks } from './links.tsx'
 import { useKnownFiles } from './known-files.ts'
+import { proseCell } from './table-cells.ts'
 
 /** Code scrolls sideways, never wraps; it fades at the right edge only while a line runs past it. */
 export function Scroll({ node: _node, ...props }: ComponentProps<'pre'> & { node?: unknown }) {
@@ -262,8 +263,18 @@ const components: Components = {
   picture: Picture,
   // Tables scroll sideways inside the column instead of widening it.
   table: ({ node: _node, ...props }) => <div className="md__table"><table {...props} /></div>,
+  th: ({ node, className, ...props }) => <th {...props} className={cellClass(className, node)} />,
+  td: ({ node, className, ...props }) => <td {...props} className={cellClass(className, node)} />,
   pre: CodeBlock,
 }
+
+/** How much text a node holds, in characters. */
+type TextNode = { type: string; value?: string; children?: TextNode[] }
+const textLength = (node: TextNode): number =>
+  node.type === 'text' ? node.value!.length : (node.children ?? []).reduce((sum, child) => sum + textLength(child), 0)
+
+const cellClass = (className: string | undefined, node: TextNode | undefined) =>
+  [className, proseCell(node ? textLength(node) : 0)].filter(Boolean).join(' ') || undefined
 
 /** An image's data, blob or file:// address kept (read as the others, in a thread). */
 const imageUrl = (url: string, key: string) => key === 'src' && /^(data:image\/|blob:|file:)/i.test(url)

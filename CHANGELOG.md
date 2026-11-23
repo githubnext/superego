@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Tables in answers fit a phone: a column of text keeps a readable width, a thread named in one wraps, and a table
+  too wide to fit scrolls all the way to its last column instead of cutting it off.
 - Extensions can ask for a key or token as a secret: you set it in Settings (or `superego secrets set <key>` in your own
   terminal), it's kept in the system keychain (or encrypted in `~/.superego` where there's none), and agents, Ego and
   `superego settings` only ever see whether it's set. Settings says where each one is kept. A profile setting that was

@@ -318,8 +318,17 @@ details[open] > .row > .row__chevron { transform: rotate(90deg); }
 .md hr { border: 0; border-top: 1px solid var(--superego-border); margin: var(--superego-space-5) 0; }
 .md__table { overflow-x: auto; }
 .md table { border-collapse: collapse; font-size: var(--superego-text-ui); line-height: var(--superego-leading-ui); width: 100%; font-variant-numeric: tabular-nums; }
-/* Columns as wide as their text asks, each at least readable; a table wider than the column scrolls in its wrapper. */
-.md th, .md td { min-width: 8em; }
+/* Columns as wide as their text asks, no word broken to squeeze one: a table wider than the column scrolls in its
+   wrapper. Each column at least 8em; a thread named in one on a line of its own. The floor is a block in the cell, as
+   its content: a cell's min-width is undefined, and Safari laid the cell out wider than its column, past the end of the
+   scroll. */
+.md :is(th, td) { overflow-wrap: break-word; }
+.md :is(th, td)::after { content: ''; display: block; width: 8em; }
+.md :is(th, td):last-child { padding-right: 0; }
+/* On a phone, three 8em columns are the screen: only a column of prose keeps a floor (table-cells.ts), so it doesn't
+   run down the page a word or two wide, and a thread's title wraps like the words beside it. */
+.app.is-narrow .md :is(th, td):not(.is-prose)::after { content: none; }
+.app.is-narrow .md :is(th, td) .thread-ref__title { white-space: normal; }
 .md th, .md td { text-align: left; padding: 6px 24px 6px 0; border-bottom: 1px solid color-mix(in srgb, var(--superego-border) 45%, transparent); vertical-align: top; }
 .md th { font-size: var(--superego-text-sm); font-weight: 600; color: var(--superego-muted); border-bottom-color: var(--superego-border); }
 .md tr:last-child td { border-bottom: 0; }

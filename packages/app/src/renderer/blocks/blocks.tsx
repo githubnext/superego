@@ -16,6 +16,7 @@ import { useImageSource, WebImage } from '../images.tsx'
 import { Markdown } from '../Markdown.tsx'
 import { useRegistry } from '../registry.tsx'
 import { ThreadRef } from '../thread-ref.tsx'
+import { proseCell } from '../table-cells.ts'
 import frameUrl from './frame.html?url&no-inline'
 import './blocks.css'
 
@@ -161,8 +162,8 @@ function BlockView({ block }: { block: Block }): ReactNode {
     case 'table': return (
       <div className="blocks-table">
         <table>
-          <thead><tr>{block.columns.map((c, i) => <th key={i}>{c}</th>)}</tr></thead>
-          <tbody>{block.rows.map((row, r) => <tr key={r}>{block.columns.map((_, c) => <td key={c}>{showCell(row[c])}</td>)}</tr>)}</tbody>
+          <thead><tr>{block.columns.map((c, i) => <th key={i} className={proseCell(c.length)}>{c}</th>)}</tr></thead>
+          <tbody>{block.rows.map((row, r) => <tr key={r}>{block.columns.map((_, c) => <td key={c} className={proseCell(showCell(row[c]).length)}>{showCell(row[c])}</td>)}</tr>)}</tbody>
         </table>
       </div>
     )

@@ -20,6 +20,10 @@
 .blocks-table table { border-collapse: collapse; font-size: var(--superego-text-ui); font-variant-numeric: tabular-nums; min-width: 100%; }
 .blocks-table th { text-align: left; font-weight: 600; color: var(--superego-muted); font-size: var(--superego-text-sm); }
 .blocks-table th, .blocks-table td { padding: 5px 12px 5px 0; border-bottom: .5px solid var(--superego-border); vertical-align: top; }
+/* As a Markdown table's (app.css): words kept whole; on a phone, a column of prose at least 8em. */
+.blocks-table :is(th, td) { overflow-wrap: break-word; }
+.blocks-table :is(th, td):last-child { padding-right: 0; }
+.app.is-narrow .blocks-table .is-prose::after { content: ''; display: block; width: 8em; }
 
 .blocks-kv { display: grid; grid-template-columns: max-content 1fr; gap: 4px var(--superego-space-4); margin: 0; font-size: var(--superego-text-ui); }
 .blocks-kv > div { display: contents; }

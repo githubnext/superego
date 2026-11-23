@@ -24,6 +24,13 @@ describe('Markdown', () => {
     expect(render({ text: 'x', compact: true, lines: 2 })).toMatch(/^<div class="md md--compact md--clamped" style="-webkit-line-clamp:2">/)
   })
 
+  it('marks a table cell of prose, not one of a few words, and keeps its alignment', () => {
+    const html = render({ text: '| Thread | Where it stands |\n| :-- | --: |\n| [Style](thread:1) | It compared our buttons with **COSS**, and they are identical. |' })
+    expect(html).toContain('<th style="text-align:left">Thread</th>')
+    expect(html).toContain('<td style="text-align:left"><a')
+    expect(html).toContain('<td style="text-align:right" class="is-prose">It compared')
+  })
+
   it('takes no clamp at 0', () => {
     expect(render({ text: 'x', lines: 0 })).toBe('<div class="md"><p>x</p></div>')
   })
