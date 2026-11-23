@@ -108,10 +108,13 @@ superego.view('orders.open', { title: 'Orders', icon: 'list', context: 'window',
   other. A `thread` view in `pane` is a pane kind of its id; with `about`, the agent is told it can open it.
 - The window hears of them as every daemon's live value `view.list`. A view a machine's extension declares shows a
   thread only from that machine, and a `window` view gathers every machine's, each under its name. A profile's fit only
-  `beside` and `pane`, in its own threads. An extension's UI half that declares a view of the same id draws it instead.
+  `beside` and `pane`, in its own threads; but a `window` view of one of the user's own profiles (not a project's) is
+  the window's, as a bundled extension's: a space too. It's there while the profile is loaded: once a thread of it is
+  in use (the daemon loads those as it starts) or starts. An extension's UI half that declares a view of the same id
+  draws it instead.
 - The window checks what it's sent as it lands, not on the machine's word. A declaration must be of one of that
   machine's extensions that's on, named for it (its id and its source `<extension>.<name>`), in places there are (a
-  profile's never a space), and within bounds; one that isn't is left out, with a warning on the console. Blocks are
+  view carrying a profile's folders never a space), and within bounds; one that isn't is left out, with a warning on the console. Blocks are
   checked whole (`blockErrors(blocks, { by: 'extension', extension, thread })`, from `'superego'`, says what a window
   would): a button that runs another's action or none, a params key that's also an input's id, inputs with no button,
   a `window` view's `open` link or image by path, or more than the limits allow refuses the view, which shows its first

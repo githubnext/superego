@@ -34,8 +34,12 @@ export const RESERVED = new Set([
 /** An agent part as set up: as installed, how to take it away, and how to put another (of its name) in its place. */
 export type Installed = { installed: Extension; undo(): void; replace(next: Extension): Extension }
 
-/** Where a daemon half is from: the core's own, the app's bundled ones, or a profile's (by its file). */
-export type Source = { source: 'core' | 'bundled' | 'profile'; file?: string }
+/**
+ * Where a daemon half is from: the core's own, the app's bundled ones, or a profile's (by its file). A profile's is the
+ * user's (`scope: 'user'`) when it's one of their own profiles' (see ProfileHost's `share`): its `window` data views
+ * may then be spaces.
+ */
+export type Source = { source: 'core' | 'bundled' | 'profile'; file?: string; scope?: 'user' | 'project' }
 
 /**
  * An extension known here: a daemon half set up (or being set up) for the daemon's life or a profile's, or one a window
@@ -513,7 +517,7 @@ export function createExtensionHost(host: Host, later: { profiles(): ProfileHost
    */
   async function setUp(extension: DaemonExtension, agentExtension: (extension: Extension, always: boolean) => Installed, profiles?: Set<string>, from: Source = { source: 'bundled' }): Promise<() => Promise<void>> {
     const report = (state: 'failed' | 'refused' | 'timed out', error: string) => {
-      failures.set(from.file ?? extension.name, { ...manifestOf(extension), ...(extension.title ? { title: extension.title } : {}), ...from, ...(profiles ? { profiles: [...profiles] } : {}), state, error, registered: {}, watches: [] })
+      failures.set(from.file ?? extension.name, { ...manifestOf(extension), ...(extension.title ? { title: extension.title } : {}), source: from.source, ...(from.file ? { file: from.file } : {}), ...(profiles ? { profiles: [...profiles] } : {}), state, error, registered: {}, watches: [] })
     }
     const refuse = (why: string) => { report('refused', why); return new Error(why) }
     if (!/^[a-z][a-z0-9-]*$/.test(extension.name)) throw refuse(`Extension name "${extension.name}" must be lowercase letters, digits and dashes`)
@@ -527,7 +531,7 @@ export function createExtensionHost(host: Host, later: { profiles(): ProfileHost
     if (taken) throw refuse(`Pane kind ${taken} is already described`)
     const registered = new Map<string, string[]>()
     const note = (kind: string, what: string) => { registered.set(kind, [...registered.get(kind) ?? [], what]) }
-    const record: ExtensionRecord = { about: aboutOf(extension), ...from, ...(profiles ? { profiles } : {}), ready: false, registered }
+    const record: ExtensionRecord = { about: aboutOf(extension), source: from.source, ...(from.file ? { file: from.file } : {}), ...(profiles ? { profiles } : {}), ready: false, registered }
     for (const kind of Object.keys(record.about.panes ?? {})) note('pane kinds', kind)
     records.set(extension.name, record)
     // Everything it registers goes through its lifetime: undone together at teardown, and refused after.
@@ -680,10 +684,12 @@ export function createExtensionHost(host: Host, later: { profiles(): ProfileHost
         const source = view.value ?? view.method!
         if (!source.startsWith(`${extension.name}.`)) throw new Error(`View ${name} must read a value or method of ${extension.name}'s, not ${source}`)
         if (dataViews.some((v) => v.info.id === name)) throw new Error(`View ${name} is already declared`)
-        // A profile's show only in its threads: the places that show one.
-        const fits = profiles ? view.fits.filter((p) => p !== 'space') : view.fits
+        // A profile's show only in its threads, in the places that show one; but a `window` view of the user's own
+        // profile's is the window's, as a bundled extension's is (data, so no code of the profile's runs there): a space too.
+        const windows = !profiles || (from.scope === 'user' && view.context === 'window')
+        const fits = windows ? view.fits : view.fits.filter((p) => p !== 'space')
         if (!fits.length) throw new Error(`View ${name} fits no place a profile's view is drawn in (beside, pane)`)
-        const entry = { info: { ...view, fits, id: name, extension: extension.name }, ...(profiles ? { profiles } : {}) }
+        const entry = { info: { ...view, fits, id: name, extension: extension.name }, ...(windows ? {} : { profiles }) }
         dataViews.push(entry)
         publishViews()
         note('views', `${name} (${fits.join(', ')}; from ${source})`)

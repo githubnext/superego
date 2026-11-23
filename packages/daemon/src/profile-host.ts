@@ -47,8 +47,13 @@ export function createProfileHost(host: Host, extensions: ExtensionHost, later: 
       registry.uninstall(part)
     }
   }
-  /** Profile `dir`'s use of a daemon half: the one set up already for another profile, else set up now. */
-  async function share(item: ProfileDaemonExtension, dir: string) {
+  /**
+   * Profile `ref`'s use of a daemon half: the one set up already for another profile, else set up now. It's the user's
+   * own (its `window` views may be spaces) when it's in one of their profiles' folders (a project's profile extending one
+   * of theirs shares it as theirs), or set up for a profile of theirs; never a project profile's own file.
+   */
+  async function share(item: ProfileDaemonExtension, ref: ProfileRef) {
+    const dir = ref.dir
     let entry = shared.get(item.key)
     if (!entry) {
       const made: Shared = { key: item.key, file: item.file, profiles: new Set(), parts: [], teardown: async () => {} }
@@ -66,7 +71,7 @@ export function createProfileHost(host: Host, extensions: ExtensionHost, later: 
             return named = renamed
           },
         }
-      }, made.profiles, { source: 'profile', file: item.file })
+      }, made.profiles, { source: 'profile', file: item.file, scope: ref.scope === 'user' || item.prefix.startsWith('user:') ? 'user' : 'project' })
       shared.set(item.key, entry = made)
     }
     const used = entry
@@ -144,7 +149,7 @@ export function createProfileHost(host: Host, extensions: ExtensionHost, later: 
     const release = () => { life.dispose() }
     try {
       for (const item of loaded.daemon) {
-        const { entry, release } = await share(item, ref.dir)
+        const { entry, release } = await share(item, ref)
         uses.push(entry)
         life.add(release)
       }

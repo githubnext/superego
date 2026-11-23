@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- One of your own profiles can add a space, a tab in the rail with its sidebar: a data view of its daemon extension
+  that fits `space`. It shows while the profile is loaded (as soon as the daemon starts, when a thread of it is in use).
+  A project's profiles still can't.
 - In dark, the message box is flat, with a thin border instead of a shadow.
 
 ## 0.2.0

@@ -340,7 +340,8 @@ export type UiApi = {
   /**
    * A view, `<extension>.<name>`: UI that the layout puts in the places it fits (a space in the rail, beside the thread,
    * the pane menu, the title bar), by default where `default` says. The user's layout (`app.layout`) can move or hide
-   * it. A profile's views fit only the places that show a thread, and only its own threads.
+   * it. A profile's views fit only the places that show a thread, and only its own threads: code from a profile never
+   * makes a space (a user profile's daemon half can, with a data view: `superego.view` there).
    */
   view<C extends ViewContext>(id: string, view: View<C>): void
   /** A component in a slot whose place behaviour decides (`header.chips`, `composer.above`, the editor's, `overlay`), in `order`. */

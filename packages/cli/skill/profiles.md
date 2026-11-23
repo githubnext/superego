@@ -56,7 +56,9 @@ that loads with one anyway (a key no extension here reads, a `without` naming no
     (`superego --skill tools`), or
   - a **daemon half**, `defineDaemonExtension({ name, setup(superego) { … } })`: actions the UI and command
     line run, live values, a thread's blocked status, and agent parts of its own (`superego --skill daemon`).
-- **`ui`** are modules for the window (`superego --skill ui`). They draw only in this profile's threads.
+- **`ui`** are modules for the window (`superego --skill ui`). They draw only in this profile's threads. A space (a
+  rail tab and its sidebar) comes from a daemon half instead: a data view (`superego.view`, `context: 'window'`) of
+  one of your own profiles' may fit `space`, and shows while the profile is loaded (a project's may not).
 - **`panes`** describes each pane kind the UI registers, so the agent knows it can open one and with which params.
 - **`without`** takes the names of optional extensions, the ones Settings → Extensions lists (and `superego
   extensions`): the core's `coding-tools` (read, write, edit, bash), `panes` (pane_open) and `agents-md`, and bundled

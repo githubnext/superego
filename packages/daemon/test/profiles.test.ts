@@ -851,6 +851,39 @@ export default defineDaemonExtension({
   await close()
 })
 
+it("lets a user profile's window data view be a space, the window's as a bundled one's is, but not a project profile's", async () => {
+  const staff = (name: string) => `import { defineDaemonExtension } from 'superego'
+export default defineDaemonExtension({
+  name: '${name}',
+  setup(superego) {
+    superego.value('${name}.space', [])
+    superego.view('${name}.space', { title: 'Staff', context: 'window', fits: ['space', 'beside'], default: 'space', value: '${name}.space' })
+    superego.view('${name}.mine', { title: 'Mine', context: 'thread', fits: ['space', 'beside'], value: '${name}.space' })
+  },
+})
+`
+  const user = join(home, 'profiles', 'staff')
+  const shop = join(project, '.superego', 'profiles', 'shop')
+  write(user, { 'profile.ts': profileTs(['./staff.ts']), 'staff.ts': staff('staff') })
+  write(shop, { 'profile.ts': profileTs(['./shop.ts']), 'shop.ts': staff('shop') })
+  const { peer, close } = await open()
+  const watched = await peer.call<{ sub: string; value: DataViewInfo[] }>('value.watch', { key: DATA_VIEWS })
+  let views = watched.value
+  peer.on('value.changed', (p: { sub: string; value: DataViewInfo[] }) => { if (p.sub === watched.sub) views = p.value })
+  await peer.call('profile.ui', { scope: 'user', name: 'staff', dir: user })
+  await peer.call('profile.allow', { cwd: project, name: 'shop' })
+  await peer.call('profile.ui', { scope: 'project', name: 'shop', dir: shop })
+  await until(async () => views.length === 4)
+  const of = (id: string) => views.find((v) => v.id === id)
+  // The user's window view: every place it fits, no profile's folders, so the window gathers it as any machine's.
+  expect(of('staff.space')).toEqual({ id: 'staff.space', extension: 'staff', title: 'Staff', context: 'window', fits: ['space', 'beside'], default: 'space', value: 'staff.space' })
+  // Its thread view, and anything of a project's, stay in the profile's own threads.
+  expect(of('staff.mine')).toMatchObject({ fits: ['beside'], profiles: [user] })
+  expect(of('shop.space')).toMatchObject({ fits: ['beside'], profiles: [shop] })
+  expect(of('shop.mine')).toMatchObject({ fits: ['beside'], profiles: [shop] })
+  await close()
+})
+
 // ── Lifetime and reload ──────────────────────────────────────────────────────────────────────────────────────────────
 
 const profileTs = (extensions: string[]) => `import { defineProfile } from 'superego'\nexport default defineProfile({ extensions: ${JSON.stringify(extensions)} })\n`
