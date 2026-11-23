@@ -127,6 +127,7 @@ A **surface** fills the window's main area, where a thread otherwise shows: a no
 UI half registers it, or a global profile's (`global: true`, [profiles.md](profiles.md)); a thread-bound profile's
 can't, as it would have nowhere to open.
 
+<!-- check: ui; import { NotebookIcon, type SurfaceProps } from 'superego/ui'; declare const NotePage: (props: SurfaceProps) => null -->
 ```tsx
 superego.surface('notes.page', {
   title: (params) => String(params.name),          // the title bar, history; or a string

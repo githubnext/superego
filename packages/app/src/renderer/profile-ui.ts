@@ -148,7 +148,8 @@ async function install(entry: Known) {
   const extensions = entry.sources.entries.length ? await load(entry.profile, entry.sources).catch((error: Error & { kind?: string }) => {
     throw Object.assign(error, { kind: error.kind ?? 'invalid' })
   }) : []
-  entry.registry.installProfile(entry.machine, entry.profile, extensions, { global: globals.has(keyOf(entry.machine, entry.profile.dir)) })
+  if (globals.has(keyOf(entry.machine, entry.profile.dir))) entry.registry.installProfile(entry.machine, entry.profile, extensions, { global: true })
+  else entry.registry.installProfile(entry.machine, entry.profile, extensions)
   entry.installed = true
   if (revokedRan.delete(keyOf(entry.machine, entry.profile.dir))) revokedList = [...revokedRan.values()]
 }
