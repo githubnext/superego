@@ -95,7 +95,8 @@ function SecretField({ label, isSet, placeholder, disabled, apply }: {
       </span>
     )
   }
-  const save = () => { if (text.trim()) run(text.trim()) }
+  // Trimmed where it's kept (the settings registry): here, only whether there's anything to save.
+  const save = () => { if (text.trim()) run(text) }
   return (
     <span className="setting__buttons setting__secret">
       <TextField type="password" aria-label={label} value={text} placeholder={placeholder} disabled={disabled || busy} autoComplete="off" spellCheck={false}
