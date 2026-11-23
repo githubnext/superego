@@ -38,7 +38,7 @@
 #   dark, and Settings → Appearance's theme pickers.
 # - `theme-ui`: the whole window (sidebar, a thread with a task's tool calls and a code block, the Diff pane, the
 #   composer) under Superego's own and every built-in theme, as <theme-id>.png.
-# - `phone-look`: the web build on an iPhone (402×874 at 3×, a finger, its safe areas), paired by Web access: the drawer,
+# - `phone-look`: the web build on an iPhone (402×874 at 3×, a finger, its safe areas), paired by Web access: the drawer (a row swiped open),
 #   its search (empty, with matches, with none), a thread, the keyboard up, the thread's menu, New thread, a pane, Settings.
 set -e
 cd "$(dirname "$0")/.."

@@ -797,6 +797,30 @@ button.app__mobiletitle > .superego-status { font-size: 12px; }
 .app__drawer > .app__sidebar .superego-list-item__trailing { order: 2; margin-left: var(--lead); }
 .app__drawer > .app__sidebar .superego-list-item__body > :is(.threads__title, .threads-archived__title) { order: 0; flex: 1 1 0; display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: inherit; line-height: inherit; color: inherit; }
 .app__drawer > .app__sidebar .superego-list-item__body > :is(.threads-pinned__where, .threads-archived__where) { flex: 1 1 0; display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Swipe actions (the threads extension's swipe.tsx), as Mail's under a finger: the row slides by `--swipe`, its actions
+   filling the gap it leaves at that side, each a rounded button sharing it; swiped far enough to be done, the outermost
+   stretches over the others. `--swipe` is registered, so settling (open, shut, away) animates the row and its actions
+   together. The list clips them at its edges. */
+@property --swipe { syntax: '<length>'; inherits: true; initial-value: 0px; }
+.app__drawer > .app__sidebar .superego-list:has(> .threads-swipe) { overflow-x: clip; }
+.app__drawer > .app__sidebar .threads-swipe { position: relative; touch-action: pan-y; transform: translateX(var(--swipe)); }
+.app__drawer > .app__sidebar .threads-swipe.is-settling { transition: --swipe .4s cubic-bezier(.32, .72, 0, 1); }
+/* Swiped, it isn't pressed; and a tap on one of its actions doesn't leave it lit (a finger's tap is a hover too). */
+.app__drawer > .app__sidebar .threads-swipe.is-swiped:not(.is-selected):active { background: transparent; }
+@media (hover: none) { .app__drawer > .app__sidebar .threads-swipe:hover:not(.is-selected, :active) { background: transparent; } }
+.app__drawer > .app__sidebar .superego-list-item__body > .threads-swipe__actions { position: absolute; top: 0; bottom: 0; display: flex; align-items: stretch; gap: 0; overflow: hidden; margin: 0; color: #fff; font-size: calc(12px * var(--superego-text-size)); font-weight: 500; line-height: 1.2; }
+.threads-swipe__actions--trailing { left: 100%; width: max(0px, -1 * var(--swipe)); justify-content: flex-end; }
+.threads-swipe__actions--leading { right: 100%; width: max(0px, var(--swipe)); }
+.threads-swipe__action { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; margin-left: 6px; padding: 0; overflow: hidden; border: 0; border-radius: 12px; color: inherit; font: inherit; white-space: nowrap;
+  -webkit-tap-highlight-color: transparent; transition: flex-grow .25s cubic-bezier(.32, .72, 0, 1), margin .25s cubic-bezier(.32, .72, 0, 1), opacity .2s; }
+.threads-swipe__actions--leading .threads-swipe__action { margin: 0 6px 0 0; }
+.threads-swipe__action:active { filter: brightness(.85); }
+.threads-swipe__action--archive { background: var(--superego-status-error); }
+.threads-swipe__action--pin { background: var(--superego-status-blocked); }
+.threads-swipe__action--more { background: light-dark(#8e8e93, #636366); }
+/* Armed: the outermost (the trailing's last, the leading's first) takes the whole gap. */
+.threads-swipe__actions--trailing.is-armed .threads-swipe__action:not(:last-child), .threads-swipe__actions--leading.is-armed .threads-swipe__action:not(:first-child) { flex-grow: 0; margin: 0; opacity: 0; }
+@media (prefers-reduced-motion: reduce) { .app__drawer > .app__sidebar .threads-swipe.is-settling, .threads-swipe__action { transition: none; } }
 .app__drawer > .app__sidebar .app__footer { margin-inline: -10px; padding: 12px 16px calc(env(safe-area-inset-bottom) + 8px); background: linear-gradient(to top, var(--phone-grouped) 60%, transparent); }
 .app__drawer > .app__sidebar .app__drawer-bar .superego-icon-button { width: 44px; height: 44px; min-height: 44px; border-radius: 50%; color: var(--superego-text);
   background: var(--superego-glass); -webkit-backdrop-filter: var(--superego-glass-blur); backdrop-filter: var(--superego-glass-blur); box-shadow: var(--superego-glass-edge), 0 2px 10px light-dark(rgb(0 0 0 / .06), rgb(0 0 0 / .35)); }

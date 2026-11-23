@@ -43,7 +43,7 @@ import { NewThreadDialog } from './NewThread.tsx'
 import { SetupPage, useSetup } from './Setup.tsx'
 import { bound, RailTabNumber, shortcutOf, useActions, useRailShortcut, useShortcut, type Keymap } from './keys.ts'
 import { railTabs } from './rail-tabs.ts'
-import { useAllThreads, useFold, useHistory, useMachines, useNewThreadDialog, useSelection, useProjects, useSettingsDialog, useShell, useSidebar, type Selection } from './state.tsx'
+import { useAllThreads, useFold, useHistory, useMachines, useNewThreadDialog, useSelection, useProjects, useSettingsDialog, useShell, useSidebar, useThreadSheet, type Selection } from './state.tsx'
 
 /** Dispatch an action from this window: `dispatch('app.sidebar')`, `dispatch('thread.select', { machine, thread })`. */
 export function useDispatch() {
@@ -70,8 +70,10 @@ export function Shell() {
   const { placed, narrow } = useLayout()
   const [drawer, setDrawer] = useState(false)
   // On a phone, what the title bar and the column beside hold for the thread: a sheet from the foot (Base UI's Drawer),
-  // opened from its title. Its own drawer, not one nested in the sidebar's, so the title opens it through a handle.
-  const [sheet, setSheet] = useState(false)
+  // opened from its title (or for another thread, from its row in the drawer: `useShell().threadMenu`). Its own drawer,
+  // not one nested in the sidebar's, so the title opens it through a handle.
+  const [sheet, openSheet] = useThreadSheet()
+  const setSheet = (open: boolean) => openSheet(open)
   const [sheetHandle] = useState(() => BaseUI.Drawer.createHandle())
   // The spaces, and the one the sidebar shows: as the window was left, else the first.
   const spaces = viewsIn(registry, placed, 'space')
@@ -89,6 +91,9 @@ export function Shell() {
   // Closed by a thread picked in it, the focus is the thread's to take, not ☰'s again.
   const picked = useRef(false)
   const where = selection && thread && machine ? { machine: machine.id, thread } : undefined
+  // The sheet's thread: the one it was opened for, else the selected one.
+  const sheetMachine = sheet.at ? machines.find((m) => m.id === sheet.at!.machine) : machine
+  const sheetThread = sheet.at ? allThreads[sheet.at.machine]?.find((t) => t.id === sheet.at!.thread) : thread
   // A space shown in the sidebar (\`open\`), or the sidebar hidden from its button: from Ego's thread, back to the
   // listed one it left; from Settings, back to the thread.
   const showSpace = (view: (typeof spaces)[number], open = true) => {
@@ -110,7 +115,7 @@ export function Shell() {
   const [swipeEdgeHost, setSwipeEdgeHost] = useState<HTMLElement | null>(null)
   // What the title bar gives way with, short of room (overflow.tsx).
   const [overflow] = useState(() => new Overflow())
-  useEffect(() => { setDrawer(false); setSheet(false); setPanePicker(false) }, [selection?.machine, selection?.thread, narrow])
+  useEffect(() => { setDrawer(false); openSheet(false); setPanePicker(false) }, [selection?.machine, selection?.thread, narrow])
   // The installed fonts take seconds to list: read them in the background, for Settings' font pickers.
   useEffect(refreshFontsSoon, [])
   // Actions read the shell as it is when they run.
@@ -264,7 +269,7 @@ export function Shell() {
           <aside className="app__beside"><PlacedViews place="beside" machine={machine} thread={thread} frame={withMenuButton('beside', where)} /></aside>
         )}
       </div>
-      {narrow && thread && machine && <ThreadSheet machine={machine} thread={thread} open={sheet} onOpenChange={setSheet} handle={sheetHandle} container={app} />}
+      {narrow && sheetMachine && sheetThread && <ThreadSheet machine={sheetMachine} thread={sheetThread} open={sheet.open} onOpenChange={setSheet} handle={sheetHandle} container={app} />}
       {narrow && settings.open && <SettingsView machines={machines} onClose={settings.close} />}
       {palette && <Palette onClose={() => setPalette(false)} />}
       {navigator && <Navigator onClose={() => setNavigator(false)} />}

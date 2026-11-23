@@ -48,6 +48,9 @@ type ShellState = {
   setSettingsTarget(target: string): void
   newThread: NewThreadStart | undefined
   openNewThread(start?: NewThreadStart | false): void
+  /** On a phone, the thread's sheet (thread-sheet.tsx): open or not, and for which thread (left out: the selected one). */
+  threadSheet: { open: boolean; at?: Selection | undefined }
+  openThreadSheet(open: boolean, at?: Selection): void
   /** Every project, in the sidebar's order; held still while `hold` says so. */
   projects: Project[]
   /** What the sidebar lists: the pinned threads, then the projects with the rest. */
@@ -126,9 +129,14 @@ export function useHistory() {
   const { canBack, canForward, go } = useShellState()
   return { canBack, canForward, back: () => go(-1), forward: () => go(1) }
 }
+/** On a phone, the thread's sheet: whether it's open, for which thread (undefined: the selected one), and opening it. */
+export function useThreadSheet() {
+  const { threadSheet, openThreadSheet } = useShellState()
+  return [threadSheet, openThreadSheet] as const
+}
 /** The shell's own actions. */
 export function useShell() {
-  const { openSettings, openNewThread, setSettingsTarget } = useShellState()
+  const { openSettings, openNewThread, setSettingsTarget, openThreadSheet } = useShellState()
   return {
     /** Settings: at a tab (its target, see settings/tabs.ts), or as it was left. */
     openSettings: (at?: string) => {
@@ -149,6 +157,8 @@ export function useShell() {
     },
     /** The New thread dialog, optionally starting on a machine or folder. */
     newThread: (start: NewThreadStart = {}) => openNewThread(start),
+    /** On a phone, a thread's sheet: what its title bar holds and what can be done with it (the selected thread's, left out). */
+    threadMenu: (at?: Selection) => openThreadSheet(true, at),
   }
 }
 
@@ -161,6 +171,7 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
   const [settingsTarget, setSettingsTarget] = useLocalState('settings.target', GENERAL)
   const [settingsAtTab, setSettingsAtTab] = useState(false)
   const [newThread, setNewThread] = useState<NewThreadStart>()
+  const [threadSheet, setThreadSheet] = useState<ShellState['threadSheet']>({ open: false })
   const [sidebarOpen, setSidebarOpen] = useLocalState('sidebar.open', true)
   const [sidebarShownTight, setSidebarShownTight] = useState(false)
   const tight = useMedia(TIGHT)
@@ -285,12 +296,15 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
     settingsTarget,
     setSettingsTarget,
     openNewThread: (start = {}) => setNewThread(start === false ? undefined : start),
+    threadSheet,
+    // Closed, it keeps its thread: the sheet still shows it as it slides away.
+    openThreadSheet: (open, at) => setThreadSheet((was) => open ? { open, at } : { ...was, open }),
     showSidebar: (open) => {
       const next = showSidebar(sidebarMode, tight, open)
       setSidebarOpen(next.open)
       setSidebarShownTight(next.shownTight)
     },
-  }), [machines, threads, rejections, selection, settingsOpen, settingsAtTab, settingsTarget, newThread, projects, sidebar, pins, lastThread, sidebarOpen, sidebarShownTight, tight, archived, hidden, hiddenAll, history, listed])
+  }), [machines, threads, rejections, selection, settingsOpen, settingsAtTab, settingsTarget, newThread, projects, sidebar, pins, lastThread, sidebarOpen, sidebarShownTight, tight, archived, hidden, hiddenAll, history, listed, threadSheet])
   return (
     <Context.Provider value={value}>
       {machines.filter((m) => m.state !== 'disabled').map((m) => <MachineThreads key={m.id} machine={m} onThreads={onThreads} onHidden={onHidden} onRejections={onRejections} />)}

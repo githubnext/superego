@@ -15,7 +15,7 @@ import { controlOf } from './overflow.tsx'
 import { ProfileBadge } from './profile-card.tsx'
 import { ThreadRef } from './thread-ref.tsx'
 import { isPinned } from './pins.ts'
-import { useProjects } from './state.tsx'
+import { useProjects, useSelection } from './state.tsx'
 import { startRename, useRenaming } from './rename.ts'
 import { TitleField } from './thread-header.tsx'
 
@@ -44,9 +44,12 @@ export function ThreadSheet({ machine, thread, open, onOpenChange, handle, conta
     onOpenChange(false)
     void registry.router.dispatch(id, params, { ...options, source: 'sheet' }).catch((error) => console.error(error))
   }
+  const { selection, select } = useSelection()
+  // Opened for another thread (from its row in the drawer), a pane opened from it shows with that thread.
   const openPane = (kind: string) => {
     opened.current = true
     run('pane.open', { thread: thread.id, kind })
+    if (selection?.machine !== machine.id || selection.thread !== thread.id) select({ machine: machine.id, thread: thread.id })
   }
   const close = () => onOpenChange(false)
   return (

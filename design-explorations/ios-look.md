@@ -148,8 +148,14 @@ theme still colours the phone.
 
 - iOS: swiping a list row reveals actions at its trailing edge (Archive, Delete; a full swipe takes the first);
   leading-edge swipes for the positive one (Mark as read, Pin).
-- Superego: the drawer's rows have a ··· menu and a long press (context menu); swipe actions on rows would be the
-  iOS way to archive or pin a thread. Not built here: a question for later.
+- iOS 26: the actions are rounded buttons in the gap the row leaves, sharing it; swiped most of the way across, the
+  outermost stretches over the others and is done on release. One row open at a time; a tap elsewhere or a scroll
+  closes it.
+- Superego: the drawer's rows swipe under a finger (threads' swipe.tsx): right for Pin (or Unpin, orange), left for
+  More (grey, the thread's sheet, for that row's thread) and Archive (red, the full swipe's). The row takes a touch only
+  once it's gone a few points more sideways than down (`touch-action: pan-y`); its own sideways swipe wins over the
+  drawer's swipe-to-close (`data-base-ui-swipe-ignore`), which still works from the heading and the gaps, with a tap
+  on the scrim. Archive isn't undoable but as anywhere else (the thread is under Archived, to unarchive).
 
 ### Keyboard shortcuts
 

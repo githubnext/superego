@@ -6,7 +6,7 @@
 // - the list (`threads.list`), a space: sorted recently active, newest first, needs you first or alphabetically (an app
 //   setting); with the sidebar hidden, a rail of status glyphs; the key to go anywhere (⌘L) beside its heading, while
 //   pointed at; ⌃T puts the keyboard in it, on the selected thread's row (and again, back in the prompt). A row's title is followed by other extensions' marks (the `thread.badge` slot: a worktree's branch,
-//   say); a right-click on it pins or unpins it, or archives it. Pinned rows are dragged to reorder them, and a
+//   say); a right-click on it pins or unpins it, or archives it; on a phone, so does a swipe (swipe.tsx). Pinned rows are dragged to reorder them, and a
 //   project's row dragged among them is pinned there. Pointed at or focused for a moment, a row (or a rail's dot) shows
 //   a card of its thread (card.tsx). On a phone, a search field under its title narrows it to the threads that match,
 //   archived ones too, as ⌘L finds them
@@ -21,12 +21,13 @@ import {
   type ArchivedThreads, type MachineEntry, type Pin, type Project, type ShownRow, type ShownSection, type Sort, type SpaceRailProps, type WindowContext,
 } from '@superego/app/ui'
 import { rollup, statusLabel, statusShape, unread, type ThreadInfo } from '@superego/protocol'
-import { CaretRightIcon, ChatsIcon, ContextMenu, DotsThreeIcon, Glyph, HOVER_DELAY, HoverCard, IconButton, List, ListItem, MagnifyingGlassIcon, Menu, PlusIcon, ProviderMark, providerOf, PushPinIcon, SparkleIcon, StatusGlyph, StatusWord, Tooltip, TooltipProvider, XCircleIcon } from '@superego/ui'
+import { ArchiveIcon, CaretRightIcon, ChatsIcon, ContextMenu, DotsThreeIcon, Glyph, HOVER_DELAY, HoverCard, IconButton, List, ListItem, MagnifyingGlassIcon, Menu, PlusIcon, ProviderMark, providerOf, PushPinIcon, PushPinSlashIcon, SparkleIcon, StatusGlyph, StatusWord, Tooltip, TooltipProvider, XCircleIcon } from '@superego/ui'
 import './styles.css'
 import { ago } from './ago.ts'
 import { ThreadCard } from './card.tsx'
 import { registerLinks, registerRows } from './rows.tsx'
 import { about } from './shared.ts'
+import { useCoarse, useRowSwipe } from './swipe.tsx'
 
 /** The list, the Threads space; and the action that puts the keyboard in it. */
 const LIST = 'threads.list'
@@ -306,14 +307,28 @@ function ThreadRow({ machine, thread, selected, row, where, className = '', ...d
   const on = isPinned(pins, at)
   const shape = statusShape(thread.status, thread.quiet)
   const run = (id: string, options: { machine?: string } = {}) => () =>
-    void dispatch(id, id === 'thread.archive' ? { thread: thread.id } : at, { source: 'threads', ...options }).catch((error) => console.error(error))
+    dispatch(id, id === 'thread.archive' ? { thread: thread.id } : at, { source: 'threads', ...options }).catch((error) => console.error(error))
+  const pin = run(on ? 'thread.unpin' : 'thread.pin')
+  const archive = run('thread.archive', { machine: machine.id })
+  // On a phone, under a finger: swiped right, Pin (or Unpin); left, More (the thread's sheet) and Archive, a full swipe's.
+  const { threadMenu } = useShell()
+  const narrow = useNarrow()
+  const finger = useCoarse()
+  const swipe = useRowSwipe({
+    on: narrow && finger,
+    leading: [{ id: 'pin', label: on ? 'Unpin' : 'Pin', icon: on ? PushPinSlashIcon : PushPinIcon, tone: 'pin', run: pin }],
+    trailing: [
+      { id: 'archive', label: 'Archive', icon: ArchiveIcon, tone: 'archive', run: archive, leaves: true },
+      { id: 'more', label: 'More', icon: DotsThreeIcon, tone: 'more', run: () => threadMenu(at) },
+    ],
+  })
   return (
-    <ContextMenu.Root>
+    <ContextMenu.Root onOpenChange={(open, details) => { if (open && swipe.swiped()) details.cancel() }}>
       <ContextMenu.Trigger>
         <HoverCard card={<ThreadCard machine={machine} thread={thread} {...(row?.folded ? { tucked: row.tucked } : {})} />}>
           <ListItem selected={selected} leading={<span className="threads__lead">{LEADS.has(shape) && <StatusGlyph status={thread.status} quiet={thread.quiet} />}</span>} draggable {...data} data-depth={level}
             {...(row?.fold ? { 'aria-expanded': !row.folded } : {})} onKeyDown={(event) => rowKeys(event, row, setFold)}
-            className={`${level ? 'threads-child' : ''} ${row?.folded ? 'is-folded' : ''} ${className}`} {...(level ? { style: { '--depth': level } as CSSProperties } : {})}
+            {...swipe.rowProps} className={`${level ? 'threads-child' : ''} ${row?.folded ? 'is-folded' : ''} ${swipe.rowProps.className ?? ''} ${className}`} {...(level ? { style: { '--depth': level } as CSSProperties } : {})}
             onDragStart={(event) => { event.dataTransfer.setData(DRAGGED, JSON.stringify(at)); event.dataTransfer.effectAllowed = 'move' }}
             trailing={(row?.folded && rolledUp([thread, ...row.tucked])) || <RowEnd thread={thread} />}
             onClick={() => select(at)}>
@@ -322,12 +337,13 @@ function ThreadRow({ machine, thread, selected, row, where, className = '', ...d
             {on && !where && <PushPinIcon className="threads__pin" size={11} weight="fill" aria-label="Pinned" />}
             <Slot name="thread.badge" props={{ machine, thread }} />
             {where && <em className="threads-pinned__where">{where}</em>}
+            {swipe.actions}
           </ListItem>
         </HoverCard>
       </ContextMenu.Trigger>
       <ContextMenu.Popup className="threads-row-menu">
-        <Menu.Item onClick={run(on ? 'thread.unpin' : 'thread.pin')}>{on ? 'Unpin' : 'Pin'}</Menu.Item>
-        <Menu.Item onClick={run('thread.archive', { machine: machine.id })} hint={archiveKeys}>Archive</Menu.Item>
+        <Menu.Item onClick={pin}>{on ? 'Unpin' : 'Pin'}</Menu.Item>
+        <Menu.Item onClick={archive} hint={archiveKeys}>Archive</Menu.Item>
       </ContextMenu.Popup>
     </ContextMenu.Root>
   )

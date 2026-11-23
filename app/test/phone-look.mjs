@@ -3,7 +3,7 @@
 // this home. The drawer open (its rows' states dressed on their way to the phone: one working on a branch of its own,
 // one asking, one done, the rest quiet at their times); its search in use, empty, with matches and with none, the keyboard up; a thread with markdown, a code block and tool calls, words in the composer; the same with
 // the keyboard up; the thread's menu; the New thread sheet; the Diff pane's tab; Settings' list and a page of it. In light and dark, into
-// $SUPEREGO_SHOWCASE_OUT as drawer-, search-empty-, search-results-, search-none-, thread-, answer-, keyboard-, menu-, new-thread-, pane-, settings- and settings-page-<light|dark>.png.
+// $SUPEREGO_SHOWCASE_OUT as drawer-, swipe- (a row swiped open), swipe-pin-, swipe-full- (held most of the way across), search-empty-, search-results-, search-none-, thread-, answer-, keyboard-, menu-, new-thread-, pane-, settings- and settings-page-<light|dark>.png.
 import { BrowserWindow } from 'electron'
 import { writeFileSync } from 'node:fs'
 import { openApp } from './harness.mjs'
@@ -136,6 +136,46 @@ await openApp({ name: 'phone-look', timeout: 300_000 }, async (t) => {
   await p.run(`document.querySelector('.app__mobilebar button').click()`)
   await p.until(`[...document.querySelectorAll('.app__sidebar .superego-list-item')].some((li) => li.textContent.includes('Group spending'))`, 'the drawer, its threads')
   await both('drawer')
+  // Swipe actions, by a finger: a row swiped left and let go, open on More and Archive; another swiped right, open on
+  // Pin; one swiped most of the way across and held, Archive stretched over it (let go back where it began). Touch
+  // pointer events dispatched in the page: a hidden window takes real touches only as it draws, slower than a long press.
+  const drag = (text, by, { from = 0.5, release = true } = {}) => p.run(`(async () => {
+    const li = [...document.querySelectorAll('.app__sidebar .superego-list-item')].find((li) => li.textContent.includes(${JSON.stringify(text)}))
+    const box = li.getBoundingClientRect()
+    const x = box.left + box.width * ${from}, y = box.top + box.height / 2
+    const at = (type, clientX) => li.dispatchEvent(new PointerEvent(type, { bubbles: true, cancelable: true, pointerType: 'touch', pointerId: 7, isPrimary: true, clientX, clientY: y }))
+    const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+    at('pointerdown', x)
+    for (let i = 1; i <= 12; i++) { at('pointermove', x + ${by} * i / 12); await pause(16) }
+    // Still a moment before letting go: no flick.
+    await pause(120)
+    at('pointermove', x + ${by})
+    if (${release}) at('pointerup', x + ${by})
+    await pause(600)
+    // Held: let go of later back where it began (\`back\`).
+    window.swipeBack = () => { at('pointermove', x); at('pointerup', x) }
+  })()`)
+  const tapHead = () => p.run(`(() => {
+    const head = document.querySelector('.app__sidebar .threads__head')
+    const box = head.getBoundingClientRect()
+    const init = { bubbles: true, cancelable: true, pointerType: 'touch', pointerId: 8, isPrimary: true, clientX: box.left + 20, clientY: box.top + box.height / 2 }
+    head.dispatchEvent(new PointerEvent('pointerdown', init))
+    head.dispatchEvent(new PointerEvent('pointerup', init))
+  })()`)
+  await drag('Group spending', -120, { from: 0.8 })
+  await p.until(`Boolean(document.querySelector('.threads-swipe.is-swiped .threads-swipe__actions--trailing'))`, 'a row swiped open on its trailing actions')
+  await both('swipe')
+  await drag('Retry the bank sync', 90, { from: 0.2 })
+  await p.until(`document.querySelectorAll('.threads-swipe.is-swiped').length === 1 && Boolean(document.querySelector('.threads-swipe.is-swiped .threads-swipe__actions--leading'))`, 'a row swiped open on Pin, the other closed')
+  await both('swipe-pin')
+  await tapHead()
+  await p.until(`!document.querySelector('.threads-swipe.is-swiped')`, 'the open row closed by a tap elsewhere')
+  await drag('Group spending', -300, { from: 0.9, release: false })
+  await p.until(`Boolean(document.querySelector('.threads-swipe__actions.is-armed'))`, 'Archive stretched')
+  await both('swipe-full')
+  await p.run(`window.swipeBack()`)
+  await p.until(`!document.querySelector('.threads-swipe.is-swiped')`, 'the row back where it was')
+  await new Promise((resolve) => setTimeout(resolve, 700))
   // Its search: focused with the keyboard up (the field where it was, not slid away), empty; then typed, with matches
   // (the archived among them); then with none.
   const field = `document.querySelector('.app__drawer .threads-search__input')`
