@@ -16,13 +16,14 @@
 .app:not(.is-narrow) {
   --side-inset: 8px; --side-radius: calc(var(--superego-window-radius) - var(--side-inset));
   --side-width: var(--superego-rail); --side-top: calc(var(--superego-titlebar) + env(safe-area-inset-top, 0px));
+  /* What it casts on the ground round it: the focus's ring (see Focus), its edge, its shadow. */
+  --side-shadow: var(--side-ring, 0 0 #0000), var(--superego-glass-edge), 0 6px 24px light-dark(rgb(0 0 0 / .07), rgb(0 0 0 / .35));
 }
 .app:not(.is-narrow):is(:has(.app__sidebar:not(:empty)), :has(.settings--pane)) { --side-width: calc(var(--superego-rail) + var(--superego-sidebar)); --side-top: var(--side-inset); }
 .app:not(.is-narrow)::before {
   content: ''; position: absolute; z-index: 0; top: var(--side-top); left: var(--side-inset); bottom: var(--side-inset); width: calc(var(--side-width) - var(--side-inset)); pointer-events: none;
   border-radius: var(--side-radius); background: var(--superego-chrome);
-  box-shadow: var(--side-ring, 0 0 #0000), var(--superego-glass-edge), 0 6px 24px light-dark(rgb(0 0 0 / .07), rgb(0 0 0 / .35));
-  transition: box-shadow .15s;
+  box-shadow: var(--side-shadow); transition: box-shadow .15s;
 }
 .app__titlebar, .app__body > * { position: relative; z-index: 1; }
 .app__rail { position: relative; flex: none; width: var(--superego-rail); display: flex; flex-direction: column; justify-content: space-between; align-items: center; padding: 9px 0 18px var(--side-inset); -webkit-app-region: drag; }
@@ -835,14 +836,25 @@ button.app__mobiletitle > svg { flex: none; color: var(--superego-faint); }
 .panes:not(.panes--narrow) > .panes__column.is-maximized { inset: var(--row-top) var(--side-inset) var(--side-inset); }
 .panes__kept { flex: none; }
 /* The thread kept in view (scrolled): it and its handle stand still at the start, over the panes passing under them,
-   and so does the room before it (the row's ::before, in its start's padding); the handle and that room on the
-   window's ground, so none shows through. A soft shadow falls from the thread once they've started to. */
+   and so does the room before it, between it and the side's panel; the handle on the window's ground, so none shows
+   through. A soft shadow falls from the thread once they've started to. */
 .panes--keep > :is(.panes__column--thread, .panes__gap--thread) { position: sticky; left: 0; z-index: 2; }
 .panes--keep.is-scrolled > .panes__gap--thread { background: var(--superego-ground); }
 .panes--keep.is-scrolled > .panes__column--thread { --column-lift: 3px 0 8px light-dark(rgb(0 0 0 / .1), rgb(0 0 0 / .5)); }
-.panes--keep:not(.panes--narrow):not(.panes--stack)::before {
-  content: ''; order: -1; flex: none; position: sticky; left: calc(-1 * var(--side-inset)); z-index: 1;
-  width: var(--side-inset); margin-left: calc(-1 * var(--side-inset)); background: var(--superego-ground);
+/* That room, the sheet's full height (the row's start padding, --side-inset): the ground as it is there, the side's
+   panel casting on it (its shadow, its ring), so it reads as the ground round the panel above and below. The panel is
+   drawn under the window's body (.app::before), so what covers the panes there covers what it casts too: the room is
+   the ground (::before), and over it a stand-in for the panel in its place (::after), past the sheet's start where the
+   body clips it, casting the panel's --side-shadow into the room only. */
+.app:not(.is-narrow) .sheet:has(> .panes--keep)::before {
+  content: ''; position: absolute; z-index: 1; top: 0; bottom: 0; left: 0; width: var(--side-inset); pointer-events: none;
+  background: var(--superego-ground);
+}
+.app:not(.is-narrow) .sheet:has(> .panes--keep)::after {
+  content: ''; position: absolute; z-index: 1; pointer-events: none; right: 100%; width: calc(var(--side-width) - var(--side-inset));
+  top: calc(var(--side-top) - var(--superego-titlebar) - env(safe-area-inset-top, 0px)); bottom: var(--side-inset);
+  border-radius: var(--side-radius); box-shadow: var(--side-shadow); transition: box-shadow .15s;
+  clip-path: inset(-100vh calc(-1 * var(--side-inset)) -100vh 0);
 }
 .pane-empty { margin: auto; color: var(--superego-muted); padding: var(--superego-space-5); text-align: center; }
 .pane-scroll { flex: 1; overflow: auto; }
