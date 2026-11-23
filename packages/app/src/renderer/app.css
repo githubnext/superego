@@ -1450,3 +1450,29 @@ a.pane-header__url:hover { color: var(--superego-link); }
 .notify-offer__ask { display: inline-flex; align-items: center; gap: 6px; font: inherit; font-size: var(--superego-text-sm); height: 26px; color: var(--superego-muted); background: var(--superego-bg); border: 0; box-shadow: inset 0 0 0 1px light-dark(rgb(0 0 0 / .12), rgb(255 255 255 / .12)); border-radius: 999px; padding: 0 10px; cursor: default; }
 .notify-offer__ask:hover { color: var(--superego-text); background: linear-gradient(var(--superego-hover), var(--superego-hover)) var(--superego-bg); }
 .notify-offer__no { width: 22px; height: 22px; min-height: 22px; color: var(--superego-muted); box-shadow: none; background: none; }
+
+/* ── Surfaces ──────────────────────────────────────────────────────────────────────────────────────────────────────
+   A surface fills the main area (surfaces.tsx): wide, a sheet on the window's ground as a thread's columns are, its
+   thread docked beside it as another (or, floating, a card over its right side). */
+.surface { flex: 1; display: flex; min-height: 0; min-width: 0; gap: 8px; position: relative; }
+.app:not(.is-narrow) .surface { padding: 4px var(--side-inset) var(--side-inset) var(--side-inset); }
+.app:not(.is-narrow):has(.surface) { background: var(--superego-ground); }
+.surface__body { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; position: relative; overflow: hidden; background: var(--superego-bg); }
+.surface__body > * { flex: 1; min-height: 0; }
+.app:not(.is-narrow) .surface__body, .app:not(.is-narrow) .surface__agent { border-radius: var(--side-radius); box-shadow: 0 0 0 .5px var(--superego-line); }
+.surface__agent { width: 380px; flex: none; display: flex; flex-direction: column; min-height: 0; overflow: hidden; background: var(--superego-bg); }
+.surface.is-floating .surface__agent {
+  position: absolute; right: calc(var(--side-inset) + 12px); top: 16px; bottom: calc(var(--side-inset) + 12px); width: 340px; z-index: 2;
+  box-shadow: 0 0 0 .5px var(--superego-border), 0 12px 32px -10px light-dark(rgb(0 0 0 / .25), rgb(0 0 0 / .6));
+}
+.surface__agent-head { display: flex; align-items: center; gap: 8px; flex: none; height: 36px; padding: 0 6px 0 14px; background: var(--superego-pane-tab); font-size: var(--superego-text-sm); color: var(--superego-muted); }
+.surface__agent-title { flex: 1; min-width: 0; font-weight: 500; color: var(--superego-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.surface__agent-body { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.surface__agent-body > .thread { flex: 1; }
+.surface__agent .thread__column { max-width: calc(100% - 2 * var(--superego-space-4)); }
+.surface__agent .dock { max-width: calc(100% - 2 * var(--superego-space-3)); width: calc(100% - 2 * var(--superego-space-3)); }
+.surface__ask { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.surface__ask-body { margin-top: auto; padding: var(--superego-space-3); display: flex; flex-direction: column; gap: var(--superego-space-2); align-items: flex-end; }
+.surface__ask-body .superego-textarea { width: 100%; border: 1px solid var(--superego-line); border-radius: 14px; padding: 10px 12px; background: var(--superego-raised); }
+.surface__error { margin: 0; color: var(--superego-danger, #d70015); font-size: var(--superego-text-sm); align-self: stretch; }
+.titlebar__action.is-on { color: var(--superego-accent); }

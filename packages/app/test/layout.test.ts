@@ -207,6 +207,28 @@ describe('views in the registry', () => {
     expect(registry.views).toEqual([])
   })
 
+  it("installs a global profile's UI as the app's: in any place, its surfaces and their links; a thread-bound profile can't add a surface", () => {
+    const notes = defineUiExtension({
+      name: 'notes',
+      setup(superego) {
+        superego.view('notes.list', { title: 'Notes', context: 'window', fits: ['space'], default: 'space', component: None })
+        superego.surface('notes.page', { title: (p) => String(p.name), component: None, match: 'note:', params: (href) => ({ name: href.slice(5) }) })
+      },
+    })
+    const profile = { scope: 'user' as const, name: 'notes', dir: '/home/me/.superego/profiles/notes' }
+    const registry = createRegistry(app, [], () => {})
+    registry.installProfile('local', profile, [notes], { global: true })
+    expect(registry.views.find((v) => v.id === 'notes.list')?.fits).toEqual(['space'])
+    expect(viewsIn(registry, resolveLayout(registry.views, undefined), 'space').map((v) => v.id)).toEqual(['notes.list'])
+    expect(registry.surfaces.map((s) => [s.kind, s.machine])).toEqual([['notes.page', 'local']])
+    expect(registry.links.some((l) => l.match === 'note:')).toBe(true)
+    // Set up again without being global: its space and surface go, and its links with them.
+    registry.installProfile('local', profile, [notes])
+    expect(registry.views.find((v) => v.id === 'notes.list')).toBeUndefined()
+    expect(registry.surfaces).toEqual([])
+    expect(registry.links.some((l) => l.match === 'note:')).toBe(false)
+  })
+
   it('resolves a view declared in several scopes from the scope a thread is in, once', () => {
     // The same profile on two machines, its notes beside the thread on one and in the pane menu on the other.
     const notes = (where: 'beside' | 'pane'): UiExtension => defineUiExtension({

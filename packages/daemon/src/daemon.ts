@@ -260,6 +260,8 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     }
     const refs = new Map([...mounted.values()].filter((m) => !m.meta.archived && m.meta.profile).map((m) => [m.meta.profile!.dir, m.meta.profile!]))
     for (const ref of refs.values()) await profiles.profileOf(ref).catch((error: Error) => console.error(`Profile ${ref.name}: ${error.message}`))
+    // And the user's global ones, whatever threads there are.
+    await profiles.loadGlobals()
   })()
 
   const daemon: Daemon = {

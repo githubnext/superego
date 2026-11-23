@@ -79,6 +79,12 @@ export type ProfileSpec = {
   without?: string[]
   /** Start from another profile and add to it: 'user:<name>' (a project's profile on the user's). */
   extends?: string
+  /**
+   * One of your own profiles that is part of the app, not only of its threads: the daemon loads it as it starts (its
+   * daemon halves run for the daemon's life), and the window installs its UI as the app's, so its views may go in any
+   * place (a space in the rail) and it may add surfaces. Not a project's profile's, nor taken from the one it extends.
+   */
+  global?: boolean
 }
 
 /**
@@ -90,7 +96,7 @@ export type ProfileSpec = {
 export type LoadedSpec = ProfileSpec & { [key: string]: Json | undefined }
 
 /** The profile keys that are the core's own: an extension can't register them (`profileKey`). */
-export const CORE_KEYS = new Set(['description', 'model', 'thinking', 'agent', 'prompt', 'extensions', 'ui', 'panes', 'options', 'without', 'extends'])
+export const CORE_KEYS = new Set(['description', 'model', 'thinking', 'agent', 'prompt', 'extensions', 'ui', 'panes', 'options', 'without', 'extends', 'global'])
 
 /**
  * A key of an extension's own in profiles (`superego.profileKey`): how a profile's value of it is checked, merged over
@@ -384,6 +390,11 @@ function realSpecifier(specifier: string, parent: string | undefined): string {
 const fresh = versionedUrl
 
 /** What a profile's profile.ts says, as it is now. */
+/** Whether one of the user's profiles says it's `global`, by its profile.ts alone (nothing of it set up). */
+export async function isGlobal(ref: ProfileRef): Promise<boolean> {
+  return ref.scope === 'user' && (await specOf(ref)).global === true
+}
+
 async function specOf(ref: ProfileRef): Promise<LoadedSpec> {
   const spec = (await load(fresh(join(ref.dir, 'profile.ts'))) as { default?: LoadedSpec }).default
   if (!spec || typeof spec !== 'object') throw new RpcError('invalid', `${join(ref.dir, 'profile.ts')} must export default defineProfile({ … })`)
@@ -464,7 +475,10 @@ export async function loadProfile(ref: ProfileRef, roots: UserRoot[], allowances
     options: { ...base?.spec.options, ...spec.options },
     // UI paths are relative to their own profile's folder: only this profile's are served from here.
     ui: spec.ui,
+    // Its own say, never the one it extends': and only one of the user's own may be.
+    global: ref.scope === 'user' && spec.global === true ? true : undefined,
   }
+  if (spec.global && ref.scope !== 'user') problems.push("global: only one of your own profiles may be global, not a project's")
   return { ...ref, spec: merged, problems: [...base?.problems.map((p) => `${spec.extends}: ${p}`) ?? [], ...problems], extensions, daemon, hash, versions }
 }
 

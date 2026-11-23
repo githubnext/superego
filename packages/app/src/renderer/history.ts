@@ -1,8 +1,17 @@
-// Back and forward, as a browser has them: the places this window has shown (a thread, Settings), in memory. Going
+// Back and forward, as a browser has them: the places this window has shown (a thread, a surface, Settings), in memory. Going
 // somewhere new after going back drops what was ahead; going back or forward moves along without adding a place.
 // Places that are gone by then (a thread archived or deleted) are stepped over.
 
-export type Place = { thread: { machine: string; thread: string } } | { settings: true }
+import type { Json } from '@superego/protocol'
+
+/** A surface open in the main area: its kind, on a machine, with its params. */
+export type SurfaceAt = { machine: string; kind: string; params: Record<string, Json> }
+
+export type Place = { thread: { machine: string; thread: string } } | { surface: SurfaceAt } | { settings: true }
+
+/** Whether two surfaces are the same one: of a kind, on a machine, with the same params. */
+export const sameSurface = (a: SurfaceAt | undefined, b: SurfaceAt | undefined) =>
+  !a || !b ? a === b : a.machine === b.machine && a.kind === b.kind && JSON.stringify(a.params) === JSON.stringify(b.params)
 
 export type History = { places: Place[]; at: number }
 
@@ -14,6 +23,7 @@ export const emptyHistory: History = { places: [], at: -1 }
 export function samePlace(a: Place | undefined, b: Place | undefined): boolean {
   if (!a || !b) return a === b
   if ('settings' in a || 'settings' in b) return 'settings' in a && 'settings' in b
+  if ('surface' in a || 'surface' in b) return 'surface' in a && 'surface' in b && sameSurface(a.surface, b.surface)
   return a.thread.machine === b.thread.machine && a.thread.thread === b.thread.thread
 }
 

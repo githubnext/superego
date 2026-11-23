@@ -1,10 +1,11 @@
 // A profile's UI, loaded while the app runs. The daemon serves the profile's modules (types stripped, after checking the
 // profile is allowed there); here every module its entries need is fetched, then each one's imports are rewritten and
 // it is loaded from a blob URL:
-//   'react', 'react/jsx-runtime', 'superego/ui', 'superego/unstable'
+//   'react', 'react/jsx-runtime', 'react-dom', 'react-dom/client', 'superego/ui', 'superego/unstable'
 //                                         → this window's own copies, so a profile's components share its React
 //   './other.ts'                          → that module of the profile, loaded the same way
-// Their default exports are UI halves, installed for that profile's threads only (see Registry.installProfile).
+// Their default exports are UI halves, installed for that profile's threads only (see Registry.installProfile); a global
+// profile's (`global: true`, the machine's GLOBAL_PROFILES) as the app's, from the moment the machine says it has it.
 //
 // The window runs with the user's full access to every machine, so a machine other than this computer gets no say in
 // what runs in it: a remote profile's UI runs only once it is allowed on this computer, for that machine, that profile
@@ -21,16 +22,21 @@ import {
 } from '@superego/client/profile-ui'
 import { machine as client } from './client.ts'
 import type { UiExtension } from './extension-api.ts'
-import { profileScope, useRegistry, type Registry } from './registry.tsx'
+import { profileScope, scopeIsOn, useRegistry, type Registry } from './registry.tsx'
 import { APP } from '../shared/app-settings.ts'
 
 /** What a profile's modules import by name: built on first use, from this window's own modules. */
 let shared: Promise<Map<string, string>> | undefined
 function sharedModules() {
   return shared ??= (async () => {
-    const [react, jsx, stable, unstable] = await Promise.all([import('react'), import('react/jsx-runtime'), import('./sdk-ui.ts'), import('./sdk-unstable.ts')])
+    const [react, jsx, dom, domClient, stable, unstable] = await Promise.all([
+      import('react'), import('react/jsx-runtime'), import('react-dom'), import('react-dom/client'), import('./sdk-ui.ts'), import('./sdk-unstable.ts'),
+    ])
     const g = globalThis as { __superegoShared?: Record<string, Record<string, unknown>> }
-    g.__superegoShared = { react: { ...react }, 'react/jsx-runtime': { ...jsx }, 'superego/ui': { ...stable }, 'superego/unstable': { ...unstable } }
+    g.__superegoShared = {
+      react: { ...react }, 'react/jsx-runtime': { ...jsx }, 'react-dom': { ...dom }, 'react-dom/client': { ...domClient },
+      'superego/ui': { ...stable }, 'superego/unstable': { ...unstable },
+    }
     const urls = new Map<string, string>()
     for (const [name, exports] of Object.entries(g.__superegoShared)) {
       const names = Object.keys(exports).filter((key) => /^[A-Za-z_$][\w$]*$/.test(key) && key !== 'default')
@@ -118,6 +124,9 @@ type Known = {
   hash?: string
   installed: boolean
 }
+
+/** The global profiles each machine has (GLOBAL_PROFILES), by `keyOf`: their UI is installed as the app's. */
+const globals = new Set<string>()
 const known = new Map<string, Known>()
 const loading = new Map<string, Promise<void>>()
 const keyOf = (machine: string, dir: string) => profileScope(machine, { dir })
@@ -139,7 +148,7 @@ async function install(entry: Known) {
   const extensions = entry.sources.entries.length ? await load(entry.profile, entry.sources).catch((error: Error & { kind?: string }) => {
     throw Object.assign(error, { kind: error.kind ?? 'invalid' })
   }) : []
-  entry.registry.installProfile(entry.machine, entry.profile, extensions)
+  entry.registry.installProfile(entry.machine, entry.profile, extensions, { global: globals.has(keyOf(entry.machine, entry.profile.dir)) })
   entry.installed = true
   if (revokedRan.delete(keyOf(entry.machine, entry.profile.dir))) revokedList = [...revokedRan.values()]
 }
@@ -266,6 +275,41 @@ export function useListedProfileUis(machine: string, connected: boolean, threads
   }, [machine, connected, dirs])
 }
 
+/**
+ * Load the UIs of a machine's global profiles (GLOBAL_PROFILES, as it says them now) as the app's, whatever threads
+ * there are; and again when the window comes to the front, should their files have changed. One no longer global
+ * there is installed again as a profile's (its threads') or let go of.
+ */
+export function useGlobalProfileUis(machine: string, connected: boolean, refs: ProfileRef[] | null | undefined) {
+  const registry = useRegistry()
+  const dirs = (refs ?? []).map((r) => r.dir).sort().join('\n')
+  useEffect(() => {
+    if (!connected || !refs) return
+    const now = new Set(refs.map((r) => keyOf(machine, r.dir)))
+    for (const key of [...globals]) {
+      if (!scopeIsOn(key, machine) || now.has(key)) continue
+      globals.delete(key)
+      const entry = known.get(key)
+      // Its UI as a profile's again (for its threads), from the sources it has.
+      if (entry?.installed) void install(entry).catch((error) => console.error(`The ${entry.profile.name} profile's UI didn't load`, error))
+    }
+    const load = () => {
+      for (const ref of refs) {
+        const key = keyOf(machine, ref.dir)
+        const was = globals.has(key)
+        globals.add(key)
+        const entry = known.get(key)
+        // Installed already as a profile's: as the app's now, from what it has; then as its files are now.
+        if (!was && entry?.installed) void install(entry).catch((error) => console.error(`The ${ref.name} profile's UI didn't load`, error))
+        void ensureOnce(registry, machine, ref)
+      }
+    }
+    load()
+    window.addEventListener('focus', load)
+    return () => window.removeEventListener('focus', load)
+  }, [machine, connected, dirs])
+}
+
 /** What `useListedProfileUis` does once the profiles listed change: done when each of them is (or waits to be allowed). */
 export async function loadListedProfileUis(registry: Pick<Registry, 'installProfile'>, machine: string, profiles: ProfileRef[]) {
   if (machine !== 'local') await allowedList().catch(() => undefined)
@@ -335,5 +379,5 @@ export async function profileUisLoaded() {
 
 /** Tests: forget every profile's UI. */
 export function resetProfileUi() {
-  known.clear(); loading.clear(); reopened.clear(); revokedRan.clear(); revokedList = []; allowed = []; declined = []; allowedLoad = undefined; load = loadProfileUi
+  known.clear(); loading.clear(); globals.clear(); reopened.clear(); revokedRan.clear(); revokedList = []; allowed = []; declined = []; allowedLoad = undefined; load = loadProfileUi
 }

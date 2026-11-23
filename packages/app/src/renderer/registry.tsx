@@ -17,7 +17,7 @@ import { dataIcon, DataViewBody } from './data-views.tsx'
 import { addStyle } from './profile-style.ts'
 import { checkTheme, type Theme } from '@superego/ui/themes'
 import type {
-  BehaviourSlot, EntryProps, LinkHandler, NewThreadField, PaneKind, PaneProps, SettingsComponentProps, SlotProps, ToolCallProps, ToolRow, UiApi,
+  BehaviourSlot, EntryProps, LinkHandler, NewThreadField, PaneKind, PaneProps, SettingsComponentProps, SlotProps, SurfaceKind, ToolCallProps, ToolRow, UiApi,
   UiExtension, View, ViewProps, WindowEvent, WindowEvents, WindowState, WorkPart, WorkRun,
 } from './extension-api.ts'
 
@@ -26,7 +26,11 @@ import type {
  * that profile on its machine (`profileScope`). `speaks` for an app's UI half: whether it draws for threads on
  * `machine`, by the version that machine runs its extension at (see `speaks`).
  */
-export type Owner = { extension: string; optional: boolean; profile?: string; data?: true; speaks?(machine: string): boolean }
+export type Owner = {
+  extension: string; optional: boolean; profile?: string; data?: true; speaks?(machine: string): boolean
+  /** A global profile's UI (`global: true`): installed as the app's, but taken down with its profile (its scope). */
+  global?: string
+}
 
 /**
  * Whether a UI half at `version` works with a machine whose manifest of its extension is `there`: at the same major
@@ -75,6 +79,8 @@ export type Registry = {
   entries: Owned<{ kind: string; component: ComponentType<EntryProps> }>[]
   links: Owned<LinkHandler>[]
   panes: Owned<PaneKind & { kind: string }>[]
+  /** Surfaces (`superego.surface`), by kind, each with the machine it opens on (a global profile's, its own). */
+  surfaces: Owned<SurfaceKind & { kind: string; machine?: string }>[]
   work: Owned<{ divide: (run: WorkRun) => WorkPart[] | undefined }>[]
   settings: Owned<{ ui: string; component: ComponentType<SettingsComponentProps> }>[]
   /** The New thread dialog's fields, by the extension each is of (its `options` key). */
@@ -95,9 +101,10 @@ export type Registry = {
   emit<E extends WindowEvent>(event: E, payload: WindowEvents[E]): void
   /**
    * Set up a profile's UI halves on `machine`, after tearing down what that profile set up before. One that fails
-   * to start is logged and left out, the rest set up; the failures are returned.
+   * to start is logged and left out, the rest set up; the failures are returned. `global`: a global profile's
+   * (`global: true`), set up as the app's: in any place, for every thread.
    */
-  installProfile(machine: string, profile: ProfileRef, extensions: UiExtension[]): { extension: string; error: unknown }[]
+  installProfile(machine: string, profile: ProfileRef, extensions: UiExtension[], options?: { global?: boolean }): { extension: string; error: unknown }[]
   /** Tear down every extension set up, the core's last: as the window closing would (a test's end). */
   teardown(): void
   /** Changes whenever extensions are added or removed at runtime; `subscribe` to hear it. */
@@ -109,14 +116,14 @@ export function createRegistry(app: AppConfig, extensions: UiExtension[], core: 
   const listeners = new Set<() => void>()
   /** The teardown of each extension set up, by owner (`<profile scope>/<name>`). */
   const teardowns = new Map<string, () => void>()
-  const ownerKey = (owner: Owner) => `${owner.profile ?? ''}/${owner.extension}`
+  const ownerKey = (owner: Owner) => `${owner.profile ?? owner.global ?? ''}/${owner.extension}`
   const registry: Registry = {
     app, extensions: extensions.map(({ name, title, description, required, version, api, panes }) => ({
       name, ...(title ? { title } : {}), ...(description ? { description } : {}), ...(required ? { required } : {}),
       ...(version ? { version } : {}), ...(api ? { api } : {}), ...(panes ? { panes } : {}),
     })),
     slots: { 'header.chips': [], 'thread.badge': [], 'composer.above': [], 'details.section': [], 'editor.side': [], 'editor.bar': [], 'overlay': [], 'onboarding': [] },
-    views: [], dataViews: {}, machineExtensions: {}, tools: [], entries: [], links: [], panes: [], work: [], settings: [], newThreadFields: [], router: createWindowRouter(), appSettings: [], themes: [], completions: [], sentWith: [], listeners: [],
+    views: [], dataViews: {}, machineExtensions: {}, tools: [], entries: [], links: [], panes: [], surfaces: [], work: [], settings: [], newThreadFields: [], router: createWindowRouter(), appSettings: [], themes: [], completions: [], sentWith: [], listeners: [],
     window: {
       focused: typeof document === 'undefined' || document.hasFocus(),
       visible: typeof document === 'undefined' || document.visibilityState !== 'hidden',
@@ -153,12 +160,12 @@ export function createRegistry(app: AppConfig, extensions: UiExtension[], core: 
       registry.version++
       for (const listener of listeners) listener()
     },
-    installProfile(machine, profile, list) {
+    installProfile(machine, profile, list, options = {}) {
       const scope = profileScope(machine, profile)
       for (const [key, teardown] of [...teardowns]) if (key.startsWith(`${scope}/`)) teardown()
       const failed: { extension: string; error: unknown }[] = []
       for (const extension of list) {
-        try { setUp(extension, scope) } catch (error) {
+        try { setUp(extension, scope, options.global) } catch (error) {
           console.error(`Profile extension ${extension.name} failed to start`, error)
           failed.push({ extension: extension.name, error })
         }
@@ -206,17 +213,22 @@ export function createRegistry(app: AppConfig, extensions: UiExtension[], core: 
   }
 
   /** Set up one extension: everything it adds is owned by it, and its teardown takes all of it away again. */
-  function setUp(extension: UiExtension, profile?: string) {
+  function setUp(extension: UiExtension, scope?: string, global = false) {
+    // A global profile's is the app's in all but its teardown (by its scope): `profile` is a thread-bound profile's.
+    const profile = global ? undefined : scope
     if (!/^[a-z][a-z0-9-]*$/.test(extension.name)) throw new Error(`Extension name "${extension.name}" must be lowercase letters, digits and dashes`)
     // One whose versions don't read, or that needs an extension API this window isn't, is refused before it runs.
     const problem = contractProblem(extension)
     if (problem) throw new Error(problem)
     // The core's and a profile's own aren't the machine's to turn off; a bundled extension is, unless it's required.
-    const owner: Owner = { extension: extension.name, optional: !profile && extension.name !== 'core' && !extension.required, ...(profile ? { profile } : {}) }
+    const owner: Owner = {
+      extension: extension.name, optional: !scope && extension.name !== 'core' && !extension.required,
+      ...(profile ? { profile } : {}), ...(global && scope ? { global: scope } : {}),
+    }
     // An app's UI half draws for a machine's threads only where it speaks with that machine's half (a profile's comes
     // from the machine itself; the core is the app).
     // Asked for every tool call a transcript draws, so worked out once for each list a machine announces.
-    if (!profile && extension.name !== 'core') {
+    if (!scope && extension.name !== 'core') {
       const spoken = new WeakMap<ExtensionManifest[], boolean>()
       owner.speaks = (machine) => {
         const there = registry.machineExtensions[machine]
@@ -227,9 +239,9 @@ export function createRegistry(app: AppConfig, extensions: UiExtension[], core: 
       }
     }
     // A name is the extension's prefix: one of each among the app's, and a profile's can't take one of theirs.
-    if (teardowns.has(ownerKey(owner)) || (profile && teardowns.has(`/${extension.name}`))) throw new Error(`An extension named ${extension.name} is already set up`)
+    if (teardowns.has(ownerKey(owner)) || (scope && teardowns.has(`/${extension.name}`))) throw new Error(`An extension named ${extension.name} is already set up`)
     // Everything it registers goes through its lifetime: undone together at teardown, and refused after.
-    const life = new Lifetime(`${profile ? 'Profile extension' : 'Extension'} ${extension.name}`)
+    const life = new Lifetime(`${scope ? 'Profile extension' : 'Extension'} ${extension.name}`)
     const add = <T,>(list: Owned<T>[], item: T) => {
       life.live('anything')
       const entry = { ...item, owner } as Owned<T>
@@ -304,6 +316,22 @@ export function createRegistry(app: AppConfig, extensions: UiExtension[], core: 
         own(ui, 'settings sections', true)
         unique(registry.settings, 'ui', { ui, component }, 'settings section')
       },
+      surface(kind, surface) {
+        own(kind, 'surfaces')
+        // Bound to a profile's threads, it'd have nowhere to open: only the app's and a global profile's.
+        if (profile) return console.warn(`Profile extension ${extension.name}: surface ${kind} needs its profile to be global (global: true)`)
+        const machine = scope?.slice(0, scope.indexOf('\u0000'))
+        unique(registry.surfaces, 'kind', { ...surface, kind, ...(machine ? { machine } : {}) }, 'surface')
+        // Its links open it.
+        if (surface.match) {
+          const scheme = surface.match
+          add(registry.links, {
+            match: scheme,
+            open: (href) => registry.router.dispatch('surface.open', { kind, params: surface.params?.(href) ?? { href }, ...(machine ? { machine } : {}) }, { source: 'link' })
+              .then(() => undefined, (error: Error) => error.message),
+          })
+        }
+      },
       pane(kind, pane) {
         unique(registry.panes, 'kind', { ...pane, kind }, 'pane kind')
         // Offered in the pane menu: a view of the pane menu, of the kind's name, placed there by default.
@@ -354,7 +382,7 @@ export function createRegistry(app: AppConfig, extensions: UiExtension[], core: 
         const name = key.startsWith(`${extension.name}.`) ? key : `${extension.name}.${key}`
         life.live(`the store ${name}`)
         // A profile's is kept apart for each profile on each machine: the same profile folder elsewhere is another.
-        return createStore(profile ? `profile.${encodeURIComponent(profile)}.${name}` : name, initial, options)
+        return createStore(scope ? `profile.${encodeURIComponent(scope)}.${name}` : name, initial, options)
       },
       composer: {
         complete: (provider) => { add(registry.completions, provider as CompletionProvider<any>) },

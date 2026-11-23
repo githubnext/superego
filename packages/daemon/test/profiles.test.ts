@@ -3,7 +3,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { DATA_VIEWS, defineApp, MESSAGE_ENTRY, PROTOCOL_VERSION, type Hello, type DataViewInfo, type ProfileInfo, type RpcPeer, type ThreadInfo } from '@superego/protocol'
+import { DATA_VIEWS, GLOBAL_PROFILES, defineApp, MESSAGE_ENTRY, PROTOCOL_VERSION, type Hello, type DataViewInfo, type ProfileInfo, type RpcPeer, type ThreadInfo } from '@superego/protocol'
 import { connectSocket, defineDaemonExtension, listen, openDaemon } from '../src/index.ts'
 import { until } from './until.ts'
 import { hashProfile, loadProfile, Allowances, type ProfileRef } from '../src/profiles.ts'
@@ -881,6 +881,35 @@ export default defineDaemonExtension({
   expect(of('staff.mine')).toMatchObject({ fits: ['beside'], profiles: [user] })
   expect(of('shop.space')).toMatchObject({ fits: ['beside'], profiles: [shop] })
   expect(of('shop.mine')).toMatchObject({ fits: ['beside'], profiles: [shop] })
+  await close()
+})
+
+it("loads the user's global profiles as it starts, and says so; a project's can't be global", async () => {
+  const daemonHalf = `import { defineDaemonExtension } from 'superego'
+export default defineDaemonExtension({ name: 'notes', setup(superego) { superego.value('notes.ready', true) } })
+`
+  const notes = join(home, 'profiles', 'notes')
+  write(notes, { 'profile.ts': `import { defineProfile } from 'superego'\nexport default defineProfile({ global: true, extensions: ['./notes.ts'] })\n`, 'notes.ts': daemonHalf })
+  write(join(home, 'profiles', 'plain'), { 'profile.ts': profileTs([]) })
+  const shop = join(project, '.superego', 'profiles', 'shop')
+  write(shop, { 'profile.ts': `import { defineProfile } from 'superego'\nexport default defineProfile({ global: true })\n` })
+  const { peer, close } = await open()
+  // No thread of it: its daemon half runs all the same, and the window hears it's global.
+  const globals = await peer.call<{ sub: string; value: unknown }>('value.watch', { key: GLOBAL_PROFILES })
+  let now = globals.value
+  peer.on('value.changed', (p: { sub: string; value: unknown }) => { if (p.sub === globals.sub) now = p.value })
+  await until(async () => JSON.stringify(now) === JSON.stringify([{ scope: 'user', name: 'notes', dir: notes }]))
+  expect((await peer.call<{ value: unknown }>('value.watch', { key: 'notes.ready' })).value).toBe(true)
+  const listed = await peer.call<ProfileInfo[]>('profile.list', { cwd: project, user: true })
+  expect(listed.find((p) => p.name === 'notes')).toMatchObject({ global: true })
+  expect(listed.find((p) => p.name === 'plain')?.global).toBeUndefined()
+  // A project's says so, and isn't.
+  await peer.call('profile.allow', { cwd: project, name: 'shop' })
+  await peer.call('profile.ui', { scope: 'project', name: 'shop', dir: shop })
+  const theirs = (await peer.call<ProfileInfo[]>('profile.list', { cwd: project })).find((p) => p.name === 'shop')
+  expect(theirs?.global).toBeUndefined()
+  expect(theirs?.problems).toContainEqual(expect.stringMatching(/global: only one of your own/))
+  expect(JSON.stringify(now)).not.toContain(shop)
   await close()
 })
 

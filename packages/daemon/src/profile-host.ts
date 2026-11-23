@@ -5,13 +5,13 @@
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import type { Extension } from '@earendil-works/pi-durable'
-import { bool, Lifetime, obj, opt, RpcError, str } from '@superego/protocol'
+import { bool, GLOBAL_PROFILES, Lifetime, obj, opt, RpcError, str, type Json, type ProfileRef as Ref } from '@superego/protocol'
 import { describeProfile } from './extension-settings.ts'
 import type { ExtensionHost } from './extension-host.ts'
 import { defineAction } from './extension.ts'
 import type { Host, ThreadMeta } from './host.ts'
 import {
-  allUserProfiles, broughtBy, findProfile, hashProfile, isProfileDir, listProfiles, loadProfile, profileModule, shadowing, type LoadedProfile, type ProfileDaemonExtension,
+  allUserProfiles, broughtBy, findProfile, hashProfile, isGlobal, isProfileDir, listProfiles, loadProfile, profileModule, shadowing, type LoadedProfile, type ProfileDaemonExtension,
   type ProfileRef,
 } from './profiles.ts'
 import type { Threads } from './threads.ts'
@@ -100,6 +100,16 @@ export function createProfileHost(host: Host, extensions: ExtensionHost, later: 
     holds.get(dir)?.release()
     holds.delete(dir)
     if (profiles.delete(dir)) changed()
+    publishGlobals()
+  }
+  // The global profiles loaded now, for the window (GLOBAL_PROFILES).
+  const setGlobals = host.values.core(GLOBAL_PROFILES, [] as Ref[])
+  let globalsNow = '[]'
+  function publishGlobals() {
+    const now = [...profiles.values()].filter((p) => p.spec.global).map(refOf).sort((a, b) => a.dir.localeCompare(b.dir))
+    if (JSON.stringify(now) === globalsNow) return
+    globalsNow = JSON.stringify(now)
+    setGlobals(now as unknown as Json)
   }
   /** Profile loads, one at a time: two never set up the same extension at once, nor an older version last. */
   let loads: Promise<unknown> = Promise.resolve()
@@ -161,6 +171,7 @@ export function createProfileHost(host: Host, extensions: ExtensionHost, later: 
     }
     holds.set(ref.dir, { uses, release })
     profiles.set(ref.dir, loaded)
+    publishGlobals()
     profileErrors.delete(ref.dir)
     // What its threads go without may have changed with it.
     changed()
@@ -170,6 +181,25 @@ export function createProfileHost(host: Host, extensions: ExtensionHost, later: 
       else if (known.required) loaded.problems.push(`without: ${name} is required, and can't be done without`)
     }
     return loaded
+  }
+
+  /**
+   * Load the user's global profiles (`global: true`): theirs, not shadowed, each loaded whatever threads there are, so
+   * their daemon halves run from the start and the window can install their UI. One that fails says why and is skipped.
+   */
+  function loadGlobals() {
+    return (async () => {
+      const roots = profileSources.roots()
+      const shadowed = shadowing(roots)
+      for (const ref of allUserProfiles(roots)) {
+        if (shadowed.get(ref.dir)?.some((p) => p.startsWith('Shadowed'))) continue
+        try {
+          if (await isGlobal(ref)) await profileOf(ref)
+        } catch (error) {
+          console.error(`Profile ${ref.name}: ${(error as Error).message}`)
+        }
+      }
+    })()
   }
 
   router.register(defineAction({
@@ -187,7 +217,7 @@ export function createProfileHost(host: Host, extensions: ExtensionHost, later: 
         const allowed = await Promise.resolve().then(async () => allowances.allowed(ref, await hashProfile(ref.dir))).catch(() => false)
         const brought = loaded ? broughtBy(loaded, profileKeys) : {}
         const problems = [...shadows.get(ref.dir) ?? [], ...brought.problems ?? []]
-        return { ...ref, ...(description ? { description } : {}), allowed, ...brought, ...(problems.length ? { problems } : {}) }
+        return { ...ref, ...(description ? { description } : {}), allowed, ...(loaded?.spec.global ? { global: true } : {}), ...brought, ...(problems.length ? { problems } : {}) }
       }))
     },
   }))
@@ -272,7 +302,7 @@ export function createProfileHost(host: Host, extensions: ExtensionHost, later: 
   })
 
   return {
-    profileOf, partsOf,
+    profileOf, partsOf, loadGlobals,
     /** A thread's profile, if it's loaded yet. */
     loaded: (meta: ThreadMeta) => meta.profile && profiles.get(meta.profile.dir),
     all: () => [...profiles.values()],

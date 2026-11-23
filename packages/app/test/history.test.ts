@@ -63,3 +63,11 @@ it('takes leaving Settings for where it was opened as going back', () => {
   h = visit(through(t('a'), settings), t('b'))
   expect(h.places).toEqual([t('a'), settings, t('b')])
 })
+
+
+it('tells surfaces apart by kind, machine and params', () => {
+  const note = (name: string, machine = 'local'): Place => ({ surface: { machine, kind: 'notes.page', params: { name } } })
+  const h = through(t('a'), note('x'), note('x'), note('y'), note('y', 'box'))
+  expect(h.places).toEqual([t('a'), note('x'), note('y'), note('y', 'box')])
+  expect(back(h)?.place).toEqual(note('y'))
+})

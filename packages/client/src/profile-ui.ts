@@ -11,7 +11,7 @@ export type ProfileModule = { path: string; code: string }
 export type ProfileUiSources = { entries: string[]; modules: Map<string, ProfileModule> }
 
 /** What a profile's modules may import by name; anything else is one of its own files, by a relative path. */
-export const SHARED_MODULES = ['react', 'react/jsx-runtime', 'superego/ui', 'superego/unstable']
+export const SHARED_MODULES = ['react', 'react/jsx-runtime', 'react-dom', 'react-dom/client', 'superego/ui', 'superego/unstable']
 
 /** `specifier`, imported by the module at `from`, as a path in the profile. */
 export const resolveSpecifier = (from: string, specifier: string) => new URL(specifier, `file:///p/${from}`).pathname.slice(3)

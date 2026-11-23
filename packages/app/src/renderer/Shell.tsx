@@ -43,7 +43,8 @@ import { NewThreadDialog } from './NewThread.tsx'
 import { SetupPage, useSetup } from './Setup.tsx'
 import { bound, RailTabNumber, shortcutOf, useActions, useRailShortcut, useShortcut, type Keymap } from './keys.ts'
 import { railTabs } from './rail-tabs.ts'
-import { useAllThreads, useFold, useHistory, useMachines, useNewThreadDialog, useSelection, useProjects, useSettingsDialog, useShell, useSidebar, useThreadSheet, type Selection } from './state.tsx'
+import { useAllThreads, useFold, useHistory, useMachines, useNewThreadDialog, useSelection, useProjects, useSettingsDialog, useShell, useSidebar, useSurface, useThreadSheet, type Selection } from './state.tsx'
+import { SurfaceMain, SurfaceTitle } from './surfaces.tsx'
 
 /** Dispatch an action from this window: `dispatch('app.sidebar')`, `dispatch('thread.select', { machine, thread })`. */
 export function useDispatch() {
@@ -63,6 +64,8 @@ export function Shell() {
   const [log, setLog] = useState(false)
   const machines = useMachines()
   const { selection, select, machine, thread, hidden: alone, listed } = useSelection()
+  // A surface open fills the main area instead of the thread.
+  const { surface, open: openSurface } = useSurface()
   const settings = useSettingsDialog()
   const newThread = useNewThreadDialog()
   const { openSettings, newThread: openNewThread } = useShell()
@@ -83,7 +86,7 @@ export function Shell() {
   const space = spaces.find((view) => view.id === spaceId) ?? spaces[0]
   // Wide, the rail is a row of tabs with one in front, joined to what's beside it: Settings while it's open; else a
   // hidden thread's (Ego's: the thread alone, no sidebar); else the open space, as the sidebar.
-  const tab: 'settings' | 'thread' | 'space' = narrow ? 'space' : settings.open ? 'settings' : alone ? 'thread' : 'space'
+  const tab: 'settings' | 'thread' | 'space' = narrow ? 'space' : settings.open ? 'settings' : alone && !surface ? 'thread' : 'space'
   // Wide, the sidebar's edge resizes it, and hides it dragged narrow.
   const sidebarEdge = useSidebarEdge()
   // Narrow, the sidebar is a drawer (Base UI's): out from ☰ or a swipe from the screen's left edge, back with a swipe to
@@ -92,7 +95,7 @@ export function Shell() {
   const drawerPopup = useRef<HTMLDivElement>(null)
   // Closed by a thread picked in it, the focus is the thread's to take, not ☰'s again.
   const picked = useRef(false)
-  const where = selection && thread && machine ? { machine: machine.id, thread } : undefined
+  const where = selection && thread && machine && !surface ? { machine: machine.id, thread } : undefined
   // The sheet's thread: the one it was opened for, else the selected one.
   const sheetMachine = sheet.at ? machines.find((m) => m.id === sheet.at!.machine) : machine
   const sheetThread = sheet.at ? allThreads[sheet.at.machine]?.find((t) => t.id === sheet.at!.thread) : thread
@@ -123,6 +126,7 @@ export function Shell() {
   // Actions read the shell as it is when they run.
   registry.router.setContext({
     app: registry.app, machines, selection, select, openSettings, newThread: openNewThread,
+    surface, openSurface, hasSurface: (kind) => registry.surfaces.some((s) => s.kind === kind),
     togglePalette: () => { setNavigator(false); setPanePicker(false); setPalette((open) => !open) },
     toggleNavigator: () => { setPalette(false); setPanePicker(false); setNavigator((open) => !open) },
     togglePanePicker: () => { setPalette(false); setNavigator(false); setPanePicker((open) => !open) },
@@ -189,10 +193,11 @@ export function Shell() {
           <PlacedViews place="titlebar" frame={withContextMenu('titlebar')} />
           {tab === 'settings'
             ? <span className="titlebar__crumb"><span className="titlebar__seg titlebar__title">Settings</span></span>
+            : surface ? <SurfaceTitle at={surface} narrow={false} />
             : selection && thread && machine && <ThreadTitle machine={machine} thread={thread} />}
           <span className="app__titlebar-end">
             <span className="app__strip" ref={setStrip} />
-            {tab !== 'settings' && selection && thread && machine && <ThreadTools machine={machine} thread={thread} />}
+            {tab !== 'settings' && !surface && selection && thread && machine && <ThreadTools machine={machine} thread={thread} />}
           </span>
           <OverflowMenu />
         </header>
@@ -227,7 +232,9 @@ export function Shell() {
               {spaces.length > 0
                 ? <BaseUI.Drawer.Trigger render={<Button className="app__barbutton" aria-label={space?.title} />}><ListIcon size={20} aria-hidden /></BaseUI.Drawer.Trigger>
                 : <PlacedViews place="titlebar" frame={withContextMenu('titlebar')} />}
-              {thread && machine
+              {surface
+                ? <span className="app__mobiletitle"><SurfaceTitle at={surface} narrow /></span>
+                : thread && machine
                 ? (
                   <BaseUI.Drawer.Trigger handle={sheetHandle} className="app__mobiletitle" aria-label={`${thread.title}: the thread's tools`}>
                     <StatusGlyph status={thread.status} quiet={thread.quiet} /><span className="app__mobiletitle-text">{thread.title}</span><CaretDownIcon size={11} weight="bold" aria-hidden />
@@ -259,7 +266,9 @@ export function Shell() {
             </>}
             </BaseUI.Drawer.Root>
           )}
-          {selection && thread && machine
+          {surface
+            ? <SurfaceMain at={surface} narrow={narrow} />
+            : selection && thread && machine
             ? (
               <StripSlot.Provider value={narrow ? null : strip}><SwipeEdgeRef.Provider value={narrow ? setSwipeEdgeHost : null}>
                 <ThreadView key={`${selection.machine}/${selection.thread}`} machine={machine} thread={thread} />
@@ -271,7 +280,7 @@ export function Shell() {
           <aside className="app__beside"><PlacedViews place="beside" machine={machine} thread={thread} frame={withMenuButton('beside', where)} /></aside>
         )}
       </div>
-      {narrow && sheetMachine && sheetThread && <ThreadSheet machine={sheetMachine} thread={sheetThread} open={sheet.open} onOpenChange={setSheet} handle={sheetHandle} container={app} />}
+      {narrow && !surface && sheetMachine && sheetThread && <ThreadSheet machine={sheetMachine} thread={sheetThread} open={sheet.open} onOpenChange={setSheet} handle={sheetHandle} container={app} />}
       {/* One Settings, wide or narrow: the window crossing between them keeps what's being done in it. */}
       {settings.open && <SettingsView machines={machines} onClose={settings.close} place={narrow ? 'dialog' : settingsPlace} />}
       {palette && <Palette onClose={() => setPalette(false)} />}

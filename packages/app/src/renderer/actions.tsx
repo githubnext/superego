@@ -8,6 +8,7 @@ import type { ReturnedMessage, ThreadInfo } from '@superego/protocol'
 import type { MachineEntry } from '../shared/bridge.ts'
 import { APP, PANE_KEEP_THREAD, PANE_LAYOUT, type PaneLayout } from '../shared/app-settings.ts'
 import type { NewThreadStart, Selection } from './state.tsx'
+import type { SurfaceAt } from './history.ts'
 import { threadBeside, type Project, type Sidebar } from './projects.ts'
 import { isPinned, pinAt, PINS, pinsOf, unpin, type Pin } from './pins.ts'
 import { focusBeside, focusColumn, focusPrompt, focusThread } from './focus.ts'
@@ -29,6 +30,11 @@ export type WindowContext = {
   machines: MachineEntry[]
   selection: Selection | undefined
   select(selection: Selection | undefined): void
+  /** The surface the main area shows instead of the selected thread, if one is open; and opening one (none: the thread). */
+  surface: SurfaceAt | undefined
+  openSurface(surface: SurfaceAt | undefined): void
+  /** Whether a surface of `kind` is registered in this window. */
+  hasSurface(kind: string): boolean
   /** Settings: at a tab (its target, see settings/tabs.ts), or as it was left. */
   openSettings(at?: string): void
   newThread(start?: NewThreadStart): void
@@ -343,6 +349,17 @@ export const coreActions = (app: AppConfig): WindowAction[] => [
     id: 'thread.select', title: 'Show a thread', 
     params: obj({ machine: str(), thread: str() }),
     run: ({ machine, thread }, c) => c.select({ machine, thread }),
+  }),
+  // A surface in the main area (extensions' and global profiles' `superego.surface`): `kind` with `params`, on `machine`
+  // (this computer unless given).
+  defineWindowAction({
+    id: 'surface.open', title: 'Open a surface',
+    description: '`kind`: a surface kind (`notes.page`); `params`: what it shows; `machine`: where (this computer unless given)',
+    params: obj({ kind: str(), params: opt(obj({}, { open: true })), machine: opt(str()) }),
+    run: ({ kind, params, machine }, c) => {
+      if (!c.hasSurface(kind)) throw new Error(`No surface ${kind} in this window`)
+      c.openSurface({ machine: machine ?? 'local', kind, params: (params ?? {}) as Record<string, Json> })
+    },
   }),
 ]
 

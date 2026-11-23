@@ -7,6 +7,12 @@
 /** The live value every daemon publishes its extensions' data views in (`value.watch`), as `DataViewInfo[]`. */
 export const DATA_VIEWS = 'view.list'
 
+/**
+ * The core's live value of the user's global profiles loaded on a machine (`ProfileRef[]`, `global: true` in their
+ * profile.ts): the window installs their UI as the app's.
+ */
+export const GLOBAL_PROFILES = 'profile.globals'
+
 /** The places a data view can be drawn in: a space (on a phone, the drawer), beside the thread, a pane. */
 export type DataPlace = 'space' | 'beside' | 'pane'
 export const DATA_PLACES: DataPlace[] = ['space', 'beside', 'pane']

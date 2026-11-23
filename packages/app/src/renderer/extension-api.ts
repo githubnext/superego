@@ -140,6 +140,38 @@ export type PaneKind = {
   width?: number
 }
 
+/** What a surface gets: where and what it was opened with, the thread docked to it, and a way to show another of its kind. */
+export type SurfaceProps = {
+  machine: MachineEntry
+  kind: string
+  params: Record<string, Json>
+  /** The thread docked to it, if one is. */
+  thread: ThreadInfo | undefined
+  /** Show another of this kind in its place (a link from one note to another): back returns here. */
+  open(params: Record<string, Json>): void
+}
+
+/**
+ * A kind of surface: a view that fills the window's main area, where a thread otherwise shows (a notes page, a canvas),
+ * opened with params of its own (`surface.open`, or a link its `match` claims), with a thread docked beside it.
+ */
+export type SurfaceKind = {
+  /** In the title bar, history and ⌘K: fixed, or from its params. */
+  title: string | ((params: Record<string, Json>) => string)
+  icon?: ComponentType<{ size?: number; 'aria-hidden'?: boolean }>
+  component: ComponentType<SurfaceProps>
+  /** Links of this scheme (`'note:'`) open it, anywhere Markdown is drawn (an agent's answer too). */
+  match?: string
+  /** The params a link it claims opens it with; default `{ href }`. */
+  params?(href: string): Record<string, Json>
+  /** What a thread started on it is told first: what the user has open. */
+  about?(params: Record<string, Json>): string
+  /** The profile a thread started on it runs (by name, one of the user's); default the machine's. */
+  profile?: string
+  /** Its thread as a column beside it (`docked`, the default), or as a card over its right side (`floating`). */
+  agent?: 'docked' | 'floating'
+}
+
 /**
  * A field of the New thread dialog: what it asks, on the machine and in the folder picked. Its value goes to
  * `thread.start` as `options[<extension>]`, for the extension's `starting` hook; undefined sends nothing.
@@ -388,6 +420,12 @@ export type UiApi = {
    * A profile's pane kinds exist in that profile's threads only.
    */
   pane(kind: string, pane: PaneKind): void
+  /**
+   * A kind of surface, `<extension>.<name>`: a view that fills the main area, opened by `surface.open` (`{ kind,
+   * params, machine? }`) or a link its `match` claims, with a thread docked beside it. An app extension's, or a global
+   * profile's (`global: true`); not a thread-bound profile's.
+   */
+  surface(kind: string, surface: SurfaceKind): void
   /**
    * An action of this extension: dispatched by its keys, from the palette, from other code (`useDispatch`). Ids start
    * with the extension's name. `run` gets its parameters and the window's context.

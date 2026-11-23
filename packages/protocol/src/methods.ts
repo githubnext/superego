@@ -223,6 +223,8 @@ export type ProfileInfo = ProfileRef & {
   description?: string; allowed: boolean; extensions?: string[]; brings?: Record<string, string[]>; problems?: string[]
   /** The kind of agent its threads run on (an extension's: `claude-agent`), once loaded; unset, Superego's own. */
   agent?: string
+  /** One of the user's own that is part of the app (`global: true`): loaded from the start, its UI installed as the app's. */
+  global?: true
 }
 
 /**
@@ -632,5 +634,5 @@ export type Client = {
  * machine's daemon (see the app's perform.ts).
  */
 export const PERFORMABLE: ReadonlySet<string> = new Set([
-  'thread.select', 'thread.next', 'thread.previous', 'unread.next', 'project.next', 'project.previous', 'pane.next', 'pane.previous',
+  'thread.select', 'thread.next', 'thread.previous', 'unread.next', 'project.next', 'project.previous', 'pane.next', 'pane.previous', 'surface.open',
 ])

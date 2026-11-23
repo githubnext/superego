@@ -44,6 +44,9 @@ declare module '@phosphor-icons/react/dist/csr/CaretDown' { export const CaretDo
 declare module '@phosphor-icons/react/dist/csr/CaretLeft' { export const CaretLeftIcon: import('@phosphor-icons/react').Icon }
 declare module '@phosphor-icons/react/dist/csr/CaretRight' { export const CaretRightIcon: import('@phosphor-icons/react').Icon }
 declare module '@phosphor-icons/react/dist/csr/ChatCircle' { export const ChatCircleIcon: import('@phosphor-icons/react').Icon }
+declare module '@phosphor-icons/react/dist/csr/Notebook' { export const NotebookIcon: import('@phosphor-icons/react').Icon }
+declare module '@phosphor-icons/react/dist/csr/Shapes' { export const ShapesIcon: import('@phosphor-icons/react').Icon }
+declare module '@phosphor-icons/react/dist/csr/Scribble' { export const ScribbleIcon: import('@phosphor-icons/react').Icon }
 declare module '@phosphor-icons/react/dist/csr/Circle' { export const CircleIcon: import('@phosphor-icons/react').Icon }
 declare module '@phosphor-icons/react/dist/csr/ChatText' { export const ChatTextIcon: import('@phosphor-icons/react').Icon }
 declare module '@phosphor-icons/react/dist/csr/ChatsCircle' { export const ChatsCircleIcon: import('@phosphor-icons/react').Icon }
