@@ -4,6 +4,8 @@
 
 - On a phone, the thread list has a search field under its title: type to find a thread by its title or project,
   archived ones too, and tap one to open it.
+- **Upgrade (extension authors):** the `onboarding` slot's `use` takes `{ label, detail, model }` only: an extension
+  that passes `{ label, detail, profile }` names its kind's model (`<kind>/<model>`) instead.
 - **Upgrade (extension authors):** a `string` setting's `secret: true`, which only masked the field, is gone, and a
   setting that still has it is refused. Make it `type: { type: 'secret' }` under the same key: its value moves into
   the keychain.

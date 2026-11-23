@@ -38,10 +38,9 @@ export function openSetup(machine = LOCAL, back?: Selection) { ask({ machine, ..
 
 /**
  * What an extension found on a machine, as the `onboarding` slot's `use` takes it: what it is, a line on it, and the
- * model it runs (another kind of agent's, `<kind>/<model>`), made the machine's default. Before extension API 5.9 it
- * named the profile its threads start with instead: that kind's first model is made the default.
+ * model it runs (another kind of agent's, `<kind>/<model>`), made the machine's default.
  */
-export type SetupFound = { label: string; detail: string } & ({ model: string } | { profile: string })
+export type SetupFound = { label: string; detail: string; model: string }
 
 /** A machine as a sentence names it: "this computer", else its label. */
 export const placeName = (machine: Pick<MachineEntry, 'id' | 'label'>) => machine.id === LOCAL ? 'this computer' : machine.label
@@ -186,12 +185,9 @@ export function SetupPage({ machine: machineId }: { machine: string }) {
   const useFound = async (found: SetupFound) => {
     setProblem(undefined); setOpen(undefined)
     try {
-      const c = await models()
-      const model = 'model' in found ? found.model : c.agents?.find((a) => a.profile === found.profile)?.models[0]?.value
-      if (!model) throw new Error(`${found.label} has no model for threads to start on`)
-      await dispatch('settings.set', { key: 'agent.model', value: model }, on)
+      await dispatch('settings.set', { key: 'agent.model', value: found.model }, on)
       await models()
-      setReady({ provider: model.slice(0, model.indexOf('/')), detail: found.detail })
+      setReady({ provider: found.model.slice(0, found.model.indexOf('/')), detail: found.detail })
     } catch (error) {
       console.error(`Using ${found.label} failed`, error)
       setProblem((error as Error).message)

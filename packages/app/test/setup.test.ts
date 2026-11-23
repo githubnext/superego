@@ -15,7 +15,7 @@ import { defineApp, ONBOARDED, PROTOCOL_VERSION, RELEASED, type AuthEvent, type 
 import type { MachineEntry, SuperegoEvent } from '../src/shared/bridge.ts'
 import { RegistryProvider, useRegistry } from '../src/renderer/registry.tsx'
 import { windowRegistry } from '../src/renderer/index.tsx'
-import { NoModel, SetupPage, useSetup } from '../src/renderer/Setup.tsx'
+import { NoModel, SetupPage, useSetup, type SetupFound } from '../src/renderer/Setup.tsx'
 import { SignInFlow } from '../src/renderer/sign-in-flow.tsx'
 import { ShellStateProvider, useMachines, useSelection } from '../src/renderer/state.tsx'
 
@@ -293,4 +293,11 @@ it('stops a sign-in taken away before it ended, so nothing is left waiting on th
   root = undefined
   await until(() => events.get(started)?.at(-1)?.type === 'failed', 'the flow stopped')
   expect(events.get(started)!.at(-1)).toEqual({ type: 'failed', message: 'Cancelled' })
+})
+
+it('takes what an extension found as what it is, a line on it, and the model it runs: nothing else', () => {
+  const found: SetupFound = { label: 'Claude Code', detail: 'Signed in', model: 'claude-agent/sonnet' }
+  // @ts-expect-error A profile in place of the model was taken before 5.9 was released, and no longer is.
+  const named: SetupFound = { label: 'Claude Code', detail: 'Signed in', profile: 'claude' }
+  expect([found, named].map((f) => f.label)).toEqual(['Claude Code', 'Claude Code'])
 })
