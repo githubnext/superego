@@ -6,7 +6,7 @@
 import { Chip, defineAction, defineUiExtension, factsOf, has, RailButton, useApp, useDispatch, useMachines, useRailShortcut, useSelection, type ViewProps } from '@superego/app/ui'
 import { obj, opt, str } from '@earendil-works/pi-schema'
 import { agentName, type ThreadInfo } from '@superego/protocol'
-import { BroomIcon, IconButton, LifebuoyIcon, PlugsConnectedIcon, Select } from '@superego/ui'
+import { BroomIcon, CircleIcon, IconButton, LifebuoyIcon, PlugsConnectedIcon, Select } from '@superego/ui'
 import type { MachineEntry } from '@superego/app/ui'
 import './styles.css'
 import { about, ASK, CLEAR, outsideBlocks } from './shared.ts'
@@ -66,7 +66,7 @@ function EgoButton({ place, chosen }: ViewProps<'window'> & { chosen: string }) 
   return (
     <RailButton label={label} title={keys ? `${label} (${keys})` : label} on={isEgo(thread)} className="ego__button"
       onClick={() => void dispatch(OPEN, {}, { source: place }).catch((error) => console.error(error))}>
-      <span className="ego__dot" aria-hidden />
+      <CircleIcon size={18} aria-hidden />
     </RailButton>
   )
 }
