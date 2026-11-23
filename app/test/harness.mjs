@@ -15,7 +15,8 @@
 //
 // Awaited at the top of the script: it loads the app's main before Electron's `ready` and runs the body after it.
 import { app, BrowserWindow, nativeTheme } from 'electron'
-import { readdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
 
 /** A failure the harness reports: thrown by `until`, `check` and `fail`, and caught by `openApp`. */
 export class Failure extends Error {}
@@ -149,9 +150,22 @@ function driver(contentsOf, name, shotsDir) {
  *
  * Options: `name` (in its messages), `timeout` (ms), `size` ([width, height] of the window), `shots` (the folder
  * screenshots go to: `$SUPEREGO_SHOWCASE_OUT` unless given; none, no screenshots), `connected` (wait for the local machine:
- * true unless false), `console` (`all` of the pages' console, or `errors` only), `main`, and `onFail(message)` / `onPass()`
- * to end the run another way (they exit themselves).
+ * true unless false), `console` (`all` of the pages' console, or `errors` only), `main`, `firstRun` (the home's first run:
+ * setup opens; otherwise it's set as done before the app starts), and `onFail(message)` / `onPass()` to end the run
+ * another way (they exit themselves).
  */
+/** Set `home`'s setup as done (its `onboarding.seen` setting), unless it was set already. */
+function pastFirstRun(home) {
+  const file = join(home, 'settings.json')
+  let values = {}
+  try { values = JSON.parse(readFileSync(file, 'utf8')) } catch (error) {
+    if (error.code !== 'ENOENT') throw error
+  }
+  if ('onboarding.seen' in values) return
+  mkdirSync(home, { recursive: true })
+  writeFileSync(file, JSON.stringify({ ...values, 'onboarding.seen': true }, null, 2) + '\n', { mode: 0o600 })
+}
+
 export async function openApp(options, body) {
   const { name, timeout = 120_000, size, connected = true, main = new URL('../out/main/main.js', import.meta.url).href } = options
   const shots = 'shots' in options ? options.shots : process.env.SUPEREGO_SHOWCASE_OUT
@@ -235,6 +249,8 @@ export async function openApp(options, body) {
     },
   })
 
+  // Past first run, unless the run is about it (`firstRun`): a fresh home's first window opens on setup (Setup.tsx).
+  if (!options.firstRun && process.env.SUPEREGO_HOME) pastFirstRun(process.env.SUPEREGO_HOME)
   const started = Date.now()
   await import(main)
   // Not awaited: Electron's `ready` comes only once the entry module (the script awaiting this) has run.

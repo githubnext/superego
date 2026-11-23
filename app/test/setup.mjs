@@ -34,7 +34,7 @@ process.env.SUPEREGO_CLAUDE = claude
 delete process.env.SUPEREGO_MODEL
 for (const name of Object.keys(process.env)) if (/_(API_KEY|TOKEN|ACCESS_KEY_ID|PROFILE)$/.test(name)) delete process.env[name]
 
-await openApp({ name: 'setup', timeout: 180_000 }, async (t) => {
+await openApp({ name: 'setup', timeout: 180_000, firstRun: true }, async (t) => {
   const { run, until } = t
   await t.resize(1100, 760)
   const row = (title) => `[...document.querySelectorAll('.setup__row')].find((r) => r.querySelector('.setup__what')?.firstElementChild?.textContent === ${JSON.stringify(title)})`

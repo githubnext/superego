@@ -20,8 +20,8 @@
 - Choosing Claude Code in setup (experimental) makes it the default for new threads, so New thread starts on it.
 - With Claude Code as the default, New thread says so when it's signed out or no longer installed, with Set up models
   beside it, instead of starting on another provider or failing. A project's own default profile still comes first.
-- On first run, a key found in your environment is tried first: one that no longer works brings you to setup instead of
-  your first message failing.
+- On first run, setup opens at once instead of after a wait: on the model your computer already has (a key in your
+  environment, say), saying hi with it or why it can't, or on the ways to get one.
 - GitHub Copilot signs in to github.com without asking first; GitHub Enterprise is a link under it.
 - Closing a sign-in in setup stops it, so signing in with ChatGPT again works instead of saying its port is in use.
 - A local model server is added by its address as you'd write it (`localhost:11434`), its models in its own order, and

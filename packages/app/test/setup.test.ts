@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 // @vitest-environment-options {"settings":{"fetch":{"disableSameOriginPolicy":true}}}
-// First-run setup, against a real daemon: it shows on a fresh data folder while no model works (and not when one
-// does), finds a local model server (a mock, as Ollama), uses it, has it say hi, stars a model, and goes for good once
+// First-run setup, against a real daemon: it shows at once on a fresh data folder (on the model that works, if one
+// does, done once it has answered), finds a local model server (a mock, as Ollama), uses it, has it say hi, stars a model, and goes for good once
 // done. Set up models… brings it back; from a composer that couldn't send, it goes back to that thread once done.
 import { mkdtemp, rm } from 'node:fs/promises'
 import { createServer, type Server } from 'node:http'
@@ -163,12 +163,17 @@ it('shows on first run with no model, uses the Ollama it finds, says hi, and goe
   expect(page()).toBeNull()
 })
 
-it("doesn't show when a model works already, and counts as done", async () => {
+it('shows at once on first run, on the model that works, and counts as done once it has answered', async () => {
+  // Nothing is asked of the model before the page shows: it says hi there, however long that takes.
   await start({ faux: true })
   await mount()
+  await until(() => text().includes('Set up a model'), 'the page, at once')
+  await until(() => text().includes('echo: Say hi'), 'the model saying hi')
   await until(async () => (await value(ONBOARDED)) === true, 'setup done')
-  expect(page()).toBeNull()
-  expect(text()).toContain('Select or start a thread.')
+  // Done, but still there to start from.
+  expect(page()).not.toBeNull()
+  await click(button('Start a thread'))
+  await until(() => !page(), 'the page gone')
 })
 
 it('comes back on Set up models…, opening on the model that works, and goes when a thread is picked', async () => {

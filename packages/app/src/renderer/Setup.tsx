@@ -1,15 +1,16 @@
-// First-run setup, in the main column: a model to think with, on this computer or another machine. It shows on a fresh
-// data folder while no model works here (none set up, or what's there doesn't answer: a revoked key in the
-// environment), in the app's first window with nothing selected; and again when asked (Set up models…: Settings →
-// Providers, ⌘K, a composer or ⌘N that couldn't send for lack of a model) until it's done, skipped, or a thread is
-// picked.
+// First-run setup, in the main column: a model to think with, on this computer or another machine. It shows at once on
+// a fresh data folder, in the app's first window with nothing selected, and counts as done once a model has answered
+// (or it's put away with Done or Skip); and again when asked (Set up models…: Settings → Providers, ⌘K, a composer or
+// ⌘N that couldn't send for lack of a model) until it's done, skipped, or a thread is picked. A default that can run
+// already (a key in the environment, Claude Code signed in) opens it on that, tried there: one that doesn't answer (a
+// revoked key) says so.
 //
 // Picking: what the machine already has (a key in its environment or login shell, a local model server answering, and
 // what extensions find: Claude Code, in the `onboarding` slot), or a way in, each saying what it needs: ChatGPT, GitHub
 // Copilot or OpenRouter's sign-in, an API key (whose it is told from the key, and tried before it's kept), a local
 // server's address, or any other provider, searched for. Then, for a provider: its default model (its recommended one
 // to start with), a few starred, and a test request showing it works. Then the first thread, in ⌘N.
-import { useEffect, useState, useSyncExternalStore, type ReactNode } from 'react'
+import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { ONBOARDED, type ModelCatalog, type ModelTest, type ProviderAuthInfo, type SetupProbe } from '@superego/protocol'
 import { Button, CheckIcon, GlobeIcon, KeyIcon, LaptopIcon, MagnifyingGlassIcon, Select, StarIcon, TerminalIcon, TextField, WarningIcon } from '@superego/ui'
 import { has, machine as client, useSettings } from './client.ts'
@@ -46,24 +47,8 @@ export type SetupFound = { label: string; detail: string; model: string }
 export const placeName = (machine: Pick<MachineEntry, 'id' | 'label'>) => machine.id === LOCAL ? 'this computer' : machine.label
 
 /**
- * Whether this computer needs setting up on first run: no model to use, or the one there is doesn't answer (a key in
- * the environment, revoked). Another kind of agent's model (Claude Code's) answers for itself.
- */
-async function needsSetup(): Promise<boolean> {
-  const probe = await client(LOCAL).call('setup.probe', {})
-  if (!probe.usable) return true
-  const catalog = await client(LOCAL).call('agent.models', {})
-  if (catalog.agents?.some((kind) => kind.models.some((m) => m.value === catalog.default.model))) return false
-  return client(LOCAL).call('model.test', {}).then(() => false, (error: Error) => {
-    // Shown on the page, as the model's test once it's picked.
-    console.error("The model found on this computer didn't answer", error)
-    return true
-  })
-}
-
-/**
- * The machine setup shows for now, if it shows: asked for, or on first run (this computer's data folder fresh, and no
- * model working there). A first run with a model already working is set as done without showing.
+ * The machine setup shows for now, if it shows: asked for, or on first run (this computer's data folder fresh), at once,
+ * as if asked for. It tries what this computer has itself, and counts as done once a model has answered there.
  */
 export function useSetup(): string | undefined {
   const local = useMachines().find((m) => m.id === LOCAL)
@@ -72,23 +57,18 @@ export function useSetup(): string | undefined {
   const { selection } = useSelection()
   const settings = useSettingsDialog()
   const fresh = firstWindow && snapshot?.values[ONBOARDED] === false && has(local, 'model-setup')
-  const [needed, setNeeded] = useState<boolean>()
+  // Shown once for a first run, and not again once put away (a thread picked) while it isn't done.
+  const shown = useRef(false)
   useEffect(() => {
-    if (!fresh || needed !== undefined) return
-    needsSetup().then((needs) => {
-      setNeeded(needs)
-      if (!needs) void client(LOCAL).call('settings.set', { key: ONBOARDED, value: true }).catch((error: Error) => console.error('Marking setup done failed', error))
-    }, (error: Error) => {
-      // Shown anyway: it says what failed.
-      console.error('Looking at what this computer has for models failed', error)
-      setNeeded(true)
-    })
-  }, [fresh, needed])
+    if (!fresh || shown.current || selection) return
+    shown.current = true
+    openSetup()
+  }, [fresh])
   // Picking a thread puts it away; asked for, it comes out from behind Settings.
   useEffect(() => { if (selection) ask(undefined) }, [selection])
   useEffect(() => { if (wanted) settings.close() }, [wanted])
   if (selection) return undefined
-  return wanted?.machine ?? (fresh && needed ? LOCAL : undefined)
+  return wanted?.machine
 }
 
 /** Where to get a key, for the providers people most often have one for. */
@@ -140,28 +120,50 @@ export function SetupPage({ machine: machineId }: { machine: string }) {
   const [ready, setReady] = useState<Ready>()
   const [open, setOpen] = useState<Open>()
   const [problem, setProblem] = useState<string>()
+  // Whether the first look (what's there, and the models) is in: until it is, which view to open on isn't known.
+  const [looked, setLooked] = useState(false)
   // Whether the default model answered the test.
   const [talks, setTalks] = useState(false)
   const providers = (snapshot?.sections.find((s) => s.id === 'providers')?.data ?? []) as ProviderAuthInfo[]
   const nameOf = (id: string) => providers.find((p) => p.id === id)?.name ?? id
   const on = { machine: machineId, source: 'setup' }
 
-  const look = () => client(machineId).call('setup.probe', {}).then(setProbe, (error: Error) => {
+  // Connected, and new enough for setup: looked at once it is.
+  const settable = machine?.state === 'connected' && has(machine, 'model-setup')
+  const look = () => client(machineId).call('setup.probe', {}).then((found) => { setProbe(found); return found }, (error: Error) => {
     console.error(`Looking at what ${machineId} has for models failed`, error)
     setProbe({ message: error.message })
+    return undefined
   })
   const models = () => client(machineId).call('agent.models', {}).then((c) => { setCatalog(c); return c })
   useEffect(() => {
-    setProbe(undefined); setReady(undefined); setOpen(undefined); setProblem(undefined); setTalks(false)
-    if (!has(machine, 'model-setup')) return
-    void look()
-    // A model working already: setup opens on it, to change it or add another.
-    models().then((c) => {
-      const kind = c.agents?.find((a) => a.models.some((m) => m.value === c.default.model))
-      const provider = kind?.kind ?? c.default.model?.split('/')[0]
-      if (provider && (kind || c.models.some((m) => m.value === c.default.model))) setReady((was) => was ?? { provider })
-    }, (error: Error) => setProblem(`Couldn't list the models: ${error.message}`))
-  }, [machineId])
+    setProbe(undefined); setReady(undefined); setOpen(undefined); setProblem(undefined); setTalks(false); setLooked(false)
+    if (!settable) return
+    let live = true
+    const listed = models().catch((error: Error) => {
+      console.error(`Listing ${machineId}'s models failed`, error)
+      setProblem(`Couldn't list the models: ${error.message}`)
+      return undefined
+    })
+    // A default that can run already: setup opens on it, to try it, change it or add another.
+    void Promise.all([look(), listed]).then(([found, c]) => {
+      if (!live) return
+      const provider = c?.agents?.find((a) => a.models.some((m) => m.value === c.default.model))?.kind ?? c?.default.model?.split('/')[0]
+      if (found?.usable && provider) setReady((was) => was ?? { provider })
+      setLooked(true)
+    })
+    return () => { live = false }
+  }, [machineId, settable])
+  // Whether the default runs: another kind's as the machine says (setup.probe), a provider's once it has answered here.
+  const readyKind = ready && catalog?.agents?.find((a) => a.kind === ready.provider)
+  const works = Boolean(ready) && (readyKind ? Boolean(probe && 'usable' in probe && probe.usable) : talks)
+  // A model that runs is setup done: a first run doesn't come back once one has.
+  const marked = useRef(false)
+  useEffect(() => {
+    if (!works || marked.current) return
+    marked.current = true
+    void dispatch('settings.set', { key: ONBOARDED, value: true }, { machine: LOCAL, source: 'setup' }).catch((error: Error) => console.error('Marking setup done failed', error))
+  }, [works])
 
   /** Use a provider: its recommended model the default, unless the default is one of its already. */
   const useProvider = async (provider: string) => {
@@ -186,7 +188,7 @@ export function SetupPage({ machine: machineId }: { machine: string }) {
     setProblem(undefined); setOpen(undefined)
     try {
       await dispatch('settings.set', { key: 'agent.model', value: found.model }, on)
-      await models()
+      await Promise.all([models(), look()])
       setReady({ provider: found.model.slice(0, found.model.indexOf('/')), detail: found.detail })
     } catch (error) {
       console.error(`Using ${found.label} failed`, error)
@@ -229,12 +231,25 @@ export function SetupPage({ machine: machineId }: { machine: string }) {
     </div>
   )
 
-  if (ready) {
-    const kind = catalog?.agents?.find((a) => a.kind === ready.provider)
+  if (!looked) {
     return (
       <div className="setup">
         <header className="setup__hello">
-          <span className={`setup__mark ${kind ? (kind.unavailable ? '' : 'is-awake') : talks ? 'is-awake' : ''}`} aria-hidden />
+          <span className="setup__mark" aria-hidden />
+          <h1>Set up a model</h1>
+          {where}
+        </header>
+        <p className="setup__note">Looking…</p>
+      </div>
+    )
+  }
+
+  if (ready) {
+    const kind = readyKind
+    return (
+      <div className="setup">
+        <header className="setup__hello">
+          <span className={`setup__mark ${works ? 'is-awake' : ''}`} aria-hidden />
           <h1>Set up a model</h1>
           {where}
         </header>
@@ -280,7 +295,6 @@ export function SetupPage({ machine: machineId }: { machine: string }) {
                 : addLocal(server.name, server.baseUrl, server.models).catch((error: Error) => { console.error(`Adding ${server.name} failed`, error); setProblem(error.message) }))}>Use</Button>} />
           ))}
         </ul>
-        {!probe && <p className="setup__note">Looking…</p>}
       </section>
 
       <section className="setup__ways" aria-label="Ways in">
