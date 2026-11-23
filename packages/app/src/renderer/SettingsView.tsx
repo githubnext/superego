@@ -180,7 +180,7 @@ function Section({ machine, target, section, values, heading }: { machine: Machi
   // Drawn from a live value: that's its data, kept current.
   const live = useValue<Json>(section.value ? machine : undefined, section.value ?? '')
   const shown = section.settings.filter((s) => !s.hidden)
-  const { accentThemed } = useChosenThemes()
+  const { accentThemed, accent } = useChosenThemes()
   return (
     <section className="settings-section">
       {heading && <h2>{section.title}</h2>}
@@ -188,6 +188,7 @@ function Section({ machine, target, section, values, heading }: { machine: Machi
       {shown.map((setting) => (
         <Fragment key={setting.key}>
           <Setting setting={setting} value={values[setting.key] ?? null} note={target === APP && setting.key === ACCENT && accentThemed ? 'The theme’s, until you choose one.' : undefined}
+            inUse={target === APP && setting.key === ACCENT && accentThemed ? accent : undefined}
             apply={(value) => dispatch(setting.type === 'secret' ? 'secrets.set' : target === APP ? 'app.settings.set' : 'settings.set', { key: setting.key, value }, { machine: target, source: 'settings' })} />
           {/* Under the theme pickers and their switch: both themes as they look, and importing. */}
           {setting.key === THEME_WINDOW && <ThemeTools />}

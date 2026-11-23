@@ -22,9 +22,12 @@ function LayoutControl() {
   )
 }
 
-/** One setting's row. `apply` changes it wherever it lives; `mixed` shows that the machines it spans disagree. */
-export function Setting({ setting, value, apply, mixed, note }: {
-  setting: SettingInfo; value: Json; apply(value: Json): Promise<unknown>; mixed?: boolean; note?: string
+/**
+ * One setting's row. `apply` changes it wherever it lives; `mixed` shows that the machines it spans disagree. A colour
+ * left at its default may be drawn as another (`inUse`: the theme's accent), which it shows instead.
+ */
+export function Setting({ setting, value, apply, mixed, note, inUse }: {
+  setting: SettingInfo; value: Json; apply(value: Json): Promise<unknown>; mixed?: boolean; note?: string; inUse?: string | undefined
 }) {
   const [error, setError] = useState<string>()
   const knownFonts = useSyncExternalStore(fonts.subscribe, fonts.get)
@@ -45,7 +48,7 @@ export function Setting({ setting, value, apply, mixed, note }: {
       disabled={disabled} onBlur={(e) => set(Number(e.target.value))} />; break
     case 'font': control = <FontPicker label={setting.title} value={typeof value === 'string' ? value : null} monospace={setting.monospace}
       nullLabel={setting.nullLabel} fonts={knownFonts} loadFonts={fonts.load} onChange={set} />; break
-    case 'color': control = <ColorField label={setting.title} value={typeof value === 'string' ? value : String(setting.default ?? '')} fallback={String(setting.default ?? '')} disabled={disabled} onChange={set} onInvalid={setError} />; break
+    case 'color': control = <ColorField label={setting.title} value={typeof value === 'string' ? value : String(setting.default ?? '')} fallback={String(setting.default ?? '')} inUse={inUse} disabled={disabled} onChange={set} onInvalid={setError} />; break
     case 'theme': control = <ThemePicker label={setting.title} appearance={setting.appearance} value={value} disabled={disabled} onChange={set} />; break
     case 'keymap': return <Keymap setting={setting} value={value} apply={apply} />
     case 'layout': control = <LayoutControl />; break
@@ -128,6 +131,16 @@ function StepSlider({ label, options, value, disabled, onChange }: {
   )
 }
 
+/** A colour as the page draws it now: `light-dark()` taken for the window's appearance, which a canvas can't. */
+function resolved(color: string) {
+  if (!color.includes('light-dark(')) return color
+  const probe = document.body.appendChild(document.createElement('span'))
+  probe.style.color = color
+  const drawn = getComputedStyle(probe).color
+  probe.remove()
+  return drawn
+}
+
 /** A colour as sRGB hex, for the system picker (which knows no other): drawn and read back, so any CSS colour works. */
 function hexOf(color: string) {
   const context = document.createElement('canvas').getContext('2d')
@@ -140,25 +153,28 @@ function hexOf(color: string) {
 
 /**
  * A colour: its swatch (click it for the system picker) and the CSS it is, to type any colour the browser reads
- * (display-p3, oklch, a name); back to the default when it isn't that.
+ * (display-p3, oklch, a name); back to the default when it isn't that. Left at the default while another colour is
+ * drawn in its place (`inUse`, a theme's), the swatch is that one and the field empty, for one of your own.
  */
-function ColorField({ label, value, fallback, disabled, onChange, onInvalid }: {
-  label: string; value: string; fallback: string; disabled?: boolean; onChange(value: string): void; onInvalid(message: string): void
+function ColorField({ label, value, fallback, inUse, disabled, onChange, onInvalid }: {
+  label: string; value: string; fallback: string; inUse?: string | undefined; disabled?: boolean; onChange(value: string): void; onInvalid(message: string): void
 }) {
-  const [text, setText] = useState(value)
-  useEffect(() => { setText(value) }, [value])
+  const standIn = value === fallback ? inUse : undefined
+  const shown = standIn ?? value
+  const [text, setText] = useState(standIn ? '' : value)
+  useEffect(() => { setText(standIn ? '' : value) }, [value, standIn])
   const commit = (next: string) => {
     const trimmed = next.trim()
-    if (trimmed === value) return
+    if (trimmed === value || (standIn && !trimmed)) return
     if (!CSS.supports('color', trimmed)) { onInvalid(`“${trimmed}” isn't a colour`); setText(value); return }
     onChange(trimmed)
   }
   return (
     <span className="color-field">
-      <label className="color-field__swatch" style={{ background: value }} title="Pick a colour">
-        <input type="color" aria-label={`${label}: pick`} value={hexOf(value)} disabled={disabled} onChange={(e) => onChange(e.target.value)} />
+      <label className="color-field__swatch" style={{ background: shown }} title="Pick a colour">
+        <input type="color" aria-label={`${label}: pick`} value={hexOf(resolved(shown))} disabled={disabled} onChange={(e) => onChange(e.target.value)} />
       </label>
-      <TextField aria-label={label} value={text} disabled={disabled} spellCheck={false} onChange={(e) => setText(e.target.value)}
+      <TextField aria-label={label} value={text} placeholder={standIn ? 'The theme’s' : undefined} disabled={disabled} spellCheck={false} onChange={(e) => setText(e.target.value)}
         onBlur={(e) => commit(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') commit(e.currentTarget.value) }} />
       {value !== fallback && <Button onClick={() => onChange(fallback)} disabled={disabled}>Reset</Button>}
     </span>

@@ -48,6 +48,9 @@ it('picks a light and a dark theme: stored, and applied to code, the terminal an
   expect(css('--superego-terminal-red')).toBe('light-dark(#cf222e, #f7768e)')
   expect(css('--superego-diff-removed-text')).toBe('light-dark(#82071e, #f7768e)')
   await ui.until(() => Boolean($('[data-key="app.accent"]')?.textContent?.includes('The theme’s, until you choose one.')), 'the accent noted as the theme’s')
+  // Its field shows the accent in use, the theme's, not the default it's left at.
+  const accentField = () => $('[data-key="app.accent"] input:not([type=color])') as HTMLInputElement
+  expect([accentField().value, accentField().placeholder]).toEqual(['', 'The theme’s'])
 
   // The window matching the themes: their grounds, text and links, the terminal on the window's ground.
   expect(await ui.dispatch('app.settings.set', { key: 'app.theme.window', value: true })).toBe(null)
@@ -60,6 +63,7 @@ it('picks a light and a dark theme: stored, and applied to code, the terminal an
   expect(await ui.dispatch('app.settings.set', { key: 'app.accent', value: '#ff3300' })).toBe(null)
   await ui.until(() => css('--superego-accent-base') === '#ff3300', 'the user’s accent over the themes’')
   await ui.until(() => !$('[data-key="app.accent"]')?.textContent?.includes('The theme’s'), 'no note on the accent')
+  expect(accentField().value).toBe('#ff3300')
 
   // Back to Superego's: nothing of a theme's left on the root.
   pick('light', 'superego')
