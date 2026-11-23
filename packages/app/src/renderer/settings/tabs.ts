@@ -22,7 +22,7 @@ export const sectionTab = (section: Pick<SectionInfo, 'tab'>): AppSettingsTab =>
 
 /**
  * The tab a kept target opens: itself, unless it's gone (a machine removed since) or from before the app's settings had
- * tabs (`app`, all of them on one): then General.
+ * tabs (all of them on one, under the old single id): then General.
  */
 export function openTarget(kept: string, machines: { id: string }[]): string {
   return appTab(kept) || kept === MACHINES || kept === ALL || machines.some((m) => m.id === kept) ? kept : GENERAL
