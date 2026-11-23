@@ -111,7 +111,7 @@ export function ThreadPanes({ machine, thread, main }: { machine: PaneProps['mac
   const { rowWidth, widths, threadWidth, stackWidth, drag, reset } = useColumnWidths(row, {
     scope: threadKey, keys, stacked, narrow, kept,
     saved: [{ width: thread.width, lastWidth: thread.lastWidth }, ...panes.map((pane) => ({ width: pane.width, lastWidth: pane.lastWidth }))],
-    defaults: panes.map((pane) => paneKind(registry, pane.kind, where)?.width ?? DEFAULT_SHARE),
+    kindShares: panes.map((pane) => paneKind(registry, pane.kind, where)?.width),
     ...(has(machine, 'pane-resize') ? { save: resize } : {}),
   })
   const widthOf = (pane: Pane) => widths[panes.indexOf(pane) + 1]!
@@ -334,7 +334,7 @@ export function ThreadPanes({ machine, thread, main }: { machine: PaneProps['mac
 /**
  * Each column's width in px, from the widths the thread keeps (`saved`, by `keys`: the thread's, then each pane's; see
  * columnShares), and the dragging of the handle after each. Until it's dragged, a column takes its default: the
- * thread's half of the room, a pane's its kind's (`defaults`). The last one's is kept apart (`lastWidth`): dragged
+ * thread's half of the room, a pane's its kind's (`kindShares`). The last one's is kept apart (`lastWidth`): dragged
  * from its own handle at the end, it's its width while it is last; never dragged, it takes what's left over. With the
  * thread kept in view (`kept`), no pane is wider than what's in view beside it (see keptWidths). Stacked, the thread's
  * is the only one: its panes' column takes the rest. On a phone each is the row's width.
@@ -342,8 +342,8 @@ export function ThreadPanes({ machine, thread, main }: { machine: PaneProps['mac
  * A drag is shown as it goes and handed to `save` as it ends (a factor of the window's width; none: the default
  * again), shown so until the thread has it (or saving fails). `scope` names the thread: a drag shows only on its own.
  */
-function useColumnWidths(row: RefObject<HTMLDivElement | null>, { scope, keys, saved, defaults, stacked, narrow, kept, save }: {
-  scope: string; keys: string[]; saved: SavedWidth[]; defaults: number[]; stacked: boolean; narrow: boolean; kept: boolean
+function useColumnWidths(row: RefObject<HTMLDivElement | null>, { scope, keys, saved, kindShares, stacked, narrow, kept, save }: {
+  scope: string; keys: string[]; saved: SavedWidth[]; kindShares: (number | undefined)[]; stacked: boolean; narrow: boolean; kept: boolean
   save?: (index: number, last: boolean, width: number | undefined) => Promise<unknown>
 }) {
   const [rowWidth, setRowWidth] = useState(0)
@@ -384,7 +384,7 @@ function useColumnWidths(row: RefObject<HTMLDivElement | null>, { scope, keys, s
   const last = stacked ? 1 : keys.length - 1
   // The room the columns share: the row less the gap after each (stacked, the thread's and the stack's).
   const room = narrow ? rowWidth : roomFor(rowWidth, stacked ? 2 : keys.length)
-  const shares = columnShares(keys.map((_, i) => savedOf(i)), [DEFAULT_SHARE, ...defaults], last, windowWidth, room)
+  const shares = columnShares(keys.map((_, i) => savedOf(i)), [DEFAULT_SHARE, ...kindShares], last, windowWidth, room)
   const [threadWidth, stackWidth] = stackWidths(room, shares[0])
   const widths = narrow ? keys.map(() => rowWidth)
     : stacked ? [threadWidth, ...keys.slice(1).map(() => stackWidth)]
@@ -412,7 +412,7 @@ function useColumnWidths(row: RefObject<HTMLDivElement | null>, { scope, keys, s
     dragging.current = true
     const move = (e: PointerEvent) => {
       const px = start + e.clientX - startX
-      const share = index === last ? endShare(px, room, used) : Math.min(0.85, Math.max(0.15, px / Math.max(1, room)))
+      const share = isLast ? endShare(px, room, used) : Math.min(0.85, Math.max(0.15, px / Math.max(1, room)))
       width = share === undefined ? undefined : windowFactor(share * room, windowWidth)
       moved = true
       setDraft({ scope, column, last: isLast, width })

@@ -23,10 +23,10 @@ export type SavedWidth = { width?: number | undefined; lastWidth?: number | unde
 /**
  * Each column's share of the room `room` (what the layouts take), from the widths the thread keeps (`saved`: the
  * thread's, then each pane's), factors of the window's width `windowWidth`. One not kept takes its default
- * (`defaults`), but the last (at `last`), which takes the room the others leave until its own is kept. What doesn't
+ * (`defaults`, else DEFAULT_SHARE), but the last (at `last`), which takes the room the others leave until its own is kept. What doesn't
  * fit is the layout's to clamp: what's kept stays as it is.
  */
-export function columnShares(saved: SavedWidth[], defaults: number[], last: number, windowWidth: number, room: number): (number | undefined)[] {
+export function columnShares(saved: SavedWidth[], defaults: (number | undefined)[], last: number, windowWidth: number, room: number): (number | undefined)[] {
   const share = (factor: number | undefined) => factor === undefined ? undefined : factor * windowWidth / Math.max(1, room)
   return saved.map((column, i) => i === last ? share(column.lastWidth) : share(column.width) ?? defaults[i] ?? DEFAULT_SHARE)
 }
