@@ -1,6 +1,7 @@
 {
   "name": "@superego/threads",
   "version": "0.0.0",
+  "license": "MIT",
   "private": true,
   "type": "module",
   "exports": { "./ui": "./src/ui.tsx" },

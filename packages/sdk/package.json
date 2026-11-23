@@ -1,6 +1,7 @@
 {
   "name": "@superego/sdk",
   "version": "0.0.0",
+  "license": "MIT",
   "private": true,
   "type": "module",
   "description": "What an extension's author imports: 'superego', 'superego/ui', 'superego/testing', and 'superego/unstable'",

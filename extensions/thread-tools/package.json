@@ -1,6 +1,7 @@
 {
   "name": "@superego/thread-tools",
   "version": "0.0.0",
+  "license": "MIT",
   "private": true,
   "type": "module",
   "exports": { "./daemon": "./src/daemon.ts", "./shared": "./src/shared.ts", "./tools": "./src/tools.ts" },

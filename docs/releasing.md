@@ -4,12 +4,15 @@ A release is a signed, notarized `Superego.app` for Apple Silicon, zipped and at
 `githubnext/superego`, with `update.json` beside it: the feed the released app updates itself from (see
 [Automatic updates](#automatic-updates)). The first install is by hand: download the zip and open the app.
 
+**Versions:** each release raises the minor version by one (0.2.0, 0.3.0, 0.4.0…; no patch releases, and no holding back).
+Early days: a release is whatever is on `main` and green, not a milestone.
+
 Releasing is by hand, on a Mac that can sign and notarize (for now, the one that has the Developer ID and the
 `TunaNotary` profile): no CI builds it.
 
 ```sh
-pnpm release 0.1.0               # main, built, notarized, tagged v0.1.0 and published
-pnpm release 0.1.0 --no-publish  # the same up to the notarized zip; nothing is tagged or leaves this Mac
+pnpm release 0.3.0               # main, built, notarized, tagged v0.3.0 and published
+pnpm release 0.3.0 --no-publish  # the same up to the notarized zip; nothing is tagged or leaves this Mac
 pnpm bundle                      # this checkout as it is, notarized into app/dist (the version in app/package.json)
 ```
 

@@ -7,3 +7,6 @@ dist
 .types
 evals/results/
 out-profile
+
+# Design explorations (explore-design) stay local
+design-explorations/

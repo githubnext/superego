@@ -1,6 +1,7 @@
 {
   "name": "@superego/thread-reports",
   "version": "0.0.0",
+  "license": "MIT",
   "private": true,
   "type": "module",
   "exports": { "./daemon": "./src/daemon.ts", "./shared": "./src/shared.ts" },
