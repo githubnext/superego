@@ -66,8 +66,9 @@
 - Coming back to a thread (from Settings, Ego's thread or another thread) shows its panes as you left them: a terminal
   pane no longer takes the focus and scrolls itself into view, and the pane you had focused keeps the focus.
 - Each thread remembers how wide you made its column and its panes, as a proportion of the window: they're kept as you
-  switch threads, resize the window, restart, or open the thread in another window or on another device. Widths you
-  dragged in 0.1.10 aren't carried over: each thread starts at its default widths once.
+  switch threads, resize the window, restart, or open the thread in another window or on another device (a thread on
+  a machine still running 0.1.10 keeps them in the window you dragged them in). Widths you dragged in 0.1.10 aren't
+  carried over: each thread starts at its default widths once.
 - In a narrow window, Settings' tabs stay in a list down the side instead of lining up across the middle of it.
 - Settings opens each tab at its top, not scrolled as far as the last one was.
 - Narrowing the window to a phone's width (or widening it back) while you're in Settings keeps what you were doing:

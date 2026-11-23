@@ -1,6 +1,6 @@
 // The pane row's arithmetic: column widths kept, scrolled and stacked, and which pane a stack shows.
 import { describe, expect, it } from 'vitest'
-import { arranged, columnShares, DEFAULT_SHARE, dropIndex, endShare, frontOf, GAP, keptWidths, MIN_COLUMN, moved, placeAmong, roomFor, scrollWidths, slideOf, SNAP, stackWidths, windowFactor } from '../src/renderer/pane-layout.ts'
+import { arranged, columnShares, DEFAULT_SHARE, dropIndex, endShare, frontOf, GAP, keepInWindow, keptWidths, MIN_COLUMN, moved, placeAmong, roomFor, scrollWidths, slideOf, SNAP, stackWidths, windowFactor } from '../src/renderer/pane-layout.ts'
 
 describe('widths kept with the thread', () => {
   // A window 1400 wide, its row (the sidebar beside) leaving the columns 1000 between them.
@@ -43,6 +43,23 @@ describe('widths kept with the thread', () => {
     expect(windowFactor(1000 / 3, 1000)).toBe(0.3333)
     expect(windowFactor(0, 1000)).toBeGreaterThan(0)
     expect(windowFactor(1500, 1000)).toBe(1)
+  })
+})
+
+describe('widths kept in the window, where the machine cannot keep them', () => {
+  it('keeps a column its own width and its width while last apart, for the columns it has now', () => {
+    const one = keepInWindow(undefined, ['thread', 'p1'], 'thread', false, 0.3)
+    expect(one).toEqual({ thread: { width: 0.3 } })
+    const two = keepInWindow(one, ['thread', 'p1'], 'p1', true, 0.4)
+    expect(two).toEqual({ thread: { width: 0.3 }, p1: { lastWidth: 0.4 } })
+    // p1 closed: only what's there now is kept.
+    expect(keepInWindow({ ...two, gone: { width: 0.2 } }, ['thread', 'p2'], 'p2', false, 0.25)).toEqual({ thread: { width: 0.3 }, p2: { width: 0.25 } })
+  })
+
+  it('forgets a width put back to its default, and the thread once none is left', () => {
+    const kept = { thread: { width: 0.3 }, p1: { width: 0.2, lastWidth: 0.4 } }
+    expect(keepInWindow(kept, ['thread', 'p1'], 'p1', true, undefined)).toEqual({ thread: { width: 0.3 }, p1: { width: 0.2 } })
+    expect(keepInWindow({ thread: { width: 0.3 } }, ['thread'], 'thread', false, undefined)).toBeUndefined()
   })
 })
 

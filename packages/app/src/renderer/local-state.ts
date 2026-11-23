@@ -32,6 +32,22 @@ if (windowId && address?.has('seed')) {
   history.replaceState(history.state, '', `${location.pathname}?${address}${location.hash}`)
 }
 
+/**
+ * State no longer kept, dropped from every window's as one loads: `pane.widths`, the columns' shares of the row that
+ * 0.1.10 kept per window (their widths are factors of the window's width now, see panes.tsx).
+ */
+const RETIRED = ['pane.widths']
+if (typeof localStorage !== 'undefined') {
+  const retired: string[] = []
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i)
+    if (!key?.startsWith(PREFIX)) continue
+    const own = key.startsWith(`${PREFIX}window.`) ? key.slice(`${PREFIX}window.`.length).split('.').slice(1).join('.') : key.slice(PREFIX.length)
+    if (RETIRED.includes(own)) retired.push(key)
+  }
+  for (const key of retired) localStorage.removeItem(key)
+}
+
 /** This window's own state, for a new window to start as a copy of it. */
 export function windowState(): Record<string, string> {
   const state: Record<string, string> = {}

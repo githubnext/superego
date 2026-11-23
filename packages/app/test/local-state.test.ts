@@ -55,3 +55,12 @@ it("the web app's one window keeps its state as it always has", async () => {
   expect(localStorage.getItem('superego.selection')).toBe('{"thread":"t1"}')
   expect(windowState()).toEqual({})
 })
+
+it('drops state no longer kept from every window as one loads, the rest as it was', async () => {
+  localStorage.setItem('superego.window.a.pane.widths', '{"t1":0.4}')
+  localStorage.setItem('superego.window.b.pane.widths', '{"t2":0.3}')
+  localStorage.setItem('superego.pane.widths', '{"t3":0.5}')
+  localStorage.setItem('superego.window.a.pane.front', '{"t1":"p1"}')
+  await load('?window=a')
+  expect(Object.keys({ ...localStorage })).toEqual(['superego.window.a.pane.front'])
+})

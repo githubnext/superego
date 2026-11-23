@@ -21,6 +21,28 @@ export const roomFor = (rowWidth: number, columns: number) => Math.max(0, rowWid
 export type SavedWidth = { width?: number | undefined; lastWidth?: number | undefined }
 
 /**
+ * A thread's widths kept in the window instead, by column (`THREAD_COLUMN`, a pane's id): where its machine can't keep
+ * them with the thread (a daemon without `pane-resize`).
+ */
+export type WindowWidths = Record<string, SavedWidth>
+
+/**
+ * A thread's widths kept in the window once `column`'s (its `last` one's, or its own) is `width` (none: its default
+ * again): only the columns it has now (`keys`), and none at all once nothing's left to keep.
+ */
+export function keepInWindow(kept: WindowWidths | undefined, keys: string[], column: string, last: boolean, width: number | undefined): WindowWidths | undefined {
+  const next: WindowWidths = {}
+  for (const key of keys) {
+    const saved: SavedWidth = { ...kept?.[key] }
+    if (key === column) saved[last ? 'lastWidth' : 'width'] = width
+    if (saved.width === undefined) delete saved.width
+    if (saved.lastWidth === undefined) delete saved.lastWidth
+    if (Object.keys(saved).length) next[key] = saved
+  }
+  return Object.keys(next).length ? next : undefined
+}
+
+/**
  * Each column's share of the room `room` (what the layouts take), from the widths the thread keeps (`saved`: the
  * thread's, then each pane's), factors of the window's width `windowWidth`. One not kept takes its default
  * (`defaults`, else DEFAULT_SHARE), but the last (at `last`), which takes the room the others leave until its own is kept. What doesn't

@@ -35,7 +35,7 @@ import { ThreadBody } from './thread-body.tsx'
 import { PaneMoveTo } from './view-menu.tsx'
 import { FileEditor } from './file-editor.tsx'
 import { BRING_FORWARD, focusRegion } from './focus.ts'
-import { arranged, columnShares, DEFAULT_SHARE, dropIndex, END, endShare, frontOf, GAP, keptWidths, moved, placeAmong, roomFor, scrollWidths, slideOf, stackWidths, windowFactor, type SavedWidth } from './pane-layout.ts'
+import { arranged, columnShares, DEFAULT_SHARE, dropIndex, END, endShare, frontOf, GAP, keptWidths, moved, placeAmong, roomFor, scrollWidths, slideOf, stackWidths, windowFactor, keepInWindow, type SavedWidth, type WindowWidths } from './pane-layout.ts'
 import { maximizedColumn, maximizedStore, restoresOn, THREAD_COLUMN } from './maximized.ts'
 import { useShortcut } from './keys.ts'
 import { OverflowBox, OverflowRow, PRIORITY, useOverflowItem } from './overflow.tsx'
@@ -108,11 +108,24 @@ export function ThreadPanes({ machine, thread, main }: { machine: PaneProps['mac
         throw error
       })
   }
+  // A machine that can't (an older daemon): kept in this window instead, by thread, the same factors of its width.
+  const withThread = has(machine, 'pane-resize')
+  const [inWindow, setInWindow] = useLocalState<Record<string, WindowWidths>>('pane.columnWidths', {})
+  const keepHere = async (index: number, last: boolean, width: number | undefined) => {
+    setInWindow((all) => {
+      const { [threadKey]: was, ...rest } = all
+      const next = keepInWindow(was, keys, keys[index]!, last, width)
+      return next ? { ...rest, [threadKey]: next } : rest
+    })
+  }
+  const keptHere = inWindow[threadKey] ?? {}
   const { rowWidth, widths, threadWidth, stackWidth, drag, reset } = useColumnWidths(row, {
     scope: threadKey, keys, stacked, narrow, kept,
-    saved: [{ width: thread.width, lastWidth: thread.lastWidth }, ...panes.map((pane) => ({ width: pane.width, lastWidth: pane.lastWidth }))],
+    saved: withThread
+      ? [{ width: thread.width, lastWidth: thread.lastWidth }, ...panes.map((pane) => ({ width: pane.width, lastWidth: pane.lastWidth }))]
+      : keys.map((key) => keptHere[key] ?? {}),
     kindShares: panes.map((pane) => paneKind(registry, pane.kind, where)?.width),
-    ...(has(machine, 'pane-resize') ? { save: resize } : {}),
+    save: withThread ? resize : keepHere,
   })
   const widthOf = (pane: Pane) => widths[panes.indexOf(pane) + 1]!
 
@@ -332,7 +345,7 @@ export function ThreadPanes({ machine, thread, main }: { machine: PaneProps['mac
 }
 
 /**
- * Each column's width in px, from the widths the thread keeps (`saved`, by `keys`: the thread's, then each pane's; see
+ * Each column's width in px, from the widths kept (`saved`, by `keys`: the thread's, then each pane's; see
  * columnShares), and the dragging of the handle after each. Until it's dragged, a column takes its default: the
  * thread's half of the room, a pane's its kind's (`kindShares`). The last one's is kept apart (`lastWidth`): dragged
  * from its own handle at the end, it's its width while it is last; never dragged, it takes what's left over. With the
@@ -340,11 +353,11 @@ export function ThreadPanes({ machine, thread, main }: { machine: PaneProps['mac
  * is the only one: its panes' column takes the rest. On a phone each is the row's width.
  *
  * A drag is shown as it goes and handed to `save` as it ends (a factor of the window's width; none: the default
- * again), shown so until the thread has it (or saving fails). `scope` names the thread: a drag shows only on its own.
+ * again), shown so until `saved` has it (or saving fails). `scope` names the thread: a drag shows only on its own.
  */
 function useColumnWidths(row: RefObject<HTMLDivElement | null>, { scope, keys, saved, kindShares, stacked, narrow, kept, save }: {
   scope: string; keys: string[]; saved: SavedWidth[]; kindShares: (number | undefined)[]; stacked: boolean; narrow: boolean; kept: boolean
-  save?: (index: number, last: boolean, width: number | undefined) => Promise<unknown>
+  save: (index: number, last: boolean, width: number | undefined) => Promise<unknown>
 }) {
   const [rowWidth, setRowWidth] = useState(0)
   const [windowWidth, setWindowWidth] = useState(() => window.innerWidth)
@@ -395,7 +408,7 @@ function useColumnWidths(row: RefObject<HTMLDivElement | null>, { scope, keys, s
     const next = { scope, column: keys[index]!, last: index === last, width }
     setDraft(next)
     // `save` says what went wrong itself (on the column's tab): here, only what's shown goes back.
-    save?.(index, next.last, width).catch(() => setDraft((now) => now === next ? undefined : now))
+    save(index, next.last, width).catch(() => setDraft((now) => now === next ? undefined : now))
   }
   // The gap after a column resizes it (`index`), kept for next time as a factor of the window's width. The last one's,
   // dragged to about what the others leave, takes that again; past it, it's wider and the row scrolls. Shown as it's
