@@ -4,7 +4,8 @@
 // one asking, one done, the rest quiet at their times); its search in use, empty, with matches and with none, the keyboard up; a thread with markdown, a code block and tool calls, words in the composer; the same with
 // the keyboard up; the thread's menu; the New thread sheet, swiped down part way and asking to discard a name typed
 // in (after checking the swipe: it follows the finger, springs back, closes past 30%, leaves a scrolled body to
-// scroll, ends at the keyboard); the Diff pane's tab; Settings' list and a page of it. In light and dark, into
+// scroll, ends at the keyboard); the Diff pane's tab; Settings' list and a page of it (checked to keep its page, scroll
+// and controls as the window widens and narrows again). In light and dark, into
 // $SUPEREGO_SHOWCASE_OUT as drawer-, swipe- (a row swiped open), swipe-pin-, swipe-full- (held most of the way across), search-empty-, search-results-, search-none-, thread-, answer-, keyboard-, menu-, new-thread-, new-thread-swiping-, new-thread-discard-, pane-, settings- and settings-page-<light|dark>.png.
 import { BrowserWindow } from 'electron'
 import { writeFileSync } from 'node:fs'
@@ -385,6 +386,26 @@ await openApp({ name: 'phone-look', timeout: 420_000 }, async (t) => {
   await tap('.settings__row', 'General')
   await p.until(`!!document.querySelector('.settings--list .settings-section .setting')`, 'Settings → General')
   await both('settings-page')
+  // The window crossing to a wide one and back (an iPad turned, a browser widened) moves Settings' page rather than
+  // drawing it afresh: the same control, the tab's page in the pane and back in the sheet, still scrolled.
+  step('Settings across the width')
+  await p.run(`document.querySelector('.superego-dialog__back').click()`)
+  await tap('.settings__row', 'Appearance')
+  await p.until(`!!document.querySelector('.settings--list [data-key="app.theme.light"]')`, 'Settings → Appearance')
+  await p.run(`(() => {
+    document.querySelector('[data-key="app.theme.light"] :is(button, input, select, [tabindex])').dataset.kept = ''
+    document.querySelector('.settings--list .superego-dialog__body').scrollTop = 60
+  })()`)
+  await p.until(`document.querySelector('.settings--list .superego-dialog__body').scrollTop === 60`, 'Settings scrolled')
+  await cdp.sendCommand('Emulation.setDeviceMetricsOverride', { width: 1000, height: PHONE.height, deviceScaleFactor: PHONE.scale, mobile: true })
+  await p.until(`!!document.querySelector('.settings--pane .settings__content [data-kept]')`, 'the same control in the wide pane')
+  await metrics(PHONE.height)
+  await p.until(`!!document.querySelector('.settings--list .settings__content [data-kept]')`, 'the same control in the sheet again')
+  const page = await p.run(`document.querySelector('.settings--list .superego-dialog__title').textContent`)
+  if (page !== 'Appearance') t.fail(`back on a phone, Settings shows ${JSON.stringify(page)}, not Appearance's page`)
+  const top = await p.run(`document.querySelector('.settings--list .superego-dialog__body').scrollTop`)
+  // Not to the same pixel: the page reflows at each width, and the browser keeps what was in view in view as it does.
+  if (top < 30) t.fail(`back on a phone, Settings scrolled to ${top}, back near its top`)
   phone.destroy()
   await run(`window.superego.call('local', 'settings.set', { key: 'web.access', value: 'off' })`)
 })
