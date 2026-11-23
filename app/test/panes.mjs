@@ -68,7 +68,10 @@ await openApp({ name: 'panes', timeout: 240_000 }, async (t) => {
   // Kept in view: the thread still at the start with the last pane focused, the pane whole beside it, the first pane
   // scrolled under it (away, on the strip), the thread's tab not.
   const rect = (column) => `document.querySelector('[data-column="${column}"]').getBoundingClientRect()`
-  const beside = (pane) => `(() => { const row = document.querySelector('.panes').getBoundingClientRect(), t = ${rect('thread')}, p = ${rect(pane)}; return Math.abs(t.left - row.left) < 1 && p.left >= t.right - 1 && p.right <= row.right + 1 })()`
+  // The row's box less its padding (wide, the room at its start and foot): where its columns go.
+  const inner = `(() => { const p = document.querySelector('.panes'), r = p.getBoundingClientRect(), s = getComputedStyle(p)
+    return { start: parseFloat(s.paddingLeft), left: r.left + parseFloat(s.paddingLeft), right: r.right - parseFloat(s.paddingRight), top: r.top + parseFloat(s.paddingTop), bottom: r.bottom - parseFloat(s.paddingBottom) } })()`
+  const beside = (pane) => `(() => { const row = ${inner}, t = ${rect('thread')}, p = ${rect(pane)}; return Math.abs(t.left - row.left) < 1 && p.left >= t.right - 1 && p.right <= row.right + 1 })()`
   await until(beside(folder), 'kept: the thread in view, the last pane whole beside it')
   if (!await run(`document.querySelector('.strip__tab:not([data-pane])').matches('.is-shown, .is-focused') && document.querySelector('.strip__tab[data-pane="${diff}"]').matches('.is-away')`)) t.fail('kept: the strip shows the thread in view, the first pane away')
   // ⌘⌥← to the pane before, and ⌃Tab back: each whole beside the thread.
@@ -145,7 +148,8 @@ await openApp({ name: 'panes', timeout: 240_000 }, async (t) => {
   await run(`document.querySelector('[data-column="${editor}"] .panes__maximize').click()`)
   await until(`document.querySelector('.panes > .is-maximized')?.dataset.column === '${editor}'`, 'maximized from its button')
   await t.settled()
-  const covers = await run(`(() => { const s = document.querySelector('.sheet').getBoundingClientRect(), c = document.querySelector('[data-column="${editor}"]').getBoundingClientRect(); return [s.width - c.width, s.height - c.height].every((d) => Math.abs(d) < 1) })()`)
+  // The whole of the row inside its padding (the room around the columns): on the right as on the left.
+  const covers = await run(`(() => { const s = ${inner}, c = document.querySelector('[data-column="${editor}"]').getBoundingClientRect(); return [c.left - s.left, c.top - s.top, c.bottom - s.bottom, s.right - s.start - c.right].every((d) => Math.abs(d) < 1) })()`)
   if (!covers) t.fail('maximized: the pane should cover the thread and the rest')
   if (JSON.stringify(await shownPanes()) !== JSON.stringify([editor])) t.fail(`maximized: only it shown, not ${await shownPanes()}`)
   if (!await run(`document.querySelector('[data-column="thread"]').inert`)) t.fail('maximized: the thread under it is out of reach')

@@ -80,7 +80,7 @@ const TINTS: Partial<Record<ColourToken, number>> = {
 
 /** Every token `uiPalette` may set. */
 export const PALETTE_TOKENS: readonly ColourToken[] = [
-  '--superego-bg', '--superego-text', ...Object.keys(STEPS), ...Object.keys(TINTS), '--superego-link', '--superego-bubble',
+  '--superego-bg', '--superego-text', '--superego-ground', ...Object.keys(STEPS), ...Object.keys(TINTS), '--superego-link', '--superego-bubble',
 ] as ColourToken[]
 
 /** A theme's ground and text: its own (`ui`), else its terminal's; Superego's text on a ground given alone. */
@@ -127,6 +127,9 @@ export function uiPalette(theme: Theme): Partial<Record<ColourToken, string>> | 
     return p === 0 ? bg : p === 100 ? fg : `color-mix(in srgb, ${fg} ${p}%, ${bg})`
   }
   for (const [token, [light, darkStep]] of Object.entries(STEPS) as [ColourToken, [Step, Step]][]) palette[token] = step(dark ? darkStep : light)
+  // Behind the thread's columns: in the light a step toward the text, in the dark one toward black, so the sheets
+  // stand on it either way (and the side, a step toward the text, stands apart from it).
+  palette['--superego-ground'] = dark ? `color-mix(in srgb, #000 30%, ${bg})` : step({ percent: 8, least: 1.12 })
   for (const [token, percent] of Object.entries(TINTS) as [ColourToken, number][]) palette[token] = `color-mix(in srgb, ${fg} ${percent}%, transparent)`
   // Links: the theme's, else its blue (or its accent), lifted toward the text until they read (4.5:1).
   const link = theme.ui?.link ?? theme.terminal?.blue ?? theme.accent

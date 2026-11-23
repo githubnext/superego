@@ -298,7 +298,7 @@ export function ThreadPanes({ machine, thread, main }: { machine: PaneProps['mac
           row's scroll-padding shows one brought into view beside them. */}
       <div className={`panes ${narrow ? 'panes--narrow' : ''} ${stacked ? 'panes--stack' : ''} ${kept ? 'panes--keep' : ''} ${kept && scrolled > 0 ? 'is-scrolled' : ''} ${maximized ? 'has-maximized' : ''}`}
         ref={setRow} onScroll={onScroll}
-        style={stacked ? { gridTemplateColumns: `${threadWidth}px ${GAP}px ${stackWidth}px ${GAP}px` } : kept ? { scrollPaddingLeft: widths[0]! + GAP } : undefined}>
+        style={stacked ? { gridTemplateColumns: `${threadWidth}px ${GAP}px ${stackWidth}px ${GAP}px` } : kept ? { scrollPaddingLeft: `calc(${widths[0]! + GAP}px + var(--side-inset, 0px))` } : undefined}>
         {/* Focus moving into a column (a click, a key) makes it the focused one: the app and the keyboard agree. */}
         <div data-column={THREAD_COLUMN} tabIndex={-1} className={`panes__column panes__column--thread ${threadMaximized ? 'is-maximized' : maximized ? 'is-covered' : ''}`}
           inert={Boolean(maximized) && !threadMaximized} style={threadMaximized ? undefined : { width: widths[0] }}
@@ -352,8 +352,14 @@ function useColumnWidths(row: RefObject<HTMLDivElement | null>, { scope, keys, s
   useLayoutEffect(() => {
     const el = row.current
     if (!el) return
-    // The window resizing resizes the row: both are read as it does.
-    const measure = () => { setRowWidth(el.clientWidth); setWindowWidth(window.innerWidth) }
+    // What's inside its padding (wide, the room at its start), which the columns and their handles share; and the
+    // window's width, which the widths the thread keeps are factors of. The window resizing resizes the row: both are
+    // read as it does.
+    const measure = () => {
+      const style = getComputedStyle(el)
+      setRowWidth(el.clientWidth - (parseFloat(style.paddingLeft) || 0) - (parseFloat(style.paddingRight) || 0))
+      setWindowWidth(window.innerWidth)
+    }
     const observer = new ResizeObserver(measure)
     observer.observe(el)
     measure()

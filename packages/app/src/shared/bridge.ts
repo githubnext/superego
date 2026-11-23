@@ -81,9 +81,10 @@ export type WebViewPartition = 'browser' | 'artifact'
 /**
  * A box in the window's page, in its CSS pixels. With a `layout` (a page at a set size), the page in it is laid out at
  * that size whatever the window's zoom (what its media queries see), and drawn to fill the box (smaller, when the box is
- * shrunk by a CSS transform).
+ * shrunk by a CSS transform). With a `radius`, its corners are rounded by that much: it fills a rounded box's foot (the
+ * pane's column), which would otherwise cut it.
  */
-export type WebViewRect = { x: number; y: number; width: number; height: number; layout?: { width: number; height: number } }
+export type WebViewRect = { x: number; y: number; width: number; height: number; radius?: number; layout?: { width: number; height: number } }
 
 /** Where a web view's page is, as its window's main process tells it. */
 export type WebViewState = {

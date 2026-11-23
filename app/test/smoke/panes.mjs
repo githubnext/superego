@@ -319,7 +319,8 @@ async function reorder(t, paned, panesOf) {
  * and on again, kept in the app's settings.
  */
 async function keepThread(t, paned, last) {
-  const row = `document.querySelector('.panes').getBoundingClientRect()`
+  // The row's box less its padding (wide, the room at its start): where its columns go.
+  const row = `(() => { const p = document.querySelector('.panes'), r = p.getBoundingClientRect(), s = getComputedStyle(p); return { left: r.left + parseFloat(s.paddingLeft), right: r.right - parseFloat(s.paddingRight) } })()`
   const rect = (column) => `document.querySelector('[data-column="${column}"]').getBoundingClientRect()`
   const setting = (value) => `window.superego.call('app', 'settings.watch', {}).then((r) => r.value.values['app.panes.keepThread'] === ${value})`
   await t.check(`!!document.querySelector('.panes--keep')`, 'the thread kept in view by default')

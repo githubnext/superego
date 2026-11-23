@@ -424,7 +424,22 @@ export function placeOf(host: HTMLElement, sized = false): { rect: WebViewRect; 
   }
   if (!seen || seen.right - seen.left < 1 || seen.bottom - seen.top < 1) return null
   const whole = seen.left <= box.left + 0.5 && seen.top <= box.top + 0.5 && seen.right >= box.right - 0.5 && seen.bottom >= box.bottom - 0.5
-  return { rect: { x: box.left, y: box.top, width: box.width, height: box.height, ...(sized ? { layout: { width: host.offsetWidth, height: host.offsetHeight } } : {}) }, whole }
+  const radius = footRadius(host, box)
+  return { rect: { x: box.left, y: box.top, width: box.width, height: box.height, ...(radius ? { radius } : {}), ...(sized ? { layout: { width: host.offsetWidth, height: host.offsetHeight } } : {}) }, whole }
+}
+
+/**
+ * How round the corners of the column `host` fills the foot of (its sides and its bottom edge): the page laid over it
+ * must be as round, or its square corners stand out past the column's. 0 when it doesn't reach them.
+ */
+function footRadius(host: HTMLElement, box: DOMRect): number {
+  const column = host.closest<HTMLElement>('.panes__column')
+  if (!column) return 0
+  const r = column.getBoundingClientRect()
+  const style = getComputedStyle(column)
+  const edge = parseFloat(style.borderLeftWidth) || 0
+  const reaches = Math.abs(box.bottom - (r.bottom - edge)) < 1 && Math.abs(box.left - (r.left + edge)) < 1 && Math.abs(box.right - (r.right - edge)) < 1
+  return reaches ? Math.max(0, (parseFloat(style.borderBottomLeftRadius) || 0) - edge) : 0
 }
 
 /** Whether anything the window draws over its panes is over `rect` (one the pane itself is in, a dialog's, isn't). */

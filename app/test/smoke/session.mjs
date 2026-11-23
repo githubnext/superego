@@ -186,7 +186,7 @@ export default async function session(t, s) {
   await new Promise((resolve) => another.listen(0, '127.0.0.1', resolve))
   // The column wearing the ring, and the one brought forward (its title lit): focus moving into a column brings it.
   const ringed = (label) => t.until(`(() => {
-    const ringed = [...document.querySelectorAll('.panes > [data-column]')].filter((c) => getComputedStyle(c).borderTopColor !== 'rgba(0, 0, 0, 0)')
+    const ringed = [...document.querySelectorAll('.panes > [data-column]')].filter((c) => getComputedStyle(c).boxShadow.includes('0px 0px 0px 4px'))
     return ringed.length === 1 && (ringed[0].querySelector('.panes__label')?.textContent ?? 'thread') === ${JSON.stringify(label)}
   })()`, `only ${label} ringed`)
   const front = (label) => t.until(`(document.querySelector('.panes__tab.is-active .panes__label')?.textContent ?? 'thread') === ${JSON.stringify(label)}`, `${label} brought forward`)

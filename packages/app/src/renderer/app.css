@@ -21,7 +21,8 @@
 .app:not(.is-narrow)::before {
   content: ''; position: absolute; z-index: 0; top: var(--side-top); left: var(--side-inset); bottom: var(--side-inset); width: calc(var(--side-width) - var(--side-inset)); pointer-events: none;
   border-radius: var(--side-radius); background: var(--superego-chrome);
-  box-shadow: var(--superego-glass-edge), 0 6px 24px light-dark(rgb(0 0 0 / .07), rgb(0 0 0 / .35));
+  box-shadow: var(--side-ring, 0 0 #0000), var(--superego-glass-edge), 0 6px 24px light-dark(rgb(0 0 0 / .07), rgb(0 0 0 / .35));
+  transition: box-shadow .15s;
 }
 .app__titlebar, .app__body > * { position: relative; z-index: 1; }
 .app__rail { position: relative; flex: none; width: var(--superego-rail); display: flex; flex-direction: column; justify-content: space-between; align-items: center; padding: 9px 0 18px var(--side-inset); -webkit-app-region: drag; }
@@ -779,18 +780,25 @@ button.app__mobiletitle > svg { flex: none; color: var(--superego-faint); }
 .panes { -webkit-app-region: drag; }
 .panes > * { -webkit-app-region: no-drag; }
 
-/* Wide, the columns stand apart on the side's grey, a hairline at each edge; the room after each (see GAP in panes.tsx)
-   is its handle, with a grip that's quiet until it's pointed at or dragged. Past the last column, the row's ground. */
-.panes:not(.panes--narrow) { background: var(--superego-chrome); }
-.panes__gap { flex: none; width: 8px; cursor: col-resize; position: relative; display: grid; place-items: center; box-shadow: inset 1px 0 0 var(--superego-line); }
-/* A column's edge on each side: the one before it always, the next one's only where there's a next (none at the
-   window's edge, nor against the column beside, which draws its own). */
-.panes__gap.is-between { box-shadow: inset 1px 0 0 var(--superego-line), inset -1px 0 0 var(--superego-line); }
+/* Wide, the columns are sheets inset on the window's ground, as the side's panel is: room around the row (its foot
+   and start the side's inset; its top just the focus ring's, under the title bar), and after each column (GAP in
+   pane-layout.ts) the same room, its handle, with a grip that's quiet until it's pointed at or dragged. Each column's
+   corners are the panel's, concentric with the window's (--side-radius). Past the last column, the row's ground. */
+.app:not(.is-narrow):has(.sheet) { background: var(--superego-ground); }
+.panes:not(.panes--narrow) { --row-top: 4px; padding: var(--row-top) 0 var(--side-inset) var(--side-inset); scroll-padding-inline: var(--side-inset); }
+.panes:not(.panes--narrow) > .panes__column { border-radius: var(--side-radius); }
+.panes__gap { flex: none; width: 8px; cursor: col-resize; position: relative; display: grid; place-items: center; }
 .panes__gap::after { content: ''; width: 3px; height: 28px; border-radius: 2px; background: var(--superego-faint); opacity: .45; transition: opacity .12s, height .12s, background-color .12s; }
 .panes__gap:hover::after, .panes__gap:active::after { opacity: 1; height: 40px; background: var(--superego-muted); }
 /* While a column is dragged: the cursor stays, and nothing under it is selected. */
 .is-resizing-columns, .is-resizing-columns * { cursor: col-resize !important; user-select: none !important; }
 .panes__column { flex: none; display: flex; flex-direction: column; min-height: 0; position: relative; isolation: isolate; overflow: hidden; background: var(--superego-bg); }
+/* Its edge, a hairline; around it, the focus's ring (--column-ring) and, kept in view over the panes, a shadow
+   (--column-lift): see Focus below, and the thread kept in view. */
+.panes:not(.panes--narrow) > .panes__column {
+  box-shadow: var(--column-ring, 0 0 #0000), var(--column-lift, 0 0 #0000), 0 0 0 .5px var(--superego-line);
+  transition: box-shadow .15s;
+}
 .panes__column--thread > .thread { flex: 1; min-width: 0; }
 .panes__column--thread .thread__column { max-width: calc(100% - 2 * var(--superego-space-4)); }
 .panes__column--thread .dock { max-width: calc(100% - 2 * var(--superego-space-4)); }
@@ -818,7 +826,7 @@ button.app__mobiletitle > svg { flex: none; color: var(--superego-faint); }
 .panes--stack > .panes__column { grid-area: 1 / 3; }
 .panes--stack > .panes__column--thread { grid-area: 1 / 1; }
 .panes--stack > .panes__gap { grid-area: 1 / 2; }
-.panes__end { grid-area: 1 / 4; box-shadow: inset 1px 0 0 var(--superego-line); }
+.panes__end { grid-area: 1 / 4; }
 /* Scrolled, the room past the last handle (END in pane-layout.ts); the last column, brought into view, shows it too. */
 .panes__tail { flex: none; }
 .panes__column.is-last { scroll-margin-right: 28px; }
@@ -828,12 +836,18 @@ button.app__mobiletitle > svg { flex: none; color: var(--superego-faint); }
 .sheet { position: relative; }
 .panes.has-maximized > :not(.is-maximized) { visibility: hidden; }
 .panes > .panes__column.is-maximized { position: absolute; inset: 0; z-index: 1; }
+.panes:not(.panes--narrow) > .panes__column.is-maximized { inset: var(--row-top) var(--side-inset) var(--side-inset); }
 .panes__kept { flex: none; }
-/* The thread kept in view (scrolled): it and its handle stand still at the start, over the panes passing under them
-   (the handle on the row's grey, so none shows through); a soft shadow falls on them once they've started to. */
+/* The thread kept in view (scrolled): it and its handle stand still at the start, over the panes passing under them,
+   and so does the room before it (the row's ::before, in its start's padding); the handle and that room on the
+   window's ground, so none shows through. A soft shadow falls from the thread once they've started to. */
 .panes--keep > :is(.panes__column--thread, .panes__gap--thread) { position: sticky; left: 0; z-index: 2; }
-.panes--keep > .panes__gap--thread { background: var(--superego-chrome); transition: box-shadow .15s; }
-.panes--keep.is-scrolled > .panes__gap--thread { box-shadow: inset 1px 0 0 var(--superego-line), inset -1px 0 0 var(--superego-line), 3px 0 6px light-dark(rgb(0 0 0 / .08), rgb(0 0 0 / .45)); }
+.panes--keep.is-scrolled > .panes__gap--thread { background: var(--superego-ground); }
+.panes--keep.is-scrolled > .panes__column--thread { --column-lift: 3px 0 8px light-dark(rgb(0 0 0 / .1), rgb(0 0 0 / .5)); }
+.panes--keep:not(.panes--narrow):not(.panes--stack)::before {
+  content: ''; order: -1; flex: none; position: sticky; left: calc(-1 * var(--side-inset)); z-index: 1;
+  width: var(--side-inset); margin-left: calc(-1 * var(--side-inset)); background: var(--superego-ground);
+}
 .pane-empty { margin: auto; color: var(--superego-muted); padding: var(--superego-space-5); text-align: center; }
 .pane-scroll { flex: 1; overflow: auto; }
 .pane-bar { display: flex; align-items: center; gap: var(--superego-space-3); padding: 6px var(--superego-space-3); border-bottom: 1px solid var(--superego-line); font-size: var(--superego-text-sm); color: var(--superego-muted); flex: none; min-height: 38px; }
@@ -1033,15 +1047,22 @@ a.pane-header__url:hover { color: var(--superego-link); }
 
 .composer-box.is-dropping .dock__box { outline: 2px dashed var(--superego-ring); outline-offset: 2px; }
 
-/* Focus: the region holding it (the sidebar, the thread, a pane) wears a quiet, neutral ring, its own border. The border is always
-   there, clear until then, so nothing moves; it lies outside what's in the region, which the region clips, so nothing
-   in it (scrolled text, a page, an editor) can paint over it. Nothing inside a region wears a ring of its own, but a
-   small control reached from the keyboard (see @superego/ui's styles). */
-.app__sidebar, .panes > .panes__column { border: 2px solid transparent; }
-:is(.app__sidebar, .panes > .panes__column):focus-within { border-color: var(--superego-region-ring); }
+/* Focus: the region holding it (the sidebar, the thread, a pane) wears the ring (--superego-region-ring): wide, round
+   its sheet, following its corners, in the room around it, so nothing in it (scrolled text, a page, an editor) can
+   paint over it; the sidebar's is round the side's panel, and its selected row is lit in the accent while it has it.
+   Narrow, a region fills the screen, with no room around it: its ring is its own border, always there, clear until
+   then, so nothing moves, and outside what's in it, which it clips, so nothing paints over it. Nothing inside a region
+   wears a ring of its own, but a small control reached from the keyboard (see @superego/ui's styles). */
+.panes:not(.panes--narrow) > .panes__column:focus-within { --column-ring: var(--superego-region-ring); }
+.app:not(.is-narrow):has(.app__sidebar:focus-within) { --side-ring: var(--superego-region-ring); }
+.app__sidebar:focus-within .superego-list-item.is-selected { background: color-mix(in srgb, var(--superego-accent) 16%, transparent); }
+.app.is-narrow .app__sidebar, .panes--narrow > .panes__column { border: 2px solid transparent; }
+:is(.app.is-narrow .app__sidebar, .panes--narrow > .panes__column):focus-within { border-color: var(--superego-ring); }
 /* None while a finger works it (touch.ts): what's tapped is where you are. A mouse or a keyboard brings it back, on a
    phone or an iPad too. */
+:root[data-finger] :is(.app, .panes > .panes__column) { --column-ring: 0 0 #0000; --side-ring: 0 0 #0000; }
 :root[data-finger] :is(.app__sidebar, .panes > .panes__column) { border-color: transparent; }
+:root[data-finger] .app__sidebar .superego-list-item.is-selected { background: var(--superego-selected); }
 
 /* Over the row: a tab for the thread and each pane (the focused one tinted, those out of view faint, with which way
    they are), the row in small, and + for another pane. */

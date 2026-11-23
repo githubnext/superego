@@ -309,6 +309,8 @@ export function serveWebViews({ windowOf, linkOf, sites }: WebViewsOptions) {
           const zoom = window.contents.getZoomFactor()
           const width = Math.round(rect.width * zoom), height = Math.round(rect.height * zoom)
           native.setBounds(shown ? { x: Math.round(rect.x * zoom), y: Math.round(rect.y * zoom), width, height } : { x: 1 - width, y: 1 - height, width, height })
+          // A view can't be cut by the page: rounded itself, as the column it fills the foot of.
+          native.setBorderRadius(Math.round((rect.radius ?? 0) * zoom))
           emulate(view, rect)
           native.setVisible(true)
           break

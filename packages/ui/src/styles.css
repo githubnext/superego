@@ -11,6 +11,7 @@
   --superego-bg: light-dark(#ffffff, #1d1d1f);          /* the sheet: the thread, its panes, dialogs */
   --superego-sidebar-bg: light-dark(#f2f2f4, #262628);  /* headers and side lists inside dialogs */
   --superego-chrome: light-dark(#f2f2f4, #262628);      /* the window's side: the sidebar, and the strip over it */
+  --superego-ground: light-dark(#ebebef, #141416);      /* the window behind the thread's columns, a step under the side */
   --superego-rail-bg: light-dark(#ebebed, #212123);     /* the rail, a shade under the sidebar beside it */
   --superego-rail-tab: light-dark(#e6e6e9, #1c1c1e);    /* the rail's tabs behind the open one */
   /* Hairlines between columns and parts: the window's every structural line, 1px. Opaque, so a line is one colour
@@ -32,9 +33,8 @@
   --superego-accent: light-dark(var(--superego-accent-base), color-mix(in oklab, var(--superego-accent-base) 92%, white));
   /* Focus rings: around the control that has the keyboard. */
   --superego-ring: var(--superego-accent);
-  /* The edge of the region holding the focus (the sidebar, the thread, a pane): neutral, a step past the hairlines, so
-     it says where you are without calling out. */
-  --superego-region-ring: color-mix(in oklab, var(--superego-line), var(--superego-text) 22%);
+  /* The region holding it: a line in the ring's colour, and a soft band of it outside, following the region's corners. */
+  --superego-region-ring: 0 0 0 1px color-mix(in srgb, var(--superego-ring) 80%, transparent), 0 0 0 4px color-mix(in srgb, var(--superego-ring) 22%, transparent);
   --superego-accent-text: #ffffff;
   --superego-link: var(--superego-accent);              /* links, and what opens a file or a thread */
   --superego-selected: light-dark(rgb(0 0 0 / .07), rgb(255 255 255 / .08));
