@@ -11,19 +11,19 @@ import { PERFORMABLE, RpcError, type ClientInfo, type Json, type RpcPeer } from 
  */
 export type Via = {
   via: ClientInfo['via']; label?: string; device?: string; elsewhere?: boolean
-  /** The name a browser reached this machine by (its tailnet name, through serve). */
-  host?: string
+  /** Through Tailscale serve: this machine's MagicDNS name on the tailnet a browser came in through. */
+  tailnet?: string
 }
 
 /**
  * Where the user's windows are, as this machine sees them: whether one is on this computer, the other computers the app
- * is on (by hostname), and whether a browser on another computer is one, and the names such browsers reached this
- * machine by.
+ * is on (by hostname), and whether a browser on another computer is one, and this machine's names on the tailnets such
+ * browsers came in through.
  */
 export type Windows = { here: boolean; elsewhere: string[]; browser: boolean; reached: string[] }
 
 export class Clients {
-  #entries = new Map<string, { info: ClientInfo; peer: RpcPeer; host?: string }>()
+  #entries = new Map<string, { info: ClientInfo; peer: RpcPeer; tailnet?: string }>()
   #listeners = new Set<(list: ClientInfo[]) => void>()
   #timer: ReturnType<typeof setTimeout> | undefined
   #hostname: string
@@ -39,7 +39,7 @@ export class Clients {
   add(peer: RpcPeer, via: Via = { via: 'socket' }): string {
     const id = `c${randomBytes(4).toString('hex')}`
     const now = Date.now()
-    this.#entries.set(id, { peer, ...(via.host ? { host: via.host } : {}), info: {
+    this.#entries.set(id, { peer, ...(via.tailnet ? { tailnet: via.tailnet } : {}), info: {
       id, kind: 'client', label: via.label ?? 'client', connectedAt: now, activeAt: now, via: via.via,
       ...(via.device ? { device: via.device } : {}), ...(via.elsewhere ? { elsewhere: true } : {}),
     } })
@@ -81,7 +81,7 @@ export class Clients {
         here: windows.some((w) => !w.elsewhere),
         elsewhere: [...new Set(windows.filter((w) => w.elsewhere && w.via === 'socket').map((w) => w.label))],
         browser: browsers.length > 0,
-        reached: [...new Set(browsers.flatMap((b) => b.host ? [b.host] : []))],
+        reached: [...new Set(browsers.flatMap((b) => b.tailnet ? [b.tailnet] : []))],
       }
     }
     return this.#windows

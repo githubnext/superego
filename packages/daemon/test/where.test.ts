@@ -69,7 +69,7 @@ it('counts windows, not agents\' command lines or other daemons, and tells a bro
   clients.hello(app, 'superego-app', 'WorkBox')
   expect(clients.windows()).toEqual({ here: true, elsewhere: [], browser: false, reached: [] })
   clients.remove(app)
-  clients.hello(clients.add(peer, { via: 'tailscale', label: 'me@example.com', elsewhere: true, host: 'workbox.tail1.ts.net' }), 'web', undefined)
+  clients.hello(clients.add(peer, { via: 'tailscale', label: 'me@example.com', elsewhere: true, tailnet: 'workbox.tail1.ts.net' }), 'web', undefined)
   expect(clients.windows()).toEqual({ here: false, elsewhere: [], browser: true, reached: ['workbox.tail1.ts.net'] })
   expect(whereYouRun(clients.windows())).toContain('ask how they reach this machine')
   expect(whereYouRun(clients.windows())).not.toContain('browser pane')
