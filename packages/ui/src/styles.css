@@ -316,6 +316,8 @@ button, summary { -webkit-user-select: none; user-select: none; }
   min-width: 200px; background: var(--superego-glass); -webkit-backdrop-filter: var(--superego-glass-blur); backdrop-filter: var(--superego-glass-blur);
   border: 0; border-radius: 14px; box-shadow: var(--superego-glass-edge), var(--superego-shadow-float); padding: 5px; outline: none; font-size: var(--superego-text-ui);
   transform-origin: var(--transform-origin); transition: opacity .1s, transform .1s;
+  /* No taller than the room on the side it opens to (Base UI's --available-height): a phone's screen, say. */
+  max-height: var(--available-height); overflow-y: auto;
 }
 .superego-menu[data-starting-style], .superego-menu[data-ending-style], .superego-popover[data-starting-style], .superego-popover[data-ending-style] { opacity: 0; transform: scale(.98); }
 .superego-menu__item { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 4px 10px; border-radius: 9px; cursor: default; outline: none; user-select: none; }

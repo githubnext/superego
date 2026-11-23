@@ -480,7 +480,8 @@ details[open] > .row > .row__chevron { transform: rotate(90deg); }
 /* The model menu (model-picker.tsx). */
 .model-picker__button { min-width: 180px; max-width: 280px; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .model-picker__popover { width: 340px; display: flex; flex-direction: column; gap: 6px; padding: 8px; }
-.model-picker__list { max-height: 340px; overflow: auto; overscroll-behavior: contain; outline: none; }
+/* The list gives way to the room the popover has (on a phone, what's left of the screen), scrolling. */
+.model-picker__list { flex: 0 1 auto; min-height: 0; max-height: 340px; overflow: auto; overscroll-behavior: contain; outline: none; }
 .model-picker__heading { font-size: var(--superego-text-xs); font-weight: 500; color: var(--superego-muted); text-transform: uppercase; letter-spacing: .04em; padding: 8px 8px 2px; }
 .model-picker__item { display: flex; align-items: center; gap: 6px; padding: 3px 4px 3px 8px; border-radius: 4px; cursor: default; user-select: none; outline: none; min-height: calc(24px * var(--superego-text-scale)); }
 .model-picker__item[data-selected]:not([data-highlighted]) { background: var(--superego-selected); }
