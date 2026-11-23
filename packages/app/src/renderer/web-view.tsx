@@ -418,8 +418,15 @@ export function placeOf(host: HTMLElement, sized = false): { rect: WebViewRect; 
     if (!scrolls(style)) continue
     for (const child of el.children) {
       if (!seen) break
-      if (child.contains(host) || getComputedStyle(child).position !== 'sticky') continue
-      seen = trim(seen, child.getBoundingClientRect())
+      const stuck = getComputedStyle(child)
+      if (child.contains(host) || stuck.position !== 'sticky') continue
+      // Stuck at an edge, it covers up to the scroller's edge there: the room between (the scroller's padding) is
+      // drawn over too (wide, the room before the thread kept in view: see app.css).
+      const o = child.getBoundingClientRect()
+      seen = trim(seen, {
+        left: stuck.left === 'auto' ? o.left : Math.min(o.left, r.left), right: stuck.right === 'auto' ? o.right : Math.max(o.right, r.right),
+        top: stuck.top === 'auto' ? o.top : Math.min(o.top, r.top), bottom: stuck.bottom === 'auto' ? o.bottom : Math.max(o.bottom, r.bottom),
+      })
     }
   }
   if (!seen || seen.right - seen.left < 1 || seen.bottom - seen.top < 1) return null
