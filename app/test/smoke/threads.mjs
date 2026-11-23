@@ -56,6 +56,8 @@ export default async function threads(t, s) {
   site.close()
   // ⌃O lists the links the thread drew (each claimed by what opens it): the web page and the thread it names.
   await t.call('thread.send', { thread: s.hello, text: `From [this thread](thread:${s.hello})` })
+  // Listed as the transcript is as the list opens: once the link is drawn.
+  await t.until(`Boolean(document.querySelector('.md a[href="thread:${s.hello}"]'))`, 'the thread link drawn')
   t.key('o', ['control'])
   await t.until(`(() => { const items = [...document.querySelectorAll('.links .palette__list li')].map((li) => li.textContent); return items.some((t) => t.includes('127.0.0.1')) && items.some((t) => t.includes('this thread')) })()`, 'links listed')
   t.key('Escape', [])
