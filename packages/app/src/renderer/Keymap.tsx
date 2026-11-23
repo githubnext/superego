@@ -1,4 +1,4 @@
-// Settings → Keyboard: every action that runs without asking for more, with its shortcut. Click one and press keys to
+// Settings → Hotkeys: every action that runs without asking for more, with its shortcut. Click one and press keys to
 // change it; ⌫ removes it, Esc keeps it. What differs from the actions' own is all that is stored (`app.keys`).
 import { useState, type KeyboardEvent } from 'react'
 import type { ActionInfo, Json, SettingInfo } from '@superego/protocol'

@@ -54,12 +54,12 @@ export const PANE_LAYOUT_SETTING: SettingSpec = {
 }
 
 /**
- * Register the app's own sections in `settings`: Appearance, Keyboard and Notifications everywhere; on the desktop (`desktop`, with
- * whether it's macOS), Menu bar too. `themes`: where imported themes are kept, listed as Appearance's data (none: no imports).
+ * Register the app's own sections in `settings`: Appearance and Hotkeys (each a tab of Settings of its own) and
+ * Notifications everywhere; on the desktop (`desktop`, with whether it's macOS), Menu bar too. `themes`: where imported themes are kept, listed as Appearance's data (none: no imports).
  */
 export function registerAppSettings(settings: SettingsRegistry, { desktop, themes }: { desktop?: { app: AppConfig; mac: boolean }; themes?: ThemeStore } = {}) {
   settings.register({
-    id: 'appearance', title: 'Appearance', order: 50,
+    id: 'appearance', title: 'Appearance', order: 50, tab: 'appearance',
     data: async () => (themes ? await themes.list() : { themes: [], problems: [] }) satisfies ImportedThemes as unknown as Json,
     settings: [
       { key: INTERFACE_FONT, title: 'Interface font', default: null, type: { type: 'font', nullLabel: 'System' } },
@@ -85,7 +85,7 @@ export function registerAppSettings(settings: SettingsRegistry, { desktop, theme
     ],
   })
   settings.register({
-    id: 'keyboard', title: 'Keyboard', order: 65,
+    id: 'hotkeys', title: 'Hotkeys', order: 65, tab: 'hotkeys',
     settings: [{
       key: KEYMAP, title: 'Shortcuts', default: {},
       description: 'Every action that runs without asking for more. Click a shortcut and press new keys; ⌫ removes it, Esc keeps it.',

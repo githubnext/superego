@@ -144,7 +144,7 @@ export function Shell() {
   const setup = useSetup()
 
   const settingsButton = (
-    <IconButton label="Settings" className={`app__settings ${tab === 'settings' ? 'is-on' : ''}`} onClick={openSettings}>
+    <IconButton label="Settings" className={`app__settings ${tab === 'settings' ? 'is-on' : ''}`} onClick={() => openSettings()}>
       <GearSixIcon size={18} aria-hidden />
     </IconButton>
   )
@@ -378,7 +378,7 @@ function useAppearance() {
  * (a Browser pane's) that has the keyboard gets key presses before this window could, so the main process takes
  * these ones first and hands them back (`app.key`, see useAppEvents). Answers `runKeys`, which runs the action bound
  * to a shortcut, through the same router the palette and other code dispatch through; with two on one shortcut, the
- * first registered wins (Settings → Keyboard shows the clash). It says whether one ran.
+ * first registered wins (Settings → Hotkeys shows the clash). It says whether one ran.
  */
 function useKeyRouting() {
   const registry = useRegistry()

@@ -90,7 +90,7 @@ it('closes on Esc, and on ⌘U again', async () => {
   await ui.until(() => !$('.unread-list'), 'closed by ⌘U')
 })
 
-it('takes another key set in Settings → Keyboard', async () => {
+it('takes another key set in Settings → Hotkeys', async () => {
   ui = await mountUi({ window: true, extensions: [unread], machines: [machineWith(threads())] })
   await ui.dispatch('app.settings.set', { key: 'app.keys', value: { 'unread.list': 'mod+shift+u' } })
   // ⌘U no longer opens it (else ⌘⇧U would close it again).

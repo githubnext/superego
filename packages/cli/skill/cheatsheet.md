@@ -55,7 +55,7 @@ and [ui.md](ui.md) have the full tables.
 | `work(divide)` | split a run of work into titled parts (tasks); bundled only |
 | `action(defineAction({ id, keys, when, run }))` | a window action with keys, in ⌘K while `when(context)` holds; a profile's only while one of its threads is shown |
 | `store('open', initial, { persist })` → `get`, `set`, `use()` | a store its actions and components share, kept as `<name>.open` (`'<name>.open'` is the same one) |
-| `appSettings({ id, settings })` | per-user settings; `useAppSetting(key)`, `context.appSetting(key)`; bundled only |
+| `appSettings({ id, settings, tab? })` | per-user settings, in Settings → General (or `tab`); `useAppSetting(key)`, `context.appSetting(key)`; bundled only |
 | `settings(ui, Component)` | draw under a settings section that names `ui` |
 | `dispatch(id, params, { machine })` | run any action outside React |
 

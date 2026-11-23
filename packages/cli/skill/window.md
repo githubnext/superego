@@ -63,7 +63,7 @@ superego.view('ego.button', { title: 'Ask Ego', icon: LifebuoyIcon, context: 'wi
 
   A right-click on a view in the window (its ··· beside the thread, its entry in the pane menu) has *Move to*, *Remove
   from here* and *Edit layout…*; a pane's ··· has *Move to* among the pane's own (*Maximize*, *Close*). ⌘K offers each view in each place it fits and isn't in (*Show Files beside the thread*), and *Reset
-  layout*. Settings → General → Layout has *Edit layout…* and *Reset*, and no layout can take Settings away: the
+  layout*. Settings → Appearance → Layout has *Edit layout…* and *Reset*, and no layout can take Settings away: the
   rail always has it, and a phone's drawer, or its top bar while there's no space. A browser keeps its layout itself:
   there *Edit layout…* opens it in a dialog. So `default` is only where a view starts. Draw it to work in every place it `fits`
   (read `place` when it must differ: a menu's side, a button's size), never assume another view sits beside it, and

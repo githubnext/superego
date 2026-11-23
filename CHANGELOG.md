@@ -25,6 +25,8 @@
   pane no longer takes the focus and scrolls itself into view, and the pane you had focused keeps the focus.
 - Each thread remembers how wide you made its column and its panes, as a proportion of the window: they're kept as you
   switch threads, resize the window, restart, or open the thread in another window or on another device.
+- Settings has Appearance and Hotkeys tabs of their own beside General. Extensions' app settings stay in General
+  unless they ask for another tab (`tab: 'appearance'` or `'hotkeys'`).
 
 ## 0.1.10
 

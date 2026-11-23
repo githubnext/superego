@@ -1,5 +1,6 @@
-// Settings, drawn generically from what each endpoint registers: the app's own settings and every machine's. Sections
-// may name a custom component (`ui`) drawn below their settings; the Providers section is one.
+// Settings, drawn generically from what each endpoint registers: the app's own settings (on its three tabs, see
+// settings/tabs.ts) and every machine's. Sections may name a custom component (`ui`) drawn below their settings; the
+// Providers section is one.
 import { Fragment, useEffect } from 'react'
 import type { Json, SectionInfo, SettingsSnapshot } from '@superego/protocol'
 import { BaseUI, Dialog, Glyph } from '@superego/ui'
@@ -9,24 +10,22 @@ import { useSettings, useValue } from './client.ts'
 import { Contained } from './contained.tsx'
 import { useRegistry } from './registry.tsx'
 import { settingsEntry } from './lookups.ts'
-import { useLocalState } from './local-state.ts'
 import { COMPACT, useMedia } from './media.ts'
 import { Setting } from './settings/controls.tsx'
 import { AllMachines, machineGlyph, Machines } from './settings/machines.tsx'
+import { ALL, APP_TABS, appTab, appTarget, MACHINES, openTarget, sectionTab } from './settings/tabs.ts'
+import { useSettingsTarget } from './state.tsx'
 import { ThemeTools, useChosenThemes } from './themes.tsx'
-
-/** Settings → Machines (also opened by Update: see actions.tsx). */
-const MACHINES = '$machines'
-const ALL = '$all'
 
 /** Settings: wide, a pane beside the rail (Escape goes back); on a phone, a dialog. */
 export function SettingsView({ machines, onClose, pane = false }: { machines: MachineEntry[]; onClose(): void; pane?: boolean }) {
-  const [kept, setTarget] = useLocalState('settings.target', APP)
-  // The section kept from last time, unless its machine has gone since.
-  const target = kept === APP || kept === MACHINES || kept === ALL || machines.some((m) => m.id === kept) ? kept : APP
+  const [kept, setTarget] = useSettingsTarget()
+  const target = openTarget(kept, machines)
+  const tab = appTab(target)
   const machine = machines.find((m) => m.id === target)
-  const connected = target === APP || machine?.state === 'connected'
-  const snapshot = useSettings(target, target !== MACHINES && target !== ALL && connected)
+  const endpoint = tab ? APP : target
+  const connected = Boolean(tab) || machine?.state === 'connected'
+  const snapshot = useSettings(endpoint, target !== MACHINES && target !== ALL && connected)
   const editable = machines.filter((m) => m.state === 'connected')
   useEffect(() => {
     if (!pane) return
@@ -35,13 +34,19 @@ export function SettingsView({ machines, onClose, pane = false }: { machines: Ma
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [pane, onClose])
+  // An app tab shows the app's sections under it; a machine's, all of its own. A section shows when it has something
+  // to: a setting not hidden, or a component of its own.
+  const sections = snapshot?.sections
+    .filter((section) => !tab || sectionTab(section) === tab)
+    .filter((section) => section.ui || section.settings.some((s) => !s.hidden))
+  const tabTitle = APP_TABS.find((t) => t.tab === tab)?.title
 
   // Down the side, wide; across the top on a phone (app.css), where the arrow keys follow.
   const across = useMedia(COMPACT)
   const body = (
     <BaseUI.Tabs.Root className="settings__body" orientation={across ? 'horizontal' : 'vertical'} value={target} onValueChange={(value: string) => setTarget(value)}>
       <BaseUI.Tabs.List className="settings__nav" render={<nav />}>
-        <BaseUI.Tabs.Tab value={APP}>General</BaseUI.Tabs.Tab>
+        {APP_TABS.map((t) => <BaseUI.Tabs.Tab key={t.tab} value={appTarget(t.tab)}>{t.title}</BaseUI.Tabs.Tab>)}
         <BaseUI.Tabs.Tab value={MACHINES}>Machines</BaseUI.Tabs.Tab>
         {editable.length > 1 && <BaseUI.Tabs.Tab value={ALL}>All machines</BaseUI.Tabs.Tab>}
         {machines.filter((m) => m.state !== 'disabled').map((m) => (
@@ -54,8 +59,11 @@ export function SettingsView({ machines, onClose, pane = false }: { machines: Ma
         {target === MACHINES ? <Machines machines={machines} onOpen={setTarget} />
           : target === ALL ? <AllMachines machines={editable} />
           : !connected ? <p className="settings__note">{machine?.label} is {machine?.state}. Its settings live on it, so they show once it is back.</p>
-          : !snapshot ? <p className="settings__note">Loading…</p>
-          : snapshot.sections.filter((section) => section.ui || section.settings.some((s) => !s.hidden)).map((section) => <Section key={section.id} machine={machine} target={target} section={section} values={snapshot.values} />)}
+          : !sections ? <p className="settings__note">Loading…</p>
+          : sections.map((section) => (
+            // Its heading goes where the tab already says it (Appearance under Appearance).
+            <Section key={section.id} machine={machine} target={endpoint} section={section} values={snapshot!.values} heading={section.title !== tabTitle} />
+          ))}
       </BaseUI.Tabs.Panel>
     </BaseUI.Tabs.Root>
   )
@@ -64,7 +72,7 @@ export function SettingsView({ machines, onClose, pane = false }: { machines: Ma
     : <Dialog title="Settings" size="large" onClose={onClose} className="settings">{body}</Dialog>
 }
 
-function Section({ machine, target, section, values }: { machine: MachineEntry | undefined; target: string; section: SectionInfo; values: SettingsSnapshot['values'] }) {
+function Section({ machine, target, section, values, heading }: { machine: MachineEntry | undefined; target: string; section: SectionInfo; values: SettingsSnapshot['values']; heading: boolean }) {
   const registry = useRegistry()
   const dispatch = registry.router.dispatch
   const custom = section.ui ? settingsEntry(registry, section.ui, target) : undefined
@@ -75,7 +83,7 @@ function Section({ machine, target, section, values }: { machine: MachineEntry |
   const { accentThemed } = useChosenThemes()
   return (
     <section className="settings-section">
-      <h2>{section.title}</h2>
+      {heading && <h2>{section.title}</h2>}
       {section.description && <p className="settings__note">{section.description}</p>}
       {shown.map((setting, index) => (
         <Fragment key={setting.key}>

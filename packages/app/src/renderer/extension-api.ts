@@ -409,8 +409,8 @@ export type UiApi = {
   /** Run any action (window, app or machine) through the window's router, outside React. In components: `useDispatch`. */
   dispatch: Dispatch
   /**
-   * Settings of this UI half, kept by the app (per user, not per machine) and shown in Settings → General. Keys are
-   * named `<extension>.<key>`. Read and change them with `useAppSetting`.
+   * Settings of this UI half, kept by the app (per user, not per machine) and shown in Settings → General, or under
+   * the section's `tab` (`'appearance'`, `'hotkeys'`). Keys are named `<extension>.<key>`. Read and change them with `useAppSetting`.
    */
   appSettings(section: DeclaredSection): void
   /**

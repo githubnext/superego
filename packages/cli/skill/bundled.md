@@ -110,8 +110,8 @@ Bundled extensions get more than a profile's:
 - **A store** for actions and components to share: `const open = superego.store('orders.open', false)` in setup,
   `open.set(true)` in an action, `open.use()` in a component; `{ persist: true }` keeps it across reloads. No module
   globals that rendering sets.
-- **App settings** (per user, in Settings → General): `superego.appSettings({ id, title, settings: [{ key: 'orders.x', … }] })`,
-  read with `useAppSetting('orders.x')`, or `context.appSetting('orders.x')` in an action.
+- **App settings** (per user, in Settings → General, or Appearance or Hotkeys with `tab: 'appearance'` or `'hotkeys'`):
+  `superego.appSettings({ id, title, settings: [{ key: 'orders.x', … }] })`, read with `useAppSetting('orders.x')`, or `context.appSetting('orders.x')` in an action.
 - **Machine settings** from the daemon half: `superego.settings.register({ id: 'orders', title, settings: [{ key: 'orders.x', title, default, type }] })`.
 - **A settings section drawn your own way**, for what isn't a list of settings (a machine's MCP servers, its
   providers): the daemon half registers `{ id, title, ui: 'orders', settings: [], value: 'orders.list' }`, naming a

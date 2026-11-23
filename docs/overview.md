@@ -113,7 +113,7 @@ project    a git repository (its worktrees too) or a folder, on a machine
 | `⌘⇧W` | Close the window (Superego keeps running) |
 | `⌘,` | Settings |
 
-Every one is an action: Settings → Keyboard changes them, `⌘K` lists them, `superego do <id>` runs a machine's from a shell.
+Every one is an action: Settings → Hotkeys changes them, `⌘K` lists them, `superego do <id>` runs a machine's from a shell.
 Focus is always visible: the region holding it (the sidebar, the thread, a pane) wears one solid ring, from a click or a key alike.
 
 ## Layout

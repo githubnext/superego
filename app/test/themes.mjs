@@ -66,6 +66,8 @@ await openApp({ name: 'themes', timeout: 240_000 }, async (t) => {
   await setting('app.theme.light', 'github-light')
   await setting('app.theme.dark', 'tokyo-night')
   t.key(',')
+  await until(`Boolean(document.querySelector('.settings__nav'))`, 'Settings')
+  await t.click('.settings__nav button', 'Appearance')
   await until(`Boolean(document.querySelector('[data-key="app.theme.dark"]')) && Boolean(document.querySelector('.theme-tools .setting'))`, 'Settings → Appearance with an imported theme')
   await run(`document.querySelector('[data-key="app.theme.light"]').scrollIntoView({ block: 'start' })`)
   await t.both('themes-settings')

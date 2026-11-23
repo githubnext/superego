@@ -71,7 +71,7 @@ export default async function web(t, s) {
   await b.until(`Boolean(document.querySelector('.app__mobilebar .app__settings')) && Boolean(document.querySelector('.app__mobilebar button.app__mobiletitle')) && !document.querySelector('.app__mobilebar [aria-label="Threads"]')`, 'a phone with no space keeps its bar and Settings')
   await b.click('.app__mobilebar .app__settings')
   await b.until(`Boolean(document.querySelector('.settings__nav button'))`, 'Settings on a phone')
-  await b.click('.settings__nav button', 'General')
+  await b.click('.settings__nav button', 'Appearance')
   await b.until(`[...document.querySelectorAll('.setting[data-key="app.layout"] button')].some((b) => b.textContent === 'Edit layout…')`, 'the layout in Settings')
   await b.click('.setting[data-key="app.layout"] button', 'Edit layout…')
   await b.until(`Boolean(document.querySelector('.layout-editor__text')) && !document.querySelector('.settings')`, "the browser's layout in a dialog")

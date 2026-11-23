@@ -56,11 +56,19 @@ export type SettingInfo = SettingType & {
   problem?: string
 }
 
+/**
+ * The tabs of the app's own Settings an app section can show under: General, unless it says otherwise. A machine's
+ * sections have a tab each of their own, the machine's, and go without.
+ */
+export type AppSettingsTab = 'general' | 'appearance' | 'hotkeys'
+
 export type SectionInfo = {
   id: string
   title: string
   description?: string
   order: number
+  /** An app section's tab (General when left out). */
+  tab?: AppSettingsTab
   settings: SettingInfo[]
   /** A custom component the client draws below the settings, by id (e.g. "providers"). */
   ui?: string
@@ -78,6 +86,8 @@ export type DeclaredSection = {
   title: string
   description?: string
   order?: number
+  /** Its tab in the app's Settings (General when left out). */
+  tab?: AppSettingsTab
   /** `hidden`: kept, and changed where its owner offers it (a view's menu, a shortcut), but not shown in Settings. */
   settings: (SettingType & { key: string; title: string; description?: string; default: Json; hidden?: boolean })[]
 }

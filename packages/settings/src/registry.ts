@@ -5,7 +5,7 @@
 // A `secret` setting's value isn't kept with the others: it's in a `SecretStore` (the machine's keychain, or an encrypted
 // file), and what the registry tells anyone (`get`, a snapshot) is only whether it's set. Its value is read with
 // `secret(key)`, by the extension that owns it, and changed only with `setSecret`.
-import { RpcError, type DeclaredSection, type Json, type SectionInfo, type SettingInfo, type SettingsSnapshot, type SettingType } from '@superego/protocol'
+import { RpcError, type AppSettingsTab, type DeclaredSection, type Json, type SectionInfo, type SettingInfo, type SettingsSnapshot, type SettingType } from '@superego/protocol'
 
 /** A setting type that isn't `secret`: those whose values the registry keeps itself. */
 export type PlainSettingType = Exclude<SettingType, { type: 'secret' }>
@@ -34,6 +34,8 @@ export type SectionSpec = {
   title: string
   description?: string
   order?: number
+  /** An app section's tab in Settings (General when left out). */
+  tab?: AppSettingsTab
   settings: SettingSpec[]
   ui?: string
   /** Read-only state for the custom component, read with each snapshot. */
@@ -328,6 +330,7 @@ export class SettingsRegistry {
       sections.push({
         id: section.id, title: section.title, order: section.order ?? 100, settings,
         ...(section.description ? { description: section.description } : {}),
+        ...(section.tab ? { tab: section.tab } : {}),
         ...(section.ui ? { ui: section.ui } : {}),
         ...(data !== undefined ? { data } : {}),
         ...(section.value ? { value: section.value } : {}),

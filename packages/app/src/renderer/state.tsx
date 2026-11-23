@@ -11,7 +11,7 @@ import { useRegistry } from './registry.tsx'
 import { useImageRechecks } from './images.tsx'
 import { useListedProfileUis } from './profile-ui.ts'
 import { emptyHistory, step, visit, type History, type Place } from './history.ts'
-import { setLocalState, useLocalState } from './local-state.ts'
+import { useLocalState } from './local-state.ts'
 import { focusProvider } from './provider-focus.ts'
 import { useWindowEvents } from './window-events.ts'
 import { Notifications } from './notifications.tsx'
@@ -19,7 +19,7 @@ import { freeze, pinnedFirst, projectKey, stillFolded, useProjectList, wayTo, ty
 import { PINS, pinsOf, SHOW_PINNED, stillListed, type Pin } from './pins.ts'
 import { sidebarIsHidden, showSidebar, type SidebarMode } from './sidebar-mode.ts'
 import { TIGHT, useMedia } from './media.ts'
-import { APP } from '../shared/app-settings.ts'
+import { GENERAL } from './settings/tabs.ts'
 import { pruneWebViews } from './kept-web-views.ts'
 
 /** The thread the window shows: its machine's id and its own. */
@@ -40,6 +40,9 @@ type ShellState = {
   select(selection: Selection | undefined): void
   settingsOpen: boolean
   openSettings(open?: boolean): void
+  /** The tab Settings shows (see settings/tabs.ts), kept from last time. */
+  settingsTarget: string
+  setSettingsTarget(target: string): void
   newThread: NewThreadStart | undefined
   openNewThread(start?: NewThreadStart | false): void
   /** Every project, in the sidebar's order; held still while `hold` says so. */
@@ -122,18 +125,22 @@ export function useHistory() {
 }
 /** The shell's own actions. */
 export function useShell() {
-  const { openSettings, openNewThread } = useShellState()
+  const { openSettings, openNewThread, setSettingsTarget } = useShellState()
   return {
-    openSettings: () => openSettings(true),
+    /** Settings: at a tab (its target, see settings/tabs.ts), or as it was left. */
+    openSettings: (at?: string) => {
+      if (at !== undefined) setSettingsTarget(at)
+      openSettings(true)
+    },
     /** Settings, on a machine's Providers, at `provider`: to sign in to it again. */
     signIn: (machine: string, provider: string) => {
-      setLocalState('settings.target', machine, APP)
+      setSettingsTarget(machine)
       focusProvider(machine, provider)
       openSettings(true)
     },
     /** Settings, on a machine's Providers. */
     providers: (machine: string) => {
-      setLocalState('settings.target', machine, APP)
+      setSettingsTarget(machine)
       focusProvider(machine, '')
       openSettings(true)
     },
@@ -148,6 +155,7 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
   // Which thread and whether Settings is open: as the window was left, after a reload too.
   const [selection, setSelection] = useLocalState<Selection | undefined>('selection', undefined)
   const [settingsOpen, setSettingsOpen] = useLocalState('settings.open', false)
+  const [settingsTarget, setSettingsTarget] = useLocalState('settings.target', GENERAL)
   const [newThread, setNewThread] = useState<NewThreadStart>()
   const [sidebarOpen, setSidebarOpen] = useLocalState('sidebar.open', true)
   const [sidebarShownTight, setSidebarShownTight] = useState(false)
@@ -270,13 +278,15 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
     },
     select: (next) => { setSettingsOpen(false); setNewThread(undefined); setSelection(next) },
     openSettings: (open = true) => setSettingsOpen(open),
+    settingsTarget,
+    setSettingsTarget,
     openNewThread: (start = {}) => setNewThread(start === false ? undefined : start),
     showSidebar: (open) => {
       const next = showSidebar(sidebarMode, tight, open)
       setSidebarOpen(next.open)
       setSidebarShownTight(next.shownTight)
     },
-  }), [machines, threads, rejections, selection, settingsOpen, newThread, projects, sidebar, pins, lastThread, sidebarOpen, sidebarShownTight, tight, archived, hidden, hiddenAll, history, listed])
+  }), [machines, threads, rejections, selection, settingsOpen, settingsTarget, newThread, projects, sidebar, pins, lastThread, sidebarOpen, sidebarShownTight, tight, archived, hidden, hiddenAll, history, listed])
   return (
     <Context.Provider value={value}>
       {machines.filter((m) => m.state !== 'disabled').map((m) => <MachineThreads key={m.id} machine={m} onThreads={onThreads} onHidden={onHidden} onRejections={onRejections} />)}
@@ -339,4 +349,10 @@ export function useNewThreadDialog() {
 export function useSettingsDialog() {
   const { settingsOpen, openSettings } = useShellState()
   return { open: settingsOpen, close: () => openSettings(false) }
+}
+
+/** For Settings: the tab it shows (its target, see settings/tabs.ts), as kept, and going to another. */
+export function useSettingsTarget(): [string, (target: string) => void] {
+  const { settingsTarget, setSettingsTarget } = useShellState()
+  return [settingsTarget, setSettingsTarget]
 }

@@ -13,7 +13,8 @@ import { isPinned, pinAt, PINS, pinsOf, unpin, type Pin } from './pins.ts'
 import { focusBeside, focusColumn, focusPrompt, focusThread } from './focus.ts'
 import { scrollHalfPage } from './scroll.ts'
 import { startRename } from './rename.ts'
-import { setLocalState, windowState } from './local-state.ts'
+import { windowState } from './local-state.ts'
+import { MACHINES } from './settings/tabs.ts'
 import { giveBack } from './returned.ts'
 import { clearProblem, reportProblem } from './machine-problems.ts'
 import { openSetup } from './Setup.tsx'
@@ -27,7 +28,8 @@ export type WindowContext = {
   machines: MachineEntry[]
   selection: Selection | undefined
   select(selection: Selection | undefined): void
-  openSettings(): void
+  /** Settings: at a tab (its target, see settings/tabs.ts), or as it was left. */
+  openSettings(at?: string): void
   newThread(start?: NewThreadStart): void
   togglePalette(): void
   showLog(): void
@@ -254,9 +256,8 @@ export const coreActions = (app: AppConfig): WindowAction[] => [
     when: (c) => c.machines.some((m) => m.remote && m.state === 'connected'),
     run: async ({ machine }, c) => {
       const id = machine ?? updatable(c)
-      // Settings, at Machines (SettingsView's own section key), where the update's output shows.
-      setLocalState('settings.target', '$machines', APP)
-      c.openSettings()
+      // Settings, at Machines, where the update's output shows.
+      c.openSettings(MACHINES)
       if (!id) return
       await window.superego.call(APP, 'app.updateMachine', { machine: id })
     },

@@ -2,7 +2,7 @@
 # The window's layout in the states the design covers, screenshotted:
 # `test/look.sh <dir> [look|focus|panes|panehead|composer|images|mcp|web|terminal|toolbar|titlebar|titlebar-fit|pins|folds|states|cards|dialogs|machines|staff|picker|providers|keptpage|themes|claude-agent|setup]` (look, unless given), each a script of
 # that name here:
-# - `look`: the sidebar shown, dragged and hidden, the thread alone and with panes, details, a phone; ⌘N's dialog, Settings and its Keyboard;
+# - `look`: the sidebar shown, dragged and hidden, the thread alone and with panes, details, a phone; ⌘N's dialog, Settings' General, Appearance and Hotkeys (a clash too);
 # - `focus`: each region holding the focus;
 # - `panes`: a thread's panes scrolled and stacked;
 # - `panehead`: panes' heads (a tab, an editor's bar, the Browser pane's toolbar) at rest and with what's under them scrolled;

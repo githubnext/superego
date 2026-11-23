@@ -1,11 +1,14 @@
 // Settings as only the desktop app has them: the installed fonts, machines over ssh and through a command, the menu bar
-// and the Dock, and a restart onto new daemon code. (Keyboard, the accent, a provider's key: window-settings.test.ts.)
+// and the Dock, and a restart onto new daemon code. (Hotkeys, the accent, a provider's key: window-settings.test.ts.)
 import { home, restartOntoNewCode, STRAY } from './common.mjs'
 import { writeFileSync } from 'node:fs'
 
 export default async function settings(t, s) {
   await t.click('.app__settings')
-  await t.until(`document.querySelector('.settings')?.textContent.includes('Appearance') && document.querySelector('.settings').textContent.includes('Notifications')`, 'app settings')
+  await t.click('.settings__nav button', 'General')
+  await t.until(`document.querySelector('.settings__content')?.textContent.includes('Notifications') && document.querySelector('.settings__content').textContent.includes('Menu bar')`, 'General')
+  await t.click('.settings__nav button', 'Appearance')
+  await t.until(`Boolean(document.querySelector('[data-key="app.font.interface"]'))`, 'Appearance')
   // Fonts: the picker lists installed families (the harness's, here; it needs a user gesture), and a choice sets the
   // CSS variable.
   await t.run(`document.querySelector('[data-key="app.font.interface"] .superego-font-picker__button').click()`, true)
@@ -64,8 +67,8 @@ export default async function settings(t, s) {
   // brings up a daemon of that build, with the threads still there.
   await restartOntoNewCode(t, () => writeFileSync(STRAY, '// smoke\n'))
   // The dialog: Escape in the font picker closes only the picker; the next Escape closes Settings.
-  await t.click('.settings__nav button', 'General')
-  await t.until(`Boolean(document.querySelector('[data-key="app.font.mono"]'))`, 'general pane')
+  await t.click('.settings__nav button', 'Appearance')
+  await t.until(`Boolean(document.querySelector('[data-key="app.font.mono"]'))`, 'Appearance')
   await t.run(`document.querySelector('[data-key="app.font.mono"] .superego-font-picker__button').click()`, true)
   await t.until(`document.activeElement?.placeholder === 'Search fonts'`, 'picker focused')
   t.key('Escape', [])

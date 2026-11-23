@@ -23,6 +23,8 @@ const open = async (extensions: MountOptions['extensions'] = []) => {
   daemon = await testDaemon({ model: 'echo' })
   ui = await mountUi({ window: true, machines: [daemon], extensions })
   $('.app__settings')!.click()
+  await ui.until(() => Boolean($$('.settings__nav [role="tab"]').length), 'Settings')
+  $$('.settings__nav [role="tab"]').find((t) => t.textContent === 'Appearance')!.click()
   await ui.until(() => Boolean(picker('light') && picker('dark')), 'the theme pickers')
 }
 afterEach(async () => { await ui.unmount(); await daemon.close() })

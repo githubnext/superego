@@ -100,7 +100,7 @@ export function createDesktop({ app: appConfig, headless, settings, machines, se
         { label: `Quit ${appConfig.name}`, accelerator: 'CommandOrControl+Q', click: quitKey },
       ],
     } satisfies MenuItemConstructorOptions] : []),
-    // The window's own action has the shortcut (Settings → Keyboard): the menu shows it without taking it first.
+    // The window's own action has the shortcut (Settings → Hotkeys): the menu shows it without taking it first.
     {
       label: 'File',
       submenu: [
