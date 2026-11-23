@@ -11,15 +11,17 @@
 - `superego extensions` shows each extension's own folder in `~/.superego/extensions`, and lists those left behind by
   profiles that are gone, for you to delete.
 - API keys typed into a sign-in no longer show in the action log (`superego actions log`).
-- The thread and its panes stand as rounded sheets with room around them, and the one you're in wears a soft ring in
-  the accent colour that follows its corners, in place of the square border. The sidebar's selected thread is lit
-  while the sidebar has the focus.
+- A new macOS look: the sidebar is an inset glass panel, the thread and its panes are rounded sheets, and controls and
+  menus are softer.
+- The pane or thread you're in has a soft ring in the accent colour instead of a square border, and its tab is no
+  longer tinted.
+- Match window to theme (Settings → Appearance): the whole window in your theme's colours, not only code and the
+  terminal.
 - When your window is on another computer, agents no longer hand you `localhost` addresses (the Browser pane still
   opens them), and when an address is needed they use this machine's real Tailscale name on your tailnet.
 - On a phone, New thread and other dialogs stay put when the keyboard comes up: they end at the keyboard with their
   header on top, and the field you're typing in stays in sight. The prompt no longer offers to AutoFill a contact, and
   New thread's Model and Thinking menus no longer overlap.
-- The focused pane's or thread's tab is no longer tinted with the accent.
 - Signing in to GitHub Copilot: the code to enter has a Copy button, and opening GitHub's page copies it too.
 - When GitHub stops accepting a GitHub Copilot sign-in, threads wait for you to sign in again instead of failing with an
   error.
