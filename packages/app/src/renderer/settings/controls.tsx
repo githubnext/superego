@@ -56,7 +56,7 @@ export function Setting({ setting, value, apply, mixed, note, inUse }: {
     case 'pins': return null
     // The Model section's own list draws them (settings/models.tsx).
     case 'models': return null
-    case 'string': control = <TextField type={setting.secret ? 'password' : 'text'} aria-label={setting.title} defaultValue={typeof value === 'string' ? value : ''}
+    case 'string': control = <TextField type="text" aria-label={setting.title} defaultValue={typeof value === 'string' ? value : ''}
       placeholder={setting.placeholder} disabled={disabled} onBlur={(e) => set(e.target.value)} />; break
     case 'secret': control = <SecretField label={setting.title} isSet={value === true} placeholder={setting.placeholder} disabled={disabled} apply={(next) => { setError(undefined); return apply(next).catch((e: Error) => { setError(e.message); throw e }) }} />; break
   }

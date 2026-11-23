@@ -175,6 +175,8 @@ export class SettingsRegistry {
     for (const setting of section.settings) {
       if (this.#settings.has(setting.key)) throw new Error(`Setting ${setting.key} is already registered`)
       if (isSecret(setting) && !this.#secrets) throw new Error(`Setting ${setting.key} is a secret, and there's no secret store here: secrets are a machine's settings`)
+      // A masked text field was a key kept in the clear: gone for `secret`, said rather than drawn plainly.
+      if (typeof setting.type === 'object' && setting.type.type === 'string' && 'secret' in setting.type) throw new Error(`Setting ${setting.key}: a string setting is no longer masked (secret: true); make it { type: 'secret' } to keep it in the keychain`)
       if (isSecret(setting) && !SECRET_KEY.test(setting.key)) throw new Error(`Secret ${JSON.stringify(setting.key)}: a secret's key is lowercase letters, digits, ".", "_" and "-"`)
     }
     this.#sections.set(section.id, section)
@@ -275,8 +277,7 @@ export class SettingsRegistry {
   }
 
   /**
-   * A value kept with the settings under a key that is a secret now (a `string` setting with `secret: true` before,
-   * which only masked it): moved into the secret store, unless the store has one already, and out of the settings file.
+   * A value kept with the settings under a key that is a secret now (a `string` setting before, masked or not): moved into the secret store, unless the store has one already, and out of the settings file.
    * Failing, it stays where it was, and says why.
    */
   #moveIntoStore(key: string) {

@@ -9,8 +9,8 @@ export type SettingOption = { value: string; label: string; description?: string
 
 export type SettingType =
   | { type: 'boolean' }
-  /** Text. `secret`: only drawn masked in Settings; the value is a setting like any other, so not for keys (see `secret`). */
-  | { type: 'string'; placeholder?: string; secret?: boolean }
+  /** Text, in the clear: a key or token is a `secret`. */
+  | { type: 'string'; placeholder?: string }
   /**
    * A key or token, kept in the machine's secret store (the OS keychain, or an encrypted file in the data folder), not
    * with the settings: a snapshot's value for it is only whether it's set (`true` or `false`), never the secret. Only the

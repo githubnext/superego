@@ -131,6 +131,13 @@ describe('upsert', () => {
     settings.register({ id: 'mail', title: 'Mail', settings: [{ key: 'mail.api_token-2', title: 'Key', type: { type: 'secret' } }] })
   })
 
+  it("refuses a string setting that asks to be masked: a key is a secret, kept out of the settings", () => {
+    const settings = new SettingsRegistry(new MemorySettingsStore(), new MemorySecretStore())
+    expect(() => settings.register({ id: 'mail', title: 'Mail', settings: [{ key: 'mail.token', title: 'Token', type: { type: 'string', secret: true } as never, default: '' }] }))
+      .toThrow(/make it \{ type: 'secret' \}/)
+    expect(settings.spec('mail.token')).toBeUndefined()
+  })
+
   it("says what's wrong with the whole secret store beside each secret, and lists those set that no setting asks for", async () => {
     const secrets = Object.assign(new MemorySecretStore(), { broken: undefined as string | undefined, problem() { return this.broken } })
     const settings = new SettingsRegistry(new MemorySettingsStore(), secrets)

@@ -150,8 +150,8 @@ gives the same user its items (`security find-generic-password`), and the key fi
 shell that wants the token can get it; this keeps it from leaking, it isn't a vault. A project's profile you allow runs
 with the same reach.
 
-**A `string` setting with `secret: true`** only masks the field in Settings: its value is plain text in
-`settings.json`, in every snapshot, and in `superego settings`. Don't use it for keys. Change its type to `secret` under
+**A key kept in a `string` setting** is plain text in `settings.json`, in every snapshot, and in `superego settings`
+(a string's `secret: true`, which only masked it, is gone: such a setting is refused). Change its type to `secret` under
 the same key, and the value it has moves into the secret store when the extension next sets up.
 
 ## Common patterns

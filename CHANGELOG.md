@@ -4,6 +4,9 @@
 
 - On a phone, the thread list has a search field under its title: type to find a thread by its title or project,
   archived ones too, and tap one to open it.
+- **Upgrade (extension authors):** a `string` setting's `secret: true`, which only masked the field, is gone, and a
+  setting that still has it is refused. Make it `type: { type: 'secret' }` under the same key: its value moves into
+  the keychain.
 - Setting up a model, reworked. Each way in says what it needs (your ChatGPT or Copilot plan, pay as you go, free on
   your computer), every other provider (Amazon Bedrock, Google Vertex AI, Azure and more) is signed in to right there in
   setup, and you start on the provider's recommended model, not the first one by name.
@@ -21,8 +24,9 @@
   too wide to fit scrolls all the way to its last column instead of cutting it off.
 - Extensions can ask for a key or token as a secret: you set it in Settings (or `superego secrets set <key>` in your own
   terminal), it's kept in the system keychain (or encrypted in `~/.superego` where there's none), and agents, Ego and
-  `superego settings` only ever see whether it's set. Settings says where each one is kept. A profile setting that was
-  a masked text field moves into the keychain once its extension asks for it as a secret.
+  `superego settings` only ever see whether it's set. Settings says where each one is kept, and what's wrong when its
+  store can't be read. A profile setting that was a masked text field moves into the keychain once its extension asks
+  for it as a secret.
 - A secret's field in Settings fits a narrow window, and on a phone, Escape while replacing one no longer closes
   Settings too.
 - `superego extensions` shows each extension's own folder in `~/.superego/extensions`, and lists those left behind by
