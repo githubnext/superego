@@ -62,11 +62,11 @@ export function useChosenThemes() {
   const values = useSettings(APP, true)?.values
   const light = themeFor(choices, values?.[THEME_LIGHT], 'light').theme
   const dark = themeFor(choices, values?.[THEME_DARK], 'dark').theme
-  const window = values?.[THEME_WINDOW] === true
+  const matchWindow = values?.[THEME_WINDOW] === true
   const chosen = values?.[ACCENT]
   const valid = typeof chosen === 'string' && CSS.supports('color', chosen) ? chosen : undefined
-  const themed = valid === undefined || valid === DEFAULT_ACCENT ? themeAccent(light, dark, DEFAULT_ACCENT, window) : undefined
-  return { light, dark, window, accent: themed?.accent ?? valid, accentText: themed?.text, accentThemed: Boolean(themed) }
+  const themed = valid === undefined || valid === DEFAULT_ACCENT ? themeAccent(light, dark, DEFAULT_ACCENT, matchWindow) : undefined
+  return { light, dark, matchWindow, accent: themed?.accent ?? valid, accentText: themed?.text, accentThemed: Boolean(themed) }
 }
 
 /**
@@ -75,8 +75,8 @@ export function useChosenThemes() {
  * and the accent. At once, with no reload.
  */
 export function useThemeStyle() {
-  const { light, dark, window, accent, accentText } = useChosenThemes()
-  const style = themeStyle(light, dark, window)
+  const { light, dark, matchWindow, accent, accentText } = useChosenThemes()
+  const style = themeStyle(light, dark, matchWindow)
   const key = JSON.stringify(style)
   useEffect(() => {
     const root = document.documentElement.style
