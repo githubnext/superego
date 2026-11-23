@@ -66,6 +66,8 @@ button.setup__line:hover { background: var(--superego-hover); }
 .setup__pick { flex: 1; display: flex; justify-content: space-between; gap: var(--superego-space-2); padding: 5px var(--superego-space-2) 5px 0; text-align: left; }
 .setup__pick .setup__detail { color: var(--superego-faint); }
 .setup__model:not(.is-default):not(:hover) .setup__pick .setup__detail { visibility: hidden; }
+/* Another kind's models aren't starred: their names keep off the default's fill. */
+.setup__model:not(:has(.setup__star)) .setup__pick { padding-left: var(--superego-space-2); }
 .setup__models .model-picker__button { margin-top: var(--superego-space-1); }
 .setup__models > .setup__note { margin-top: var(--superego-space-1); }
 
