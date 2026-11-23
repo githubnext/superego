@@ -97,10 +97,14 @@ function SecretField({ label, isSet, placeholder, disabled, apply }: {
   }
   const save = () => { if (text.trim()) run(text.trim()) }
   return (
-    <span className="setting__buttons">
+    <span className="setting__buttons setting__secret">
       <TextField type="password" aria-label={label} value={text} placeholder={placeholder} disabled={disabled || busy} autoComplete="off" spellCheck={false}
         autoFocus={editing} onChange={(e) => setText(e.target.value)}
-        onKeyDown={(e) => { if (e.key === 'Enter') save(); if (e.key === 'Escape' && editing) { e.preventDefault(); setText(''); setEditing(false) } }} />
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') save()
+          // Taken here: Settings, as a phone's dialog, would close on it too.
+          if (e.key === 'Escape' && editing) { e.preventDefault(); e.stopPropagation(); setText(''); setEditing(false) }
+        }} />
       <Button onClick={save} disabled={disabled || busy || !text.trim()}>Save</Button>
       {editing && <Button onClick={() => { setText(''); setEditing(false) }} disabled={busy}>Cancel</Button>}
     </span>

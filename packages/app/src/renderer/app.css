@@ -1129,7 +1129,10 @@ a.pane-header__url:hover { color: var(--superego-accent); }
 .data-view__machine-name { margin: 0 0 6px; padding: 0 6px; font-size: var(--superego-text-xs); font-weight: 500; color: var(--superego-faint); }
 .data-view__empty { color: var(--superego-muted); padding: var(--superego-space-3) 6px; }
 .data-view__error { color: var(--superego-status-error-text); font-size: var(--superego-text-sm); margin-bottom: 8px; overflow-wrap: anywhere; }
-.setting__buttons { display: flex; gap: 6px; }
+.setting__buttons { display: flex; align-items: center; gap: 6px; }
+/* A secret's field gives way first in a narrow row, so its Save and Cancel stay in it. */
+.setting__control:has(.setting__secret) { max-width: 100%; }
+.setting__secret .superego-field { flex: 1 1 auto; min-width: 0; }
 .layout-editor__text { width: 100%; min-height: 12em; font: var(--superego-text-sm) var(--superego-mono); }
 .layout-editor__actions { display: flex; justify-content: flex-end; margin-top: var(--superego-space-3); }
 
