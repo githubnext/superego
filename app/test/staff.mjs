@@ -56,6 +56,9 @@ await openApp({ name: 'staff', timeout: 240_000 }, async (t) => {
     await t.theme(theme)
     await t.shot(`staff-board-${theme}`, `document.querySelector('.staff-board').closest('[data-column]')`)
   }
+  // The site's hero (../site/shots.sh): the window's buttons drawn in, and the thread holding the focus.
   await t.resize(1440, 900)
-  await t.both('staff-wide', end)
+  await t.emulateFocus()
+  await t.lights()
+  await t.both('staff-wide', `${end}; document.querySelector('.thread__scroll').focus({ preventScroll: true, focusVisible: true })`)
 })

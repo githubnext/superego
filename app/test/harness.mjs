@@ -237,6 +237,18 @@ export async function openApp(options, body) {
       await t.until(`Math.abs(innerWidth - ${width / factor}) < 1`, `the page zoomed to ${factor}`)
       await t.settled()
     },
+    /**
+     * The window's buttons, which aren't in a screenshot of the page: stand-ins (#lights) drawn where the system puts
+     * them (trafficLightPosition, 12pt each, 20pt apart).
+     */
+    lights: () => t.run(`(() => {
+      if (document.getElementById('lights')) return
+      const lights = document.createElement('div')
+      lights.id = 'lights'
+      lights.style.cssText = 'position: fixed; z-index: 99; top: 18px; left: 18px; display: flex; gap: 8px; pointer-events: none'
+      for (const colour of ['#ff5f57', '#febc2e', '#28c840']) lights.append(Object.assign(document.createElement('span'), { style: \`width: 12px; height: 12px; border-radius: 50%; background: \${colour}\` }))
+      document.body.append(lights)
+    })()`),
     /** Screenshots in light, then dark, as `<file>-light` and `<file>-dark`; `before` runs in the page first each time. */
     async both(file, before) {
       if (!shots) return

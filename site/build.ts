@@ -168,10 +168,10 @@ function layout(o: { title: string; description?: string; current?: 'docs' | 'ch
 <meta property="og:site_name" content="Superego">
 <meta property="og:title" content="${escape(o.title)}">
 <meta property="og:description" content="${escape(o.description ?? DESCRIPTION)}">
-<meta property="og:image" content="${SITE_URL}og.png">
+<meta property="og:image" content="${SITE_URL}og.jpg">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
-<meta property="og:image:alt" content="The Superego icon, a halo over a dot, on a blue swirl">
+<meta property="og:image:alt" content="The Superego window: threads in the sidebar, one building a web page, and the page beside it">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="${BASE}icon.png">
 <link rel="stylesheet" href="${BASE}style.css">
@@ -288,12 +288,12 @@ export function build() {
   rmSync(OUT, { recursive: true, force: true })
   mkdirSync(OUT, { recursive: true })
   writeFileSync(join(OUT, 'style.css'), `${appTokens()}\n${readFileSync(join(SITE, 'style.css'), 'utf8')}`)
-  // The window, from `app/test/look.sh <dir> staff`: staff-wide-light.png and -dark.png (cwebp -q 82).
+  // The window, from `app/test/look.sh <dir> staff` (site/shots.sh makes them).
   for (const shot of ['screenshot-light.webp', 'screenshot-dark.webp']) cpSync(join(SITE, shot), join(OUT, shot))
   // The byline's avatars, from avatars.githubusercontent.com.
   for (const avatar of ['mikker.png', 'githubnext.png']) cpSync(join(SITE, avatar), join(OUT, avatar))
-  // The link preview: docs/header.webp (the README's), cropped to 1200×630.
-  cpSync(join(SITE, 'og.png'), join(OUT, 'og.png'))
+  // The link preview: the README's header scene at 1200×630 (site/shots.sh).
+  cpSync(join(SITE, 'og.jpg'), join(OUT, 'og.jpg'))
   cpSync(join(ROOT, 'app/resources/icon.png'), join(OUT, 'icon.png'))
   write('', home())
   for (const page of docs) write(urlOf(page).slice(BASE.length), docPage(page, render(page)))

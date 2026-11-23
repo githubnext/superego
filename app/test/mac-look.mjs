@@ -56,15 +56,8 @@ await openApp({ name: 'mac-look', timeout: 300_000 }, async (t) => {
       await t.shot(`${name}-${appearance}`)
     }
   }
-  // The window's buttons aren't in a screenshot of the page: stand-ins drawn where the system puts them
-  // (trafficLightPosition, 12pt each, 20pt apart), and checked to sit clear of the panel's corner.
-  await run(`(() => {
-    const lights = document.createElement('div')
-    lights.id = 'lights'
-    lights.style.cssText = 'position: fixed; z-index: 99; top: 18px; left: 18px; display: flex; gap: 8px; pointer-events: none'
-    for (const colour of ['#ff5f57', '#febc2e', '#28c840']) lights.append(Object.assign(document.createElement('span'), { style: \`width: 12px; height: 12px; border-radius: 50%; background: \${colour}\` }))
-    document.body.append(lights)
-  })()`)
+  // The window's buttons, drawn in, and checked to sit clear of the panel's corner.
+  await t.lights()
   const panel = `(() => { const s = getComputedStyle(document.querySelector('.app'), '::before'); return { top: parseFloat(s.top), right: parseFloat(s.left) + parseFloat(s.width) } })()`
   const clear = async (what) => {
     const { top, right } = await run(panel)

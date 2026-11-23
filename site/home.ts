@@ -1,6 +1,6 @@
 // The home page: what Superego is, one configured workbench (the Chief of Staff) with marker rings on the parts that
 // were asked for, what's built in, and what an extension can add. The screenshot is `app/test/look.sh <dir> staff`'s
-// staff-wide frame, 1440×900; rings are in that frame's points.
+// staff-wide frame, 1440×900 (site/shots.sh); rings are in that frame's points.
 
 /** A part of the screenshot, ringed and numbered, and what was asked for to get it. */
 type Callout = { ring: [cx: number, cy: number, rx: number, ry: number]; asked: string }

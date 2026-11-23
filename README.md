@@ -1,4 +1,4 @@
-<p align="center"><img src="docs/header.webp" alt="Superego" width="800"></p>
+<p align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="docs/header-dark.webp"><img src="docs/header.webp" alt="The Superego window: threads in the sidebar, one building a web page, and the page beside it" width="800"></picture></p>
 
 # Superego
 

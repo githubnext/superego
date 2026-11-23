@@ -1,6 +1,6 @@
 #!/bin/sh
 # The window's layout in the states the design covers, screenshotted:
-# `test/look.sh <dir> [look|focus|panes|panehead|composer|images|mcp|web|terminal|toolbar|titlebar|titlebar-fit|pins|folds|states|cards|dialogs|machines|staff|picker|providers|keptpage|themes|theme-ui|mac-look|claude-agent|setup|phone-look]` (look, unless given), each a script of
+# `test/look.sh <dir> [look|focus|panes|panehead|composer|images|mcp|web|terminal|toolbar|titlebar|titlebar-fit|pins|folds|states|cards|dialogs|machines|staff|picker|providers|keptpage|themes|theme-ui|mac-look|claude-agent|setup|phone-look|header]` (look, unless given), each a script of
 # that name here:
 # - `look`: the sidebar shown, dragged and hidden, the thread alone and with panes, details, a phone; ⌘N's dialog, Settings' General, Appearance and Hotkeys (a clash too);
 # - `focus`: each region holding the focus;
@@ -43,13 +43,15 @@
 #   a menu, and Settings (a narrow window too).
 # - `phone-look`: the web build on an iPhone (402×874 at 3×, a finger, its safe areas), paired by Web access: the drawer (a row swiped open),
 #   its search (empty, with matches, with none), a thread, the keyboard up, the thread's menu, New thread, a pane, Settings.
+# - `header`: threads in three projects, one building a page with the page in a Browser pane beside it (the README's
+#   header and the site's link preview: ../site/shots.sh).
 set -e
 cd "$(dirname "$0")/.."
 # A heavy check: it waits for a slot (../scripts/check.ts), is stopped after 8 minutes (SUPEREGO_SHOWCASE_TIMEOUT, in
 # seconds), and builds the app first if its sources changed.
 [ "$SUPEREGO_CHECK_COMMAND" = test/look.sh ] || exec node ../scripts/check.ts --timeout SUPEREGO_SHOWCASE_TIMEOUT=480 test/look.sh "$@"
 node scripts/build.ts
-OUT="$(cd "$(dirname "${1:?usage: look.sh <dir> [look|focus|panes|panehead|composer|images|mcp|web|terminal|toolbar|titlebar|titlebar-fit|pins|folds|states|cards|dialogs|machines|staff|picker|keptpage|themes|theme-ui|mac-look|claude-agent|setup|phone-look]}")" && pwd)/$(basename "$1")"
+OUT="$(cd "$(dirname "${1:?usage: look.sh <dir> [look|focus|panes|panehead|composer|images|mcp|web|terminal|toolbar|titlebar|titlebar-fit|pins|folds|states|cards|dialogs|machines|staff|picker|keptpage|themes|theme-ui|mac-look|claude-agent|setup|phone-look|header]}")" && pwd)/$(basename "$1")"
 mkdir -p "$OUT"
 unset ANTHROPIC_API_KEY ANTHROPIC_OAUTH_TOKEN OPENAI_API_KEY
 export SUPEREGO_HOME="$(mktemp -d)" SUPEREGO_HEADLESS=1 SUPEREGO_SHOWCASE_OUT="$OUT" SUPEREGO_REPLAY_SPEED=0 TZ=Europe/Copenhagen
@@ -95,6 +97,11 @@ if [ "$2" = staff ]; then
   rm "$SUPEREGO_HOME/profiles/README.md"
   node test/showcase/staff.mjs "$SUPEREGO_HOME/staff-turns.jsonl"
   export SUPEREGO_MODEL="replay:$SUPEREGO_HOME/staff-turns.jsonl"
+fi
+# `header`: its scene's turns.
+if [ "$2" = header ]; then
+  node test/showcase/header.mjs "$SUPEREGO_HOME/header-turns.jsonl"
+  export SUPEREGO_MODEL="replay:$SUPEREGO_HOME/header-turns.jsonl"
 fi
 # Skills of its own (shown in the Skills data view), not this machine's ~/.agents.
 export SUPEREGO_AGENTS="$SUPEREGO_HOME/agents"

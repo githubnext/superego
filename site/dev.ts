@@ -19,6 +19,7 @@ const types: Record<string, string> = {
   '.svg': 'image/svg+xml',
   '.png': 'image/png',
   '.webp': 'image/webp',
+  '.jpg': 'image/jpeg',
 }
 
 let failure = ''
