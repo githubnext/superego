@@ -511,6 +511,7 @@ details[open] > .row > .row__chevron { transform: rotate(90deg); }
 .auth-flow__events a { color: var(--superego-link); }
 .auth-flow__done { color: var(--superego-text); }
 .auth-flow__prompt { display: flex; flex-direction: column; gap: 4px; margin: 8px 0; }
+.auth-flow__fallback > summary { cursor: pointer; color: var(--superego-muted); width: fit-content; }
 .auth-flow__row { display: flex; gap: 6px; }
 .auth-flow__row .superego-field { flex: 1; }
 .auth-flow__device { margin: 6px 0; }

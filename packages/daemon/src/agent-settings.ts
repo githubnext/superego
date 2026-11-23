@@ -610,8 +610,16 @@ export async function createAgentSettings(settings: SettingsRegistry, dataDir: s
         await models.login(provider, type, {
           signal: flow.signal,
           prompt,
-          notify: (event) => flow.emit(event.type === 'device_code' ? { type: 'device_code', userCode: event.userCode, verificationUri: event.verificationUri } : event as AuthFlowEvent),
-        }, { agentName: app.id, getDeviceId })
+          notify: (event) => {
+            // Where its page's redirect is listened for: the flow's workings, not something to do (OpenRouter's says it).
+            if (event.type === 'progress' && /\bcallback on https?:\/\//i.test(event.message)) return
+            flow.emit(event.type === 'device_code' ? { type: 'device_code', userCode: event.userCode, verificationUri: event.verificationUri } : event as AuthFlowEvent)
+          },
+        }, { agentName: app.id, getDeviceId }).catch((error: Error) => {
+          // A sign-in of this app's own is cancelled before another starts: one holding the port is another program's.
+          const port = /^Port (\d+) is in use\b/.exec(error.message)?.[1]
+          throw port ? new RpcError('busy', `Another program is signing in on port ${port} (the Codex CLI, say). Finish or cancel that, then try again.`) : error
+        })
         await refreshAuth()
         const trial = check && type === 'api_key' ? testModelOf(provider) : undefined
         if (trial) {

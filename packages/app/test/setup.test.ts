@@ -11,11 +11,12 @@ import { act, createElement as h } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, expect, it } from 'vitest'
 import { connectSocket, listen, openDaemon, type Daemon } from '@superego/daemon'
-import { defineApp, ONBOARDED, PROTOCOL_VERSION, RELEASED, type Hello, type RpcPeer } from '@superego/protocol'
+import { defineApp, ONBOARDED, PROTOCOL_VERSION, RELEASED, type AuthEvent, type Hello, type Notifications, type RpcPeer } from '@superego/protocol'
 import type { MachineEntry, SuperegoEvent } from '../src/shared/bridge.ts'
 import { RegistryProvider, useRegistry } from '../src/renderer/registry.tsx'
 import { windowRegistry } from '../src/renderer/index.tsx'
 import { NoModel, SetupPage, useSetup } from '../src/renderer/Setup.tsx'
+import { SignInFlow } from '../src/renderer/sign-in-flow.tsx'
 import { ShellStateProvider, useMachines, useSelection } from '../src/renderer/state.tsx'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
@@ -97,7 +98,7 @@ let selection: ReturnType<typeof useSelection>['selection']
  * Where the shell puts it: in place of "Select or start a thread", with the router's context as the shell sets it; and
  * a composer's "no model" card, for a thread that couldn't send.
  */
-function Main({ card }: { card?: string }) {
+function Main({ card, flow }: { card?: string; flow?: () => Promise<{ flow: string }> }) {
   const registry = useRegistry()
   const machines = useMachines()
   const selected = useSelection()
@@ -109,6 +110,7 @@ function Main({ card }: { card?: string }) {
   })
   const setup = useSetup()
   const local = machines.find((m) => m.id === 'local')
+  if (flow) return h(SignInFlow, { machine: 'local', title: 'Signing in…', start: flow, onClose() {} })
   return h('div', null,
     card && local && selected.selection ? h(NoModel, { machine: local, back: { machine: 'local', thread: card } }) : null,
     setup ? h(SetupPage, { key: setup, machine: setup }) : h('p', { className: 'empty' }, 'Select or start a thread.'))
@@ -119,12 +121,12 @@ async function until(check: () => boolean | Promise<boolean>, what: string) {
   for (let i = 0; i < 200; i++) { if (await check()) return; await settle() }
   throw new Error(`waiting for ${what}: ${container.textContent}`)
 }
-async function mount(card?: string) {
+async function mount(card?: string, flow?: () => Promise<{ flow: string }>) {
   const registry = windowRegistry(app, [])
   container = document.createElement('div')
   document.body.append(container)
   root = createRoot(container)
-  await act(async () => { root!.render(h(RegistryProvider, { registry, children: h(ShellStateProvider, { children: h(Main, { card }) }) })) })
+  await act(async () => { root!.render(h(RegistryProvider, { registry, children: h(ShellStateProvider, { children: h(Main, { card, ...(flow ? { flow } : {}) }) }) })) })
   await settle()
   return registry
 }
@@ -272,4 +274,23 @@ it('finds any other provider in setup itself, and adds an endpoint of your own t
   await act(async () => { container.querySelector<HTMLFormElement>('.provider-form')!.requestSubmit() })
   await until(() => text().includes('Hi! Ready when you are.'), 'it saying hi')
   expect((await peer.call<{ default: { model?: string } }>('agent.models', {})).default.model).toBe('mine/qwen3:32b')
+})
+
+it('stops a sign-in taken away before it ended, so nothing is left waiting on the browser', async () => {
+  // A ChatGPT sign-in left running held its port, and the next one couldn't start.
+  await start()
+  await daemon.settings.set(ONBOARDED, true)
+  const events = new Map<string, AuthEvent[]>()
+  peer.on('auth.event', ({ flow, event }: Notifications['auth.event']) => events.set(flow, [...events.get(flow) ?? [], event]))
+  let started = ''
+  await mount(undefined, async () => {
+    const answer = await peer.call<{ flow: string }>('auth.signIn', { provider: 'github-copilot', type: 'oauth' })
+    started = answer.flow
+    return answer
+  })
+  await until(() => Boolean(events.get(started)?.some((e) => e.type === 'prompt')), 'the flow asking')
+  await act(async () => root!.unmount())
+  root = undefined
+  await until(() => events.get(started)?.at(-1)?.type === 'failed', 'the flow stopped')
+  expect(events.get(started)!.at(-1)).toEqual({ type: 'failed', message: 'Cancelled' })
 })

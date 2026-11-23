@@ -110,8 +110,6 @@ const SIGN_INS = [
   { provider: 'github-copilot', label: 'GitHub Copilot', detail: 'Your Copilot plan' },
   { provider: 'openrouter', label: 'OpenRouter', detail: 'Pay as you go, hundreds of models' },
 ]
-/** On another machine, Copilot's comes first: its code works from any browser, where the others' last page can't load. */
-const signInsFor = (machine: string) => machine === LOCAL ? SIGN_INS : [SIGN_INS[1]!, SIGN_INS[0]!, SIGN_INS[2]!]
 /** Providers named first among "More providers": those setup offers no way of its own to. */
 const MORE_NAMED = ['amazon-bedrock', 'google-vertex', 'azure']
 
@@ -289,7 +287,7 @@ export function SetupPage({ machine: machineId }: { machine: string }) {
       <section className="setup__ways" aria-label="Ways in">
         <h2>Connect</h2>
         <ul>
-          {signInsFor(machineId).filter((s) => providers.some((p) => p.id === s.provider && p.oauth)).map((s) => {
+          {SIGN_INS.filter((s) => providers.some((p) => p.id === s.provider && p.oauth)).map((s) => {
             const way: Open = { kind: 'signIn', provider: s.provider }
             const enterprise: Open = { ...way, enterprise: true }
             const signing = open?.kind === 'signIn' && open.provider === s.provider ? open : undefined
