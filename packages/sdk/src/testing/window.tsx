@@ -9,8 +9,8 @@ import {
 } from '@superego/protocol'
 import type { MachineEntry, SuperegoBridge, SuperegoEvent } from '@superego/app/shared'
 import {
-  bound, closeWebViews, DescribedCall, describeRun, LAYOUT, layoutOf, linkHandler, mainKind, normalize, pageApp, PaneBody, paneKind, placedFor, PlacedViews, profileUisLoaded, provideProfileUi, RegistryProvider, resetProfileUi, spaceFor,
-  scopedViews, seenIn, setLocalState, Shell as Window, ShellStateProvider, Slot, SpaceMain, toolRow, urlKind, ViewScopeProvider, useAllThreads, useMachines, useSelection, useSpace, windowRegistry,
+  bound, closeWebViews, DescribedCall, describeRun, LAYOUT, layoutOf, linkHandler, mainKind, normalize, pageApp, PaneBody, paneKind, placedFor, PlacedViews, NO_SHELL, profileUisLoaded, provideProfileUi, RegistryProvider, resetProfileUi, spaceFor,
+  scopedViews, seenIn, setLocalState, Shell as Window, ShellStateProvider, Slot, SpaceMain, toolRow, urlKind, ViewScopeProvider, useAllThreads, useMachines, useSelection, useSpace, useWindowContext, windowRegistry,
   type BehaviourSlot, type SpaceAt, type Layout, type Place, type Registry, type SlotProps, type UiExtension, type ViewProps,
 } from '@superego/app/internals'
 import type { LinkHandler, LinkWhere, ToolRow, ToolRowCall } from '@superego/app/ui'
@@ -502,16 +502,19 @@ export async function mountUi(options: MountOptions = {}): Promise<TestWindow> {
   } = { select() {}, threads: {}, openSpace() {} }
   function Shell({ children }: { children: ReactNode }) {
     const { selection, select } = useSelection()
-    const { space, open: openSpace, docked, redock } = useSpace()
-    const all = useAllThreads()
-    const list = useMachines()
-    shell = { select, ...(selection ? { selection } : {}), threads: all, ...(space ? { space } : {}), openSpace }
+    const { space, open: openSpace } = useSpace()
+    shell = { select, ...(selection ? { selection } : {}), threads: useAllThreads(), ...(space ? { space } : {}), openSpace }
     // The whole window drawn: its shell says what actions see, as the app's does.
-    if (options.window) return <>{children}</>
-    registry.router.setContext({
-      app, machines: list, selection, select, space, openSpace, docked, redock, hasSpace: (kind, at) => Boolean(spaceFor(registry, { kind, ...at })), openSettings() {}, newThread() {}, togglePalette() {}, toggleNavigator() {}, togglePanePicker() {}, showLog() {},
-      threadOf: (s) => all[s.machine]?.find((t) => t.id === s.thread), projects: [], sidebar: { pinned: [], projects: [], folded: [] }, lastThread: {}, fold() {},
-      appSetting: (key) => appSide.settings.get(key) as never, toggleSidebar() {}, focusSidebar() { throw new Error('No sidebar to focus: mount the whole window (window: true)') }, back() {}, forward() {}, railTabs: () => [],
+    return options.window ? <>{children}</> : <WithContext>{children}</WithContext>
+  }
+  // A window without the shell: what actions see, the shell's parts left out.
+  function WithContext({ children }: { children: ReactNode }) {
+    const all = useAllThreads()
+    useWindowContext({
+      ...NO_SHELL,
+      threadOf: (s) => all[s.machine]?.find((t) => t.id === s.thread),
+      appSetting: (key) => appSide.settings.get(key) as never,
+      focusSidebar() { throw new Error('No sidebar to focus: mount the whole window (window: true)') },
     })
     return <>{children}</>
   }

@@ -13,7 +13,7 @@ import { useThemeStyle } from './themes.tsx'
 import { useSettings, watched } from './client.ts'
 import type { SidebarRailProps, View, ViewProps } from './extension-api.ts'
 import { scopeOfEntry, useRegistry, whose } from './registry.tsx'
-import { shownPanes, spaceFor } from './lookups.ts'
+import { shownPanes } from './lookups.ts'
 import { focusSidebar } from './focus.ts'
 import { paneMenu, PlacedViews, Slot, useLayout, viewsIn } from './placement.tsx'
 import { Contained } from './contained.tsx'
@@ -41,6 +41,7 @@ import { ActionLog, runsBare } from './actions.tsx'
 import { performed } from './perform.ts'
 import { NewThreadDialog } from './NewThread.tsx'
 import { SetupPage, useSetup } from './Setup.tsx'
+import { useWindowContext } from './window-context.ts'
 import { bound, RailTabNumber, shortcutOf, useActions, useRailShortcut, useShortcut, type Keymap } from './keys.ts'
 import { railTabs } from './rail-tabs.ts'
 import { useAllThreads, useFold, useHistory, useMachines, useNewThreadDialog, useSelection, useProjects, useSettingsDialog, useShell, useSidebar, useSpace, useThreadSheet, type Selection } from './state.tsx'
@@ -66,7 +67,7 @@ export function Shell() {
   const machines = useMachines()
   const { selection, select, machine, thread, hidden: alone, listed } = useSelection()
   // A space open fills the main area instead of the thread.
-  const { space, open: openSpace, docked, redock } = useSpace()
+  const { space } = useSpace()
   const settings = useSettingsDialog()
   const newThread = useNewThreadDialog()
   const { openSettings, newThread: openNewThread } = useShell()
@@ -128,9 +129,8 @@ export function Shell() {
   // The installed fonts take seconds to list: read them in the background, for Settings' font pickers.
   useEffect(refreshFontsSoon, [])
   // Actions read the shell as it is when they run.
-  registry.router.setContext({
-    app: registry.app, machines, selection, select, openSettings, newThread: openNewThread,
-    space, openSpace, docked, redock, hasSpace: (kind, at) => Boolean(spaceFor(registry, { kind, ...at })),
+  useWindowContext({
+    openSettings, newThread: openNewThread,
     togglePalette: () => { setNavigator(false); setPanePicker(false); setPalette((open) => !open) },
     toggleNavigator: () => { setPalette(false); setPanePicker(false); setNavigator((open) => !open) },
     togglePanePicker: () => { setPalette(false); setNavigator(false); setPanePicker((open) => !open) },

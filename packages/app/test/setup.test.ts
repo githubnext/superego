@@ -14,11 +14,12 @@ import { afterEach, beforeEach, expect, it } from 'vitest'
 import { connectSocket, listen, openDaemon, type Daemon } from '@superego/daemon'
 import { defineApp, ONBOARDED, PROTOCOL_VERSION, RELEASED, type AuthEvent, type Hello, type Notifications, type RpcPeer } from '@superego/protocol'
 import type { MachineEntry, SuperegoEvent } from '../src/shared/bridge.ts'
-import { RegistryProvider, useRegistry } from '../src/renderer/registry.tsx'
+import { RegistryProvider } from '../src/renderer/registry.tsx'
 import { windowRegistry } from '../src/renderer/index.tsx'
 import { NoModel, SetupPage, useSetup, type SetupFound } from '../src/renderer/Setup.tsx'
 import { SignInFlow } from '../src/renderer/sign-in-flow.tsx'
 import { ShellStateProvider, useMachines, useSelection } from '../src/renderer/state.tsx'
+import { NO_SHELL, useWindowContext } from '../src/renderer/window-context.ts'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 for (const key of ['ANTHROPIC_API_KEY', 'ANTHROPIC_OAUTH_TOKEN', 'OPENAI_API_KEY']) delete process.env[key]
@@ -100,15 +101,11 @@ let selection: ReturnType<typeof useSelection>['selection']
  * a composer's "no model" card, for a thread that couldn't send.
  */
 function Main({ card, flow }: { card?: string; flow?: () => Promise<{ flow: string }> }) {
-  const registry = useRegistry()
   const machines = useMachines()
   const selected = useSelection()
   select = selected.select
   selection = selected.selection
-  registry.router.setContext({
-    app, machines, selection: selected.selection, select: selected.select, openSettings() {}, newThread() {}, togglePalette() {}, toggleNavigator() {}, togglePanePicker() {},
-    showLog() {}, threadOf: () => undefined, projects: [], sidebar: { pinned: [], projects: [], folded: [] }, lastThread: {}, fold() {}, appSetting: () => undefined, toggleSidebar() {}, focusSidebar() {}, back() {}, forward() {}, railTabs: () => [], space: undefined, openSpace() {}, docked: undefined, redock() {}, hasSpace: () => false,
-  })
+  useWindowContext(NO_SHELL)
   const setup = useSetup()
   const local = machines.find((m) => m.id === 'local')
   if (flow) return h(SignInFlow, { machine: 'local', title: 'Signing in…', start: flow, onClose() {} })
