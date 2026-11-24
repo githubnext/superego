@@ -99,3 +99,7 @@ button.setup__line:hover { background: var(--superego-hover); }
 /* Where sending failed for lack of a model: a line and a way to set one up. */
 .setup-card { display: inline-flex; align-items: center; gap: var(--superego-space-2); flex-wrap: wrap; }
 .providers__setup { display: flex; justify-content: flex-end; margin-bottom: var(--superego-space-2); }
+
+/* On a phone: under its bar, and its buttons clear of the home indicator. */
+.app.is-narrow .setup { padding-top: calc(var(--phone-top) + var(--superego-space-2)); }
+.app.is-narrow .setup__foot { padding-bottom: calc(env(safe-area-inset-bottom) + var(--superego-space-4)); }

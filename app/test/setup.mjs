@@ -1,7 +1,9 @@
 // Screenshots of first-run setup (run by test/look.sh <dir> setup), on a fresh home with no model: the page as it
-// opens, with Claude Code (a stand-in `claude`, signed in) and Ollama (a stand-in server) found, wide and on a phone; a
+// opens, with Claude Code (a stand-in `claude`, signed in) and Ollama (a stand-in server) found, Ego's welcome and the
+// extensions' switches after them, whole (a tall window) and as it opens, wide and on a phone; a
 // key pasted, whose it is told; More providers searched; a composer that couldn't send, and its card; Ollama used,
-// saying hi; Claude Code used, and ⌘N starting on it. Light and dark, into $SUPEREGO_SHOWCASE_OUT.
+// saying hi; Claude Code used, and ⌘N starting on it; Set up models… again, on Claude Code, with the welcome after it.
+// Light and dark, into $SUPEREGO_SHOWCASE_OUT.
 import { chmodSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:http'
 import { join } from 'node:path'
@@ -40,7 +42,12 @@ await openApp({ name: 'setup', timeout: 180_000, firstRun: true }, async (t) => 
   const row = (title) => `[...document.querySelectorAll('.setup__row')].find((r) => r.querySelector('.setup__what')?.firstElementChild?.textContent === ${JSON.stringify(title)})`
   const way = (title) => `${row(title)}.querySelector('button.setup__line').click()`
   await until(`Boolean(${row('Ollama')}) && Boolean(${row('Claude Code')}?.querySelector('button'))`, 'setup, with Ollama and Claude Code found', 30_000)
+  await until(`Boolean(document.querySelector('.ego__welcome')) && document.querySelectorAll('.setup__extension').length > 0`, "Ego's welcome and the extensions")
   await t.both('setup')
+  // The whole page: the model, Ego's welcome and the extensions.
+  await t.resize(1100, 1500)
+  await t.both('setup-whole')
+  await t.resize(1100, 760)
   // A phone's width: the window goes no narrower than 600, so zoomed, its page is a phone's 375.
   await t.resize(600, 1300)
   await t.zoom(1.6)
@@ -92,6 +99,19 @@ await openApp({ name: 'setup', timeout: 180_000, firstRun: true }, async (t) => 
   t.key('n')
   await until(`document.querySelector('.new-thread [aria-label="Model"]')?.textContent === 'Default · Opus'`, '⌘N on Claude Code')
   await t.both('setup-claude-new-thread')
+  await run(`document.querySelector('.superego-dialog')?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); 0`)
+  await until(`!document.querySelector('.superego-dialog')`, '⌘N closed')
+
+  // Set up models… again, from ⌘K: on Claude Code, which runs, and Ego's welcome and the extensions after it.
+  t.key('k')
+  await until(`document.activeElement === document.querySelector('.superego-dialog input')`, 'the palette')
+  await t.type('.superego-dialog input', 'Set up models')
+  await until(`[...document.querySelectorAll('.palette__list [role=option]')].some((o) => o.textContent.includes('Set up models'))`, 'Set up models… found')
+  await run(`[...document.querySelectorAll('.palette__list [role=option]')].find((o) => o.textContent.includes('Set up models')).click()`)
+  await until(`Boolean(document.querySelector('.setup__models')) && Boolean(document.querySelector('.ego__welcome'))`, 'setup, ready, with the welcome')
+  await t.resize(1100, 1300)
+  await t.both('setup-ready-whole')
+  await t.resize(1100, 760)
   ollama.close()
   console.log(`setup: done in ${process.env.SUPEREGO_SHOWCASE_OUT}`)
 })
