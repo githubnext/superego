@@ -106,7 +106,7 @@ function Main({ card, flow }: { card?: string; flow?: () => Promise<{ flow: stri
   selection = selected.selection
   registry.router.setContext({
     app, machines, selection: selected.selection, select: selected.select, openSettings() {}, newThread() {}, togglePalette() {}, toggleNavigator() {}, togglePanePicker() {},
-    showLog() {}, threadOf: () => undefined, projects: [], sidebar: { pinned: [], projects: [], folded: [] }, lastThread: {}, fold() {}, appSetting: () => undefined, toggleSidebar() {}, focusSidebar() {}, back() {}, forward() {}, railTabs: () => [],
+    showLog() {}, threadOf: () => undefined, projects: [], sidebar: { pinned: [], projects: [], folded: [] }, lastThread: {}, fold() {}, appSetting: () => undefined, toggleSidebar() {}, focusSidebar() {}, back() {}, forward() {}, railTabs: () => [], space: undefined, openSpace() {}, hasSpace: () => false,
   })
   const setup = useSetup()
   const local = machines.find((m) => m.id === 'local')
