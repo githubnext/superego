@@ -2,16 +2,14 @@
 
 ## Unreleased
 
-- **Upgrade (extension authors, layouts):** the place called `space` (a rail button and the sidebar it opens) is now
-  `sidebar`: write `fits: ['sidebar']`, `default: 'sidebar'`, `withoutSidebar` (was `withoutSpaces`) and
-  `SidebarRailProps` (was `SpaceRailProps`); in `~/.superego/layout.json`, `"sidebar"` where it says `"space"`. A
-  machine still on an older Superego is understood as it is.
-- Your own profiles can be global (`global: true`): loaded as Superego starts, and part of the whole app rather than
-  only their threads. They can add sidebars to the rail and spaces: views that fill the main area, like a notes page
-  or a canvas, with a thread docked beside them that knows what you have open.
-- One of your own profiles can add a sidebar, a tab in the rail: a data view of its daemon extension that fits
-  `sidebar`. It shows while the profile is loaded (as soon as the daemon starts, when a thread of it is in use). A
-  project's profiles still can't.
+## 0.3.0
+
+- **Upgrade (extension authors):** the place called `space` is now `sidebar`: `fits: ['sidebar']`,
+  `default: 'sidebar'`, `withoutSidebar` and `SidebarRailProps`. In `~/.superego/layout.json`, `"space"` becomes
+  `"sidebar"`.
+
+- Global profiles (`global: true`): your own profiles can load with Superego and add sidebars to the rail and spaces,
+  views that fill the main area (a notes page, a canvas) with a thread docked beside them.
 - In dark, the message box is flat, with a thin border instead of a shadow.
 
 ## 0.2.0
