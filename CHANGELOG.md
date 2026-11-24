@@ -2,33 +2,23 @@
 
 ## Unreleased
 
-- Opened on a Mac straight from Downloads, Superego offers to move itself to Applications: run from there, macOS
-  uses a temporary copy that can't update and can freeze the app once the download is moved or deleted. Until it's
-  moved, Settings → About says why it doesn't update (with a button to move it), and the command line can't be installed.
-- Hovering a wide code block, tool output, or diff no longer shifts layout when its horizontal scrollbar appears.
-- `/clear` (or `/new`) in a thread's composer starts over in a new thread with the same folder, profile, model and
-  thinking, and archives the old one. Anything typed after it becomes the new thread's first message.
-- `/compact` summarizes a thread's conversation to free its context, with what to keep after it if you like
-  (`/compact keep the API changes`). The transcript shows it compacting, and says when that fails.
-- Clear thread and Compact conversation are in `⌘K` too.
-- Typing `/` at the start of a message offers commands and skills together.
-- First-run setup is a welcome again: after the model, a word on what to ask Ego for (with its rail button lit up
-  meanwhile) and the extensions to switch on or off, all at once or one by one.
-- Extensions can say something on first-run setup in the new `welcome` slot (extension API 5.10).
-- Settings opened as Superego first starts stays open: first-run setup waits behind it instead of closing it.
-- A project's own profiles can add spaces to their project: they're listed under the project's heading in Threads,
-  and in the rail while you're in that project.
-- While a space is open, Threads highlights only that space, not the thread selected behind it.
-- Claude Agent threads run in Auto permission mode by default, and Settings → Claude Agent offers Allow all.
-- A compacted conversation shows as a folded “Compacted conversation” row that opens to its summary, not as a
-  message from you; a handoff's reset shows the same way, as “Conversation reset”.
-- On a phone, the drawer's thread rows are tidier: a quiet thread is one line with its time at the end, a second
-  line only shows when there's more to say (its branch, spelled out, or where it is), a folded thread's caret sits at
-  the row's end, and the headers and titles line up on one edge.
-- Archiving a thread that has a worktree no longer stalls for seconds in a big checkout, and the Changes pane loads
-  quicker.
-- `superego/testing`'s daemon finds no local model server of the machine's (an Ollama running there): a test sees only
-  its own.
+## 0.4.0
+
+- **Upgrade (extension authors):** extensions can greet new users on first-run setup with the `welcome` slot
+  (extension API 5.10). A daemon older than 0.3.0 that still calls the sidebar `space` has its sidebar views left out:
+  update it.
+
+- `/clear` (or `/new`) starts over in a fresh thread with the same folder, profile and model; `/compact` summarizes
+  the conversation to free its context. Both are in `⌘K` too, and `/` offers commands and skills together.
+- First-run setup is a welcome again: after the model, a word on Ego and the extensions to switch on or off.
+- A project's own profiles can add spaces to their project, listed under its heading and in the rail.
+- Claude Agent (experimental) threads run in Auto permission mode by default; Settings → Claude Agent offers Allow all.
+- Opened straight from Downloads, Superego offers to move itself to Applications, where it can update.
+- On a phone, the thread list reads like Mail: one line when quiet, with the fold arrow at the end.
+- In dark, the message box is flat, with a thin border instead of a shadow.
+- Faster: archiving a thread with a worktree no longer stalls, and the Changes pane loads quicker.
+- Fixes: a code block's scrollbar no longer shifts the layout, a compacted conversation shows as one folded row, and
+  Settings opened during first-run setup stays open.
 
 ## 0.3.0
 
