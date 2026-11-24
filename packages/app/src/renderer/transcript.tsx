@@ -357,8 +357,8 @@ const Entry = memo(function Entry({ entry }: { entry: EntryRecord }) {
  * Where the model's context started over, as the transcript shows it: a compaction (its summary of what came before)
  * or a reset (the handoff it carried, if any). Both are user messages to the model, but nobody sent them.
  */
-export type NewContextOf = { kind: 'compaction' | 'reset'; text: string }
-export function contextOf(entry: Pick<EntryRecord, 'kind' | 'model'>): NewContextOf | undefined {
+type NewContextOf = { kind: 'compaction' | 'reset'; text: string }
+function contextOf(entry: Pick<EntryRecord, 'kind' | 'model'>): NewContextOf | undefined {
   if (entry.kind !== 'pi.compaction' && entry.kind !== 'pi.reset') return undefined
   const text = blocks(entry.model?.[0] as Message | undefined).flatMap((b) => b.type === 'text' && b.text ? [b.text] : []).join('\n')
   return entry.kind === 'pi.compaction' ? { kind: 'compaction', text: compactionSummary(text) } : { kind: 'reset', text: text.trim() }
