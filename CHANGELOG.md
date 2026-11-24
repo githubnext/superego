@@ -15,6 +15,7 @@
 - First-run setup is a welcome again: after the model, a word on what to ask Ego for (with its rail button lit up
   meanwhile) and the extensions to switch on or off, all at once or one by one.
 - Extensions can say something on first-run setup in the new `welcome` slot (extension API 5.10).
+- Settings opened as Superego first starts stays open: first-run setup waits behind it instead of closing it.
 - A project's own profiles can add spaces to their project: they're listed under the project's heading in Threads,
   and in the rail while you're in that project.
 - While a space is open, Threads highlights only that space, not the thread selected behind it.

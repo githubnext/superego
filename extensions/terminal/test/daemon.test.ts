@@ -31,7 +31,10 @@ async function attach(peer: RpcPeer, thread: string, pane: string, size = { cols
   return {
     seen, channel,
     type: (text: string) => channel.write(new TextEncoder().encode(text)),
-    waitFor: (text: string) => until(() => seen.live.includes(text), JSON.stringify(text)),
+    // Timed out, it says what the shell did print.
+    waitFor: (text: string) => until(() => seen.live.includes(text), JSON.stringify(text)).catch((error: Error) => {
+      throw new Error(`${error.message}; the terminal showed ${JSON.stringify(seen.replayed + seen.live)}`)
+    }),
   }
 }
 

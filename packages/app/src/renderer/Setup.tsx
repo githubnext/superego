@@ -72,9 +72,10 @@ export function useSetup(): string | undefined {
     shown.current = true
     ask({ machine: LOCAL, first: true })
   }, [fresh])
-  // Picking a thread puts it away; asked for, it comes out from behind Settings.
+  // Picking a thread puts it away; asked for, it comes out from behind Settings. Opening by itself, it waits behind
+  // a Settings the user opened before it did: it's there once they close it.
   useEffect(() => { if (selection) ask(undefined) }, [selection])
-  useEffect(() => { if (wanted) settings.close() }, [wanted])
+  useEffect(() => { if (wanted && !wanted.first) settings.close() }, [wanted])
   if (selection) return undefined
   return wanted?.machine
 }
