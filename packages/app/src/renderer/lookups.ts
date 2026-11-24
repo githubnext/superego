@@ -59,10 +59,10 @@ export function linkHandler(registry: Registry, href: string, kind: 'link' | 'co
  * The link handlers `where` has: its thread's profile's, and the app's but those of extensions the thread goes without;
  * and its project's (a project's spaces'), in a thread of it or one of its spaces.
  */
-const linksSeen = (registry: Registry, where: LinkWhere) => seenIn(
-  registry.links, where.machine && where.thread ? { machine: where.machine, thread: where.thread } : undefined,
-  where.machine && (where.thread?.project?.root ?? where.project) ? { machine: where.machine, root: (where.thread?.project?.root ?? where.project)! } : undefined,
-)
+function linksSeen(registry: Registry, { machine, thread, project }: LinkWhere) {
+  const root = thread?.project?.root ?? project
+  return seenIn(registry.links, machine && thread ? { machine, thread } : undefined, machine && root ? { machine, root } : undefined)
+}
 
 /** The schemes `where`'s handlers claim by name (`ticket:` → `ticket`), for its HTML's links to keep. */
 export const linkSchemes = (registry: Registry, where: LinkWhere) => [...new Set(linksSeen(registry, where).flatMap(({ match, scheme }) => [
@@ -151,8 +151,7 @@ export function spaceFor(registry: Registry, at: { kind: string; machine?: strin
 }
 
 /** A project's spaces, one per kind (`spaceFor`'s), in the order they were set up. */
-export function projectSpaces(registry: Registry, project: InProject | undefined): SpaceEntry[] {
-  if (!project) return []
+export function projectSpaces(registry: Registry, project: InProject): SpaceEntry[] {
   const kinds = [...new Set(registry.spaces.filter((s) => sameProject(s.owner.project, project)).map((s) => s.kind))]
   return kinds.map((kind) => spaceFor(registry, { kind, machine: project.machine, project: project.root })!)
 }

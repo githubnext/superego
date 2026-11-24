@@ -168,7 +168,7 @@ function useLit() {
 
 /** A project's spaces (its profiles' `superego.space`), above its threads: a row each, lit while it's open. */
 function ProjectSpaces({ machine, root }: { machine: string; root: string }) {
-  const spaces = useProjectSpaces(useMemo(() => ({ machine, root }), [machine, root]))
+  const spaces = useProjectSpaces({ machine, root })
   if (!spaces.length) return null
   return (
     <List className="threads-spaces">

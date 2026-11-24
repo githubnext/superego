@@ -8,7 +8,7 @@ import type { ThreadInfo } from '@superego/protocol'
 import { ArrowSquareOutIcon, Button, ChatCircleIcon, IconButton, StatusGlyph, TextArea, XIcon } from '@superego/ui'
 import type { MachineEntry } from '../shared/bridge.ts'
 import type { SpaceKind } from './extension-api.ts'
-import type { SpaceAt } from './history.ts'
+import { sameSpace, type SpaceAt } from './history.ts'
 import { machine as client } from './client.ts'
 import { Contained } from './contained.tsx'
 import { useProfileUi } from './profile-ui.ts'
@@ -17,7 +17,6 @@ import { projectSpaces, spaceFor } from './lookups.ts'
 import { LinkPlace, type LinkPlaceValue } from './links.tsx'
 import { RailButton } from './marks.tsx'
 import { useAllThreads, useMachines, useSelection, useSpace } from './state.tsx'
-import { sameSpace } from './history.ts'
 import { ThreadBody } from './thread-body.tsx'
 
 type Space = Owned<SpaceKind & { kind: string }>
@@ -26,10 +25,7 @@ type Space = Owned<SpaceKind & { kind: string }>
 const FLOATING_COVERS = 352
 
 /** The space kind `at` is of, as this window has it (a project's, of its project), if any. */
-export const useSpaceKind = (at: SpaceAt | undefined): Space | undefined => {
-  const registry = useRegistry()
-  return at ? spaceFor(registry, at) : undefined
-}
+export const useSpaceKind = (at: SpaceAt): Space | undefined => spaceFor(useRegistry(), at)
 
 /** The space a component draws in, for `useSpaceTitle`. */
 const Drawing = createContext<SpaceAt | undefined>(undefined)
@@ -184,8 +180,6 @@ function AskAbout({ machine, at, kind, started }: { machine: MachineEntry; at: S
 /** A project's space kind, as the rail and the Threads sidebar offer it: opened with its `entry` params. */
 export type ProjectSpace = {
   kind: string; title: string; icon?: SpaceKind['icon']
-  /** Where it opens: the space it is with its entry params. */
-  at: SpaceAt
   /** Whether a space of this kind in this project is the one open now. */
   open: boolean
   /** Open it (as `space.open` does). */
@@ -200,14 +194,16 @@ export type ProjectSpace = {
 export function useProjectSpaces(project: InProject | undefined): ProjectSpace[] {
   const registry = useRegistry()
   const { space } = useSpace()
+  if (!project) return []
+  const { machine, root } = project
   return projectSpaces(registry, project).map((kind) => {
-    const at: SpaceAt = { machine: project!.machine, kind: kind.kind, params: kind.entry ?? {}, project: project!.root }
+    const at: SpaceAt = { machine, kind: kind.kind, params: kind.entry ?? {}, project: root }
     return {
-      kind: kind.kind, title: spaceTitle(kind, at), ...(kind.icon ? { icon: kind.icon } : {}), at,
-      open: Boolean(space && space.kind === at.kind && space.machine === at.machine && space.project === at.project),
+      kind: kind.kind, title: spaceTitle(kind, at), ...(kind.icon ? { icon: kind.icon } : {}),
+      open: Boolean(space && space.kind === at.kind && space.machine === machine && space.project === root),
       show: () => {
         if (sameSpace(space, at)) return
-        void registry.router.dispatch('space.open', { kind: at.kind, params: at.params, machine: at.machine, project: at.project! }, { source: 'project' })
+        void registry.router.dispatch('space.open', { kind: at.kind, params: at.params, machine, project: root }, { source: 'project' })
           .catch((error) => console.error(`Opening ${at.kind}`, error))
       },
     }
@@ -225,7 +221,7 @@ export function ProjectSpaceButtons({ project, narrow = false }: { project: InPr
   return (
     <>
       {sep}
-      <span className={narrow ? 'app__project-spaces is-narrow' : 'app__project-spaces'} role="group" aria-label="The project's spaces" data-project={project!.root}>
+      <span className={narrow ? 'app__project-spaces is-narrow' : 'app__project-spaces'} role="group" aria-label="The project's spaces" data-project={project?.root}>
         {spaces.map((space) => {
           const Icon = space.icon
           return (

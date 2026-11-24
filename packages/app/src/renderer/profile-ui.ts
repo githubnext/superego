@@ -277,7 +277,7 @@ export function useProfileUi(machine: string, thread: ThreadInfo) {
  * a thread of it to be shown, which asks (ProfileUiNotice). A profile whose last listed thread goes stays loaded until
  * the window reloads: what it registered shows only on its own threads, so it shows nowhere.
  */
-export function useListedProfileUis(machine: string, connected: boolean, threads: ThreadInfo[] | undefined, allowedThere?: unknown) {
+export function useListedProfileUis(machine: string, connected: boolean, threads: ThreadInfo[] | undefined, allowedThere: unknown) {
   const registry = useRegistry()
   const profiles = new Map<string, ProfileRef>()
   for (const thread of threads ?? []) if (thread.profile) profiles.set(thread.profile.dir, thread.profile)
