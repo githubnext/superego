@@ -15,7 +15,7 @@ import { useLocalState } from './local-state.ts'
 import { splitMessage } from './attachments.ts'
 import { readSent } from './composer.ts'
 import { ComposerBox } from './composer-box.tsx'
-import { composerItems, focusTaken, setComposerItems, useComposerItems, useFocusAsked, type HeldItem } from './composer-items.ts'
+import { composerItems, focusTaken, setComposerItems, useComposerItems, useFocusAsked } from './composer-items.ts'
 import { commandIn } from './slash-commands.ts'
 import { ArchiveFailed } from './clear-thread.ts'
 import { onGivenBack, takeBack } from './returned.ts'
@@ -185,9 +185,8 @@ export function ComposerView({ machine, thread, busy, inbox, onJump }: { machine
     const sendingItems = claim ? [] : items
     const attachments = [...sending, ...sendingItems.flatMap((item) => item.files)]
     if (!value && !attachments.length) return
-    // A command (`/clear`) runs instead, with what's typed after it and what goes with it.
+    // A command runs instead: `/clear` with what's typed after it and what goes with it, `/compact` with what's typed.
     const command = claim ? undefined : commandIn(value, thread)
-    if (command?.command === 'clear') return clear(value, command.rest, sending, sendingItems)
     if (command?.command === 'compact') return compact(value, command.rest)
     setText('')
     setFiles([])
@@ -195,30 +194,20 @@ export function ComposerView({ machine, thread, busy, inbox, onJump }: { machine
     setError(undefined)
     try {
       if (claim) { await claim.submit(value); return }
+      if (command?.command === 'clear') {
+        // A new thread like this one in its place, sent the rest and the files.
+        const prompt = command.rest
+        await dispatch('thread.clear', { machine: machine.id, thread: thread.id, ...prompt ? { prompt } : {}, ...attachments.length ? { attachments } : {} }, { source: 'composer' })
+        return
+      }
       await dispatch('thread.send', {
         thread: thread.id, text: value, ...(attachments.length ? { attachments } : {}), requestId: crypto.randomUUID(), ...(busy ? { whenBusy } : {}),
       }, { machine: machine.id, source: 'composer' })
     } catch (error) {
-      setText(value)
-      setFiles(sending)
-      if (sendingItems.length) setComposerItems(where, [...sendingItems, ...composerItems(where)])
-      setError(error as { kind?: string; message: string })
-    }
-  }
-  /** Start the thread over (`/clear`): a new one like it, sent `prompt` and the files, shown in its place. */
-  const clear = async (typed: string, prompt: string, sending: Attachment[], sendingItems: readonly HeldItem[]) => {
-    const attachments = [...sending, ...sendingItems.flatMap((item) => item.files)]
-    setText('')
-    setFiles([])
-    if (sendingItems.length) setComposerItems(where, [])
-    setError(undefined)
-    try {
-      await dispatch('thread.clear', { machine: machine.id, thread: thread.id, ...prompt ? { prompt } : {}, ...attachments.length ? { attachments } : {} }, { source: 'composer' })
-    } catch (error) {
-      console.error('Clearing the thread failed', error)
-      // Not started, what was typed comes back to try again; started, it went with the new thread.
+      if (command) console.error('Clearing the thread failed', error)
+      // What was typed comes back to try again; but a thread started over took it with it, though this one stays.
       if (!(error instanceof ArchiveFailed)) {
-        setText(typed)
+        setText(value)
         setFiles(sending)
         if (sendingItems.length) setComposerItems(where, [...sendingItems, ...composerItems(where)])
       }
