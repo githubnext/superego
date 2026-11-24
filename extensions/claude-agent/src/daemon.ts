@@ -355,6 +355,8 @@ export function claudeAgent({ skills = [], executable, env = () => claudeEnv(), 
           return { title: about.title, description: 'Runs your Claude Code', models: MODELS.map((m) => ({ ...m, thinking: [...m.thinking] })), ...(unavailable ? { unavailable } : {}) }
         },
         profile: { name: PROFILE_NAME, make: makeProfile },
+        // Claude Code compacts as asked with its own command; its turn says it did (turn.ts).
+        compact: (instructions) => instructions ? `/compact ${instructions}` : '/compact',
         // Where its model shows: the model and effort it runs with, as picked, else its profile's, else Claude Code's own.
         describe(thread) {
           const own = thread.model?.startsWith(`${about.name}/`) ? thread.model.slice(about.name.length + 1) : undefined

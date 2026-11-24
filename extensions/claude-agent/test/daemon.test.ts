@@ -466,6 +466,17 @@ describe.skipIf(!claude)("a Claude Agent thread, on the user's claude against a 
     expect(await d.transcript(thread)).toMatch(/Claude Code compacted the conversation as asked \(it was [\dk.M]+ tokens\)\./)
   }, 60_000)
 
+  it('compacts as asked from the window (thread.compact), by its own /compact with the instructions', async () => {
+    const d = await start()
+    const thread = await d.thread(undefined, { cwd: dir })
+    await d.send(thread, 'Say hi')
+    expect(await d.call('thread.compact', { thread: thread.id, instructions: 'keep the greeting' })).toEqual({ submission: expect.any(String) })
+    expect((await d.idle(thread)).status.state).toBe('done')
+    const transcript = await d.transcript(thread)
+    expect(transcript).toContain('/compact keep the greeting')
+    expect(transcript).toMatch(/Claude Code compacted the conversation as asked/)
+  }, 60_000)
+
   describe("the plan's limits, as Claude Code reports them", () => {
     const inject = (info: object) => writeFileSync(join(dir, 'inject'), `${JSON.stringify({ type: 'rate_limit_event', rate_limit_info: info, uuid: '00000000-0000-4000-8000-000000000000', session_id: 'mock' })}\n`)
     const resetsAt = Math.floor(Date.now() / 1000) + 3 * 3600

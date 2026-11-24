@@ -9,7 +9,7 @@ import { has } from './client.ts'
 import { startFrom } from './NewThread.tsx'
 import { isPinned, PINS, pinsOf } from './pins.ts'
 import type { Registry } from './registry.tsx'
-import { takesCommands } from './slash-commands.ts'
+import { takes } from './slash-commands.ts'
 import type { NewThreadStart } from './state.tsx'
 
 /** Whether `path` is `root` or in it. */
@@ -42,7 +42,7 @@ export class ArchiveFailed extends Error {
 export async function clearThread(registry: Registry, c: WindowContext, at: { machine: string; thread: string }, first: { prompt?: string; attachments?: unknown[] } = {}): Promise<ThreadInfo> {
   const thread = c.threadOf(at)
   if (!thread) throw new Error(`No thread ${at.thread} on ${at.machine} here`)
-  if (!takesCommands(thread)) throw new Error(thread.archived ? `${thread.title} is archived` : `${thread.title} isn't one the sidebar lists: it can't be started over here`)
+  if (!takes('clear', thread)) throw new Error(thread.archived ? `${thread.title} is archived` : `${thread.title} isn't one the sidebar lists: it can't be started over here`)
   const machine = c.machines.find((m) => m.id === at.machine)
   if (!machine) throw new Error(`${at.machine} isn't one of this window's machines`)
   const { machine: _machine, ...start } = startLike(registry, machine, thread)
@@ -71,7 +71,8 @@ export const clearThreadAction = (registry: () => Registry) => defineWindowActio
   id: 'thread.clear', title: 'Clear thread',
   description: 'Start over in a new thread like this one (its folder, profile, model and thinking), and archive this one; `prompt` and `attachments` go to the new one',
   params: obj({ machine: opt(str()), thread: opt(str()), prompt: opt(str()), attachments: opt(arr(unknown())) }),
-  when: (c) => Boolean(c.selection && !c.space && takesCommands(c.threadOf(c.selection))),
+  thread: true,
+  when: (c) => Boolean(c.selection && !c.space && takes('clear', c.threadOf(c.selection))),
   run: ({ machine, thread, prompt, attachments }, c) => {
     const at = machine && thread ? { machine, thread } : c.selection
     if (!at) throw new Error('No thread to clear')

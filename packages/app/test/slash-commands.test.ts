@@ -1,8 +1,8 @@
-// The composer's own commands: a message that is one (`/clear`, `/new`, with what follows), what a `/` opening the
+// The composer's own commands: a message that is one (`/clear`, `/new`, `/compact`, with what follows), what a `/` opening the
 // message offers, where they're taken; and what a thread started in another's place takes after it.
 import { describe, expect, it } from 'vitest'
 import { defineApp, type ThreadInfo } from '@superego/protocol'
-import { commandAt, commandCompletions, commandIn, commandsFor, takesCommands } from '../src/renderer/slash-commands.ts'
+import { commandAt, commandCompletions, commandIn, commandsFor, takes } from '../src/renderer/slash-commands.ts'
 import { startLike } from '../src/renderer/clear-thread.ts'
 import { createRegistry } from '../src/renderer/registry.tsx'
 import { defineUiExtension } from '../src/renderer/extension-api.ts'
@@ -13,16 +13,30 @@ const thread = (more: Partial<ThreadInfo> = {}): ThreadInfo => ({
 
 describe('commands', () => {
   it('reads a message that is a command, by any of its names and any case, with what follows it', () => {
-    expect(commandIn('/clear')).toEqual({ command: 'clear', rest: '' })
-    expect(commandIn('  /NEW  ')).toEqual({ command: 'clear', rest: '' })
-    expect(commandIn('/clear fix the tests\nand then lint ')).toEqual({ command: 'clear', rest: 'fix the tests\nand then lint' })
-    for (const text of ['/clearer', '/clea', 'clear', 'please /clear', '/skill:clear', '/usr/bin/clear', '/']) expect(commandIn(text)).toBeUndefined()
+    const here = thread()
+    expect(commandIn('/clear', here)).toEqual({ command: 'clear', rest: '' })
+    expect(commandIn('  /NEW  ', here)).toEqual({ command: 'clear', rest: '' })
+    expect(commandIn('/clear fix the tests\nand then lint ', here)).toEqual({ command: 'clear', rest: 'fix the tests\nand then lint' })
+    expect(commandIn('/compact keep the API changes', here)).toEqual({ command: 'compact', rest: 'keep the API changes' })
+    for (const text of ['/clearer', '/clea', 'clear', 'please /clear', '/skill:clear', '/usr/bin/clear', '/']) expect(commandIn(text, here)).toBeUndefined()
+  })
+  it("is only a command where the thread takes it: Ego's compacts and doesn't clear, an archived one does neither", () => {
+    const ego = thread({ hidden: true, owner: 'ego' })
+    expect(commandIn('/clear', ego)).toBeUndefined()
+    expect(commandIn('/compact', ego)).toEqual({ command: 'compact', rest: '' })
+    expect(commandIn('/compact', thread({ archived: true }))).toBeUndefined()
+    expect(commandIn('/clear', undefined)).toBeUndefined()
+    expect([takes('clear', thread()), takes('clear', ego), takes('compact', ego)]).toEqual([true, false, true])
   })
   it('offers those a name starts, the alias only where it is what is typed, each run as it is taken', () => {
-    expect(commandsFor('')).toEqual([expect.objectContaining({ label: '/clear', insert: '/clear ', submit: true })])
+    expect(commandsFor('')).toEqual([
+      expect.objectContaining({ label: '/clear', insert: '/clear ', submit: true }),
+      expect.objectContaining({ label: '/compact', insert: '/compact ', submit: true }),
+    ])
     expect(commandsFor('CL').map((c) => c.label)).toEqual(['/clear'])
+    expect(commandsFor('co').map((c) => c.label)).toEqual(['/compact'])
     expect(commandsFor('n').map((c) => c.label)).toEqual(['/new'])
-    expect(commandsFor('co')).toEqual([])
+    expect(commandsFor('x')).toEqual([])
   })
   it('completes a `/` opening the message, up to the caret', () => {
     expect(commandAt('/cl', 3)).toEqual({ start: 0, query: 'cl' })
@@ -31,14 +45,13 @@ describe('commands', () => {
     expect(commandAt('/clear', 3)).toBeUndefined()
     expect(commandAt('see /cl', 7)).toBeUndefined()
   })
-  it("are a listed, open thread's: not Ego's, an archived one's, or the New thread dialog's", async () => {
+  it("offers a thread's own: none in the New thread dialog", async () => {
     const machine = { id: 'local', label: 'local', state: 'connected' as const }
-    const offered = (t?: ThreadInfo) => commandCompletions.items({ start: 0, query: '' }, { machine, cwd: '/', ...t ? { thread: t } : {} })
-    expect(await offered(thread())).toHaveLength(1)
-    expect(await offered(thread({ hidden: true, owner: 'ego' }))).toEqual([])
+    const offered = async (t?: ThreadInfo) => (await commandCompletions.items({ start: 0, query: '' }, { machine, cwd: '/', ...t ? { thread: t } : {} })).map((c) => c.label)
+    expect(await offered(thread())).toEqual(['/clear', '/compact'])
+    expect(await offered(thread({ hidden: true, owner: 'ego' }))).toEqual(['/compact'])
     expect(await offered(thread({ archived: true }))).toEqual([])
     expect(await offered()).toEqual([])
-    expect(takesCommands(thread())).toBe(true)
   })
 })
 

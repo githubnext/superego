@@ -129,7 +129,7 @@ export function createExtensionHost(host: Host, later: { profiles(): ProfileHost
    */
   const chosenParts = new Map<string, Map<string, Extension>>()
   /** The kinds of agent extensions run threads' turns with (`agentKind`): the runner task's name, and whose it is. */
-  const kinds = new Map<string, { runner: string; owner: string; title: string; menu?: AgentKind['menu']; profile?: AgentKind['profile']; describe?: AgentKind['describe'] }>()
+  const kinds = new Map<string, { runner: string; owner: string; title: string; menu?: AgentKind['menu']; profile?: AgentKind['profile']; describe?: AgentKind['describe']; compact?: AgentKind['compact'] }>()
   /**
    * The kinds of pane the agent can open from extensions' data views (a thread view that fits a pane and says what it
    * shows). The others are in what each extension is (`about.panes`).
@@ -415,6 +415,8 @@ export function createExtensionHost(host: Host, later: { profiles(): ProfileHost
   }
   /** The profile a thread started on one of `kind`'s models runs with when it's given none of that kind: its name, and what makes it. */
   const kindProfile = (kind: string) => kinds.get(kind)?.profile
+  /** How a kind of agent is asked to compact its conversation, if it can be (`AgentKind.compact`). */
+  const kindCompact = (kind: string) => kinds.get(kind)?.compact
   /** What a kind of agent is called: its extension's title; Superego's own for none. */
   const kindTitle = (kind: string | undefined) => kind ? kinds.get(kind)?.title ?? kind : `${options.app.name}'s own agent`
 
@@ -613,13 +615,13 @@ export function createExtensionHost(host: Host, later: { profiles(): ProfileHost
           remove,
         })
       },
-      agentKind({ name, runner, menu, profile, describe }) {
+      agentKind({ name, runner, menu, profile, describe, compact }) {
         life.live(`the agent kind ${name}`)
         if (name !== extension.name && !name.startsWith(`${extension.name}.`)) throw new Error(`Extension ${extension.name} must name its agent kinds "${extension.name}" or "${extension.name}.<kind>", not "${name}"`)
         if (kinds.has(name)) throw new Error(`Agent kind ${name} is already there`)
         // Installed as a part no thread is given: its task is in the registry, for the threads whose runner it is.
         const part = agentExtension(defineExtension({ name: `${name}:runner`, tasks: [runner] }), false)
-        kinds.set(name, { runner: runner.definition.name, owner: extension.name, title: extension.title ?? extension.name, ...(menu ? { menu } : {}), ...(profile ? { profile } : {}), ...(describe ? { describe } : {}) })
+        kinds.set(name, { runner: runner.definition.name, owner: extension.name, title: extension.title ?? extension.name, ...(menu ? { menu } : {}), ...(profile ? { profile } : {}), ...(describe ? { describe } : {}), ...(compact ? { compact } : {}) })
         undo(() => { kinds.delete(name); part.undo() }, 'an agent kind')
         note('agent kinds', name)
       },
@@ -965,7 +967,7 @@ export function createExtensionHost(host: Host, later: { profiles(): ProfileHost
   return {
     setUp, setUpBuiltin, registerSwitches, declare, inspect, known, offer, offered: (name: string) => offered().some((e) => e.name === name),
     runnerOf,
-    publishViews, agentOf, agentMenus, menusSeen: () => menusSeen, kindModel, kindUnavailable, kindInfoOf, kindOfModel, kindProfile, kindTitle, modelFromOf, partsFor, switchedOff, withoutFor, panesOf, factsOf, quietOf, blockedOf, appliesTo,
+    publishViews, agentOf, agentMenus, menusSeen: () => menusSeen, kindModel, kindUnavailable, kindCompact, kindInfoOf, kindOfModel, kindProfile, kindTitle, modelFromOf, partsFor, switchedOff, withoutFor, panesOf, factsOf, quietOf, blockedOf, appliesTo,
     /** The daemon closing: switches turned meanwhile change nothing. */
     close: () => unlisten(),
     /** Every teardown so far finished (or given up on): those of extensions torn down earlier too, a profile's reloaded. */

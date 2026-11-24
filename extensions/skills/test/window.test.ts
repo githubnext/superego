@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 // Skills in the composer beside its own commands, in the window over a real daemon: a `/` opening the message offers
-// both (`/clear` first, then the skills), and taking a skill puts it in to write after, where ⏎ on a command runs it.
+// both (`/clear` and `/compact` first, then the skills), and taking a skill puts it in to write after, where ⏎ on a command runs it.
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -33,13 +33,13 @@ it('offers the commands and the skills a `/` names in one menu, a skill taken to
   await ui.until(() => $('.thread__title')?.textContent === 'Here', 'the thread shown')
 
   await ui.type('.composer textarea', '/c')
-  await ui.until(() => offered().length === 3, 'the command and the skills')
-  expect(offered()).toEqual(['/clear', '/skill:clean-copy', '/skill:commit'])
+  await ui.until(() => offered().length === 4, 'the commands and the skills')
+  expect(offered()).toEqual(['/clear', '/compact', '/skill:clean-copy', '/skill:commit'])
   expect($('.completions')?.getAttribute('aria-label')).toBe('Commands · Skills')
   await ui.type('.composer textarea', '/cl')
   await ui.until(() => offered().join() === '/clear,/skill:clean-copy', 'narrowed as typed')
-  await ui.type('.composer textarea', '/co')
-  await ui.until(() => offered().join() === '/skill:commit,/skill:clean-copy', 'skills alone')
+  await ui.type('.composer textarea', '/comm')
+  await ui.until(() => offered().join() === '/skill:commit', 'a skill alone')
   await ui.key('enter')
   await ui.until(() => box().value === '/skill:commit ', 'the skill put in, not sent')
   expect((await daemon.call<ThreadInfo[]>('thread.list', {})).map((t) => t.id)).toEqual([thread.id])

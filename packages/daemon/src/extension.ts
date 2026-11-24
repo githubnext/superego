@@ -292,6 +292,11 @@ export type AgentKind = {
    * state with it). Nothing: it shows no model.
    */
   describe?(thread: AgentKindThread): AgentKindDescription | undefined
+  /**
+   * How its agent is asked to compact its conversation (`thread.compact`): the message that asks it, sent as the user's
+   * (Claude Code's `/compact <instructions>`). Without it, its threads can't be compacted.
+   */
+  compact?(instructions: string | undefined): string
 }
 
 /** What an agent kind's `menu` says: its group in the model menus, or why it isn't offered here, if it says. */

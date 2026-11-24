@@ -688,5 +688,20 @@
       "thread"
     ],
     "additionalProperties": false
+  },
+  "thread.compact": {
+    "type": "object",
+    "properties": {
+      "thread": {
+        "type": "string"
+      },
+      "instructions": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "thread"
+    ],
+    "additionalProperties": false
   }
 }

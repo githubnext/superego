@@ -134,6 +134,10 @@ export function Transcript({ machine, thread, view, live }: { machine: MachineEn
       {waitingForSignIn(here.thread.status) ? <WaitingForSignIn /> : live?.runFailure && !live.run && live.runFailure.reason !== 'aborted' && (
         <div className="transcript__error">Run failed: {live.runFailure.reason}{live.runFailure.detail ? ` — ${live.runFailure.detail}` : ''}</div>
       )}
+      {/* Compacting (asked for, or as the context filled), else the last compacting that failed since one last worked. */}
+      {live?.compactions?.length
+        ? <Compacting retry={live.compactions.find((c) => c.retry)?.retry?.error} />
+        : live?.compactionFailure && !live.run && <div className="transcript__error">Compacting failed: {live.compactionFailure.error}</div>}
     </div>
     </Here.Provider>
   )
@@ -289,6 +293,17 @@ function Working({ steps, since, waiting }: { steps: number; since: number | und
       <span>{waiting ?? 'Working'}</span>
       {steps > 0 && <span>{steps === 1 ? '1 step' : `${steps} steps`}</span>}
       {seconds !== undefined && <span>{seconds < 60 ? `${seconds}s` : `${Math.floor(seconds / 60)}m ${seconds % 60}s`}</span>}
+    </div>
+  )
+}
+
+/** The conversation being summarized, as a turn's work is shown going on: what failed, if it's trying again. */
+function Compacting({ retry }: { retry: string | undefined }) {
+  return (
+    <div className="transcript__working transcript__compacting" role="status">
+      <StatusGlyph status={{ state: 'working' }} />
+      <span>Compacting conversation</span>
+      {retry && <span>trying again: {retry}</span>}
     </div>
   )
 }

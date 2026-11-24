@@ -16,7 +16,7 @@ import { splitMessage } from './attachments.ts'
 import { readSent } from './composer.ts'
 import { ComposerBox } from './composer-box.tsx'
 import { composerItems, focusTaken, setComposerItems, useComposerItems, useFocusAsked, type HeldItem } from './composer-items.ts'
-import { commandIn, takesCommands } from './slash-commands.ts'
+import { commandIn } from './slash-commands.ts'
 import { ArchiveFailed } from './clear-thread.ts'
 import { onGivenBack, takeBack } from './returned.ts'
 import { ProfileSwitch } from './profile-pick.tsx'
@@ -186,8 +186,9 @@ export function ComposerView({ machine, thread, busy, inbox, onJump }: { machine
     const attachments = [...sending, ...sendingItems.flatMap((item) => item.files)]
     if (!value && !attachments.length) return
     // A command (`/clear`) runs instead, with what's typed after it and what goes with it.
-    const command = !claim && takesCommands(thread) ? commandIn(value) : undefined
-    if (command) return clear(value, command.rest, sending, sendingItems)
+    const command = claim ? undefined : commandIn(value, thread)
+    if (command?.command === 'clear') return clear(value, command.rest, sending, sendingItems)
+    if (command?.command === 'compact') return compact(value, command.rest)
     setText('')
     setFiles([])
     if (sendingItems.length) setComposerItems(where, [])
@@ -221,6 +222,18 @@ export function ComposerView({ machine, thread, busy, inbox, onJump }: { machine
         setFiles(sending)
         if (sendingItems.length) setComposerItems(where, [...sendingItems, ...composerItems(where)])
       }
+      setError(error as { kind?: string; message: string })
+    }
+  }
+  /** Compact the thread's conversation (`/compact`), `instructions` saying what to keep; what's typed back if it can't. */
+  const compact = async (typed: string, instructions: string) => {
+    setText('')
+    setError(undefined)
+    try {
+      await dispatch('thread.compact', { thread: thread.id, ...instructions ? { instructions } : {} }, { machine: machine.id, source: 'composer' })
+    } catch (error) {
+      console.error('Compacting the thread failed', error)
+      setText((now) => now || typed)
       setError(error as { kind?: string; message: string })
     }
   }

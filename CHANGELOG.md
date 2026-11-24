@@ -4,6 +4,9 @@
 
 - `/clear` (or `/new`) in a thread's composer starts over in a new thread with the same folder, profile, model and
   thinking, and archives the old one. Anything typed after it becomes the new thread's first message.
+- `/compact` summarizes a thread's conversation to free its context, with what to keep after it if you like
+  (`/compact keep the API changes`). The transcript shows it compacting, and says when that fails.
+- Clear thread and Compact conversation are in `⌘K` too.
 - Typing `/` at the start of a message offers commands and skills together.
 - A project's own profiles can add spaces to their project: they're listed under the project's heading in Threads,
   and in the rail while you're in that project.

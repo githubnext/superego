@@ -61,6 +61,7 @@ superego actions log                            # the latest runs, from anywhere
 | `thread.start` `cwd? title? prompt? profile? model? parent? options?` | start a thread; `options: { worktrees: true }` gives it a worktree |
 | `thread.send` `thread text whenBusy?=steer\|followUp` | send a message |
 | `thread.stop` `thread` | stop the agent and its queued messages. Answers `{ returned }`: the user's own (each its `content` and `attachments`), to write again; others' are withdrawn, and the transcript says so |
+| `thread.compact` `thread instructions?` | summarize the conversation so far to free its context, `instructions` saying what to keep. Waits until it's done; refused while it's too short to compact |
 | `thread.rename` `thread title`, `thread.archive` `thread`, `thread.unarchive` `thread` | `thread.archive` answers `{ notes }`, what extensions did (removed its worktree, say). Ego is never archived |
 | `pane.open` `thread kind title? params?` | open a pane: `editor`, `thread`; `diff` (git); `browser` (`{ url }` or `{ path }`); a profile's own |
 | `pane.close` `thread pane`, `pane.focus` `thread pane?` | |

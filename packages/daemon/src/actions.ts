@@ -55,6 +55,12 @@ export function registerCoreActions(host: Host, { harness, machine, threads, fil
     }),
   }))
   router.register(defineAction({
+    id: 'thread.compact', title: 'Compact conversation', expose: ['ui', 'cli'], ...thread,
+    description: 'Summarize what came before the newest stretch of a thread\'s conversation, to free its context; `instructions` say what the summary should keep. Answers once it\'s done (`compacted`), or with the message that asked another kind of agent to (`submission`).',
+    params: obj({ thread: str(), instructions: opt(str()) }),
+    run: ({ thread: id, instructions }) => threads.compact(id, instructions),
+  }))
+  router.register(defineAction({
     id: 'thread.stop', title: 'Stop the agent', expose: ['ui', 'cli', 'outside'], ...thread,
     description: 'Stop a thread\'s agent mid-turn, and the messages waiting their turn. The thread stays, and takes messages again. `returned`: the user\'s own waiting messages (none of another thread\'s or an extension\'s, which are withdrawn), in order, to write again: each its `content` and `attachments`.',
     params: obj({ thread: str() }),

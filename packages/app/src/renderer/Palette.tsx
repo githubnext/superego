@@ -41,7 +41,8 @@ export function Palette({ onClose }: { onClose(): void }) {
   const all = useMemo(() => [...items.filter((item) => !item.group), ...items.filter((item) => item.group), ...placings], [items, placings])
   return (
     <Picker label="Commands" placeholder="Commands" items={all} onClose={onClose} group={(item) => item.group}
-      filter={(list, query) => list.map((item) => ({ item, rank: score(item.title, query) }))
+      // Browsing, every one; searching, the best 50.
+      filter={(list, query) => !query.trim() ? list : list.map((item) => ({ item, rank: score(item.title, query) }))
         .filter(({ rank }) => rank > 0).sort((a, b) => b.rank - a.rank).map(({ item }) => item).slice(0, 50)}
       row={(item, { grouped }) => ({
         key: item.id, title: item.title,

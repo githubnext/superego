@@ -450,9 +450,22 @@ export function createThreads(host: Host, { harness, extensions, profiles }: { h
   async function submit(id: string, text: string, requestId: string, whenBusy?: 'steer' | 'followUp', attachments: Attachment[] = [], origin: MessageOrigin = {}) {
     if (!text.trim() && !attachments.length) throw new RpcError('invalid', 'Nothing to send')
     const m = await get(id)
+    await ready(id, m, 'send to it')
+    if (!m.meta.title) await updateMeta(id, (meta) => { meta.title = titleOf(text.trim() || attachments.map((a) => a.name).join(', ')) })
+    const said = originOf(origin)
+    const content = await transformed(id, m, { text, attachments, ...said }, await contentOf(attachmentsDir(options.dataDir, id), text, attachments))
+    const submission = await m.conversation.submit({ type: 'input', content, requestId, ...(whenBusy ? { whenBusy } : {}), entry: { kind: MESSAGE_ENTRY, data: said } }, context)
+    return String(submission.id)
+  }
+
+  /**
+   * Its agent set up as it is now, to run (`doing`: what's refused for an archived one): its profile found (where it
+   * moved) and loaded, its model, or its kind's runner. Refused when it's put away, its extension's off, or it has no
+   * model.
+   */
+  async function ready(id: string, m: Mounted, doing: string) {
     // Put away: it can be read, not written to, until it's brought back.
-    if (m.meta.archived) throw new RpcError('archived', 'This thread is archived', { hint: 'Unarchive it to send to it.' })
-    // Its profile found (where it moved) and loaded first, for what the thread goes without.
+    if (m.meta.archived) throw new RpcError('archived', 'This thread is archived', { hint: `Unarchive it to ${doing}.` })
     await profileFor(id)
     const { model, thinkingLevel, without, ...rest } = await extensions.agentOf(id, m.meta)
     // An extension's own thread runs as that extension makes it, or not at all: not while it's off here, or the thread
@@ -462,11 +475,31 @@ export function createThreads(host: Host, { harness, extensions, profiles }: { h
     const runner = runnerOf(m.meta, without)
     if (!model && !runner) throw new RpcError('no_model', 'No model is available', { hint: 'Sign in to a provider in Settings.' })
     await m.conversation.configure({ ...(runner ? { runner, model: null, thinkingLevel: null } : { model, thinkingLevel: thinkingLevel ?? null, runner: null }), ...rest }, context)
-    if (!m.meta.title) await updateMeta(id, (meta) => { meta.title = titleOf(text.trim() || attachments.map((a) => a.name).join(', ')) })
-    const said = originOf(origin)
-    const content = await transformed(id, m, { text, attachments, ...said }, await contentOf(attachmentsDir(options.dataDir, id), text, attachments))
-    const submission = await m.conversation.submit({ type: 'input', content, requestId, ...(whenBusy ? { whenBusy } : {}), entry: { kind: MESSAGE_ENTRY, data: said } }, context)
-    return String(submission.id)
+  }
+
+  /**
+   * Compact a thread's conversation (`thread.compact`): what came before its newest stretch summarized, `instructions`
+   * saying what the summary should keep. Superego's own agent does it as pi-durable does, and answers once it's done
+   * (the summary goes in at the next step while it works); another kind's agent is asked to, as it says (Claude Code's
+   * `/compact`), and its turn says how it went. Refused when there's nothing old enough to compact yet.
+   */
+  async function compact(id: string, instructions?: string) {
+    const m = await get(id)
+    await ready(id, m, 'compact it')
+    const asked = instructions?.trim() || undefined
+    if (m.meta.agent) {
+      const ask = extensions.kindCompact(m.meta.agent)
+      if (!ask) throw new RpcError('invalid', `${extensions.kindTitle(m.meta.agent)} threads can't be compacted from here`)
+      return { submission: await submit(id, ask(asked), randomUUID()) }
+    }
+    const task = await m.conversation.compact(asked, context)
+    const { state } = await harness.waitForTask(task, context)
+    const outcome = state.outcome
+    if (outcome.status !== 'completed') throw new RpcError('error', `Compacting failed: ${outcome.error?.message ?? outcome.status}`)
+    if (outcome.result.entryId === undefined && outcome.result.submissionId === undefined) {
+      throw new RpcError('invalid', 'Nothing to compact yet: the conversation is still short enough to keep whole')
+    }
+    return { compacted: true }
   }
 
   /** The runner of a thread's kind of agent (`ThreadMeta.agent`): none for Superego's own; refused when its kind isn't here. */
@@ -940,7 +973,7 @@ export function createThreads(host: Host, { harness, extensions, profiles }: { h
   }
 
   return {
-    list, get, updateMeta, editState, heedStatus, rebound, letGoOf, note, setProfile, tellPaneClosed, submit, stop, startThread, archive, unarchive, openPane, history, lastAnswer: answerOf, read,
+    list, get, updateMeta, editState, heedStatus, rebound, letGoOf, note, setProfile, tellPaneClosed, submit, compact, stop, startThread, archive, unarchive, openPane, history, lastAnswer: answerOf, read,
     watchTranscript, imageBlock, apiFor, retrySignIn, rejectedNow, learnConversations, threadOf,
   }
 }
