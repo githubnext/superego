@@ -13,7 +13,7 @@ import { useThemeStyle } from './themes.tsx'
 import { useSettings, watched } from './client.ts'
 import type { SidebarRailProps, View, ViewProps } from './extension-api.ts'
 import { scopeOfEntry, useRegistry, whose } from './registry.tsx'
-import { shownPanes } from './lookups.ts'
+import { shownPanes, spaceFor } from './lookups.ts'
 import { focusSidebar } from './focus.ts'
 import { paneMenu, PlacedViews, Slot, useLayout, viewsIn } from './placement.tsx'
 import { Contained } from './contained.tsx'
@@ -44,7 +44,8 @@ import { SetupPage, useSetup } from './Setup.tsx'
 import { bound, RailTabNumber, shortcutOf, useActions, useRailShortcut, useShortcut, type Keymap } from './keys.ts'
 import { railTabs } from './rail-tabs.ts'
 import { useAllThreads, useFold, useHistory, useMachines, useNewThreadDialog, useSelection, useProjects, useSettingsDialog, useShell, useSidebar, useSpace, useThreadSheet, type Selection } from './state.tsx'
-import { SpaceMain, SpaceTitle } from './spaces.tsx'
+import { ProjectSpaceButtons, SpaceMain, SpaceTitle } from './spaces.tsx'
+import type { InProject } from './registry.tsx'
 
 /** Dispatch an action from this window: `dispatch('app.sidebar')`, `dispatch('thread.select', { machine, thread })`. */
 export function useDispatch() {
@@ -96,6 +97,9 @@ export function Shell() {
   // Closed by a thread picked in it, the focus is the thread's to take, not ☰'s again.
   const picked = useRef(false)
   const where = selection && thread && machine && !space ? { machine: machine.id, thread } : undefined
+  // The project you're in, whose spaces the rail offers: the open space's, if it's a project's; else the selected thread's.
+  const inProject: InProject | undefined = space?.project ? { machine: space.machine, root: space.project }
+    : selection && thread?.project ? { machine: selection.machine, root: thread.project.root } : undefined
   // The sheet's thread: the one it was opened for, else the selected one.
   const sheetMachine = sheet.at ? machines.find((m) => m.id === sheet.at!.machine) : machine
   const sheetThread = sheet.at ? allThreads[sheet.at.machine]?.find((t) => t.id === sheet.at!.thread) : thread
@@ -126,7 +130,7 @@ export function Shell() {
   // Actions read the shell as it is when they run.
   registry.router.setContext({
     app: registry.app, machines, selection, select, openSettings, newThread: openNewThread,
-    space, openSpace, hasSpace: (kind) => registry.spaces.some((s) => s.kind === kind),
+    space, openSpace, hasSpace: (kind, at) => Boolean(spaceFor(registry, { kind, ...at })),
     togglePalette: () => { setNavigator(false); setPanePicker(false); setPalette((open) => !open) },
     toggleNavigator: () => { setPalette(false); setPanePicker(false); setNavigator((open) => !open) },
     togglePanePicker: () => { setPalette(false); setNavigator(false); setPanePicker((open) => !open) },
@@ -176,6 +180,7 @@ export function Shell() {
           <span className="app__drawer-sep" aria-hidden />
         </>}
         <PlacedViews place="drawer" frame={withContextMenu('drawer')} />
+        <ProjectSpaceButtons project={inProject} narrow />
         <span className="app__drawer-end">{settingsButton}</span>
       </div>
     </div>}
@@ -214,6 +219,7 @@ export function Shell() {
                   </RailTabNumber.Provider>
                 </ViewContextMenu>
               ))}
+              <ProjectSpaceButtons project={inProject} />
             </div>
             <div className="app__rail-group">{notices}{settingsButton}</div>
           </nav>

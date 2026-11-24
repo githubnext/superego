@@ -17,7 +17,7 @@
 // It also draws the thread tools' rows and `thread:` links (rows.tsx); the tools themselves are thread-tools'.
 import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type KeyboardEvent } from 'react'
 import {
-  call, defineAction, defineUiExtension, fold, isPinned, listArchived, MachineDrift, search, shownRows, threadPath, useFold, useNarrow, RailButton, SHOW_PINNED, showProject, Slot, SORT, unreadList, useAppSetting, useDispatch, useLocalState, useMachines, usePlacement, useSelection, useProjects, useThreadView, useShell, useShortcut, useRailShortcut,
+  call, defineAction, defineUiExtension, fold, isPinned, listArchived, MachineDrift, useProjectSpaces, search, shownRows, threadPath, useFold, useNarrow, RailButton, SHOW_PINNED, showProject, Slot, SORT, unreadList, useAppSetting, useDispatch, useLocalState, useMachines, usePlacement, useSelection, useProjects, useThreadView, useShell, useShortcut, useRailShortcut,
   type ArchivedThreads, type MachineEntry, type Pin, type Project, type ShownRow, type ShownSection, type Sort, type SidebarRailProps, type WindowContext,
 } from '@superego/app/ui'
 import { rollup, statusLabel, statusShape, unread, type ThreadInfo } from '@superego/protocol'
@@ -138,6 +138,7 @@ function Threads() {
             <Caret {...section} label={project.name} section />
             <NewThreadButton label={`New thread in ${project.name}`} machine={project.machine} cwd={project.root} />
           </div>
+          {!section.folded && <ProjectSpaces machine={project.machine.id} root={project.root} />}
           {section.rows.length > 0 && (
             <List>
               {section.rows.map((row) => (
@@ -151,6 +152,21 @@ function Threads() {
       <Archived machines={machines} live={projects} />
       </>}
     </div>
+  )
+}
+
+/** A project's spaces (its profiles' `superego.space`), above its threads: a row each, lit while it's open. */
+function ProjectSpaces({ machine, root }: { machine: string; root: string }) {
+  const spaces = useProjectSpaces(useMemo(() => ({ machine, root }), [machine, root]))
+  if (!spaces.length) return null
+  return (
+    <List className="threads-spaces">
+      {spaces.map((space) => (
+        <ListItem key={space.kind} selected={space.open} leading={<span className="threads__lead" aria-hidden>▦</span>} onClick={space.show} data-space={space.kind}>
+          <span className="threads__title">{space.title}</span>
+        </ListItem>
+      ))}
+    </List>
   )
 }
 

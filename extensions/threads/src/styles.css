@@ -131,3 +131,5 @@ a.threads-row-ref { flex: 0 1 auto; align-items: center; }
 .thread-card__status > span { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
 .thread-card__line { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 10px; min-width: 0; }
 .thread-card__fact { display: inline-flex; align-items: center; gap: 4px; min-width: 0; }
+/* A project's spaces, above its threads: ▦ and the title. */
+.threads-spaces .threads__lead { color: var(--superego-muted); font-size: 13px; }
