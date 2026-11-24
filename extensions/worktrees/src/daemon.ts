@@ -67,9 +67,14 @@ async function stopProcessesIn(path: string) {
   const own = table.find((p) => p.pid === process.pid)?.pgid
   // By the path it's known by, and the real one (a temporary folder on macOS is under /private).
   const real = await realpath(path).catch(() => path)
+  const inside = (file: string) => file === path || file === real || file.startsWith(`${path}/`) || file.startsWith(`${real}/`)
   const pids = new Set(table.filter((p) => p.command.includes(`${path}/`) || p.command.includes(`${real}/`)).map((p) => p.pid))
-  for (const line of (await run('lsof', ['-a', '-d', 'cwd', '+D', path, '-Fp'])).split('\n')) {
-    if (line.startsWith('p')) pids.add(Number(line.slice(1)))
+  // Every process's working folder, those in it kept: not lsof's +D, which walks every file under the folder first
+  // (seconds, with a node_modules in it).
+  let pid: number | undefined
+  for (const line of (await run('lsof', ['-a', '-d', 'cwd', '-n', '-P', '-Fpn'])).split('\n')) {
+    if (line.startsWith('p')) pid = Number(line.slice(1))
+    else if (line.startsWith('n') && pid !== undefined && inside(line.slice(1))) pids.add(pid)
   }
   const ours = (pid: number) => pid === process.pid || (own !== undefined && table.find((p) => p.pid === pid)?.pgid === own)
   const doomed = [...pids].filter((pid) => pid > 1 && !ours(pid))
