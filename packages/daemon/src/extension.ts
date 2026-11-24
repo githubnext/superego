@@ -486,7 +486,7 @@ export type DaemonApi = {
    * value of this extension's or a method of its (see `DataView`); every window checks them as they land and draws a
    * view that fails the check as its first error (`blockErrors(blocks, { by: 'extension', extension, thread })` says
    * what, for a test). A profile's fit only the places that show a thread, and only its own threads; but a `window` view
-   * of the user's own profile's (not a project's) is the window's, a space too, while the profile is loaded.
+   * of the user's own profile's (not a project's) is the window's, a sidebar too, while the profile is loaded.
    */
   view(id: string, view: DataView): void
   /** Take part in threads' lives: see ThreadHooks. `S`: the state its `starting` gives a thread (`state<S>()`). */

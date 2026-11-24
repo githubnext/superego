@@ -3,7 +3,7 @@
 // read when a component first shows it. A value back at its initial one is forgotten, so drafts don't pile up.
 //
 // The desktop app's windows share one storage, so each keeps its own state under its id (the main process passes it in
-// the window's address, which a reload keeps): which thread it shows, its space, its sidebar shown or hidden. State
+// the window's address, which a reload keeps): which thread it shows, its sidebar, shown or hidden. State
 // every window agrees on (a draft, a notice dismissed) is `shared`. The web app has one window: its state is all one.
 import { useCallback, useState, useSyncExternalStore } from 'react'
 

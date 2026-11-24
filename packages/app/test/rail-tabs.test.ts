@@ -16,23 +16,23 @@ describe("the rail's tabs", () => {
     expect(conflicts(actions, undefined)).toEqual(new Map())
   })
 
-  it('go to the rail buttons that say what they do, then the spaces, in order', () => {
+  it('go to the rail buttons that say what they do, then the sidebars, in order', () => {
     const run = vi.fn()
     const show = vi.fn()
     const rail = [{ id: 'ego.button', action: 'ego.open' }, { id: 'unread.bell' }, { id: 'other.button', action: 'other.open' }]
-    const spaces = [{ id: 'threads.list' }, { id: 'files.folder' }]
-    const tabs = railTabs(rail, spaces, { offered: (action) => action !== 'other.open', run, show })
+    const sidebars = [{ id: 'threads.list' }, { id: 'files.folder' }]
+    const tabs = railTabs(rail, sidebars, { offered: (action) => action !== 'other.open', run, show })
     expect(tabs.map((t) => t.id)).toEqual(['ego.button', 'threads.list', 'files.folder'])
     tabs[0]!.open()
     expect(run).toHaveBeenCalledWith('ego.open')
     tabs[2]!.open()
-    expect(show).toHaveBeenCalledWith(spaces[1])
+    expect(show).toHaveBeenCalledWith(sidebars[1])
   })
 
   it('number nine at most', () => {
-    const spaces = Array.from({ length: 12 }, (_, i) => ({ id: `s.v${i}` }))
-    const tabs = railTabs([], spaces, { offered: () => true, run() {}, show() {} })
-    expect(tabs.map((t) => t.id)).toEqual(spaces.slice(0, 9).map((s) => s.id))
+    const sidebars = Array.from({ length: 12 }, (_, i) => ({ id: `s.v${i}` }))
+    const tabs = railTabs([], sidebars, { offered: () => true, run() {}, show() {} })
+    expect(tabs.map((t) => t.id)).toEqual(sidebars.slice(0, 9).map((s) => s.id))
   })
 
   it('a number opens its tab, and is offered only while there is one', () => {

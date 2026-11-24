@@ -1,5 +1,5 @@
 // The sidebar's width, as its edge is dragged (see sidebar-edge.tsx): kept as an app setting, so it's the same in every
-// window and after a restart. Dragged past its least, it hides: the open space shows in the rail alone.
+// window and after a restart. Dragged past its least, it hides: the open sidebar shows in the rail alone.
 
 /** The app setting the width is kept in, in pixels. */
 export const SIDEBAR_WIDTH = 'app.sidebar.width'

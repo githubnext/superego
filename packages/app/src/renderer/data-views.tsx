@@ -43,9 +43,9 @@ export function DataViewBody({ id, place, machine, thread }: { id: string; place
   useSyncExternalStore(registry.subscribe, () => registry.version)
   const machines = useMachines()
   const view = registry.views.find((v) => v.id === id && v.owner.data)
-  // A space is a panel under its title, as the sidebar's are; beside the thread, a heading; a pane's tab says it already.
-  const framed = (title: string, children: ReactNode) => place === 'space'
-    ? <Panel title={title} className="data-view data-view--space">{children}</Panel>
+  // In the sidebar, a panel under its title, as the sidebar's own are; beside the thread, a heading; a pane's tab says it already.
+  const framed = (title: string, children: ReactNode) => place === 'sidebar'
+    ? <Panel title={title} className="data-view data-view--sidebar">{children}</Panel>
     : <div className={`data-view data-view--${place}`}>{place === 'beside' && <h5 className="data-view__heading">{title}</h5>}{children}</div>
   if (machine && thread) {
     const info = declaredOn(registry, machine.id, id, thread)
@@ -71,7 +71,7 @@ function Source({ info, machine, thread }: { info: DataViewInfo; machine: Machin
 /** Fed by a live value: a thread view's by the thread's scope (a scoped value's, or a plain one's entry by its id). */
 function FromValue({ info, value, machine, thread }: { info: DataViewInfo; value: string; machine: MachineEntry; thread?: ThreadInfo }) {
   // Undefined until it's heard; null when it's never been set, and a thread view's with nothing for this thread: none.
-  // A thread view with no thread (a space with none shown) has nothing to show.
+  // A thread view with no thread (a sidebar with none shown) has nothing to show.
   const scope = info.context === 'thread' ? thread?.id ?? '' : undefined
   const live = useValue<Json>(machine, value, scope === undefined ? {} : { scope })
   return <ViewBlocks blocks={scope === '' && live !== undefined ? null : live} info={info} machine={machine} thread={thread} />

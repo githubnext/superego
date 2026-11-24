@@ -82,7 +82,7 @@ export type ProfileSpec = {
   /**
    * One of your own profiles that is part of the app, not only of its threads: the daemon loads it as it starts (its
    * daemon halves run for the daemon's life), and the window installs its UI as the app's, so its views may go in any
-   * place (a space in the rail) and it may add surfaces. Not a project's profile's, nor taken from the one it extends.
+   * place (a sidebar in the rail) and it may add spaces. Not a project's profile's, nor taken from the one it extends.
    */
   global?: boolean
 }

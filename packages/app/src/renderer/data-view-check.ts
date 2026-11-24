@@ -26,6 +26,8 @@ const owned = (value: unknown, extension: string) => {
   return text && text.startsWith(`${extension}.`) && text.length > extension.length + 1 && !/\s/.test(text) ? text : undefined
 }
 const place = (value: unknown): value is DataPlace => DATA_PLACES.includes(value as DataPlace)
+/** A daemon older than the rename calls the sidebar `space`: taken as `sidebar`, so its views still show. */
+const renamed = (value: unknown): unknown => value === 'space' ? 'sidebar' : Array.isArray(value) ? value.map(renamed) : value
 const icon = (value: unknown): value is DataIcon => DATA_ICONS.includes(value as DataIcon)
 /** A default or narrow place: one, several, or `false`. */
 const placing = (value: unknown): DataPlace | DataPlace[] | false | undefined =>
@@ -42,7 +44,9 @@ export function checkDataViews(raw: unknown, has: (extension: string) => boolean
   if (raw === null || raw === undefined) return { views, dropped }
   if (!Array.isArray(raw)) return { views, dropped: ['the list of views isn’t a list'] }
   if (raw.length > LIMITS.views) dropped.push(`${raw.length - LIMITS.views} views past the first ${LIMITS.views}`)
-  for (const [i, value] of raw.slice(0, LIMITS.views).entries()) {
+  for (const [i, sent] of raw.slice(0, LIMITS.views).entries()) {
+    // A copy, its places by their names now: what the machine sent stays as it was.
+    const value = isObject(sent) ? Object.fromEntries(Object.entries(sent).map(([k, v]) => [k, ['fits', 'default', 'narrow'].includes(k) ? renamed(v) : v])) : sent
     const label = isObject(value) && name(value.id) ? value.id as string : `view ${i}`
     const problem = (why: string) => { dropped.push(`${label}: ${why}`) }
     if (!isObject(value)) { problem('isn’t a declaration'); continue }
@@ -62,8 +66,8 @@ export function checkDataViews(raw: unknown, has: (extension: string) => boolean
     if (!Array.isArray(value.fits) || !value.fits.length || value.fits.length > DATA_PLACES.length) { problem('fits no place'); continue }
     const bad = value.fits.find((p) => !place(p) || (context === 'window' && p === 'pane'))
     if (bad !== undefined) { problem(`can’t be drawn in ${String(bad).slice(0, 40)}`); continue }
-    // A profile's show only in its threads: never a space.
-    const fits = profiles ? (value.fits as DataPlace[]).filter((p) => p !== 'space') : value.fits as DataPlace[]
+    // A profile's show only in its threads: never a sidebar.
+    const fits = profiles ? (value.fits as DataPlace[]).filter((p) => p !== 'sidebar') : value.fits as DataPlace[]
     if (!fits.length) { problem('fits no place a profile’s view is drawn in'); continue }
     const source = value.value !== undefined ? 'value' : 'method'
     if ((value.value === undefined) === (value.method === undefined)) { problem('needs one source: a value or a method'); continue }

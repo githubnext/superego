@@ -1,4 +1,4 @@
-// The sidebar, shown or hidden: one state, which ⌘/, the open space's rail button and the edge all change, and a tight
+// The sidebar, shown or hidden: one state, which ⌘/, the open sidebar's rail button and the edge all change, and a tight
 // window hides it by itself until it's shown there.
 import { describe, expect, it } from 'vitest'
 import { sidebarIsHidden, showSidebar, type SidebarMode } from '../src/renderer/sidebar-mode.ts'

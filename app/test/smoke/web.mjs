@@ -46,12 +46,12 @@ export default async function web(t, s) {
   await b.run(`[...document.querySelectorAll('.unread-list .palette__list li')].find((i) => i.textContent.includes('unread on the phone')).click()`)
   await b.until(`document.querySelector('.app__mobilebar')?.textContent.includes('unread on the phone') && !document.querySelector('.app__sidebar')`, 'Unread went to the thread')
   await b.until(`!document.querySelector('.unread-list')`, 'the unread list closed')
-  // A data view on a phone: the skills, placed as a space, switched to from the drawer's foot and drawn from data.
-  await b.call('app.settings.set', { key: 'app.layout', value: { place: { 'skills.view': 'space' } } }, 'app')
+  // A data view on a phone: the skills, placed as a sidebar, switched to from the drawer's foot and drawn from data.
+  await b.call('app.settings.set', { key: 'app.layout', value: { place: { 'skills.view': 'sidebar' } } }, 'app')
   await b.click('.app__mobilebar button')
-  await b.until(`Boolean(document.querySelector('.app__drawer-bar [aria-label="Skills"]'))`, 'Skills among the spaces in the drawer')
+  await b.until(`Boolean(document.querySelector('.app__drawer-bar [aria-label="Skills"]'))`, 'Skills among the sidebars in the drawer')
   await b.click('.app__drawer-bar [aria-label="Skills"]')
-  await b.until(`document.querySelector('.data-view--space')?.textContent.includes('$smoke-skill') && document.querySelector('.data-view--space')?.textContent.includes('Checks the smoke.')`, 'the skills data view in the drawer')
+  await b.until(`document.querySelector('.data-view--sidebar')?.textContent.includes('$smoke-skill') && document.querySelector('.data-view--sidebar')?.textContent.includes('Checks the smoke.')`, 'the skills data view in the drawer')
   await b.click('.app__drawer-bar [aria-label="Threads"]')
   await b.until(`Boolean(document.querySelector('.app__sidebar .superego-list-item'))`, 'back to the threads in the drawer')
   // Ego from the drawer: its thread shown, and its Clear in the thread's sheet (the title bar's, on a phone).
@@ -65,10 +65,10 @@ export default async function web(t, s) {
   await b.click('.thread-sheet [data-item="view:threads.model"]')
   await b.click('.app__scrim--sheet')
   await b.until(`!document.querySelector('.thread-sheet')`, 'the sheet closed')
-  // No space and no picker on a phone: the bar stays, with the thread's sheet and Settings, and Settings has the layout
+  // No sidebar and no picker on a phone: the bar stays, with the thread's sheet and Settings, and Settings has the layout
   // to edit (in a browser, in a dialog) back to the defaults.
   await b.call('app.settings.set', { key: 'app.layout', value: { place: { 'threads.list': null, 'core.picker': null } } }, 'app')
-  await b.until(`Boolean(document.querySelector('.app__mobilebar .app__settings')) && Boolean(document.querySelector('.app__mobilebar button.app__mobiletitle')) && !document.querySelector('.app__mobilebar [aria-label="Threads"]')`, 'a phone with no space keeps its bar and Settings')
+  await b.until(`Boolean(document.querySelector('.app__mobilebar .app__settings')) && Boolean(document.querySelector('.app__mobilebar button.app__mobiletitle')) && !document.querySelector('.app__mobilebar [aria-label="Threads"]')`, 'a phone with no sidebar keeps its bar and Settings')
   await b.click('.app__mobilebar .app__settings')
   // As iOS's Settings: a list of its tabs, a row opening its page.
   await b.until(`Boolean(document.querySelector('.settings__groups .settings__row'))`, 'Settings on a phone, its list')
@@ -76,9 +76,9 @@ export default async function web(t, s) {
   await b.until(`[...document.querySelectorAll('.setting[data-key="app.layout"] button')].some((b) => b.textContent === 'Edit layout…')`, 'the layout in Settings')
   await b.click('.setting[data-key="app.layout"] button', 'Edit layout…')
   await b.until(`Boolean(document.querySelector('.layout-editor__text')) && !document.querySelector('.settings')`, "the browser's layout in a dialog")
-  await b.type('.layout-editor__text', '{ "place": { "threads.list": "sidebar" } }')
+  await b.type('.layout-editor__text', '{ "place": { "threads.list": "dock" } }')
   await b.click('.layout-editor button', 'Save')
-  await b.until(`document.querySelector('.layout-editor .layout-note.is-problem')?.textContent.includes('no place "sidebar"')`, 'a layout that does not read, noted')
+  await b.until(`document.querySelector('.layout-editor .layout-note.is-problem')?.textContent.includes('no place "dock"')`, 'a layout that does not read, noted')
   await b.type('.layout-editor__text', '{}')
   await b.click('.layout-editor button', 'Save')
   await b.until(`!document.querySelector('.layout-editor') && Boolean(document.querySelector('.app__mobilebar [aria-label="Threads"]'))`, 'the layout back from the dialog')

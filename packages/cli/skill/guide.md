@@ -316,7 +316,7 @@ it('queues builds and shows the thread its own', async () => {
 - The cases worth a test each, in the kit's own tests (`packages/sdk/test/kit.test.ts` in Superego's source): teardown (`unmount`, an edit and
   `reload`), set up twice (`installProfile` again), a helper edited, one profile on two machines (two daemons in one
   window), a machine away or older (`setMachine`, `fakeMachine({ features: [], extensions: [{ name, version: '0.9.0' }] })`),
-  and a phone with no spaces (`mountUi({ narrow: true })`).
+  and a phone with no sidebars (`mountUi({ narrow: true })`).
 
 ## When it doesn't show
 
@@ -352,8 +352,8 @@ source, at `extensions/<name>/src`, so only a checkout has them.
 | `mentions` | a `beforeSend` transform; `composer.complete` (with `superego.window`'s threads and `files.list`) and `composer.sentWith`'s `words` |
 | `files` | a `method`, a `pane` the agent is told of, an `overlay`, `store`s, `when` |
 | `links` | UI only: the window declares it to the machine; a `Picker` over `transcriptLinks`, the links handlers drew |
-| `unread` | UI only: a view in the rail `withoutSpaces` and in a phone's `drawer`, an action with keys reading projects, an app setting |
-| `threads` | the required one, UI only: views (the list a `space` with a `rail` of its own, details in the `beside` with ⌘I, the model in the `header`), app settings, tool rows and a `link` |
+| `unread` | UI only: a view in the rail `withoutSidebar` and in a phone's `drawer`, an action with keys reading projects, an app setting |
+| `threads` | the required one, UI only: views (the list a `sidebar` with a `rail` button of its own, details in the `beside` with ⌘I, the model in the `header`), app settings, tool rows and a `link` |
 | `thread-tools` | daemon only: the agent's thread tools, on `superego.threads` (`send` with `from`, `noteRead` for what a thread read, `idle` for thread_read's wait); it exports `readTool` and `listTool` for reuse (Ego) |
 | `thread-reports` | daemon only: report-back through `turnEnd` and `blocked` hooks, for the runs the parent asked for (told by `beforeSend`'s `by` and `from`), not what the parent has read (`threads.parentRead`); `quiet` for a child whose parent hears it |
 | `worktrees` | `thread` hooks (`starting` moves a thread, `archived` cleans up, `unarchiving` puts back), `state` and `facts`; a `header.chips` chip, a `thread.badge` mark and a `newThreadField` |

@@ -48,8 +48,8 @@ export default defineProfile({
 
 **Global profiles.** `global: true` makes one of your own profiles part of the app, not only of its threads: the daemon
 loads it as it starts (its daemon halves run for the daemon's life, whatever threads there are), and the window installs
-its UI as the app's: its views go in any place (a space in the rail), its slots and tool rows apply to every thread, its
-styles are the window's, and it can add **surfaces** (views that fill the main area, with a thread docked beside them:
+its UI as the app's: its views go in any place (a sidebar in the rail), its slots and tool rows apply to every thread, its
+styles are the window's, and it can add **spaces** (views that fill the main area, with a thread docked beside them:
 `superego --skill window`). A Notes app or a canvas is a global profile. A project's profile can't be global (it's
 told so in its `problems`), and a profile extending a global one isn't global unless it says so itself.
 
@@ -65,9 +65,9 @@ that loads with one anyway (a key no extension here reads, a `without` naming no
   - a **daemon half**, `defineDaemonExtension({ name, setup(superego) { … } })`: actions the UI and command
     line run, live values, a thread's blocked status, and agent parts of its own (`superego --skill daemon`).
 - **`ui`** are modules for the window (`superego --skill ui`). They draw only in this profile's threads, unless it's
-  global. A space (a
-  rail tab and its sidebar) comes from a daemon half instead: a data view (`superego.view`, `context: 'window'`) of
-  one of your own profiles' may fit `space`, and shows while the profile is loaded (a project's may not).
+  global. A sidebar (a rail tab and what it opens) can come from a daemon half instead: a data view (`superego.view`,
+  `context: 'window'`) of one of your own profiles' may fit `sidebar`, and shows while the profile is loaded (a
+  project's may not).
 - **`panes`** describes each pane kind the UI registers, so the agent knows it can open one and with which params.
 - **`without`** takes the names of optional extensions, the ones Settings → Extensions lists (and `superego
   extensions`): the core's `coding-tools` (read, write, edit, bash), `panes` (pane_open) and `agents-md`, and bundled

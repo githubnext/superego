@@ -13,9 +13,9 @@ export const DATA_VIEWS = 'view.list'
  */
 export const GLOBAL_PROFILES = 'profile.globals'
 
-/** The places a data view can be drawn in: a space (on a phone, the drawer), beside the thread, a pane. */
-export type DataPlace = 'space' | 'beside' | 'pane'
-export const DATA_PLACES: DataPlace[] = ['space', 'beside', 'pane']
+/** The places a data view can be drawn in: a sidebar (on a phone, the drawer), beside the thread, a pane. */
+export type DataPlace = 'sidebar' | 'beside' | 'pane'
+export const DATA_PLACES: DataPlace[] = ['sidebar', 'beside', 'pane']
 
 /** The glyphs a data view can take, by name: its tab's, its place in the rail's. */
 export const DATA_ICONS = ['list', 'table', 'folder', 'file', 'bell', 'check', 'gear', 'globe', 'sparkle', 'terminal', 'wrench', 'chats', 'archive', 'columns'] as const
@@ -24,8 +24,8 @@ export type DataIcon = (typeof DATA_ICONS)[number]
 /**
  * A data view, as a daemon half declares it (`superego.view`). What it shows is blocks (`Block[]`; `[]` or null:
  * nothing yet), read from a live value of the extension's or a method of its:
- * - a `window` view (a space): the value is the blocks; the method is called with `{}`
- * - a `thread` view (a space shows the selected thread): the value is a scoped value, each thread's blocks in its
+ * - a `window` view (a sidebar): the value is the blocks; the method is called with `{}`
+ * - a `thread` view (a sidebar shows the selected thread): the value is a scoped value, each thread's blocks in its
  *   scope (or a plain value holding each thread's by its id; the window watches only that thread's); the method is
  *   called with `{ thread }`
  * A method is read again as the thread moves on (a window view: as any thread on the machine does), and after one of
@@ -37,7 +37,7 @@ export type DataView = {
   title: string
   icon?: DataIcon
   context: 'window' | 'thread'
-  /** The places it can be drawn in. A `window` view fits only `space` and `beside`. */
+  /** The places it can be drawn in. A `window` view fits only `sidebar` and `beside`. */
   fits: DataPlace[]
   /** Where it goes unless the user's layout says otherwise; none: offered, not placed. */
   default?: DataPlace | DataPlace[] | false
@@ -61,7 +61,8 @@ export function dataViewProblem(view: DataView): string | undefined {
   if (view.context !== 'window' && view.context !== 'thread') return 'needs a context, window or thread'
   if (!Array.isArray(view.fits) || !view.fits.length) return 'fits no place'
   const bad = view.fits.find((p) => !DATA_PLACES.includes(p) || (view.context === 'window' && p === 'pane'))
-  if (bad) return `can't be drawn in ${bad}${view.context === 'window' ? ' (a window view fits space and beside)' : ''}`
+  if ((bad as string) === 'space') return "can't be drawn in space: the place is called sidebar now (fits: ['sidebar'])"
+  if (bad) return `can't be drawn in ${bad}${view.context === 'window' ? ' (a window view fits sidebar and beside)' : ''}`
   if (Boolean(view.value) === Boolean(view.method)) return 'needs one source: a value or a method'
   if (view.icon && !DATA_ICONS.includes(view.icon)) return `has no icon ${view.icon}`
   return undefined

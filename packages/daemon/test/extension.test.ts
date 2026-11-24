@@ -231,19 +231,19 @@ it('announces data views, fed by a value, whose buttons run its actions: a round
         id: 'orders.ship', title: 'Ship an order', runs: 'machine', params: obj({ id: str() }),
         run: ({ id }) => { orders = orders.map((o) => o.id === id ? { ...o, shipped: true } : o); list.set(blocks(orders)) },
       }))
-      superego.view('orders.recent', { title: 'Recent orders', icon: 'list', context: 'window', fits: ['space', 'beside'], default: 'space', value: 'orders.recent' })
+      superego.view('orders.recent', { title: 'Recent orders', icon: 'list', context: 'window', fits: ['sidebar', 'beside'], default: 'sidebar', value: 'orders.recent' })
       superego.view('orders.notes', { title: 'Notes', context: 'thread', fits: ['beside', 'pane'], method: 'orders.notes', about: "the thread's order notes; no params" })
       superego.method('orders.notes', ({ id }): Block[] => [{ type: 'markdown', text: `Notes for ${String(id)}` }])
       // Checked: a source of another's, two sources, a place a window view can't go.
-      expect(() => superego.view('orders.bad', { title: 'Bad', context: 'window', fits: ['space'], value: 'other.x' })).toThrow(/orders's/)
-      expect(() => superego.view('orders.bad', { title: 'Bad', context: 'window', fits: ['space'], value: 'orders.a', method: 'orders.b' })).toThrow(/one source/)
+      expect(() => superego.view('orders.bad', { title: 'Bad', context: 'window', fits: ['sidebar'], value: 'other.x' })).toThrow(/orders's/)
+      expect(() => superego.view('orders.bad', { title: 'Bad', context: 'window', fits: ['sidebar'], value: 'orders.a', method: 'orders.b' })).toThrow(/one source/)
       expect(() => superego.view('orders.bad', { title: 'Bad', context: 'window', fits: ['pane'], value: 'orders.a' })).toThrow(/pane/)
     },
   })
   const { peer, close } = await open([orders])
   const views = await peer.call<{ value: DataViewInfo[] }>('value.watch', { key: DATA_VIEWS })
   expect(views.value.map((v) => [v.id, v.extension])).toEqual([['orders.recent', 'orders'], ['orders.notes', 'orders']])
-  expect(views.value[0]).toMatchObject({ title: 'Recent orders', icon: 'list', fits: ['space', 'beside'], default: 'space', value: 'orders.recent' })
+  expect(views.value[0]).toMatchObject({ title: 'Recent orders', icon: 'list', fits: ['sidebar', 'beside'], default: 'sidebar', value: 'orders.recent' })
   // The window reads the blocks as any value, and a button runs the action it names on this machine.
   type List = Extract<Block, { type: 'list' }>
   const watched = await peer.call<{ sub: string; value: List[] }>('value.watch', { key: 'orders.recent' })

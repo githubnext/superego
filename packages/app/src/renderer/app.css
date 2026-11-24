@@ -30,8 +30,8 @@
 .app__titlebar, .app__body > * { position: relative; z-index: 1; }
 .app__rail { position: relative; flex: none; width: var(--superego-rail); display: flex; flex-direction: column; justify-content: space-between; align-items: center; padding: 9px 0 18px var(--side-inset); -webkit-app-region: drag; }
 .app__rail-group { display: flex; flex-direction: column; align-items: center; gap: 6px; -webkit-app-region: no-drag; }
-/* In the rail: the spaces and Settings (RailButton), the open one lit in the accent on a quiet fill, as a sidebar's
-   icons. A space's button is on whatever is shown in the window (its own `on`): with Settings shown, Settings is. */
+/* In the rail: the sidebars and Settings (RailButton), the open one lit in the accent on a quiet fill, as a sidebar's
+   icons. A sidebar's button is on whatever is shown in the window (its own `on`): with Settings shown, Settings is. */
 .app__rail-button { position: relative; width: 34px; height: 34px; min-height: 34px; border-radius: 10px; color: var(--superego-muted); box-shadow: none; background: none; }
 .app__rail-button:hover { color: var(--superego-text); background: var(--superego-hover); }
 .app__rail-button.is-on { color: var(--superego-accent); background: var(--superego-selected); }
@@ -712,7 +712,7 @@ button.app__mobiletitle > .superego-status { font-size: 12px; }
   background: var(--superego-glass); -webkit-backdrop-filter: var(--superego-glass-blur); backdrop-filter: var(--superego-glass-blur);
   box-shadow: var(--superego-glass-edge), 0 2px 10px light-dark(rgb(0 0 0 / .06), rgb(0 0 0 / .35)); -webkit-tap-highlight-color: transparent; transition: transform .2s cubic-bezier(.3, 1.6, .5, 1), background-color .2s; }
 .app__mobilebar .superego-button:active:not(:disabled) { transform: scale(1.08); background: color-mix(in srgb, var(--superego-glass) 70%, var(--superego-bg)); transition-duration: .08s; }
-/* The drawer's foot: the spaces to switch to and the drawer's views, Settings at the end. */
+/* The drawer's foot: the sidebars to switch to and the drawer's views, Settings at the end. */
 .app__drawer-bar { flex: 1 0 100%; display: flex; align-items: center; gap: 6px; }
 .app__drawer-bar .app__rail-button { width: 40px; height: 40px; min-height: 40px; }
 .app__drawer-end { margin-left: auto; }
@@ -786,9 +786,9 @@ button.app__mobiletitle > .superego-status { font-size: 12px; }
 .app__drawer > .app__sidebar[data-ending-style], .app__scrim--drawer[data-ending-style] { transition-duration: calc(var(--drawer-swipe-strength, 1) * 400ms); }
 .app__drawer > .app__sidebar[data-swiping], .app__scrim--drawer[data-swiping] { transition-duration: 0s; }
 @media (prefers-reduced-motion: reduce) { .app__drawer > .app__sidebar, .app__scrim--drawer { transition: none; } }
-/* In it, the space reads as an iOS list (as ChatGPT's and Claude's apps slide theirs in): its name a large title (34,
+/* In it, the sidebar reads as an iOS list (as ChatGPT's and Claude's apps slide theirs in): its name a large title (34,
    bold), its groups' names as section headers, rows 44 high in Body size (17), the open thread a rounded fill; at its
-   foot, the other spaces and Settings as glass circles over what scrolls under them. */
+   foot, the other sidebars and Settings as glass circles over what scrolls under them. */
 .app__drawer > .app__sidebar { width: min(86vw, 340px); padding: env(safe-area-inset-top) 10px 0 max(10px, env(safe-area-inset-left)); background: var(--phone-grouped); font-size: calc(17px * var(--superego-text-size)); }
 .app__drawer > .app__sidebar .app__drag { height: 8px; }
 .app__drawer > .app__sidebar .threads__head { height: 52px; padding: 0 0 0 8px; font-size: calc(34px * var(--superego-text-size)); font-weight: 700; letter-spacing: -.01em; color: var(--superego-text); }
@@ -1422,7 +1422,7 @@ a.pane-header__url:hover { color: var(--superego-link); }
 .data-view { display: flex; flex-direction: column; min-height: 0; font-size: var(--superego-text-ui); }
 .data-view--beside, .data-view--pane { padding: var(--superego-space-4) var(--superego-space-5) var(--superego-space-5); overflow: auto; }
 .data-view--pane { flex: 1; }
-.data-view--space .superego-panel__body { padding: 0 4px; }
+.data-view--sidebar .superego-panel__body { padding: 0 4px; }
 .data-view__heading { margin: 0 0 10px; font-size: var(--superego-text-xs); font-weight: 500; color: var(--superego-muted); }
 .data-view__machine + .data-view__machine { margin-top: var(--superego-space-4); }
 .data-view__machine-name { margin: 0 0 6px; padding: 0 6px; font-size: var(--superego-text-xs); font-weight: 500; color: var(--superego-faint); }
@@ -1451,28 +1451,28 @@ a.pane-header__url:hover { color: var(--superego-link); }
 .notify-offer__ask:hover { color: var(--superego-text); background: linear-gradient(var(--superego-hover), var(--superego-hover)) var(--superego-bg); }
 .notify-offer__no { width: 22px; height: 22px; min-height: 22px; color: var(--superego-muted); box-shadow: none; background: none; }
 
-/* ── Surfaces ──────────────────────────────────────────────────────────────────────────────────────────────────────
-   A surface fills the main area (surfaces.tsx): wide, a sheet on the window's ground as a thread's columns are, its
+/* ── Spaces ──────────────────────────────────────────────────────────────────────────────────────────────────────
+   A space fills the main area (spaces.tsx): wide, a sheet on the window's ground as a thread's columns are, its
    thread docked beside it as another (or, floating, a card over its right side). */
-.surface { flex: 1; display: flex; min-height: 0; min-width: 0; gap: 8px; position: relative; }
-.app:not(.is-narrow) .surface { padding: 4px var(--side-inset) var(--side-inset) var(--side-inset); }
-.app:not(.is-narrow):has(.surface) { background: var(--superego-ground); }
-.surface__body { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; position: relative; overflow: hidden; background: var(--superego-bg); }
-.surface__body > * { flex: 1; min-height: 0; }
-.app:not(.is-narrow) .surface__body, .app:not(.is-narrow) .surface__agent { border-radius: var(--side-radius); box-shadow: 0 0 0 .5px var(--superego-line); }
-.surface__agent { width: 380px; flex: none; display: flex; flex-direction: column; min-height: 0; overflow: hidden; background: var(--superego-bg); }
-.surface.is-floating .surface__agent {
+.space { flex: 1; display: flex; min-height: 0; min-width: 0; gap: 8px; position: relative; }
+.app:not(.is-narrow) .space { padding: 4px var(--side-inset) var(--side-inset) var(--side-inset); }
+.app:not(.is-narrow):has(.space) { background: var(--superego-ground); }
+.space__body { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; position: relative; overflow: hidden; background: var(--superego-bg); }
+.space__body > * { flex: 1; min-height: 0; }
+.app:not(.is-narrow) .space__body, .app:not(.is-narrow) .space__agent { border-radius: var(--side-radius); box-shadow: 0 0 0 .5px var(--superego-line); }
+.space__agent { width: 380px; flex: none; display: flex; flex-direction: column; min-height: 0; overflow: hidden; background: var(--superego-bg); }
+.space.is-floating .space__agent {
   position: absolute; right: calc(var(--side-inset) + 12px); top: 16px; bottom: calc(var(--side-inset) + 12px); width: 340px; z-index: 2;
   box-shadow: 0 0 0 .5px var(--superego-border), 0 12px 32px -10px light-dark(rgb(0 0 0 / .25), rgb(0 0 0 / .6));
 }
-.surface__agent-head { display: flex; align-items: center; gap: 8px; flex: none; height: 36px; padding: 0 6px 0 14px; background: var(--superego-pane-tab); font-size: var(--superego-text-sm); color: var(--superego-muted); }
-.surface__agent-title { flex: 1; min-width: 0; font-weight: 500; color: var(--superego-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.surface__agent-body { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-.surface__agent-body > .thread { flex: 1; }
-.surface__agent .thread__column { max-width: calc(100% - 2 * var(--superego-space-4)); }
-.surface__agent .dock { max-width: calc(100% - 2 * var(--superego-space-3)); width: calc(100% - 2 * var(--superego-space-3)); }
-.surface__ask { display: flex; flex-direction: column; flex: 1; min-height: 0; }
-.surface__ask-body { margin-top: auto; padding: var(--superego-space-3); display: flex; flex-direction: column; gap: var(--superego-space-2); align-items: flex-end; }
-.surface__ask-body .superego-textarea { width: 100%; border: 1px solid var(--superego-line); border-radius: 14px; padding: 10px 12px; background: var(--superego-raised); }
-.surface__error { margin: 0; color: var(--superego-danger, #d70015); font-size: var(--superego-text-sm); align-self: stretch; }
+.space__agent-head { display: flex; align-items: center; gap: 8px; flex: none; height: 36px; padding: 0 6px 0 14px; background: var(--superego-pane-tab); font-size: var(--superego-text-sm); color: var(--superego-muted); }
+.space__agent-title { flex: 1; min-width: 0; font-weight: 500; color: var(--superego-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.space__agent-body { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.space__agent-body > .thread { flex: 1; }
+.space__agent .thread__column { max-width: calc(100% - 2 * var(--superego-space-4)); }
+.space__agent .dock { max-width: calc(100% - 2 * var(--superego-space-3)); width: calc(100% - 2 * var(--superego-space-3)); }
+.space__ask { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.space__ask-body { margin-top: auto; padding: var(--superego-space-3); display: flex; flex-direction: column; gap: var(--superego-space-2); align-items: flex-end; }
+.space__ask-body .superego-textarea { width: 100%; border: 1px solid var(--superego-line); border-radius: 14px; padding: 10px 12px; background: var(--superego-raised); }
+.space__error { margin: 0; color: var(--superego-danger, #d70015); font-size: var(--superego-text-sm); align-self: stretch; }
 .titlebar__action.is-on { color: var(--superego-accent); }

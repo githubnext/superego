@@ -18,7 +18,7 @@ import { addStyle } from './profile-style.ts'
 import { onMachine } from './machine-view.tsx'
 import { checkTheme, type Theme } from '@superego/ui/themes'
 import type {
-  BehaviourSlot, EntryProps, LinkHandler, NewThreadField, PaneKind, PaneProps, SettingsComponentProps, SlotProps, SurfaceKind, ToolCallProps, ToolRow, UiApi,
+  BehaviourSlot, EntryProps, LinkHandler, NewThreadField, PaneKind, PaneProps, SettingsComponentProps, SlotProps, SpaceKind, ToolCallProps, ToolRow, UiApi,
   UiExtension, View, ViewProps, WindowEvent, WindowEvents, WindowState, WorkPart, WorkRun,
 } from './extension-api.ts'
 
@@ -80,8 +80,8 @@ export type Registry = {
   entries: Owned<{ kind: string; component: ComponentType<EntryProps> }>[]
   links: Owned<LinkHandler>[]
   panes: Owned<PaneKind & { kind: string }>[]
-  /** Surfaces (`superego.surface`), by kind, each with the machine it opens on (a global profile's, its own). */
-  surfaces: Owned<SurfaceKind & { kind: string; machine?: string }>[]
+  /** Spaces (`superego.space`), by kind, each with the machine it opens on (a global profile's, its own). */
+  spaces: Owned<SpaceKind & { kind: string; machine?: string }>[]
   work: Owned<{ divide: (run: WorkRun) => WorkPart[] | undefined }>[]
   settings: Owned<{ ui: string; component: ComponentType<SettingsComponentProps> }>[]
   /** The New thread dialog's fields, by the extension each is of (its `options` key). */
@@ -124,7 +124,7 @@ export function createRegistry(app: AppConfig, extensions: UiExtension[], core: 
       ...(version ? { version } : {}), ...(api ? { api } : {}), ...(panes ? { panes } : {}),
     })),
     slots: { 'header.chips': [], 'thread.badge': [], 'composer.above': [], 'details.section': [], 'editor.side': [], 'editor.bar': [], 'overlay': [], 'onboarding': [] },
-    views: [], dataViews: {}, machineExtensions: {}, tools: [], entries: [], links: [], panes: [], surfaces: [], work: [], settings: [], newThreadFields: [], router: createWindowRouter(), appSettings: [], themes: [], completions: [], sentWith: [], listeners: [],
+    views: [], dataViews: {}, machineExtensions: {}, tools: [], entries: [], links: [], panes: [], spaces: [], work: [], settings: [], newThreadFields: [], router: createWindowRouter(), appSettings: [], themes: [], completions: [], sentWith: [], listeners: [],
     window: {
       focused: typeof document === 'undefined' || document.hasFocus(),
       visible: typeof document === 'undefined' || document.visibilityState !== 'hidden',
@@ -320,18 +320,18 @@ export function createRegistry(app: AppConfig, extensions: UiExtension[], core: 
         own(ui, 'settings sections', true)
         unique(registry.settings, 'ui', { ui, component }, 'settings section')
       },
-      surface(kind, surface) {
-        own(kind, 'surfaces')
+      space(kind, space) {
+        own(kind, 'spaces')
         // Bound to a profile's threads, it'd have nowhere to open: only the app's and a global profile's.
-        if (profile) return console.warn(`Profile extension ${extension.name}: surface ${kind} needs its profile to be global (global: true)`)
+        if (profile) return console.warn(`Profile extension ${extension.name}: space ${kind} needs its profile to be global (global: true)`)
         const machine = scope?.slice(0, scope.indexOf('\u0000'))
-        unique(registry.surfaces, 'kind', { ...surface, kind, ...(machine ? { machine } : {}) }, 'surface')
+        unique(registry.spaces, 'kind', { ...space, kind, ...(machine ? { machine } : {}) }, 'space')
         // Its links open it.
-        if (surface.match) {
-          const scheme = surface.match
+        if (space.match) {
+          const scheme = space.match
           add(registry.links, {
             match: scheme,
-            open: (href) => registry.router.dispatch('surface.open', { kind, params: surface.params?.(href) ?? { href }, ...(machine ? { machine } : {}) }, { source: 'link' })
+            open: (href) => registry.router.dispatch('space.open', { kind, params: space.params?.(href) ?? { href }, ...(machine ? { machine } : {}) }, { source: 'link' })
               .then(() => undefined, (error: Error) => error.message),
           })
         }

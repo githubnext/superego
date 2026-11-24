@@ -2,7 +2,7 @@
 // (read as a message reads), live preview (as Obsidian does: rendered, its syntax back where the cursor is), or source.
 // It keeps nothing itself: `value` is the text from outside, `onChange` what's typed. A new `value` from outside (the
 // agent's edit, a file changed on disk) goes in as the least change that makes it, so the cursor stays put, and flashes
-// as it arrives. The editor pane's FileEditor is this plus a file; a surface's notes page is this plus its own store.
+// as it arrives. The editor pane's FileEditor is this plus a file; a space's notes page is this plus its own store.
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { history, historyKeymap, redo, standardKeymap, undo } from '@codemirror/commands'
 import { markdown as markdownSupport, markdownLanguage } from '@codemirror/lang-markdown'
@@ -24,8 +24,10 @@ import { useAppDark } from './appearance.ts'
 
 /** How Markdown shows: read, as a message is; in live preview; or as source. */
 export type TextMode = 'rendered' | 'live' | 'source'
+/** The ways Markdown shows, in the order offered, each with its label (for a toggle of one's own). */
 export const TEXT_MODES: { mode: TextMode; label: string }[] = [{ mode: 'rendered', label: 'Rendered' }, { mode: 'live', label: 'Live' }, { mode: 'source', label: 'Source' }]
 
+/** What a `TextEditor` shows and how: its text from outside, what's typed, how Markdown shows, where it was left. */
 export type TextEditorProps = {
   /** The text, as it is outside (on disk, in a store): shown, and taken in again whenever it changes. */
   value: string

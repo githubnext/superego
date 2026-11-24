@@ -37,7 +37,7 @@ export type Installed = { installed: Extension; undo(): void; replace(next: Exte
 /**
  * Where a daemon half is from: the core's own, the app's bundled ones, or a profile's (by its file). A profile's is the
  * user's (`scope: 'user'`) when it's one of their own profiles' (see ProfileHost's `share`): its `window` data views
- * may then be spaces.
+ * may then be sidebars.
  */
 export type Source = { source: 'core' | 'bundled' | 'profile'; file?: string; scope?: 'user' | 'project' }
 
@@ -685,9 +685,9 @@ export function createExtensionHost(host: Host, later: { profiles(): ProfileHost
         if (!source.startsWith(`${extension.name}.`)) throw new Error(`View ${name} must read a value or method of ${extension.name}'s, not ${source}`)
         if (dataViews.some((v) => v.info.id === name)) throw new Error(`View ${name} is already declared`)
         // A profile's show only in its threads, in the places that show one; but a `window` view of the user's own
-        // profile's is the window's, as a bundled extension's is (data, so no code of the profile's runs there): a space too.
+        // profile's is the window's, as a bundled extension's is (data, so no code of the profile's runs there): a sidebar too.
         const windows = !profiles || (from.scope === 'user' && view.context === 'window')
-        const fits = windows ? view.fits : view.fits.filter((p) => p !== 'space')
+        const fits = windows ? view.fits : view.fits.filter((p) => p !== 'sidebar')
         if (!fits.length) throw new Error(`View ${name} fits no place a profile's view is drawn in (beside, pane)`)
         const entry = { info: { ...view, fits, id: name, extension: extension.name }, ...(windows ? {} : { profiles }) }
         dataViews.push(entry)

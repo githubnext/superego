@@ -26,7 +26,7 @@ export default defineUiExtension({
   ...about,
   setup(superego) {
     const chosen = superego.store<string>('machine', 'local', { persist: true })
-    // A button, not a space: it shows a thread, and the sidebar keeps what it shows. First in the rail, its tab ⌘1.
+    // A button, not a sidebar: it shows a thread, and the sidebar keeps what it shows. First in the rail, its tab ⌘1.
     superego.view('ego.button', {
       title: `Ask ${agentName(superego.app)}`, icon: LifebuoyIcon, context: 'window', fits: ['rail', 'drawer'], default: 'rail', narrow: 'drawer', order: 10, action: OPEN,
       component: (props) => <EgoButton {...props} chosen={chosen.use()} />,

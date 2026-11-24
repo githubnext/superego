@@ -11,11 +11,11 @@ import { NARROW_PLACES, WIDE_PLACES, type Place } from '../shared/layout.ts'
 
 /** What each place is called, wherever the user moves views. */
 export const PLACE_TITLES: Record<Place, string> = {
-  space: 'Spaces', rail: 'Rail buttons', drawer: 'Drawer buttons', titlebar: 'Title bar', beside: 'Beside the thread', pane: 'Pane menu', header: 'Thread header',
+  sidebar: 'Sidebars', rail: 'Rail buttons', drawer: 'Drawer buttons', titlebar: 'Title bar', beside: 'Beside the thread', pane: 'Pane menu', header: 'Thread header',
 }
 /** Where a view goes, to say so: "Show Files beside the thread". */
 export const PLACE_PHRASES: Record<Place, string> = {
-  space: 'as a space', rail: 'in the rail', drawer: 'in the drawer', titlebar: 'in the title bar', beside: 'beside the thread', pane: 'in the pane menu', header: 'in the thread header',
+  sidebar: 'in the sidebar', rail: 'in the rail', drawer: 'in the drawer', titlebar: 'in the title bar', beside: 'beside the thread', pane: 'in the pane menu', header: 'in the thread header',
 }
 
 export type ViewMenuProps = {

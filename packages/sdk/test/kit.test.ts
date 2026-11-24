@@ -1,6 +1,6 @@
 // superego/testing, as an author uses it: a daemon with a scripted model, a window over fakes or that daemon, and the
 // cases an extension has to survive: teardown, being set up twice, a helper edited, one profile on two machines, a
-// machine gone or older, and a phone with no spaces.
+// machine gone or older, and a phone with no sidebars.
 import { createElement as h } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { defineDaemonExtension } from '../src/index.ts'
@@ -307,9 +307,9 @@ describe('a window for a UI half', () => {
     await expect(ui.dispatch('layout.place', { view: 'notes.list', place: 'beside', machine: 'laptop', thread: 'gone' })).rejects.toThrow('No thread gone on laptop')
   })
 
-  it('places views on a phone with no spaces: nothing in a rail, the thread picker in the bar', async () => {
+  it('places views on a phone with no sidebars: nothing in a rail, the thread picker in the bar', async () => {
     const ui = keep(await mountUi({ extensions: [queueUi], narrow: true }))
-    expect(ui.placed('space')).toEqual([])
+    expect(ui.placed('sidebar')).toEqual([])
     expect(ui.placed('titlebar')).toContain('core.picker')
   })
 })

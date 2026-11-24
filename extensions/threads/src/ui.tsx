@@ -1,9 +1,9 @@
-// threads: the Threads space in the sidebar. The pinned threads first, from every project and machine, then projects (a
+// threads: the Threads sidebar. The pinned threads first, from every project and machine, then projects (a
 // repository or folder on a machine) and the threads in each, its pinned at its top; the machine is said on the project,
 // where it isn't this computer (Pinned can be hidden from the ··· menu: they still top their projects). Pinned, each
 // project and each thread with others under it fold, by their carets or ← and → (the folds are the window's:
 // projects.ts). Its views:
-// - the list (`threads.list`), a space: sorted recently active, newest first, needs you first or alphabetically (an app
+// - the list (`threads.list`), a sidebar: sorted recently active, newest first, needs you first or alphabetically (an app
 //   setting); with the sidebar hidden, a rail of status glyphs; the key to go anywhere (⌘L) beside its heading, while
 //   pointed at; ⌃T puts the keyboard in it, on the selected thread's row (and again, back in the prompt). A row's title is followed by other extensions' marks (the `thread.badge` slot: a worktree's branch,
 //   say); a right-click on it pins or unpins it, or archives it; on a phone, so does a swipe (swipe.tsx). Pinned rows are dragged to reorder them, and a
@@ -18,7 +18,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type KeyboardEvent } from 'react'
 import {
   call, defineAction, defineUiExtension, fold, isPinned, listArchived, MachineDrift, search, shownRows, threadPath, useFold, useNarrow, RailButton, SHOW_PINNED, showProject, Slot, SORT, unreadList, useAppSetting, useDispatch, useLocalState, useMachines, usePlacement, useSelection, useProjects, useThreadView, useShell, useShortcut, useRailShortcut,
-  type ArchivedThreads, type MachineEntry, type Pin, type Project, type ShownRow, type ShownSection, type Sort, type SpaceRailProps, type WindowContext,
+  type ArchivedThreads, type MachineEntry, type Pin, type Project, type ShownRow, type ShownSection, type Sort, type SidebarRailProps, type WindowContext,
 } from '@superego/app/ui'
 import { rollup, statusLabel, statusShape, unread, type ThreadInfo } from '@superego/protocol'
 import { ArchiveIcon, CaretRightIcon, ChatsIcon, ContextMenu, DotsThreeIcon, Glyph, HOVER_DELAY, HoverCard, IconButton, List, ListItem, MagnifyingGlassIcon, Menu, PlusIcon, ProviderMark, providerOf, PushPinIcon, PushPinSlashIcon, SparkleIcon, StatusGlyph, StatusWord, Tooltip, TooltipProvider, XCircleIcon } from '@superego/ui'
@@ -29,7 +29,7 @@ import { registerLinks, registerRows } from './rows.tsx'
 import { about } from './shared.ts'
 import { useCoarse, useRowSwipe } from './swipe.tsx'
 
-/** The list, the Threads space; and the action that puts the keyboard in it. */
+/** The list, the Threads sidebar; and the action that puts the keyboard in it. */
 const LIST = 'threads.list'
 const LIST_FOCUS = 'threads.focus'
 /** The details view, and the action that puts it beside the thread or takes it away. */
@@ -46,7 +46,7 @@ const set = (c: Pick<WindowContext, 'dispatch'>, key: string, value: string | bo
 export default defineUiExtension({
   ...about,
   setup(superego) {
-    superego.view(LIST, { title: 'Threads', icon: ChatsIcon, context: 'window', fits: ['space'], default: 'space', component: ThreadsSpace, railButton: ThreadsRail })
+    superego.view(LIST, { title: 'Threads', icon: ChatsIcon, context: 'window', fits: ['sidebar'], default: 'sidebar', component: ThreadsSidebar, railButton: ThreadsRail })
     superego.view(DETAILS, { title: 'Thread details', context: 'thread', fits: ['beside', 'pane'], component: DetailsPane })
     superego.view('threads.model', { title: 'Model', icon: SparkleIcon, context: 'thread', fits: ['header'], default: 'header', component: ModelButton, menuItem: ModelItem })
     registerRows(superego)
@@ -61,7 +61,7 @@ export default defineUiExtension({
     // ⌃T: the keyboard in the list, on the selected thread's row (the sidebar shown first); pressed there, back to the prompt.
     action(LIST_FOCUS, 'Focus threads list', (c) => {
       if (document.activeElement?.closest('.threads')) void c.dispatch('focus.prompt', {}, { source: 'threads' })
-      else c.focusSpace(LIST)
+      else c.focusSidebar(LIST)
     }, 'ctrl+t')
     action('threads.collapse', 'Collapse all threads', (c) => c.fold([...c.sidebar.pinned.length ? [fold.pinned] : [], ...c.sidebar.projects.map(fold.project)], true))
     action('threads.expand', 'Expand all threads', (c) => c.fold(c.sidebar.folded, false))
@@ -69,7 +69,7 @@ export default defineUiExtension({
 })
 
 /** The list. Once a row's card has shown, the next row's shows at once. */
-const ThreadsSpace = () => <TooltipProvider delay={HOVER_DELAY}><Threads /></TooltipProvider>
+const ThreadsSidebar = () => <TooltipProvider delay={HOVER_DELAY}><Threads /></TooltipProvider>
 
 function Threads() {
   const machines = useMachines().filter((m) => m.state !== 'disabled')
@@ -528,11 +528,11 @@ function Options() {
 }
 
 /**
- * In the window's rail: Threads, lit while they're the open space. A click hides the sidebar, the threads then status
- * dots here (the pinned first, as the list has them), and shows the list again; with another space open (or none: Settings, Ego's thread), it shows the list.
+ * In the window's rail: Threads, lit while they're the open sidebar. A click hides the sidebar, the threads then status
+ * dots here (the pinned first, as the list has them), and shows the list again; with another sidebar open (or none: Settings, Ego's thread), it shows the list.
  * Something unread you can't see from here shows as a dot on the button, in the most pressing one's colour.
  */
-function ThreadsRail({ open, sidebarHidden, show }: SpaceRailProps) {
+function ThreadsRail({ open, sidebarHidden, show }: SidebarRailProps) {
   const { projects, sidebar } = useProjects()
   const { selection, select } = useSelection()
   const hidden = open && sidebarHidden

@@ -830,7 +830,7 @@ export default defineDaemonExtension({
   name: 'board',
   setup(superego) {
     superego.value('board.cards', {})
-    superego.view('board.cards', { title: '${title}', context: 'thread', fits: ['space', 'beside', 'pane'], default: 'beside', value: 'board.cards' })
+    superego.view('board.cards', { title: '${title}', context: 'thread', fits: ['sidebar', 'beside', 'pane'], default: 'beside', value: 'board.cards' })
   },
 })
 `
@@ -851,14 +851,14 @@ export default defineDaemonExtension({
   await close()
 })
 
-it("lets a user profile's window data view be a space, the window's as a bundled one's is, but not a project profile's", async () => {
+it("lets a user profile's window data view be a sidebar, the window's as a bundled one's is, but not a project profile's", async () => {
   const staff = (name: string) => `import { defineDaemonExtension } from 'superego'
 export default defineDaemonExtension({
   name: '${name}',
   setup(superego) {
-    superego.value('${name}.space', [])
-    superego.view('${name}.space', { title: 'Staff', context: 'window', fits: ['space', 'beside'], default: 'space', value: '${name}.space' })
-    superego.view('${name}.mine', { title: 'Mine', context: 'thread', fits: ['space', 'beside'], value: '${name}.space' })
+    superego.value('${name}.sidebar', [])
+    superego.view('${name}.sidebar', { title: 'Staff', context: 'window', fits: ['sidebar', 'beside'], default: 'sidebar', value: '${name}.sidebar' })
+    superego.view('${name}.mine', { title: 'Mine', context: 'thread', fits: ['sidebar', 'beside'], value: '${name}.sidebar' })
   },
 })
 `
@@ -876,10 +876,10 @@ export default defineDaemonExtension({
   await until(async () => views.length === 4)
   const of = (id: string) => views.find((v) => v.id === id)
   // The user's window view: every place it fits, no profile's folders, so the window gathers it as any machine's.
-  expect(of('staff.space')).toEqual({ id: 'staff.space', extension: 'staff', title: 'Staff', context: 'window', fits: ['space', 'beside'], default: 'space', value: 'staff.space' })
+  expect(of('staff.sidebar')).toEqual({ id: 'staff.sidebar', extension: 'staff', title: 'Staff', context: 'window', fits: ['sidebar', 'beside'], default: 'sidebar', value: 'staff.sidebar' })
   // Its thread view, and anything of a project's, stay in the profile's own threads.
   expect(of('staff.mine')).toMatchObject({ fits: ['beside'], profiles: [user] })
-  expect(of('shop.space')).toMatchObject({ fits: ['beside'], profiles: [shop] })
+  expect(of('shop.sidebar')).toMatchObject({ fits: ['beside'], profiles: [shop] })
   expect(of('shop.mine')).toMatchObject({ fits: ['beside'], profiles: [shop] })
   await close()
 })

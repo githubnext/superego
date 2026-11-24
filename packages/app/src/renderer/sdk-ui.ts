@@ -12,14 +12,14 @@ export { defineUiExtension, type UiExtension, type UiApi } from './extension-api
 export { defineWindowAction as defineAction, type WindowAction, type WindowContext } from './actions.tsx'
 export type { Dispatch } from './actions.tsx'
 export type {
-  View, ViewContext, ViewProps, PaneKind, PaneProps, SurfaceKind, SurfaceProps, SlotProps, BehaviourSlot, EditorSlotProps, SpaceRailProps, ToolCallProps, ToolNote, ToolRow,
+  View, ViewContext, ViewProps, PaneKind, PaneProps, SpaceKind, SpaceProps, SlotProps, BehaviourSlot, EditorSlotProps, SidebarRailProps, ToolCallProps, ToolNote, ToolRow,
   ToolRowCall, ToolState, EntryProps, LinkHandler, LinkProps, LinkWhere, LinkAttributes, NewThreadField, NewThreadFieldProps, SettingsComponentProps,
   WindowEvent, WindowEvents, WindowState, WorkRun, WorkPart, WorkBlock, WorkStatus,
 } from './extension-api.ts'
 export type { Place, Placement } from '../shared/layout.ts'
 export type { Store } from './local-state.ts'
 export { useLocalState } from './local-state.ts'
-export { useSurfaceTitle } from './surfaces.tsx'
+export { useSpaceTitle } from './spaces.tsx'
 export { TextEditor, TEXT_MODES, type TextEditorProps, type TextMode } from './text-editor.tsx'
 export type { Completion, CompletionProvider, CompletionWord, ComposerWhere, SentBlock, SentWith } from './composer.ts'
 export type { ImageItem } from './images.tsx'

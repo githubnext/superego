@@ -1,5 +1,5 @@
 // ⌘1–⌘9: the rail's tabs, in its order. First the rail's own buttons that say what pressing them does (a view's
-// `action`: Ego's opens its thread, shown alone), then the spaces. A number goes where clicking goes and stays there:
+// `action`: Ego's opens its thread, shown alone), then the sidebars. A number goes where clicking goes and stays there:
 // pressed again, its tab stays in front (⌘/ shows and hides the sidebar). Settings has ⌘, and no number.
 
 /** How many tabs have a number. */
@@ -12,15 +12,15 @@ export type RailTab = { id: string; open(): void }
 
 /**
  * The tabs the numbers go to: the rail's views whose `action` is offered now (a button that draws nothing has nothing
- * to offer), then every space; the first nine.
+ * to offer), then every sidebar; the first nine.
  */
-export function railTabs<V extends { id: string; action?: string }>(rail: V[], spaces: V[], how: {
+export function railTabs<V extends { id: string; action?: string }>(rail: V[], sidebars: V[], how: {
   offered(action: string): boolean
   run(action: string): void
-  show(space: V): void
+  show(sidebar: V): void
 }): RailTab[] {
   return [
     ...rail.flatMap((view) => view.action && how.offered(view.action) ? [{ id: view.id, open: () => how.run(view.action!) }] : []),
-    ...spaces.map((view) => ({ id: view.id, open: () => how.show(view) })),
+    ...sidebars.map((view) => ({ id: view.id, open: () => how.show(view) })),
   ].slice(0, RAIL_TABS)
 }

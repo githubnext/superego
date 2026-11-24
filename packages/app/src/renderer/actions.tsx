@@ -8,7 +8,7 @@ import type { ReturnedMessage, ThreadInfo } from '@superego/protocol'
 import type { MachineEntry } from '../shared/bridge.ts'
 import { APP, PANE_KEEP_THREAD, PANE_LAYOUT, type PaneLayout } from '../shared/app-settings.ts'
 import type { NewThreadStart, Selection } from './state.tsx'
-import type { SurfaceAt } from './history.ts'
+import type { SpaceAt } from './history.ts'
 import { threadBeside, type Project, type Sidebar } from './projects.ts'
 import { isPinned, pinAt, PINS, pinsOf, unpin, type Pin } from './pins.ts'
 import { focusBeside, focusColumn, focusPrompt, focusThread } from './focus.ts'
@@ -30,11 +30,11 @@ export type WindowContext = {
   machines: MachineEntry[]
   selection: Selection | undefined
   select(selection: Selection | undefined): void
-  /** The surface the main area shows instead of the selected thread, if one is open; and opening one (none: the thread). */
-  surface: SurfaceAt | undefined
-  openSurface(surface: SurfaceAt | undefined): void
-  /** Whether a surface of `kind` is registered in this window. */
-  hasSurface(kind: string): boolean
+  /** The space the main area shows instead of the selected thread, if one is open; and opening one (none: the thread). */
+  space: SpaceAt | undefined
+  openSpace(space: SpaceAt | undefined): void
+  /** Whether a space of `kind` is registered in this window. */
+  hasSpace(kind: string): boolean
   /** Settings: at a tab (its target, see settings/tabs.ts), or as it was left. */
   openSettings(at?: string): void
   newThread(start?: NewThreadStart): void
@@ -51,10 +51,10 @@ export type WindowContext = {
   fold(keys: readonly string[], folded: boolean): void
   toggleSidebar(): void
   /**
-   * Show the space `id` in the sidebar (the sidebar shown if it was hidden; on a phone, its drawer opened) and focus what's
-   * used there: its selected row, else its first. Throws when `id` isn't one of the window's spaces.
+   * Show the sidebar `id` (shown if it was hidden; on a phone, its drawer opened) and focus what's
+   * used there: its selected row, else its first. Throws when `id` isn't one of the window's sidebars.
    */
-  focusSpace(id: string): void
+  focusSidebar(id: string): void
   toggleNavigator(): void
   /** The picker of panes to open beside the selected thread (⌘⇧P). */
   togglePanePicker(): void
@@ -262,7 +262,7 @@ export const coreActions = (app: AppConfig): WindowAction[] => [
       key: PANE_KEEP_THREAD, value: keep ?? c.appSetting<boolean>(PANE_KEEP_THREAD) === false,
     }, { machine: APP, source: 'panes' }),
   }),
-  // Another window (in a browser, another tab), starting as a copy of this one: the same thread, space and sidebar,
+  // Another window (in a browser, another tab), starting as a copy of this one: the same thread and sidebar, shown or hidden,
   // from where each goes its own way.
   defineWindowAction({
     id: 'app.newWindow', title: 'New window', keys: 'mod+shift+n',
@@ -350,15 +350,15 @@ export const coreActions = (app: AppConfig): WindowAction[] => [
     params: obj({ machine: str(), thread: str() }),
     run: ({ machine, thread }, c) => c.select({ machine, thread }),
   }),
-  // A surface in the main area (extensions' and global profiles' `superego.surface`): `kind` with `params`, on `machine`
+  // A space in the main area (extensions' and global profiles' `superego.space`): `kind` with `params`, on `machine`
   // (this computer unless given).
   defineWindowAction({
-    id: 'surface.open', title: 'Open a surface',
-    description: '`kind`: a surface kind (`notes.page`); `params`: what it shows; `machine`: where (this computer unless given)',
+    id: 'space.open', title: 'Open a space',
+    description: '`kind`: a space kind (`notes.page`); `params`: what it shows; `machine`: where (this computer unless given)',
     params: obj({ kind: str(), params: opt(obj({}, { open: true })), machine: opt(str()) }),
     run: ({ kind, params, machine }, c) => {
-      if (!c.hasSurface(kind)) throw new Error(`No surface ${kind} in this window`)
-      c.openSurface({ machine: machine ?? 'local', kind, params: (params ?? {}) as Record<string, Json> })
+      if (!c.hasSpace(kind)) throw new Error(`No space ${kind} in this window`)
+      c.openSpace({ machine: machine ?? 'local', kind, params: (params ?? {}) as Record<string, Json> })
     },
   }),
 ]

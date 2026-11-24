@@ -49,7 +49,7 @@ export function createProfileHost(host: Host, extensions: ExtensionHost, later: 
   }
   /**
    * Profile `ref`'s use of a daemon half: the one set up already for another profile, else set up now. It's the user's
-   * own (its `window` views may be spaces) when it's in one of their profiles' folders (a project's profile extending one
+   * own (its `window` views may be sidebars) when it's in one of their profiles' folders (a project's profile extending one
    * of theirs shares it as theirs), or set up for a profile of theirs; never a project profile's own file.
    */
   async function share(item: ProfileDaemonExtension, ref: ProfileRef) {

@@ -17,7 +17,7 @@ import { resolveLayout } from '../src/shared/layout.ts'
 
 const app = defineApp({ name: 'superego', id: 'superego' })
 const thread = (more: Partial<ThreadInfo> = {}): ThreadInfo => ({ id: '1', title: 't', cwd: '/', createdAt: 0, activeAt: 0, project: { root: '/', name: '/' }, status: { state: 'idle' }, ...more })
-const recent: DataViewInfo = { id: 'orders.recent', extension: 'orders', title: 'Recent orders', icon: 'list', context: 'window', fits: ['space', 'beside'], default: 'space', value: 'orders.recent' }
+const recent: DataViewInfo = { id: 'orders.recent', extension: 'orders', title: 'Recent orders', icon: 'list', context: 'window', fits: ['sidebar', 'beside'], default: 'sidebar', value: 'orders.recent' }
 const notes: DataViewInfo = { id: 'orders.notes', extension: 'orders', title: 'Notes', context: 'thread', fits: ['beside', 'pane'], default: 'pane', method: 'orders.notes' }
 const board: DataViewInfo = { id: 'staff.board', extension: 'staff', title: 'Board', context: 'thread', fits: ['beside', 'pane'], default: 'beside', value: 'staff.board', profiles: ['/p/staff'] }
 
@@ -26,7 +26,7 @@ describe('data views in the registry', () => {
     const registry = createRegistry(app, [], () => {})
     registry.setDataViews('local', [recent, notes])
     const placed = resolveLayout(registry.views, undefined)
-    expect(placed.space).toEqual(['orders.recent'])
+    expect(placed.sidebar).toEqual(['orders.recent'])
     expect(placed.pane).toEqual(['orders.notes'])
     const view = registry.views.find((v) => v.id === 'orders.recent')!
     expect(view).toMatchObject({ title: 'Recent orders', context: 'window', machines: ['local'] })
@@ -45,7 +45,7 @@ describe('data views in the registry', () => {
     expect(registry.views.filter((v) => v.id === 'orders.recent').map((v) => v.machines)).toEqual([['local', 'box']])
     const placed = resolveLayout(registry.views, undefined)
     expect(paneMenu(registry, placed, { machine: 'box', thread: thread() })).toEqual([])
-    expect(viewsIn(registry, placed, 'space').map((v) => v.id)).toEqual(['orders.recent'])
+    expect(viewsIn(registry, placed, 'sidebar').map((v) => v.id)).toEqual(['orders.recent'])
     // A machine gone, or its extension off: its views go with it.
     registry.setDataViews('local', [])
     expect(registry.views.filter((v) => v.id === 'orders.recent').map((v) => v.machines)).toEqual([['box']])
@@ -63,7 +63,7 @@ describe('data views in the registry', () => {
   })
 
   it("leaves a view an extension's UI declares to that UI", () => {
-    const orders = defineUiExtension({ name: 'orders', setup(superego) { superego.view('orders.recent', { title: 'Mine', context: 'window', fits: ['space'], component: () => null }) } })
+    const orders = defineUiExtension({ name: 'orders', setup(superego) { superego.view('orders.recent', { title: 'Mine', context: 'window', fits: ['sidebar'], component: () => null }) } })
     const registry = createRegistry(app, [orders], () => {})
     registry.setDataViews('local', [recent])
     expect(registry.views.filter((v) => v.id === 'orders.recent').map((v) => v.title)).toEqual(['Mine'])
@@ -123,20 +123,20 @@ describe("a data view's blocks", () => {
 
 describe('what a machine sends, checked where it lands', () => {
   const on = (...names: string[]) => (extension: string) => names.includes(extension)
-  const good = { id: 'orders.recent', extension: 'orders', title: 'Recent', context: 'window', fits: ['space'], value: 'orders.recent' }
+  const good = { id: 'orders.recent', extension: 'orders', title: 'Recent', context: 'window', fits: ['sidebar'], value: 'orders.recent' }
 
   it('takes a good declaration, with only the keys a view has', () => {
-    const { views, dropped } = checkDataViews([{ ...good, extra: { evil: true }, order: 3, default: ['space'], icon: 'list' }, board, notes], on('orders', 'staff'))
+    const { views, dropped } = checkDataViews([{ ...good, extra: { evil: true }, order: 3, default: ['sidebar'], icon: 'list' }, board, notes], on('orders', 'staff'))
     expect(dropped).toEqual([])
-    expect(views).toEqual([{ ...good, order: 3, default: ['space'], icon: 'list' }, board, notes])
+    expect(views).toEqual([{ ...good, order: 3, default: ['sidebar'], icon: 'list' }, board, notes])
   })
 
   it('leaves out what is malformed, of the wrong types, or of places there are not, and never throws', () => {
     const bad: unknown[] = [
       null, 3, 'view', [], { ...good, id: 7 }, { ...good, title: '' }, { ...good, title: { toString: 1 } }, { ...good, context: 'galaxy' },
-      { ...good, fits: 'space' }, { ...good, fits: [] }, { ...good, fits: ['sidebar'] }, { ...good, fits: ['pane'] }, { ...good, fits: [null] },
-      { ...good, fits: ['space', 'space', 'space', 'space'] }, { ...good, method: 'orders.read' }, { ...good, value: undefined },
-      { ...good, icon: 'skull' }, { ...good, default: 'drawer' }, { ...good, narrow: ['space', 7] }, { ...good, order: Infinity }, { ...good, order: '1' },
+      { ...good, fits: 'sidebar' }, { ...good, fits: [] }, { ...good, fits: ['dock'] }, { ...good, fits: ['pane'] }, { ...good, fits: [null] },
+      { ...good, fits: ['sidebar', 'sidebar', 'sidebar', 'sidebar'] }, { ...good, method: 'orders.read' }, { ...good, value: undefined },
+      { ...good, icon: 'skull' }, { ...good, default: 'drawer' }, { ...good, narrow: ['sidebar', 7] }, { ...good, order: Infinity }, { ...good, order: '1' },
       { ...good, about: 5 }, { ...good, profiles: 'p' }, { ...good, profiles: [] }, { ...good, profiles: [7] }, { ...good, profiles: [''] },
       { ...good, extension: undefined }, { ...good, extension: 'Orders' }, { ...good, extension: { name: 'orders' } }, { ...good, id: 'orders.' }, { ...good, id: 'orders.a b' },
     ]
@@ -165,10 +165,10 @@ describe('what a machine sends, checked where it lands', () => {
     expect(dropped).toHaveLength(5)
   })
 
-  it("keeps a profile's out of spaces, and an id to one declaration per profile", () => {
-    const profiled = { ...good, context: 'thread', fits: ['space', 'beside'], profiles: ['/p'] }
+  it("keeps a profile's out of sidebars, and an id to one declaration per profile", () => {
+    const profiled = { ...good, context: 'thread', fits: ['sidebar', 'beside'], profiles: ['/p'] }
     expect(checkDataViews([profiled], on('orders')).views.map((v) => v.fits)).toEqual([['beside']])
-    expect(checkDataViews([{ ...profiled, fits: ['space'] }], on('orders')).views).toEqual([])
+    expect(checkDataViews([{ ...profiled, fits: ['sidebar'] }], on('orders')).views).toEqual([])
     expect(checkDataViews([good, good, profiled], on('orders')).views).toHaveLength(2)
   })
 
@@ -209,5 +209,12 @@ describe("a data view's buttons", () => {
     const log = registry.router.router.log()
     expect(log.map((e) => e.params)).toEqual([undefined, { key: '•••', name: 'n' }, { key: '•••' }, { id: '1' }])
     expect(JSON.stringify(log)).not.toContain('hush')
+  })
+})
+
+describe('a machine older than the sidebar', () => {
+  it('takes its views fitting space as fitting the sidebar', () => {
+    const older = { id: 'orders.recent', extension: 'orders', title: 'Recent', context: 'window', fits: ['space', 'beside'], default: 'space', value: 'orders.recent' }
+    expect(checkDataViews([older], (extension) => extension === 'orders').views).toEqual([{ ...older, fits: ['sidebar', 'beside'], default: 'sidebar' }])
   })
 })

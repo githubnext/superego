@@ -65,7 +65,7 @@ export type SlotProps = {
 export type ViewContext = 'window' | 'thread'
 
 /**
- * What a view is drawn with: the place it's in, and for a thread view the thread (in a pane, the pane's; in a space,
+ * What a view is drawn with: the place it's in, and for a thread view the thread (in a pane, the pane's; in a sidebar,
  * the one shown).
  */
 export type ViewProps<C extends ViewContext = ViewContext> = C extends 'thread'
@@ -73,11 +73,11 @@ export type ViewProps<C extends ViewContext = ViewContext> = C extends 'thread'
   : { place: Place; /** A global profile's view: the machine its profile is on. */ machine?: MachineEntry }
 
 /**
- * What a space draws in the rail instead of the button that opens it: whether it's the open one; whether the sidebar is
+ * What a sidebar draws in the rail instead of the button that opens it: whether it's the open one; whether the sidebar is
  * hidden, the open one then shown in the rail alone (with what it draws there while hidden, if anything: a list as
  * dots); and a way to show the sidebar (`show()`) or hide it (`show(false)`).
  */
-export type SpaceRailProps = { open: boolean; sidebarHidden: boolean; show(open?: boolean): void }
+export type SidebarRailProps = { open: boolean; sidebarHidden: boolean; show(open?: boolean): void }
 
 /**
  * A view: UI an extension offers, which the layout puts in places. `fits` says which places it can be
@@ -86,15 +86,15 @@ export type SpaceRailProps = { open: boolean; sidebarHidden: boolean; show(open?
 export type View<C extends ViewContext = ViewContext> = {
   title: string
   icon?: ComponentType<{ size?: number; 'aria-hidden'?: boolean }>
-  /** `thread`: drawn only where there's a thread (beside, pane, header; in a space, the one shown). */
+  /** `thread`: drawn only where there's a thread (beside, pane, header; in a sidebar, the one shown). */
   context: C
   /** The places it can be drawn in. A `thread` view that fits `pane` is a pane kind too, of its id. */
   fits: Place[]
   default?: Placement
   /** On a phone or narrow window, where it goes by default instead (unset: as wide). */
   narrow?: Placement
-  /** Where it goes by default while no view is in `space`: what stands in for a sidebar (the core's thread picker). */
-  withoutSpaces?: Placement
+  /** Where it goes by default while no view is in `sidebar`: what stands in for a sidebar (the core's thread picker). */
+  withoutSidebar?: Placement
   /** Order among the views in a place (100 when unset; then as registered); the user's layout comes first. */
   order?: number
   component: ComponentType<ViewProps<C>>
@@ -104,11 +104,11 @@ export type View<C extends ViewContext = ViewContext> = {
    * the ···). Unset: its title, and the text it shows.
    */
   menuItem?: ComponentType<ViewProps<C>>
-  /** As a `space`: what it draws in the rail instead of a button with its icon (the sidebar hidden, a list as dots, say). */
-  railButton?: ComponentType<SpaceRailProps>
+  /** As a `sidebar`: what it draws in the rail instead of a button with its icon (the sidebar hidden, a list as dots, say). */
+  railButton?: ComponentType<SidebarRailProps>
   /**
    * In the rail: the action pressing its button runs (Ego's: open its thread). It makes the button one of the rail's
-   * tabs, which ⌘1–⌘9 go to in order, before the spaces; its tooltip says its number (`useRailShortcut`).
+   * tabs, which ⌘1–⌘9 go to in order, before the sidebars; its tooltip says its number (`useRailShortcut`).
    */
   action?: string
   /** As a pane: its width to start with, as a share of the row. */
@@ -140,8 +140,8 @@ export type PaneKind = {
   width?: number
 }
 
-/** What a surface gets: where and what it was opened with, the thread docked to it, and a way to show another of its kind. */
-export type SurfaceProps = {
+/** What a space gets: where and what it was opened with, the thread docked to it, and a way to show another of its kind. */
+export type SpaceProps = {
   machine: MachineEntry
   kind: string
   params: Record<string, Json>
@@ -151,20 +151,20 @@ export type SurfaceProps = {
   open(params: Record<string, Json>): void
   /**
    * How much of its right side its thread covers, in px (a floating card's; 0 docked or hidden): keep controls clear
-   * of it. Also the CSS variable `--surface-inset-right` on its box.
+   * of it. Also the CSS variable `--space-inset-right` on its box.
    */
   inset: { right: number }
 }
 
 /**
- * A kind of surface: a view that fills the window's main area, where a thread otherwise shows (a notes page, a canvas),
- * opened with params of its own (`surface.open`, or a link its `match` claims), with a thread docked beside it.
+ * A kind of space: a view that fills the window's main area, where a thread otherwise shows (a notes page, a canvas),
+ * opened with params of its own (`space.open`, or a link its `match` claims), with a thread docked beside it.
  */
-export type SurfaceKind = {
+export type SpaceKind = {
   /** In the title bar, history and ⌘K: fixed, or from its params. */
   title: string | ((params: Record<string, Json>) => string)
   icon?: ComponentType<{ size?: number; 'aria-hidden'?: boolean }>
-  component: ComponentType<SurfaceProps>
+  component: ComponentType<SpaceProps>
   /** Links of this scheme (`'note:'`) open it, anywhere Markdown is drawn (an agent's answer too). */
   match?: string
   /** The params a link it claims opens it with; default `{ href }`. */
@@ -375,7 +375,7 @@ export type UiApi = {
    */
   signal: AbortSignal
   /**
-   * A view, `<extension>.<name>`: UI that the layout puts in the places it fits (a space in the rail, beside the thread,
+   * A view, `<extension>.<name>`: UI that the layout puts in the places it fits (a sidebar in the rail, beside the thread,
    * the pane menu, the title bar), by default where `default` says. The user's layout (`app.layout`) can move or hide
    * it. A profile's views fit only the places that show a thread, and only its own threads, unless the profile is global
    * (`global: true`): then they go in any place, as an app extension's do.
@@ -426,11 +426,11 @@ export type UiApi = {
    */
   pane(kind: string, pane: PaneKind): void
   /**
-   * A kind of surface, `<extension>.<name>`: a view that fills the main area, opened by `surface.open` (`{ kind,
+   * A kind of space, `<extension>.<name>`: a view that fills the main area, opened by `space.open` (`{ kind,
    * params, machine? }`) or a link its `match` claims, with a thread docked beside it. An app extension's, or a global
    * profile's (`global: true`); not a thread-bound profile's.
    */
-  surface(kind: string, surface: SurfaceKind): void
+  space(kind: string, space: SpaceKind): void
   /**
    * An action of this extension: dispatched by its keys, from the palette, from other code (`useDispatch`). Ids start
    * with the extension's name. `run` gets its parameters and the window's context.

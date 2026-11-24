@@ -77,7 +77,7 @@ const KEYS: [string, string][] = [
   ['z', 'Take back an answer before it’s sent'],
   ['r', 'Answer in words'],
   ['n N', 'Next and previous open question'],
-  ['space', 'Fold a wave, or open a report'],
+  ['sidebar', 'Fold a wave, or open a report'],
   ['x', 'Dismiss an answered decision or a report'],
   ['a', 'Archive the child, once it’s done'],
   ['? esc', 'These keys'],

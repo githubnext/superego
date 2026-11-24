@@ -90,12 +90,12 @@ export.
 Bundled extensions get more than a profile's:
 
 - **Views in the window's places**, not only a thread's: `superego.view(id, { title, icon, context, fits, default,
-  narrow, withoutSpaces, order, component })` (see [Views and the layout](window.md#views-and-the-layout)). A `space`
+  narrow, withoutSidebar, order, component })` (see [Views and the layout](window.md#views-and-the-layout)). A `sidebar`
   is a rail button (its `icon`, or its own `railButton` component, told `sidebarHidden`) and the sidebar while open;
   `rail` is a button there that
-  isn't a space (Ego's, `order: 10`); `drawer` the foot of a phone's drawer, beside Settings; `titlebar` the title
+  isn't a sidebar (Ego's, `order: 10`); `drawer` the foot of a phone's drawer, beside Settings; `titlebar` the title
   bar's start. `default` is where it starts (none: offered, the user places it), `narrow` where it goes on a phone,
-  `withoutSpaces` where it goes while no view is in `space` (Unread's bell in the rail). A button of its own in the rail
+  `withoutSidebar` where it goes while no view is in `sidebar` (Unread's bell in the rail). A button of its own in the rail
   is a `<RailButton label on>`, lit while `on`, as the rail's own are. The user's layout decides in
   the end: read where it is with `usePlacement(id, place)`, never keep a setting of your own for it. And
   **`superego.work(divide)`** to group a run of

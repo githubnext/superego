@@ -93,7 +93,7 @@ This is the overview. Each topic is a file beside this one (`guide.md`, `ui.md`,
 |---|---|
 | `guide` | building an extension: the big picture, one end to end, the build-queue examples (`examples/` beside it), testing |
 | `cheatsheet` | looking up what either half of an extension can register, a line each |
-| `window` | placing views (spaces, beside the thread, the pane menu, the header), data-only views, links, window events |
+| `window` | placing views (sidebars, beside the thread, the pane menu, the header), spaces, data-only views, links, window events |
 | `lifecycle` | teardown and what needs cleaning up, a thread's hooks (`starting`, `archived`, …), versions and compatibility |
 | `cli` | starting and scripting threads, machines, settings, actions, the daemon |
 | `profiles` | writing `profile.ts`: model, prompt, extensions, panes, allowing, `extends`, when changes apply |

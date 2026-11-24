@@ -1,7 +1,7 @@
 // unread, UI half: what agents have for you that you haven't seen (a result, a failure, a question). ⌘U lists them, the
 // most pressing first, each saying what it wants in a word (Question, Permission, Failed, Done), to type a few letters of one and go there (after Fut's); with none, it says so and lists
 // nothing. A bell with how many, coloured by the most pressing (as Fut shows its waiting agents), opens the same list:
-// a view (`unread.bell`), in the rail while there's no space (a sidebar shows its own), and beside Settings in a
+// a view (`unread.bell`), in the rail while there's no sidebar (a sidebar shows its own), and beside Settings in a
 // phone's drawer. ⌘. goes to the next one, in every project or the one you're in.
 import { useEffect } from 'react'
 import { defineAction, defineUiExtension, Picker, unreadList, useMachines, useProjects, useSelection, type Store, type ViewProps } from '@superego/app/ui'
@@ -28,7 +28,7 @@ export default defineUiExtension({
       ] }],
     })
     superego.view('unread.bell', {
-      title: 'Unread', icon: BellIcon, context: 'window', fits: ['rail', 'drawer'], withoutSpaces: 'rail', narrow: 'drawer', component: UnreadButton,
+      title: 'Unread', icon: BellIcon, context: 'window', fits: ['rail', 'drawer'], withoutSidebar: 'rail', narrow: 'drawer', component: UnreadButton,
     })
     superego.action(defineAction({
       id: 'unread.list', title: 'Unread threads…', keys: 'mod+u',

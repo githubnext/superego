@@ -1,5 +1,5 @@
 // Where views go: the views' defaults, the user's layout (`app.layout`) on top, the narrow layout on a phone; what
-// stands in for a space while there's none; placing and taking out; settings from before the layout read into it.
+// stands in for a sidebar while there's none; placing and taking out; settings from before the layout read into it.
 import { describe, expect, it } from 'vitest'
 import { defineApp, type Json, type ThreadInfo } from '@superego/protocol'
 import { defineUiExtension, type UiExtension } from '../src/renderer/extension-api.ts'
@@ -12,27 +12,27 @@ const None = () => null
 
 /** The bundled app's views, as they declare their places. */
 const bundled: Placeable[] = [
-  { id: 'core.picker', fits: ['titlebar'], withoutSpaces: 'titlebar' },
-  { id: 'threads.list', fits: ['space'], default: 'space' },
+  { id: 'core.picker', fits: ['titlebar'], withoutSidebar: 'titlebar' },
+  { id: 'threads.list', fits: ['sidebar'], default: 'sidebar' },
   { id: 'threads.details', fits: ['beside', 'pane'] },
   { id: 'threads.model', fits: ['header'], default: 'header' },
   { id: 'ego.button', fits: ['rail', 'drawer'], default: 'rail', narrow: 'drawer', order: 10 },
   { id: 'ego.clear', fits: ['header'], default: 'header' },
-  { id: 'files.folder', fits: ['space', 'beside', 'pane'] },
+  { id: 'files.folder', fits: ['sidebar', 'beside', 'pane'] },
   { id: 'git.changes', fits: ['pane'], default: 'pane' },
-  { id: 'unread.bell', fits: ['rail', 'drawer'], withoutSpaces: 'rail', narrow: 'drawer' },
+  { id: 'unread.bell', fits: ['rail', 'drawer'], withoutSidebar: 'rail', narrow: 'drawer' },
 ]
 
 describe('resolving the layout', () => {
   it("puts the bundled app's views where they were before there was a layout", () => {
     expect(resolveLayout(bundled, undefined)).toEqual({
-      space: ['threads.list'], rail: ['ego.button'], drawer: [], titlebar: [], beside: [], pane: ['git.changes'], header: ['threads.model', 'ego.clear'],
+      sidebar: ['threads.list'], rail: ['ego.button'], drawer: [], titlebar: [], beside: [], pane: ['git.changes'], header: ['threads.model', 'ego.clear'],
     })
   })
 
-  it('stands the picker and the bell in for a space while there is none', () => {
+  it('stands the picker and the bell in for a sidebar while there is none', () => {
     const placed = resolveLayout(bundled, { place: { 'threads.list': null } })
-    expect(placed.space).toEqual([])
+    expect(placed.sidebar).toEqual([])
     expect(placed.titlebar).toEqual(['core.picker'])
     // Ego first, as its order says.
     expect(placed.rail).toEqual(['ego.button', 'unread.bell'])
@@ -41,11 +41,11 @@ describe('resolving the layout', () => {
   })
 
   it("takes the user's changes over the defaults, and keeps a view out of places it doesn't fit", () => {
-    const placed = resolveLayout(bundled, { place: { 'threads.details': 'beside', 'ego.button': null, 'threads.model': 'space' } })
+    const placed = resolveLayout(bundled, { place: { 'threads.details': 'beside', 'ego.button': null, 'threads.model': 'sidebar' } })
     expect(placed.beside).toEqual(['threads.details'])
     expect(placed.rail).toEqual([])
     expect(placed.header).toEqual(['ego.clear'])
-    expect(placed.space).toEqual(['threads.list'])
+    expect(placed.sidebar).toEqual(['threads.list'])
   })
 
   it('ignores views it does not know, so a removed extension drops out', () => {
@@ -69,7 +69,7 @@ describe('resolving the layout', () => {
     const narrow = resolveLayout(bundled, undefined, { narrow: true })
     expect(narrow.drawer).toEqual(['ego.button', 'unread.bell'])
     expect(narrow.rail).toEqual([])
-    expect(narrow.space).toEqual(['threads.list'])
+    expect(narrow.sidebar).toEqual(['threads.list'])
     // The wide changes apply narrow too, unless the view has narrow places of its own or the narrow layout says; a view
     // hidden wide is hidden there too.
     const layout: Layout = { place: { 'threads.details': 'beside', 'ego.button': 'rail' }, narrow: { place: { 'unread.bell': null }, order: { drawer: [] } } }
@@ -110,7 +110,7 @@ describe('placing a view', () => {
     expect(isLayout({ place: { a: 'beside', b: ['beside', 'pane'], c: null }, order: { pane: ['a'] }, narrow: { place: {} } })).toBe(true)
     expect(isLayout({ place: { a: 1 } } as Json)).toBe(false)
     expect(isLayout({ narrow: { narrow: {} } })).toBe(false)
-    expect(isLayout({ spaces: [] })).toBe(false)
+    expect(isLayout({ sidebars: [] })).toBe(false)
     expect(isLayout([])).toBe(false)
   })
 })
@@ -118,10 +118,10 @@ describe('placing a view', () => {
 // Moving a view, as `layout.place` does for ⌘I and the views' "Move to…" menus: in, out, from one place to another,
 // wide and on a phone, keeping only what differs from the views' defaults.
 const moving: Placeable[] = [
-  { id: 'threads.list', fits: ['space'], default: 'space' },
+  { id: 'threads.list', fits: ['sidebar'], default: 'sidebar' },
   { id: 'threads.details', fits: ['beside', 'pane'] },
   { id: 'ego.button', fits: ['rail', 'drawer'], default: 'rail', narrow: 'drawer', order: 10 },
-  { id: 'files.folder', fits: ['space', 'beside', 'pane'] },
+  { id: 'files.folder', fits: ['sidebar', 'beside', 'pane'] },
   { id: 'git.changes', fits: ['pane'], default: 'pane' },
 ]
 const resolvedMoving = (layout: Layout, narrow = false) => resolveLayout(moving, layout, { narrow })
@@ -169,7 +169,7 @@ describe('views in the registry', () => {
   const orders: UiExtension = defineUiExtension({
     name: 'orders',
     setup(superego) {
-      superego.view('orders.recent', { title: 'Recent orders', context: 'window', fits: ['space', 'rail'], default: 'space', component: None })
+      superego.view('orders.recent', { title: 'Recent orders', context: 'window', fits: ['sidebar', 'rail'], default: 'sidebar', component: None })
       superego.view('orders.order', { title: 'Order', context: 'thread', fits: ['beside', 'pane'], default: 'pane', component: None })
       superego.pane('orders.log', { title: 'Log', component: None, menu: true })
     },
@@ -188,7 +188,7 @@ describe('views in the registry', () => {
   })
 
   it('names views after their extension', () => {
-    const bad = defineUiExtension({ name: 'bad', setup(superego) { superego.view('other.view', { title: 'x', context: 'window', fits: ['space'], component: None }) } })
+    const bad = defineUiExtension({ name: 'bad', setup(superego) { superego.view('other.view', { title: 'x', context: 'window', fits: ['sidebar'], component: None }) } })
     expect(() => createRegistry(app, [bad], () => {})).toThrow(/bad\.<name>/)
   })
 
@@ -207,25 +207,25 @@ describe('views in the registry', () => {
     expect(registry.views).toEqual([])
   })
 
-  it("installs a global profile's UI as the app's: in any place, its surfaces and their links; a thread-bound profile can't add a surface", () => {
+  it("installs a global profile's UI as the app's: in any place, its spaces and their links; a thread-bound profile can't add a space", () => {
     const notes = defineUiExtension({
       name: 'notes',
       setup(superego) {
-        superego.view('notes.list', { title: 'Notes', context: 'window', fits: ['space'], default: 'space', component: None })
-        superego.surface('notes.page', { title: (p) => String(p.name), component: None, match: 'note:', params: (href) => ({ name: href.slice(5) }) })
+        superego.view('notes.list', { title: 'Notes', context: 'window', fits: ['sidebar'], default: 'sidebar', component: None })
+        superego.space('notes.page', { title: (p) => String(p.name), component: None, match: 'note:', params: (href) => ({ name: href.slice(5) }) })
       },
     })
     const profile = { scope: 'user' as const, name: 'notes', dir: '/home/me/.superego/profiles/notes' }
     const registry = createRegistry(app, [], () => {})
     registry.installProfile('local', profile, [notes], { global: true })
-    expect(registry.views.find((v) => v.id === 'notes.list')?.fits).toEqual(['space'])
-    expect(viewsIn(registry, resolveLayout(registry.views, undefined), 'space').map((v) => v.id)).toEqual(['notes.list'])
-    expect(registry.surfaces.map((s) => [s.kind, s.machine])).toEqual([['notes.page', 'local']])
+    expect(registry.views.find((v) => v.id === 'notes.list')?.fits).toEqual(['sidebar'])
+    expect(viewsIn(registry, resolveLayout(registry.views, undefined), 'sidebar').map((v) => v.id)).toEqual(['notes.list'])
+    expect(registry.spaces.map((s) => [s.kind, s.machine])).toEqual([['notes.page', 'local']])
     expect(registry.links.some((l) => l.match === 'note:')).toBe(true)
-    // Set up again without being global: its space and surface go, and its links with them.
+    // Set up again without being global: its sidebar and space go, and its links with them.
     registry.installProfile('local', profile, [notes])
     expect(registry.views.find((v) => v.id === 'notes.list')).toBeUndefined()
-    expect(registry.surfaces).toEqual([])
+    expect(registry.spaces).toEqual([])
     expect(registry.links.some((l) => l.match === 'note:')).toBe(false)
   })
 

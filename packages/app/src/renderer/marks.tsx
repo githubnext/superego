@@ -30,7 +30,7 @@ export const Chip = ({ icon, children, title }: { icon: ReactNode; children: Rea
 )
 
 /**
- * In the rail (a space's own `railButton`, a `rail` view): a button as the rail draws its own, lit while `on`. On a
+ * In the rail (a sidebar's own `railButton`, a `rail` view): a button as the rail draws its own, lit while `on`. On a
  * phone's drawer too. Its other props are an `IconButton`'s; `className` adds the extension's own.
  */
 export const RailButton = ({ on = false, className = '', ...props }: ComponentProps<typeof IconButton> & { on?: boolean }) => (

@@ -1,7 +1,7 @@
 // Screenshots of the window's layout (run by test/look.sh): the sidebar shown and hidden (the threads as dots); the thread
 // alone (and dragged narrower) and with Changes beside it (and a file past it); a long title, parent and branch; thread
 // details, their menu and the layout's file beside the thread; ⌘U's unread list; a phone, its drawer open, a data view in it, the thread's sheet; a data view
-// as a space; ⌘N's dialog, Settings and its Keyboard; light and dark. Into $SUPEREGO_SHOWCASE_OUT.
+// as a sidebar; ⌘N's dialog, Settings and its Keyboard; light and dark. Into $SUPEREGO_SHOWCASE_OUT.
 import { openApp } from './harness.mjs'
 import { threads } from './showcase/threads.mjs'
 
@@ -50,7 +50,7 @@ await openApp({ name: 'look', timeout: 180_000 }, async (t) => {
   await both('unread')
   await run(`document.querySelector('.unread-list .palette__input').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`)
   await until(`!document.querySelector('.unread-list')`, 'the unread list closed')
-  // A right-click on a space in the rail: its menu.
+  // A right-click on a sidebar in the rail: its menu.
   await run(`(() => { const b = document.querySelector('.app__rail .superego-context[data-view="threads.list"] button'); const r = b.getBoundingClientRect()
     b.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, button: 2, clientX: r.left + r.width / 2, clientY: r.top + r.height / 2 })) })()`)
   await until(`!!document.querySelector('.view-menu')`, 'rail menu')
@@ -174,11 +174,11 @@ await openApp({ name: 'look', timeout: 180_000 }, async (t) => {
   await run(`document.querySelector('.app__mobilebar button')?.click()`)
   await until(`!!document.querySelector('.app__sidebar')`, 'drawer')
   await both('phone-drawer')
-  // A data view (the skills, placed as a space): in the drawer, switched to from its foot.
-  await setting('app.layout', { place: { 'skills.view': 'space' } })
+  // A data view (the skills, placed as a sidebar): in the drawer, switched to from its foot.
+  await setting('app.layout', { place: { 'skills.view': 'sidebar' } })
   await until(`!!document.querySelector('.app__drawer-bar [aria-label="Skills"]')`, 'Skills in the drawer')
   await run(`document.querySelector('.app__drawer-bar [aria-label="Skills"]').click()`)
-  await until(`document.querySelector('.data-view--space')?.textContent.includes('$release')`, 'skills listed')
+  await until(`document.querySelector('.data-view--sidebar')?.textContent.includes('$release')`, 'skills listed')
   await both('phone-data-view')
   await run(`document.querySelector('.app__drawer-bar [aria-label="Threads"]').click()`)
   await run(`document.querySelector('.app__scrim').click()`)
@@ -191,12 +191,12 @@ await openApp({ name: 'look', timeout: 180_000 }, async (t) => {
   await both('phone-sheet-details')
   await run(`document.querySelector('.thread-sheet [data-item="view:threads.model"]').click()`)
   await run(`document.querySelector('.app__scrim--sheet').click()`)
-  // Wide again: the data view as a space, its button in the rail.
+  // Wide again: the data view as a sidebar, its button in the rail.
   await t.zoom(1)
   await t.resize(width, height)
   await until(`!!document.querySelector('.app__rail [aria-label="Skills"]')`, 'Skills in the rail')
   await run(`document.querySelector('.app__rail [aria-label="Skills"]').click()`)
-  await until(`document.querySelector('.data-view--space')?.textContent.includes('$release')`, 'skills space')
+  await until(`document.querySelector('.data-view--sidebar')?.textContent.includes('$release')`, 'skills sidebar')
   await t.settled()
   await both('data-view')
   await setting('app.layout', {})

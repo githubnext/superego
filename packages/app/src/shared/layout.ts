@@ -6,19 +6,19 @@ import type { Json } from '@superego/protocol'
 
 /**
  * A kind of place in the window:
- * - `space`: a button in the rail, and the sidebar while it's the open one (on a phone, the drawer)
- * - `rail`: a button in the rail that isn't a space (Ego's)
+ * - `sidebar`: a button in the rail, and the sidebar while it's the open one (on a phone, the drawer)
+ * - `rail`: a button in the rail that isn't a sidebar (Ego's)
  * - `drawer`: at the foot of a phone's drawer, beside Settings, where there's no rail
- * - `titlebar`: at the title bar's start, after back and forward (the core's thread picker, with no space)
+ * - `titlebar`: at the title bar's start, after back and forward (the core's thread picker, with no sidebar)
  * - `beside`: a column beside the thread
  * - `pane`: in the thread's pane menu, opened as a pane beside it
  * - `header`: right of the thread's title: a button, a badge
  */
-export type Place = 'space' | 'rail' | 'drawer' | 'titlebar' | 'beside' | 'pane' | 'header'
-export const PLACES: Place[] = ['space', 'rail', 'drawer', 'titlebar', 'beside', 'pane', 'header']
-/** The places a wide window draws, and a phone's (the column beside the thread in its sheet; its title bar only while there's no space). */
-export const WIDE_PLACES: Place[] = ['space', 'rail', 'titlebar', 'beside', 'pane', 'header']
-export const NARROW_PLACES: Place[] = ['space', 'drawer', 'beside', 'pane', 'header']
+export type Place = 'sidebar' | 'rail' | 'drawer' | 'titlebar' | 'beside' | 'pane' | 'header'
+export const PLACES: Place[] = ['sidebar', 'rail', 'drawer', 'titlebar', 'beside', 'pane', 'header']
+/** The places a wide window draws, and a phone's (the column beside the thread in its sheet; its title bar only while there's no sidebar). */
+export const WIDE_PLACES: Place[] = ['sidebar', 'rail', 'titlebar', 'beside', 'pane', 'header']
+export const NARROW_PLACES: Place[] = ['sidebar', 'drawer', 'beside', 'pane', 'header']
 /** The places that show a thread: a view drawn there gets it. */
 export const THREAD_PLACES: Place[] = ['beside', 'pane', 'header']
 
@@ -43,8 +43,8 @@ export type Placeable = {
   default?: Placement
   /** On a phone or narrow window, where it goes by default instead. Unset: as wide. */
   narrow?: Placement
-  /** Where it goes by default while no view is in `space` (a window with no sidebar). */
-  withoutSpaces?: Placement
+  /** Where it goes by default while no view is in `sidebar` (a window with no sidebar). */
+  withoutSidebar?: Placement
   /** Order within a place, where nothing says otherwise (100 when unset; then as registered). */
   order?: number
 }
@@ -90,9 +90,9 @@ export function resolveLayout(views: readonly Placeable[], layout: Layout | unde
     const { places, chosen } = placesOf(view, layout, narrow)
     return { view, chosen, places: [...new Set(places)].filter((place) => view.fits.includes(place)) }
   })
-  // With no space placed, the views that stand in for one go where they say (unless the user placed them).
-  if (!resolved.some((r) => r.places.includes('space'))) {
-    for (const r of resolved) if (!r.chosen && r.view.withoutSpaces) r.places = [...new Set([...r.places, ...list(r.view.withoutSpaces).filter((p) => r.view.fits.includes(p))])]
+  // With no sidebar placed, the views that stand in for one go where they say (unless the user placed them).
+  if (!resolved.some((r) => r.places.includes('sidebar'))) {
+    for (const r of resolved) if (!r.chosen && r.view.withoutSidebar) r.places = [...new Set([...r.places, ...list(r.view.withoutSidebar).filter((p) => r.view.fits.includes(p))])]
   }
   const order = { ...layout?.order, ...(narrow ? layout?.narrow?.order : {}) }
   const placed = Object.fromEntries(PLACES.map((place) => [place, [] as string[]])) as Placed
@@ -140,8 +140,8 @@ export function placeView(views: readonly Placeable[], layout: Layout | undefine
   // Where it goes with this layer saying nothing of it: the default wide, the wide layout's on a phone.
   const base = (narrow ? placesOf(found, layout, true, false).places : list(found.default)).filter((p) => found.fits.includes(p))
   const same = next.length === base.length && next.every((p) => base.includes(p))
-  // Back where it goes anyway, nothing is kept; but a view standing in for a space is kept where it's put, space or not.
-  const kept = same && !found.withoutSpaces ? others : { ...others, [view]: next.length === 0 ? null : next.length === 1 ? next[0]! : next }
+  // Back where it goes anyway, nothing is kept; but a view standing in for a sidebar is kept where it's put, sidebar or not.
+  const kept = same && !found.withoutSidebar ? others : { ...others, [view]: next.length === 0 ? null : next.length === 1 ? next[0]! : next }
   return withLayer(layout, { ...layer, place: kept }, narrow)
 }
 

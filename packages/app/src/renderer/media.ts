@@ -5,7 +5,7 @@ import { NARROW, useMedia, useNarrow } from '@superego/ui'
 
 /**
  * NARROW, a window as narrow as a phone's (@superego/ui's, where a dialog becomes a sheet at that width): no rail, the
- * space a drawer, one column at a time (and nothing to maximize). On a phone (this, under a finger) text also reads 15%
+ * sidebar a drawer, one column at a time (and nothing to maximize). On a phone (this, under a finger) text also reads 15%
  * bigger: app.css. `useMedia` follows a query as the window's resized; `useNarrow`, this one.
  */
 export { NARROW, useMedia, useNarrow }

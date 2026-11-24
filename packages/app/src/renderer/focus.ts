@@ -28,7 +28,7 @@ function regions(): HTMLElement[] {
 /**
  * What to focus in a region: what's used there. A thread is its transcript (to read and scroll; typing goes on to the
  * prompt), an editor its text (rendered, the text to read), what a pane marks `data-focus`; any other pane takes the focus itself; a
- * space or a column beside of other views (a data view's), the first thing in it to use, past the views' ··· buttons.
+ * sidebar or a column beside of other views (a data view's), the first thing in it to use, past the views' ··· buttons.
  */
 function target(region: HTMLElement): HTMLElement | null {
   return region.querySelector<HTMLElement>('.superego-list-item.is-selected[tabindex]')
@@ -100,13 +100,13 @@ export function focusColumn(id: string | undefined) {
   requestAnimationFrame(attempt)
 }
 
-/** The sidebar showing the space `id`, once it's drawn: what's used there (its selected row, else its first). */
+/** The sidebar `id`, once it's drawn: what's used there (its selected row, else its first). */
 export function focusSidebar(id: string) {
   let tries = 0
   const attempt = () => {
-    if (focusRegion(document.querySelector<HTMLElement>(`.app__sidebar[data-space="${CSS.escape(id)}"]`))) return
+    if (focusRegion(document.querySelector<HTMLElement>(`.app__sidebar[data-sidebar="${CSS.escape(id)}"]`))) return
     if (++tries < 20) requestAnimationFrame(attempt)
-    else console.error(`The ${id} space didn't show to take the focus`)
+    else console.error(`The ${id} sidebar didn't show to take the focus`)
   }
   requestAnimationFrame(attempt)
 }

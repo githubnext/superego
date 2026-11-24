@@ -121,8 +121,8 @@ export function windowRegistry(app: AppConfig, extensions: UiExtension[]) {
     registerProfileUi(core)
     registerNotifications(core)
     for (const action of coreActions(app)) core.action(action)
-    // Every thread in a menu, and a new one: at the title bar's start while there's no space (no sidebar).
-    core.view('core.picker', { title: 'Threads', context: 'window', fits: ['titlebar'], withoutSpaces: 'titlebar', component: ThreadPicker })
+    // Every thread in a menu, and a new one: at the title bar's start while there's no sidebar.
+    core.view('core.picker', { title: 'Threads', context: 'window', fits: ['titlebar'], withoutSidebar: 'titlebar', component: ThreadPicker })
     // A view put in a place, or taken out (toggled, unless `on` says); `from`: taken out of that one too, moved there.
     // The user's layout keeps it; `narrow`, the phone's layer of it. Worked out from the view as the place is drawn
     // for `machine` and `thread` (else the selected thread): its declaration there, where it is there now.

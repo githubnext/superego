@@ -634,5 +634,5 @@ export type Client = {
  * machine's daemon (see the app's perform.ts).
  */
 export const PERFORMABLE: ReadonlySet<string> = new Set([
-  'thread.select', 'thread.next', 'thread.previous', 'unread.next', 'project.next', 'project.previous', 'pane.next', 'pane.previous', 'surface.open',
+  'thread.select', 'thread.next', 'thread.previous', 'unread.next', 'project.next', 'project.previous', 'pane.next', 'pane.previous', 'space.open',
 ])

@@ -10,7 +10,7 @@ import { clearProblem, reportProblem } from './machine-problems.ts'
 import { useRegistry } from './registry.tsx'
 import { useImageRechecks } from './images.tsx'
 import { useGlobalProfileUis, useListedProfileUis } from './profile-ui.ts'
-import { emptyHistory, sameSurface, step, visit, type History, type Place, type SurfaceAt } from './history.ts'
+import { emptyHistory, sameSpace, step, visit, type History, type Place, type SpaceAt } from './history.ts'
 import { useLocalState } from './local-state.ts'
 import { focusProvider } from './provider-focus.ts'
 import { useWindowEvents } from './window-events.ts'
@@ -73,21 +73,21 @@ type ShellState = {
   hidden: ThreadInfo[] | undefined
   /** Every machine's, by machine id. */
   hiddenAll: Record<string, ThreadInfo[] | undefined>
-  /** The listed thread last selected: where the sidebar's spaces go back to from a hidden one (Ego's). */
+  /** The listed thread last selected: where the sidebars go back to from a hidden one (Ego's). */
   listed: Selection | undefined
-  /** The surface the main area shows instead of the selected thread, if one is open. */
-  surface: SurfaceAt | undefined
-  /** Open a surface (none: back to the selected thread). */
-  openSurface(surface: SurfaceAt | undefined): void
-  /** The thread docked to each surface, by `surfaceKey`. */
+  /** The space the main area shows instead of the selected thread, if one is open. */
+  space: SpaceAt | undefined
+  /** Open a space (none: back to the selected thread). */
+  openSpace(space: SpaceAt | undefined): void
+  /** The thread docked to each space, by `spaceKey`. */
   docked: Record<string, Selection>
-  dock(surface: SurfaceAt, thread: Selection | undefined): void
-  /** What each surface says it's called now (`useSurfaceTitle`), by `surfaceKey`. */
-  surfaceTitles: Record<string, string>
-  titleSurface(surface: SurfaceAt, title: string | undefined): void
-  /** Whether surfaces show their thread (docked or floating), or hide it. */
-  surfaceAgent: boolean
-  showSurfaceAgent(shown?: boolean): void
+  dock(space: SpaceAt, thread: Selection | undefined): void
+  /** What each space says it's called now (`useSpaceTitle`), by `spaceKey`. */
+  spaceTitles: Record<string, string>
+  titleSpace(space: SpaceAt, title: string | undefined): void
+  /** Whether spaces show their thread (docked or floating), or hide it. */
+  spaceAgent: boolean
+  showSpaceAgent(shown?: boolean): void
   canBack: boolean
   canForward: boolean
   go(by: -1 | 1): void
@@ -137,23 +137,23 @@ export function useSidebar() {
   const { sidebarHidden, showSidebar } = useShellState()
   return { hidden: sidebarHidden, show: showSidebar }
 }
-/** What a surface is known by, for the thread docked to it. */
-export const surfaceKey = (surface: SurfaceAt) => `${surface.machine}\u0000${surface.kind}\u0000${JSON.stringify(surface.params)}`
+/** What a space is known by, for the thread docked to it. */
+export const spaceKey = (space: SpaceAt) => `${space.machine}\u0000${space.kind}\u0000${JSON.stringify(space.params)}`
 
 /**
- * The surface the main area shows, if one is open; how to open one (or none); the thread docked to it, and whether
+ * The space the main area shows, if one is open; how to open one (or none); the thread docked to it, and whether
  * its thread shows.
  */
-export function useSurface() {
-  const { surface, openSurface, docked, dock, surfaceAgent, showSurfaceAgent, surfaceTitles, titleSurface } = useShellState()
+export function useSpace() {
+  const { space, openSpace, docked, dock, spaceAgent, showSpaceAgent, spaceTitles, titleSpace } = useShellState()
   return {
-    surface, open: openSurface,
+    space, open: openSpace,
     /** What `at` (the open one, unless given) says it's called, if it has said. */
-    titleOf: (at = surface) => at ? surfaceTitles[surfaceKey(at)] : undefined,
-    setTitle: titleSurface,
-    docked: surface ? docked[surfaceKey(surface)] : undefined,
-    dock: (thread: Selection | undefined) => { if (surface) dock(surface, thread) },
-    agentShown: surfaceAgent, showAgent: showSurfaceAgent,
+    titleOf: (at = space) => at ? spaceTitles[spaceKey(at)] : undefined,
+    setTitle: titleSpace,
+    docked: space ? docked[spaceKey(space)] : undefined,
+    dock: (thread: Selection | undefined) => { if (space) dock(space, thread) },
+    agentShown: spaceAgent, showAgent: showSpaceAgent,
   }
 }
 
@@ -201,11 +201,11 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
   // Which thread and whether Settings is open: as the window was left, after a reload too.
   const [selection, setSelection] = useLocalState<Selection | undefined>('selection', undefined)
   const [settingsOpen, setSettingsOpen] = useLocalState('settings.open', false)
-  // The surface shown instead of the thread, the thread docked to each, and whether their threads show.
-  const [surface, setSurface] = useLocalState<SurfaceAt | undefined>('surface', undefined)
-  const [docked, setDocked] = useLocalState<Record<string, Selection>>('surface.docked', {})
-  const [surfaceAgent, setSurfaceAgent] = useLocalState('surface.agent', true)
-  const [surfaceTitles, setSurfaceTitles] = useLocalState<Record<string, string>>('surface.titles', {})
+  // The space shown instead of the thread, the thread docked to each, and whether their threads show.
+  const [space, setSpace] = useLocalState<SpaceAt | undefined>('space.open', undefined)
+  const [docked, setDocked] = useLocalState<Record<string, Selection>>('space.docked', {})
+  const [spaceAgent, setSpaceAgent] = useLocalState('space.agent', true)
+  const [spaceTitles, setSpaceTitles] = useLocalState<Record<string, string>>('space.titles', {})
   const [settingsTarget, setSettingsTarget] = useLocalState('settings.target', GENERAL)
   const [settingsAtTab, setSettingsAtTab] = useState(false)
   const [newThread, setNewThread] = useState<NewThreadStart>()
@@ -312,10 +312,10 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
     shown: shown ?? (archived?.id === selection?.thread ? archived : undefined) ?? hidden?.find((t) => t.id === selection?.thread),
   })
   const [history, setHistory] = useState<History>(emptyHistory)
-  const place: Place | undefined = settingsOpen ? { settings: true } : surface ? { surface }
+  const place: Place | undefined = settingsOpen ? { settings: true } : space ? { space }
     : selection ? { thread: { machine: selection.machine, thread: selection.thread } } : undefined
-  useEffect(() => { if (place) setHistory((h) => visit(h, place)) }, [settingsOpen, selection?.machine, selection?.thread, surface && JSON.stringify(surface)])
-  const exists = (p: Place) => 'settings' in p || ('surface' in p ? registry.surfaces.some((s) => s.kind === p.surface.kind)
+  useEffect(() => { if (place) setHistory((h) => visit(h, place)) }, [settingsOpen, selection?.machine, selection?.thread, space && JSON.stringify(space)])
+  const exists = (p: Place) => 'settings' in p || ('space' in p ? registry.spaces.some((s) => s.kind === p.space.kind)
     : Boolean(hiddenAll[p.thread.machine]?.some((t) => t.id === p.thread.thread)) || Boolean(threads[p.thread.machine]?.some((t) => t.id === p.thread.thread)))
   const value = useMemo<ShellState>(() => ({
     machines, threads, rejections, selection, settingsOpen, settingsAtTab, newThread, projects, sidebar, pins, hold, fold, lastThread, sidebarHidden: sidebarIsHidden(sidebarMode, tight), archived, hidden, hiddenAll, listed,
@@ -328,25 +328,25 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
       setNewThread(undefined)
       if ('settings' in to.place) return setSettingsOpen(true)
       setSettingsOpen(false)
-      if ('surface' in to.place) return setSurface(to.place.surface)
-      setSurface(undefined)
+      if ('space' in to.place) return setSpace(to.place.space)
+      setSpace(undefined)
       setSelection(to.place.thread)
     },
-    select: (next) => { setSettingsOpen(false); setNewThread(undefined); setSurface(undefined); setSelection(next) },
-    surface, docked, surfaceAgent,
-    openSurface: (next) => {
+    select: (next) => { setSettingsOpen(false); setNewThread(undefined); setSpace(undefined); setSelection(next) },
+    space, docked, spaceAgent,
+    openSpace: (next) => {
       setSettingsOpen(false)
       setNewThread(undefined)
-      setSurface((was) => sameSurface(was, next) ? was : next)
+      setSpace((was) => sameSpace(was, next) ? was : next)
     },
     dock: (at, thread) => setDocked((all) => {
-      const { [surfaceKey(at)]: _, ...rest } = all
-      return thread ? { ...rest, [surfaceKey(at)]: thread } : rest
+      const { [spaceKey(at)]: _, ...rest } = all
+      return thread ? { ...rest, [spaceKey(at)]: thread } : rest
     }),
-    showSurfaceAgent: (shown) => setSurfaceAgent((was) => shown ?? !was),
-    surfaceTitles,
-    titleSurface: (at, title) => setSurfaceTitles((all) => {
-      const key = surfaceKey(at)
+    showSpaceAgent: (shown) => setSpaceAgent((was) => shown ?? !was),
+    spaceTitles,
+    titleSpace: (at, title) => setSpaceTitles((all) => {
+      const key = spaceKey(at)
       if (all[key] === title) return all
       const { [key]: _, ...rest } = all
       return title ? { ...rest, [key]: title } : rest
@@ -363,7 +363,7 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
       setSidebarOpen(next.open)
       setSidebarShownTight(next.shownTight)
     },
-  }), [machines, threads, rejections, selection, settingsOpen, settingsAtTab, settingsTarget, newThread, projects, sidebar, pins, lastThread, sidebarOpen, sidebarShownTight, tight, archived, hidden, hiddenAll, history, listed, threadSheet, surface, docked, surfaceAgent, surfaceTitles, registry.version])
+  }), [machines, threads, rejections, selection, settingsOpen, settingsAtTab, settingsTarget, newThread, projects, sidebar, pins, lastThread, sidebarOpen, sidebarShownTight, tight, archived, hidden, hiddenAll, history, listed, threadSheet, space, docked, spaceAgent, spaceTitles, registry.version])
   return (
     <Context.Provider value={value}>
       {machines.filter((m) => m.state !== 'disabled').map((m) => <MachineThreads key={m.id} machine={m} onThreads={onThreads} onHidden={onHidden} onRejections={onRejections} />)}
@@ -407,7 +407,7 @@ function MachineThreads({ machine, onThreads, onHidden, onRejections }: {
   useEffect(() => { if (threads) onThreads(machine.id, threads) }, [threads])
   // Its listed threads' profiles' UI, loaded before any of them is shown: their marks in the sidebar, say.
   useListedProfileUis(machine.id, connected, threads)
-  // Its global profiles' UI, as the app's: their spaces and surfaces are there whatever threads there are.
+  // Its global profiles' UI, as the app's: their sidebars and spaces are there whatever threads there are.
   useGlobalProfileUis(machine.id, connected, useValue<ProfileRef[]>(machine, GLOBAL_PROFILES))
   // The window's extensions, told to the machine: one whose work is all here is known there too (Settings, `without`).
   useEffect(() => {

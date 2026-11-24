@@ -10,8 +10,8 @@ import {
 import type { MachineEntry, SuperegoBridge, SuperegoEvent } from '@superego/app/shared'
 import {
   bound, closeWebViews, DescribedCall, describeRun, LAYOUT, layoutOf, linkHandler, mainKind, normalize, pageApp, PaneBody, paneKind, placedFor, PlacedViews, profileUisLoaded, provideProfileUi, RegistryProvider, resetProfileUi,
-  scopedViews, seenIn, setLocalState, Shell as Window, ShellStateProvider, Slot, SurfaceMain, toolRow, urlKind, ViewScopeProvider, useAllThreads, useMachines, useSelection, useSurface, windowRegistry,
-  type BehaviourSlot, type SurfaceAt, type Layout, type Place, type Registry, type SlotProps, type UiExtension, type ViewProps,
+  scopedViews, seenIn, setLocalState, Shell as Window, ShellStateProvider, Slot, SpaceMain, toolRow, urlKind, ViewScopeProvider, useAllThreads, useMachines, useSelection, useSpace, windowRegistry,
+  type BehaviourSlot, type SpaceAt, type Layout, type Place, type Registry, type SlotProps, type UiExtension, type ViewProps,
 } from '@superego/app/internals'
 import type { LinkHandler, LinkWhere, ToolRow, ToolRowCall } from '@superego/app/ui'
 import { onRestart, type TestDaemon } from './daemon.ts'
@@ -249,7 +249,7 @@ export type MountOptions = {
    * UI halves set up as a profile's: drawn only in threads of that profile, on that machine (the first, unless given).
    * One that fails to start throws. `ref`, the profile as its threads name it: unless given, the test daemon's that
    * machine is (`daemon.profile`), else the profile under test. `testThread()` makes threads of it while it's mounted.
-   * `global`: set up as a global profile's (`global: true`), as the app's: its spaces and surfaces too. The window
+   * `global`: set up as a global profile's (`global: true`), as the app's: its sidebars and spaces too. The window
    * doesn't fetch this profile's UI from the daemon: these are it.
    */
   profile?: { ref?: ProfileRef; machine?: string; extensions: UiExtension[]; global?: boolean }
@@ -285,10 +285,10 @@ export type RenderWhat<S extends BehaviourSlot = BehaviourSlot> = { machine?: st
   /** A tool call's row in the transcript, as the extension that describes the tool says (`superego.tool`): `state` done unless given. */
   | { tool: { name: string; arguments?: Record<string, unknown>; id?: string } & Partial<Pick<ToolRowCall, 'state' | 'result' | 'live'>> }
   /**
-   * A surface of a kind (`superego.surface`), opened with its params on `machine`, as the main area draws it, its
-   * thread beside it: what it opens next (its `open`, a link it claims) shows here, as `surface()` says.
+   * A space of a kind (`superego.space`), opened with its params on `machine`, as the main area draws it, its
+   * thread beside it: what it opens next (its `open`, a link it claims) shows here, as `space()` says.
    */
-  | { surface: { kind: string; params?: Record<string, Json> } }
+  | { space: { kind: string; params?: Record<string, Json> } }
 )
 
 /** Where in the window a lookup is for: a machine (the first, unless given) and a thread, as `render` takes them. */
@@ -346,8 +346,8 @@ export type TestWindow = {
   render<S extends BehaviourSlot>(what: RenderWhat<S>): Promise<Rendered>
   /** The views the layout puts in `place` (a thread's: give the thread), as ids. */
   placed(place: Place, where?: { machine?: string; thread: string }): string[]
-  /** The surface the main area shows now (opened by `surface.open`, a link, `render({ surface })`), if one: kind, machine, params. */
-  surface(): SurfaceAt | undefined
+  /** The space the main area shows now (opened by `space.open`, a link, `render({ space })`), if one: kind, machine, params. */
+  space(): SpaceAt | undefined
   /**
    * How the transcript reads calls to the tool `name` in a thread (`where`: as `render`'s), as the extension that
    * describes them said (`superego.tool`, a prefix's like `mcp__*`); `{}`, the core's defaults. Draw one with
@@ -492,20 +492,20 @@ export async function mountUi(options: MountOptions = {}): Promise<TestWindow> {
   // The shell's state as the window has it, for the router's context and for `select`.
   let shell: {
     select(selection: { machine: string; thread: string } | undefined): void; selection?: { machine: string; thread: string }; threads: Record<string, ThreadInfo[] | undefined>
-    surface?: SurfaceAt; openSurface(surface: SurfaceAt | undefined): void
-  } = { select() {}, threads: {}, openSurface() {} }
+    space?: SpaceAt; openSpace(space: SpaceAt | undefined): void
+  } = { select() {}, threads: {}, openSpace() {} }
   function Shell({ children }: { children: ReactNode }) {
     const { selection, select } = useSelection()
-    const { surface, open: openSurface } = useSurface()
+    const { space, open: openSpace } = useSpace()
     const all = useAllThreads()
     const list = useMachines()
-    shell = { select, ...(selection ? { selection } : {}), threads: all, ...(surface ? { surface } : {}), openSurface }
+    shell = { select, ...(selection ? { selection } : {}), threads: all, ...(space ? { space } : {}), openSpace }
     // The whole window drawn: its shell says what actions see, as the app's does.
     if (options.window) return <>{children}</>
     registry.router.setContext({
-      app, machines: list, selection, select, surface, openSurface, hasSurface: (kind) => registry.surfaces.some((s) => s.kind === kind), openSettings() {}, newThread() {}, togglePalette() {}, toggleNavigator() {}, togglePanePicker() {}, showLog() {},
+      app, machines: list, selection, select, space, openSpace, hasSpace: (kind) => registry.spaces.some((s) => s.kind === kind), openSettings() {}, newThread() {}, togglePalette() {}, toggleNavigator() {}, togglePanePicker() {}, showLog() {},
       threadOf: (s) => all[s.machine]?.find((t) => t.id === s.thread), projects: [], sidebar: { pinned: [], projects: [], folded: [] }, lastThread: {}, fold() {},
-      appSetting: (key) => appSide.settings.get(key) as never, toggleSidebar() {}, focusSpace() { throw new Error('No sidebar to focus: mount the whole window (window: true)') }, back() {}, forward() {}, railTabs: () => [],
+      appSetting: (key) => appSide.settings.get(key) as never, toggleSidebar() {}, focusSidebar() { throw new Error('No sidebar to focus: mount the whole window (window: true)') }, back() {}, forward() {}, railTabs: () => [],
     })
     return <>{children}</>
   }
@@ -577,13 +577,13 @@ export async function mountUi(options: MountOptions = {}): Promise<TestWindow> {
       const given = what.thread
       if (typeof given === 'string' && !threadOf(at, given)) throw new Error(`No thread ${given} on ${at}: give it to the machine (threads), or give a ThreadInfo`)
       let node: ReactNode
-      if ('surface' in what) {
-        const { kind, params = {} } = what.surface
-        if (!registry.surfaces.some((s) => s.kind === kind)) {
-          const theirs = registry.surfaces.map((s) => s.kind)
-          throw new Error(`No surface ${kind} in the window (a profile's are there only when it's global: mountUi({ profile: { …, global: true } })): ${theirs.join(', ') || 'none'}`)
+      if ('space' in what) {
+        const { kind, params = {} } = what.space
+        if (!registry.spaces.some((s) => s.kind === kind)) {
+          const theirs = registry.spaces.map((s) => s.kind)
+          throw new Error(`No space ${kind} in the window (a profile's are there only when it's global: mountUi({ profile: { …, global: true } })): ${theirs.join(', ') || 'none'}`)
         }
-        node = <DrawSurface at={{ machine: at, kind, params }} narrow={narrow} />
+        node = <DrawSpace at={{ machine: at, kind, params }} narrow={narrow} />
       } else if ('tool' in what) {
         const { name, arguments: args = {}, id = 'call-1', state = 'done', ...rest } = what.tool
         const thread = given ?? defaultThread(at)
@@ -628,7 +628,7 @@ export async function mountUi(options: MountOptions = {}): Promise<TestWindow> {
       const { container, root } = await draw(node)
       return rendered(container, async () => { await inAct(async () => root.unmount()); roots.delete(root); container.remove() })
     },
-    surface: () => shell.surface,
+    space: () => shell.space,
     placed(place, where) {
       const thread = where && threadOf(machineOf(where.machine), where.thread)
       const scope = thread ? { machine: machineOf(where!.machine), thread } : undefined
@@ -766,7 +766,7 @@ function bySelector(container: HTMLElement, selector: string): HTMLElement | nul
 
 /** Keys by the names `ui.key` takes, as a keyboard event says them. */
 const KEY_NAMES: Record<string, string> = {
-  enter: 'Enter', escape: 'Escape', esc: 'Escape', tab: 'Tab', backspace: 'Backspace', delete: 'Delete', space: ' ',
+  enter: 'Enter', escape: 'Escape', esc: 'Escape', tab: 'Tab', backspace: 'Backspace', delete: 'Delete', sidebar: ' ',
   up: 'ArrowUp', down: 'ArrowDown', left: 'ArrowLeft', right: 'ArrowRight',
 }
 /** Punctuation keys' places on the keyboard, which shortcuts go by (what they type changes with shift). */
@@ -775,13 +775,13 @@ const CODES: Record<string, string> = {
   ';': 'Semicolon', "'": 'Quote', '-': 'Minus', '=': 'Equal',
 }
 
-/** A surface opened as `at`, then whatever the main area shows next of it, as the window draws it. */
-function DrawSurface({ at, narrow }: { at: SurfaceAt; narrow: boolean }) {
-  const { surface, open } = useSurface()
+/** A space opened as `at`, then whatever the main area shows next of it, as the window draws it. */
+function DrawSpace({ at, narrow }: { at: SpaceAt; narrow: boolean }) {
+  const { space, open } = useSpace()
   // Opened once, as drawn: what it opens after is the window's.
   const [opened, setOpened] = useState(false)
   useEffect(() => { open(at); setOpened(true) }, [])
-  return opened && surface ? <SurfaceMain at={surface} narrow={narrow} /> : null
+  return opened && space ? <SpaceMain at={space} narrow={narrow} /> : null
 }
 
 /** A view (or a place's views) as the window draws it, for the thread given, looked up live. */

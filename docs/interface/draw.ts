@@ -64,23 +64,23 @@ function anatomy() {
     r(bar), t(42, bar.y + bar.h / 2, 'title bar'),
     r(rail), buttons(4),
     r(side), mid(side, 'sidebar'),
-    r(thread), mid(thread, 'main area'), t(thread.x + thread.w / 2, thread.y + thread.h / 2 + 10, 'a thread, or a surface', 'small'),
+    r(thread), mid(thread, 'main area'), t(thread.x + thread.w / 2, thread.y + thread.h / 2 + 10, 'a thread, or a space', 'small'),
     r(beside), mid(beside, 'beside'),
     `<text class="small" x="12.5" y="110" transform="rotate(-90 12.5 110)">rail</text>`,
   ].join(''))
 }
 
 /** One place marked in the window, the rest quiet. */
-function place(which: 'space' | 'rail' | 'titlebar' | 'header' | 'beside' | 'pane') {
+function place(which: 'sidebar' | 'rail' | 'titlebar' | 'header' | 'beside' | 'pane') {
   const beside: Box = { x: 190, y: 21, w: 44, h: 123 }
   const withPane = which === 'pane'
   const thread: Box = withPane ? { ...main, w: 92 } : { ...main, w: which === 'beside' ? 109 : 157 }
   const pane: Box = { x: 173, y: 21, w: 61, h: 123 }
   const parts = [
     r(bar, 'soft'),
-    r(rail, which === 'rail' || which === 'space' ? 'tile' : 'soft'),
-    buttons(4, which === 'space' ? 1 : which === 'rail' ? 0 : -1),
-    r(side, which === 'space' ? 'tile focus' : 'soft'),
+    r(rail, which === 'rail' || which === 'sidebar' ? 'tile' : 'soft'),
+    buttons(4, which === 'sidebar' ? 1 : which === 'rail' ? 0 : -1),
+    r(side, which === 'sidebar' ? 'tile focus' : 'soft'),
     r(thread, 'soft'),
     lines(thread.x + 10, thread.y + 50, [50, 70, 40, 60]),
   ]
@@ -89,7 +89,7 @@ function place(which: 'space' | 'rail' | 'titlebar' | 'header' | 'beside' | 'pan
   if (which === 'beside') parts.push(r(beside, 'tile focus'))
   if (which === 'pane') parts.push(r(pane, 'tile focus'), r({ x: pane.x, y: pane.y, w: pane.w, h: 9 }, 'tile focus'), t(pane.x + pane.w / 2, pane.y + 4.5, 'pane', 'small'))
   const labels: Record<typeof which, [number, number]> = {
-    space: [side.x + side.w / 2, side.y + side.h / 2], rail: [44, 29.5], titlebar: [48, 32], header: [128, 32],
+    sidebar: [side.x + side.w / 2, side.y + side.h / 2], rail: [44, 29.5], titlebar: [48, 32], header: [128, 32],
     beside: [beside.x + beside.w / 2, beside.y + beside.h / 2], pane: [pane.x + pane.w / 2, pane.y + pane.h / 2],
   }
   parts.push(t(...labels[which], which, 'mark big'))
@@ -112,7 +112,7 @@ function threadAndPanes() {
   ].join(''))
 }
 
-// ── Views, panes, surfaces: small windows (160 × 100) ────────────────────────────────────────────────────────────────
+// ── Views, panes, spaces: small windows (160 × 100) ────────────────────────────────────────────────────────────────
 const w = 160, h = 100
 const sBar: Box = { x: 5, y: 5, w: 150, h: 7 }
 const sRail: Box = { x: 5, y: 15, w: 9, h: 80 }
@@ -122,7 +122,7 @@ const sButton = (i: number): Box => ({ x: 6.5, y: 18 + i * 8, w: 6, h: 6 })
 const sButtons = (n: number, on = -1) => Array.from({ length: n }, (_, i) => r(sButton(i), i === on ? 'tile focus' : 'soft', 1)).join('')
 const chrome = (on = -1, sideCls = 'soft') => [r(sBar, 'soft'), r(sRail, 'soft'), sButtons(4, on), r(sSide, sideCls)].join('')
 
-/** A view: one of it, where the layout puts it (here a space: the sidebar). */
+/** A view: one of it, where the layout puts it (here a sidebar: the sidebar). */
 function kindView() {
   return svg(w, h, 'A view: one of it, placed by the layout, here in the sidebar', [
     chrome(1, 'tile focus'), lines(21, 24, [22, 26, 18, 24, 20, 25], 7), t(sSide.x + sSide.w / 2, 88, 'a view', 'mark'),
@@ -141,13 +141,13 @@ function kindPane() {
   ].join(''))
 }
 
-/** A surface: in the main area itself, with params; its own thread docked beside it. */
-function kindSurface() {
+/** A space: in the main area itself, with params; its own thread docked beside it. */
+function kindSpace() {
   const body: Box = { x: 54, y: 15, w: 70, h: 80 }
   const dock: Box = { x: 127, y: 15, w: 28, h: 80 }
-  return svg(w, h, 'A surface: the main area itself, opened with params, its own thread docked beside it', [
+  return svg(w, h, 'A space: the main area itself, opened with params, its own thread docked beside it', [
     chrome(2), lines(21, 24, [22, 26, 18, 24], 7),
-    r(body, 'tile focus'), lines(body.x + 8, body.y + 12, [40, 52, 30, 46]), mid({ ...body, y: body.y + 20 }, 'a surface', 'mark'),
+    r(body, 'tile focus'), lines(body.x + 8, body.y + 12, [40, 52, 30, 46]), mid({ ...body, y: body.y + 20 }, 'a space', 'mark'),
     r(dock), t(dock.x + dock.w / 2, dock.y + 7, 'thread', 'small'), `<rect class="bubble" x="${dock.x + 8}" y="${dock.y + 16}" width="16" height="6" rx="2" />`, lines(dock.x + 4, dock.y + 30, [18, 14, 20]),
   ].join(''))
 }
@@ -156,7 +156,7 @@ function kindSurface() {
 function docked() {
   const body: Box = { x: 54, y: 15, w: 66, h: 80 }
   const dock: Box = { x: 123, y: 15, w: 32, h: 80 }
-  return svg(w, h, 'A surface with its thread docked: a column beside it', [
+  return svg(w, h, 'A space with its thread docked: a column beside it', [
     chrome(2), lines(21, 24, [22, 26, 18], 7), r(body), lines(body.x + 8, body.y + 12, [40, 50, 30, 46, 36]),
     r(dock, 'tile focus'), t(dock.x + dock.w / 2, dock.y + 7, 'docked', 'mark'), `<rect class="bubble" x="${dock.x + 10}" y="${dock.y + 16}" width="18" height="6" rx="2" />`, lines(dock.x + 4, dock.y + 30, [20, 16, 22]),
     r({ x: dock.x + 3, y: dock.y + dock.h - 10, w: dock.w - 6, h: 7 }, 'tile', 3),
@@ -167,7 +167,7 @@ function docked() {
 function floating() {
   const body: Box = { x: 54, y: 15, w: 101, h: 80 }
   const card: Box = { x: 118, y: 21, w: 32, h: 68 }
-  return svg(w, h, 'A surface with its thread floating: a card over its right side', [
+  return svg(w, h, 'A space with its thread floating: a card over its right side', [
     chrome(3), lines(21, 24, [22, 26, 18], 7), r(body),
     r({ x: 62, y: 26, w: 18, h: 10 }, 'soft', 1.5), r({ x: 90, y: 50, w: 20, h: 12 }, 'soft', 1.5), `<line class="arrow" x1="80" y1="31" x2="90" y2="56" />`,
     `<rect class="empty" x="${card.x - 4}" y="${body.y + 2}" width="${body.x + body.w - card.x + 2}" height="${body.h - 4}" rx="2" />`,
@@ -176,28 +176,28 @@ function floating() {
   ].join(''))
 }
 
-/** Notes, put together: its space, its surface, the docked thread. */
+/** Notes, put together: its sidebar, its space, the docked thread. */
 function notes() {
   const body: Box = { x: 77, y: 21, w: 105, h: 123 }
   const dock: Box = { x: 186, y: 21, w: 48, h: 123 }
   const row = (i: number, on = false) => r({ x: 26, y: 30 + i * 11, w: 44, h: 8 }, on ? 'tile focus' : 'soft', 1.5)
-  return svg(W, H, "Notes: its list is a space in the sidebar, the note it opens a surface in the main area, a thread docked beside it", [
+  return svg(W, H, "Notes: its list is a sidebar in the sidebar, the note it opens a space in the main area, a thread docked beside it", [
     r(bar, 'soft'), t(110, 11.5, 'Workbench', 'small'),
     r(rail, 'soft'), r(railButton(0), 'soft', 1.5), r(railButton(1), 'soft', 1.5), r(railButton(2), 'tile focus', 1.5),
-    r(side, 'tile focus'), row(0, true), row(1), row(2), row(3), t(side.x + side.w / 2, 122, 'space', 'mark'), t(side.x + side.w / 2, 130, 'notes.list', 'small'),
+    r(side, 'tile focus'), row(0, true), row(1), row(2), row(3), t(side.x + side.w / 2, 122, 'sidebar', 'mark'), t(side.x + side.w / 2, 130, 'notes.list', 'small'),
     r(body, 'tile focus'), t(body.x + 30, body.y + 12, '# Workbench'), lines(body.x + 10, body.y + 26, [80, 70, 85, 50]), lines(body.x + 10, body.y + 58, [60, 72, 40]),
-    t(body.x + body.w / 2, 122, 'surface', 'mark'), t(body.x + body.w / 2, 130, 'notes.page {name}', 'small'),
+    t(body.x + body.w / 2, 122, 'space', 'mark'), t(body.x + body.w / 2, 130, 'notes.page {name}', 'small'),
     r(dock), t(dock.x + dock.w / 2, dock.y + 8, 'thread', 'small'), `<rect class="bubble" x="${dock.x + 14}" y="${dock.y + 18}" width="30" height="9" rx="3" />`,
     lines(dock.x + 5, dock.y + 38, [36, 30, 38]), r({ x: dock.x + 4, y: dock.y + dock.h - 14, w: dock.w - 8, h: 9 }, 'tile', 4),
     t(dock.x + dock.w / 2, 122, 'docked', 'small'),
   ].join(''))
 }
 
-/** Going somewhere: the main area shows a thread, a surface, another of its kind; back goes back. */
-function step(label: string, what: 'thread' | 'surface') {
+/** Going somewhere: the main area shows a thread, a space, another of its kind; back goes back. */
+function step(label: string, what: 'thread' | 'space') {
   const body: Box = { x: 54, y: 15, w: 101, h: 80 }
   return svg(w, h, `The main area shows ${label}`, [
-    chrome(what === 'surface' ? 2 : 1), lines(21, 24, [22, 26, 18], 7),
+    chrome(what === 'space' ? 2 : 1), lines(21, 24, [22, 26, 18], 7),
     r(body, 'tile focus'), mid(body, label, 'mark'),
     what === 'thread' ? `<rect class="bubble" x="${body.x + 60}" y="${body.y + 10}" width="32" height="8" rx="3" />` : lines(body.x + 10, body.y + 14, [40, 30]),
   ].join(''))
@@ -207,7 +207,7 @@ function step(label: string, what: 'thread' | 'surface') {
 const pw = 70, ph = 120
 const phone = (label: string, body: string) => svg(pw, ph, label, body)
 function phoneDrawer() {
-  return phone('On a phone, the open space is a drawer over the thread', [
+  return phone('On a phone, the open sidebar is a drawer over the thread', [
     r({ x: 5, y: 5, w: 60, h: 9 }, 'soft'), lines(10, 30, [40, 34, 44, 30], 8),
     r({ x: 5, y: 17, w: 42, h: 98 }, 'tile focus'), t(26, 66, 'drawer', 'mark'), lines(10, 28, [28, 24, 30], 8),
     r({ x: 8, y: 102, w: 8, h: 8 }, 'soft', 1.5), r({ x: 19, y: 102, w: 8, h: 8 }, 'soft', 1.5),
@@ -219,25 +219,25 @@ function phoneSheet() {
     r({ x: 5, y: 58, w: 60, h: 57 }, 'tile focus', 4), t(35, 86, 'sheet', 'mark'), lines(12, 70, [30, 24], 6),
   ].join(''))
 }
-function phoneSurface() {
-  return phone('On a phone, a surface fills the screen; its thread opens as the thread', [
+function phoneSpace() {
+  return phone('On a phone, a space fills the screen; its thread opens as the thread', [
     r({ x: 5, y: 5, w: 60, h: 9 }, 'soft'), r({ x: 52, y: 7, w: 10, h: 5 }, 'tile', 1.5),
-    r({ x: 5, y: 17, w: 60, h: 98 }, 'tile focus'), t(35, 66, 'surface', 'mark'), lines(12, 30, [40, 30, 44], 8),
+    r({ x: 5, y: 17, w: 60, h: 98 }, 'tile focus'), t(35, 66, 'space', 'mark'), lines(12, 30, [40, 30, 44], 8),
   ].join(''))
 }
 
 write('anatomy', anatomy())
-for (const which of ['space', 'rail', 'titlebar', 'header', 'beside', 'pane'] as const) write(`place-${which}`, place(which))
+for (const which of ['sidebar', 'rail', 'titlebar', 'header', 'beside', 'pane'] as const) write(`place-${which}`, place(which))
 write('thread-and-panes', threadAndPanes())
 write('kind-view', kindView())
 write('kind-pane', kindPane())
-write('kind-surface', kindSurface())
+write('kind-space', kindSpace())
 write('docked', docked())
 write('floating', floating())
 write('notes', notes())
 write('step-thread', step('a thread', 'thread'))
-write('step-note-a', step('note:a', 'surface'))
-write('step-note-b', step('note:b', 'surface'))
+write('step-note-a', step('note:a', 'space'))
+write('step-note-b', step('note:b', 'space'))
 write('phone-drawer', phoneDrawer())
 write('phone-sheet', phoneSheet())
-write('phone-surface', phoneSurface())
+write('phone-space', phoneSpace())

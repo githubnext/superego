@@ -1,5 +1,5 @@
 // The sidebar's edge, wide: dragged, it makes the sidebar wider or narrower (between MIN_WIDTH and MAX_WIDTH, and no
-// more than MAX_SHARE of the window, kept as an app setting); let go short of HIDE_AT, the sidebar hides (the open space
+// more than MAX_SHARE of the window, kept as an app setting); let go short of HIDE_AT, the sidebar hides (the open sidebar
 // showing in the rail what it draws there while hidden, if anything). A double click puts the width back. Hidden, the
 // edge is the rail's, and dragging out from it shows the sidebar at the width it's dragged to.
 import { useEffect, useState, type CSSProperties, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from 'react'
