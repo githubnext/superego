@@ -6,6 +6,8 @@
   and in the rail while you're in that project.
 - While a space is open, Threads highlights only that space, not the thread selected behind it.
 - Claude Agent threads run in Auto permission mode by default, and Settings → Claude Agent offers Allow all.
+- A compacted conversation shows as a folded “Compacted conversation” row that opens to its summary, not as a
+  message from you; a handoff's reset shows the same way, as “Conversation reset”.
 
 ## 0.3.0
 

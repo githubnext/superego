@@ -3,7 +3,7 @@
 import { createContext, memo, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { ConversationView, EntryRecord, LiveState } from '@earendil-works/pi-durable'
 import { NOTE_ENTRY, waitingForSignIn, type ThreadInfo } from '@superego/protocol'
-import { Button, CheckIcon, FileIcon, type Icon as PhosphorIcon, MinusIcon, PauseIcon, StatusGlyph, XIcon } from '@superego/ui'
+import { ArrowCounterClockwiseIcon, Button, CheckIcon, CornersInIcon, FileIcon, type Icon as PhosphorIcon, MinusIcon, PauseIcon, StatusGlyph, XIcon } from '@superego/ui'
 import type { MachineEntry } from '../shared/bridge.ts'
 import type { ToolRowCall, WorkBlock as Block, WorkPart, WorkStatus } from './extension-api.ts'
 import { useRegistry } from './registry.tsx'
@@ -242,19 +242,26 @@ function flatten(entries: readonly EntryRecord[], partial: Message | undefined, 
     if (turn.some((b) => b.type === 'toolCall')) items.push({ type: 'end', key: `end:${key}`, blocks: turn })
     turn = []
   }
+  // A new context (a compaction, a handoff) starts no turn: it waits for what comes next, so a turn's work goes on
+  // past it, or its end line comes before it.
+  let boundaries: Item[] = []
+  const pass = () => { items.push(...boundaries); boundaries = [] }
   for (const entry of entries) {
     const message = entry.model?.[0] as Message | undefined
-    if (message?.role === 'assistant') { add(message, String(entry.id)); turn.push(...blocks(message)) }
+    if (message?.role === 'assistant') { pass(); add(message, String(entry.id)); turn.push(...blocks(message)) }
     else if (message?.role === 'toolResult' || entry.kind === 'pi.system') continue
+    else if (contextOf(entry)) boundaries.push({ type: 'entry', key: String(entry.id), entry })
     else {
       if (message?.role === 'user') { end(String(entry.id)); since = message.timestamp }
+      pass()
       items.push({ type: 'entry', key: String(entry.id), entry })
     }
   }
-  if (partial) { add(partial, 'live', true); turn.push(...blocks(partial)) }
+  if (partial) { pass(); add(partial, 'live', true); turn.push(...blocks(partial)) }
   // While the agent works, the turn so far ends with a line saying so; done, with what it did.
-  if (working) items.push({ type: 'working', key: 'working', blocks: turn, since })
+  if (working) { pass(); items.push({ type: 'working', key: 'working', blocks: turn, since }) }
   else if (!partial) end('last')
+  pass()
   return items
 }
 
@@ -320,6 +327,8 @@ const Entry = memo(function Entry({ entry }: { entry: EntryRecord }) {
   const where = { machine: here.machine.id, thread: here.thread }
   const custom = entryView(registry, entry.kind, where)
   if (custom) { const Custom = custom; const owner = entryOwner(registry, entry.kind, where); return <Contained name={owner?.extension ?? entry.kind} scope={owner?.profile}><Custom {...here} entry={{ id: entry.id, kind: entry.kind, data: entry.data }} /></Contained> }
+  const context = contextOf(entry)
+  if (context) return <NewContext {...context} />
   const message = entry.model?.[0] as Message | undefined
   if (message?.role === 'user') {
     return <Sent className="msg msg--user" entry={Number(entry.id)} blocks={blocks(message)} />
@@ -328,6 +337,43 @@ const Entry = memo(function Entry({ entry }: { entry: EntryRecord }) {
   const said = entry.kind === NOTE_ENTRY ? (entry.data as { text?: unknown } | undefined)?.text : undefined
   return <div className="msg msg--note">{typeof said === 'string' ? said : entry.kind}</div>
 })
+
+/**
+ * Where the model's context started over, as the transcript shows it: a compaction (its summary of what came before)
+ * or a reset (the handoff it carried, if any). Both are user messages to the model, but nobody sent them.
+ */
+export type NewContextOf = { kind: 'compaction' | 'reset'; text: string }
+export function contextOf(entry: Pick<EntryRecord, 'kind' | 'model'>): NewContextOf | undefined {
+  if (entry.kind !== 'pi.compaction' && entry.kind !== 'pi.reset') return undefined
+  const text = blocks(entry.model?.[0] as Message | undefined).flatMap((b) => b.type === 'text' && b.text ? [b.text] : []).join('\n')
+  return entry.kind === 'pi.compaction' ? { kind: 'compaction', text: compactionSummary(text) } : { kind: 'reset', text: text.trim() }
+}
+
+/** What pi-durable wraps a compaction's summary in, for the model. */
+const COMPACTED = 'The conversation history before this point was compacted into the following summary:'
+/** A compaction's summary, as written: without its wrapper (`COMPACTED`, then `<summary>…</summary>`). */
+export function compactionSummary(text: string): string {
+  let summary = text.trim()
+  if (summary.startsWith(COMPACTED)) summary = summary.slice(COMPACTED.length).trimStart()
+  if (summary.startsWith('<summary>')) summary = summary.slice('<summary>'.length).replace(/<\/summary>\s*$/, '')
+  return summary.trim()
+}
+
+/** A new context: a row that opens to its summary or handoff; one with neither, a row alone. */
+function NewContext({ kind, text }: NewContextOf) {
+  const Glyph = kind === 'compaction' ? CornersInIcon : ArrowCounterClockwiseIcon
+  const label = kind === 'compaction' ? 'Compacted conversation' : 'Conversation reset'
+  const icon = <Glyph className="row__icon" size={14} aria-hidden />
+  if (!text) return <div className="steps"><div className="step"><div className="row">{icon}<span className="row__label">{label}</span></div></div></div>
+  return (
+    <div className="steps">
+      <details className="step step--context">
+        <summary className="row"><Chevron />{icon}<span className="row__label">{label}</span></summary>
+        <div className="step__context"><Markdown text={text} compact /></div>
+      </details>
+    </div>
+  )
+}
 
 /** A run's blocks as rows: thinking, what the agent said along the way, tool calls. */
 const steps = (blocks: Block[], results: Results, running: Slots) => blocks.map((block, index) => block.type === 'thinking'

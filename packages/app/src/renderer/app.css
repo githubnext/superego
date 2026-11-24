@@ -183,7 +183,7 @@
 .transcript__error { color: var(--superego-status-error); font-size: var(--superego-text-ui); border-left: 2px solid currentColor; padding-left: var(--superego-space-3); }
 .msg, .md { overflow-wrap: anywhere; }
 /* What's read and copied: messages, the agent's thinking and output, diffs, files, errors. */
-:is(.msg, .step__note, .step__thinking, .step__output, .transcript__error, .composer__error, .diff-file__body, .file-editor .cm-editor, .file-editor__rendered, .service-notice__detail) { -webkit-user-select: text; user-select: text; }
+:is(.msg, .step__note, .step__thinking, .step__context, .step__output, .transcript__error, .composer__error, .diff-file__body, .file-editor .cm-editor, .file-editor__rendered, .service-notice__detail) { -webkit-user-select: text; user-select: text; }
 /* Your turns: a bubble on the right, with clear air above; the agent's work reads down the column. */
 .msg--user { white-space: pre-wrap; align-self: flex-end; max-width: 78%; background: var(--superego-bubble); border-radius: 14px; padding: 8px 13px; line-height: 1.5; }
 /* A turn starts well clear of the last one (56px against 12px inside a turn). */
@@ -247,8 +247,10 @@ details[open] > .row > .row__chevron { transform: rotate(90deg); }
 .task--failure .task__icon { color: var(--superego-status-error); }
 .task--inconclusive .task__title, .task--interrupted .task__title { color: var(--superego-muted); }
 .step__thinking { white-space: pre-wrap; font-size: var(--superego-text-ui); line-height: 1.45; color: var(--superego-muted); margin: 2px 0 var(--superego-space-2); }
+/* A new context's summary or handoff: compact Markdown, as quiet as thinking. */
+.step__context { color: var(--superego-muted); margin: 2px 0 var(--superego-space-2); }
 /* Bodies align under the label: alone, 21px in; inside a run (already 21px in), flush. */
-.steps:not(.steps--run) > .step > :is(.step__output, .step__thinking) { margin-left: 21px; }
+.steps:not(.steps--run) > .step > :is(.step__output, .step__thinking, .step__context) { margin-left: 21px; }
 /* One container for all code: a fill, no border. Output and answers wrap; diffs scroll; long ones stop at "Show all". */
 .step__output { margin: 2px 0 var(--superego-space-2); background: var(--superego-surface); border-radius: 10px; color: var(--superego-text); overflow: hidden; }
 .step__output pre { margin: 0; padding: 10px var(--superego-space-3); font: calc(12px * var(--superego-text-scale))/1.45 var(--superego-mono); white-space: pre; overflow-x: auto; }
