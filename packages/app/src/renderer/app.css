@@ -301,9 +301,11 @@ details[open] > .row > .row__chevron { transform: rotate(90deg); }
 /* Inline code wraps where it must, chip and all, so it never runs out of its bubble or column; blocks scroll instead. */
 .md code { font: 0.86em var(--superego-mono); letter-spacing: -0.01em; background: var(--superego-code-chip); border-radius: 4px; padding: 1px 3px; overflow-wrap: anywhere; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
 .md pre { font: calc(12.5px * var(--superego-text-scale))/1.5 var(--superego-mono); background: var(--superego-surface); border-radius: 10px; padding: 10px var(--superego-space-3); white-space: pre; overflow-x: auto; }
-/* Sideways-scrolling code: the scrollbar shows on hover; the edge fades only while a line runs past it. */
-:is(.md, .step__output) pre::-webkit-scrollbar { height: 0; }
-:is(.md, .step__output) pre:hover::-webkit-scrollbar { height: 8px; }
+/* Sideways-scrolling code: the scrollbar thumb shows on hover, without changing height (no layout shift); the edge fades only while a line runs past it. */
+:is(.md, .step__output) pre::-webkit-scrollbar { height: 8px; }
+:is(.md, .step__output) pre::-webkit-scrollbar-thumb { background: transparent; border-width: 2px; }
+:is(.md, .step__output) pre:hover::-webkit-scrollbar-thumb { background: light-dark(rgb(0 0 0 / .18), rgb(255 255 255 / .2)); }
+:is(.md, .step__output) pre::-webkit-scrollbar-thumb:hover { background: light-dark(rgb(0 0 0 / .32), rgb(255 255 255 / .34)); }
 .md pre.is-overflowing, .step__output:not(.is-cut) pre.is-overflowing { mask-image: linear-gradient(to left, transparent, #000 32px); }
 .md pre code { font: inherit; background: none; padding: 0; white-space: pre; }
 /* A diff's added and removed lines, tinted across the block. */
@@ -317,7 +319,6 @@ details[open] > .row > .row__chevron { transform: rotate(90deg); }
 .md details { margin: 0 0 var(--superego-space-3); }
 .md summary { cursor: default; }
 .md kbd { font: 0.82em var(--superego-mono); padding: 1px 5px; border-radius: 4px; background: var(--superego-code-chip); box-shadow: inset 0 -1px 0 var(--superego-border); }
-/* Code scrolls sideways; its scrollbar shows only while the pointer is over it. */
 
 .md blockquote { padding: 0 0 0 var(--superego-space-3); border-left: 3px solid var(--superego-border); }
 .md hr { border: 0; border-top: 1px solid var(--superego-border); margin: var(--superego-space-5) 0; }
@@ -1033,8 +1034,10 @@ button.app__mobiletitle > .superego-status { font-size: 12px; }
 /* No scrollbar of its own: the strip's map over it shows where you are. */
 .panes { display: flex; flex: 1; min-height: 0; min-width: 0; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; overscroll-behavior-x: contain; }
 .panes::-webkit-scrollbar { display: none; }
-.diff-file__body::-webkit-scrollbar { height: 0; }
-.diff-file__body:hover::-webkit-scrollbar { height: 8px; }
+.diff-file__body::-webkit-scrollbar { height: 8px; }
+.diff-file__body::-webkit-scrollbar-thumb { background: transparent; border-width: 2px; }
+.diff-file__body:hover::-webkit-scrollbar-thumb { background: light-dark(rgb(0 0 0 / .18), rgb(255 255 255 / .2)); }
+.diff-file__body::-webkit-scrollbar-thumb:hover { background: light-dark(rgb(0 0 0 / .32), rgb(255 255 255 / .34)); }
 /* The row's own ground, past the last column, moves the window; the columns and their handles don't. */
 .panes { -webkit-app-region: drag; }
 .panes > * { -webkit-app-region: no-drag; }

@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Hovering a wide code block, tool output, or diff no longer shifts layout when its horizontal scrollbar appears.
 - `/clear` (or `/new`) in a thread's composer starts over in a new thread with the same folder, profile, model and
   thinking, and archives the old one. Anything typed after it becomes the new thread's first message.
 - `/compact` summarizes a thread's conversation to free its context, with what to keep after it if you like
