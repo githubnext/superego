@@ -13,26 +13,30 @@ export async function changesIn(cwd: string, asked?: Base): Promise<Changes> {
   // For what git may rightly not have (a HEAD before the first commit, an upstream, a merge base): undefined.
   const maybe = (args: string[]) => git(args).then((out) => out.trim() || undefined, () => undefined)
   if (await maybe(['rev-parse', '--is-inside-work-tree']) !== 'true') return { repo: false }
-  // Before the first commit, HEAD is nothing: the empty tree stands in for it.
-  const [head, current, upstream] = await Promise.all([
+  // Before the first commit, HEAD is nothing: the empty tree stands in for it, and there's no default branch to be off.
+  const [head, current, upstream, found] = await Promise.all([
     maybe(['rev-parse', '--verify', '-q', 'HEAD']),
     maybe(['symbolic-ref', '--short', '-q', 'HEAD']),
     maybe(['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}']),
+    defaultBranch(maybe),
   ])
   const start = head ?? (await git(['hash-object', '-t', 'tree', '/dev/null'])).trim()
-  const main = head ? await defaultBranch(maybe) : undefined
+  const main = head ? found : undefined
   // Each base offered, with the commit it measures from.
-  const offered: (BaseChoice & { ref: string })[] = [{ base: 'uncommitted', ref: start }, { base: 'staged', ref: start }]
   const since = async (base: Base, branch: string | undefined) => {
     const ref = head && branch && await maybe(['merge-base', 'HEAD', branch])
-    if (ref) offered.push({ base, branch: branch!, ref })
+    return ref ? [{ base, branch: branch!, ref }] : []
   }
-  if (main && current !== main.name) await since('branch', main.ref)
-  if (upstream !== main?.ref) await since('upstream', upstream)
+  const offered: (BaseChoice & { ref: string })[] = [{ base: 'uncommitted', ref: start }, { base: 'staged', ref: start }, ...(await Promise.all([
+    main && current !== main.name ? since('branch', main.ref) : [],
+    upstream !== main?.ref ? since('upstream', upstream) : [],
+  ])).flat()]
   const fallback = offered.find((o) => o.base === 'branch') ?? offered[0]!
   const { base, ref } = offered.find((o) => o.base === asked) ?? fallback
-  const diff = await git(['diff', ...(base === 'staged' ? ['--cached'] : []), '--no-color', '--no-ext-diff', ref])
-  const untracked = base === 'staged' ? [] : (await git(['ls-files', '--others', '--exclude-standard'])).split('\n').filter(Boolean)
+  const [diff, untracked] = await Promise.all([
+    git(['diff', ...(base === 'staged' ? ['--cached'] : []), '--no-color', '--no-ext-diff', ref]),
+    base === 'staged' ? [] : git(['ls-files', '--others', '--exclude-standard']).then((out) => out.split('\n').filter(Boolean)),
+  ])
   return { repo: true, base, ref, diff, untracked, bases: offered.map(({ ref: _ref, ...choice }) => choice) }
 }
 
