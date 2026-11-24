@@ -75,10 +75,12 @@ theme still colours the phone.
   the leading edge (16, or aligned with the text past an icon). Grouped lists put sections on a grey ground with
   headers in Footnote (13), secondary colour.
 - Superego: the drawer keeps its place (ChatGPT's pattern) but reads as an iOS list: the ground systemGrouped-ish,
-  rows of two lines as Mail's and Messages' (the title alone on the first, the row's whole width, in Body size, cut
-  short; under it in Subheadline (15), secondary, the time or what it waits on, a pin, badges, where it is; the status
-  before the title, on its line), the selected thread a rounded fill, project names as section headers; its foot
-  (other spaces, Settings) as glass circle buttons.
+  rows as Mail's and Messages' (on the first line the title in Body size, cut short, then a pin and, at the trailing
+  edge in Subheadline (15), secondary, the time or what it waits on, and a fold's caret as a disclosure; the status
+  before the title only when there is one, so a quiet row has no empty gutter; a second line under the title only for
+  what more there is to say, the badges spelled out and where it is, so a quiet row is one line, 44 high), the
+  selected thread a rounded fill, project names as section headers on the same edge as the titles; its foot (other
+  spaces, Settings) as glass circle buttons.
 
 ### Sheets → the thread's menu, New thread, Settings, every phone dialog
 

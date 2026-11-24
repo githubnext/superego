@@ -17,7 +17,7 @@
 // It also draws the thread tools' rows and `thread:` links (rows.tsx); the tools themselves are thread-tools'.
 import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type KeyboardEvent } from 'react'
 import {
-  call, defineAction, defineUiExtension, fold, isPinned, listArchived, MachineDrift, useProjectSpaces, useSpace, search, shownRows, threadPath, useFold, useNarrow, RailButton, SHOW_PINNED, showProject, Slot, SORT, unreadList, useAppSetting, useDispatch, useLocalState, useMachines, usePlacement, useSelection, useProjects, useThreadView, useShell, useShortcut, useRailShortcut,
+  call, defineAction, defineUiExtension, fold, isPinned, listArchived, MachineDrift, useProjectSpaces, useSpace, search, shownRows, threadPath, useFold, useNarrow, RailButton, SHOW_PINNED, showProject, Slot, SORT, SpelledBadges, unreadList, useAppSetting, useDispatch, useLocalState, useMachines, usePlacement, useSelection, useProjects, useThreadView, useShell, useShortcut, useRailShortcut,
   type ArchivedThreads, type MachineEntry, type Pin, type Project, type ShownRow, type ShownSection, type Sort, type SidebarRailProps, type WindowContext,
 } from '@superego/app/ui'
 import { rollup, statusLabel, statusShape, unread, type ThreadInfo } from '@superego/protocol'
@@ -319,7 +319,8 @@ function Pinned({ section, where }: { section: ShownSection; where(project: Proj
  * question or permission, a cross for failed), and a spinner before it while it works; at the end, what it waits on in
  * a word (Question, Permission, Sign in, Failed), or when it was last active (in the accent while unread). Folded, the end sums up
  * the threads under it (`Rollup`). Its marks (`thread.badge`) follow the title; among the pinned, where it is too;
- * under its project, pinned, a pin. A right-click pins or unpins it, or archives it; it can be dragged into the pinned.
+ * under its project, pinned, a pin. The marks and where it is are `threads__more`: in the sidebar no box of its own; on
+ * the phone the row's second line, each mark spelled out (the branch's name, not only its icon). A right-click pins or unpins it, or archives it; it can be dragged into the pinned.
  */
 function ThreadRow({ machine, thread, selected, row, where, className = '', ...data }: {
   machine: MachineEntry; thread: ThreadInfo; selected: boolean; row?: ShownRow; where?: string; className?: string; 'data-pin'?: number
@@ -341,6 +342,7 @@ function ThreadRow({ machine, thread, selected, row, where, className = '', ...d
   const { threadMenu } = useShell()
   const narrow = useNarrow()
   const finger = useCoarse()
+  const badges = <Slot name="thread.badge" props={{ machine, thread }} />
   const swipe = useRowSwipe({
     on: narrow && finger,
     leading: [{ id: 'pin', label: on ? 'Unpin' : 'Pin', icon: on ? PushPinSlashIcon : PushPinIcon, tone: 'pin', run: pin }],
@@ -362,8 +364,10 @@ function ThreadRow({ machine, thread, selected, row, where, className = '', ...d
             <span className={`threads__title ${unread(thread) ? 'is-unread' : ''}`}>{thread.title}</span>
             {row?.fold && <Caret fold={row.fold} folded={row.folded} tucked={row.tucked} label={thread.title} />}
             {on && !where && <PushPinIcon className="threads__pin" size={11} weight="fill" aria-label="Pinned" />}
-            <Slot name="thread.badge" props={{ machine, thread }} />
-            {where && <em className="threads-pinned__where">{where}</em>}
+            <span className="threads__more">
+              {narrow ? <SpelledBadges>{badges}</SpelledBadges> : badges}
+              {where && <em className="threads-pinned__where">{where}</em>}
+            </span>
             {swipe.actions}
           </ListItem>
         </HoverCard>

@@ -795,28 +795,39 @@ button.app__mobiletitle > .superego-status { font-size: 12px; }
 @media (prefers-reduced-motion: reduce) { .app__drawer > .app__sidebar, .app__scrim--drawer { transition: none; } }
 /* In it, the sidebar reads as an iOS list (as ChatGPT's and Claude's apps slide theirs in): its name a large title (34,
    bold), its groups' names as section headers, rows 44 high in Body size (17), the open thread a rounded fill; at its
-   foot, the other sidebars and Settings as glass circles over what scrolls under them. */
+   foot, the other sidebars and Settings as glass circles over what scrolls under them. The title, the headers and the
+   rows' titles on one rail, 12 in from the rows' fill. */
 .app__drawer > .app__sidebar { width: min(86vw, 340px); padding: env(safe-area-inset-top) 10px 0 max(10px, env(safe-area-inset-left)); background: var(--phone-grouped); font-size: calc(17px * var(--superego-text-size)); }
 .app__drawer > .app__sidebar .app__drag { height: 8px; }
-.app__drawer > .app__sidebar .threads__head { height: 52px; padding: 0 0 0 8px; font-size: calc(34px * var(--superego-text-size)); font-weight: 700; letter-spacing: -.01em; color: var(--superego-text); }
+.app__drawer > .app__sidebar .threads__head { height: 52px; padding: 0 0 0 12px; font-size: calc(34px * var(--superego-text-size)); font-weight: 700; letter-spacing: -.01em; color: var(--superego-text); }
 .app__drawer > .app__sidebar .threads__actions { gap: var(--superego-space-2); }
 .app__drawer > .app__sidebar :is(.threads__actions .superego-icon-button, .threads-project .threads__new) { width: 36px; height: 36px; min-height: 36px; border-radius: 50%; color: var(--superego-accent); }
 .app__drawer > .app__sidebar .threads-project { margin-top: 22px; }
-.app__drawer > .app__sidebar .threads-project__head { min-height: 32px; padding: 0 0 2px 8px; }
+.app__drawer > .app__sidebar .threads-project__head { min-height: 32px; padding: 0 0 2px 12px; }
 .app__drawer > .app__sidebar .threads-project__name { font-size: calc(15px * var(--superego-text-size)); color: var(--superego-muted); }
-/* A row as Mail's and Messages' are: the title on a line of its own, the row's whole width, cut short; under it, smaller
-   and muted, what's said about it (the time or what it waits on, a pin, its badges, where it is, its caret). The status
-   or spinner before the title, on its line; every row two lines. Flex lines: the title's, a break (`::after`), then the
-   rest, under the title past the status's column (`--lead`, 13 and the gap). */
-.app__drawer > .app__sidebar .superego-list-item { --lead: 0px; height: auto; min-height: 44px; flex-wrap: wrap; align-content: center; gap: 0 8px; padding: 9px 12px 9px calc(12px + var(--depth, 0) * 14px); border-radius: 12px; line-height: 1.3; -webkit-tap-highlight-color: transparent; }
-.app__drawer > .app__sidebar .superego-list-item:has(> .superego-list-item__leading) { --lead: 21px; }
-.app__drawer > .app__sidebar .superego-list-item::after { content: ''; order: 1; flex-basis: 100%; }
+.app__drawer > .app__sidebar .threads-archived__head { min-height: 32px; padding: 0 12px; font-size: calc(15px * var(--superego-text-size)); }
+/* A row as Mail's and Messages' are: on its first line the title, the row's whole width less its end, in Body size,
+   cut short; after it a pin, if pinned; at the end, smaller and muted, the time or what it waits on (or, folded, what's
+   under it), then a fold's caret. The status or spinner before the title only when there's one: a quiet row has no
+   empty column for it. A second line, under the title, only for what more there is to say (its badges, spelled out;
+   where it is); without, the row is one line, 44 high. A grid: the status, the title, the pin, the end, the caret;
+   under them, the rest. */
+.app__drawer > .app__sidebar .superego-list-item { height: auto; min-height: 44px; display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto auto; align-content: center; align-items: center; gap: 1px 0;
+  padding: 11px 12px 11px calc(12px + var(--depth, 0) * 14px); border-radius: 12px; line-height: 1.3; -webkit-tap-highlight-color: transparent; }
 .app__drawer > .app__sidebar .superego-list-item:active { background: var(--phone-pressed); }
+.app__drawer > .app__sidebar .superego-list-item__leading { grid-area: 1 / 1; margin-right: 8px; }
+.app__drawer > .app__sidebar .superego-list-item__leading:has(> .threads__lead:empty) { display: none; }
 .app__drawer > .app__sidebar .superego-list-item__body { display: contents; }
-.app__drawer > .app__sidebar :is(.superego-list-item__body > *, .superego-list-item__trailing) { order: 3; flex: none; display: inline-flex; align-items: center; gap: 4px; margin: 0; font-size: calc(15px * var(--superego-text-size)); line-height: 1.35; color: var(--superego-muted); }
-.app__drawer > .app__sidebar .superego-list-item__trailing { order: 2; margin-left: var(--lead); }
-.app__drawer > .app__sidebar .superego-list-item__body > :is(.threads__title, .threads-archived__title) { order: 0; flex: 1 1 0; display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: inherit; line-height: inherit; color: inherit; }
-.app__drawer > .app__sidebar .superego-list-item__body > :is(.threads-pinned__where, .threads-archived__where) { flex: 1 1 0; display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.app__drawer > .app__sidebar :is(.superego-list-item__body > *, .superego-list-item__trailing) { grid-column: 2 / -1; display: flex; align-items: center; gap: 6px; min-width: 0; margin: 0; font-size: calc(15px * var(--superego-text-size)); line-height: 1.35; color: var(--superego-muted); }
+.app__drawer > .app__sidebar .superego-list-item__body > :is(.threads__title, .threads-archived__title) { grid-area: 1 / 2; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: inherit; line-height: inherit; color: inherit; }
+.app__drawer > .app__sidebar .superego-list-item__trailing { grid-area: 1 / 4; margin-left: 10px; gap: 4px; white-space: nowrap; }
+/* The caret at the row's trailing edge, as a disclosure: a finger's target, its arrow where the row's text ends. */
+.app__drawer > .app__sidebar .superego-list-item__body > .threads-caret { grid-area: 1 / 5; display: grid; width: 32px; height: 32px; margin: -6px -10px -6px 2px; border-radius: 50%; color: var(--superego-faint); }
+.app__drawer > .app__sidebar .superego-list-item__body > .threads-caret svg { width: 12px; height: 12px; }
+.app__drawer > .app__sidebar .superego-list-item__body > .threads__pin { grid-area: 1 / 3; margin-left: 8px; color: var(--superego-faint); }
+.app__drawer > .app__sidebar .superego-list-item__body > .threads__more:not(:has(:not(.profile-scope))) { display: none; }
+.app__drawer > .app__sidebar .threads__more > .threads-pinned__where { order: -1; flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: inherit; color: inherit; }
+.app__drawer > .app__sidebar .superego-list-item__body > .threads-archived__where { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* Swipe actions (the threads extension's swipe.tsx), as Mail's under a finger: the row slides by `--swipe`, its actions
    filling the gap it leaves at that side, each a rounded button sharing it; swiped far enough to be done, the outermost
    stretches over the others. `--swipe` is registered, so settling (open, shut, away) animates the row and its actions
@@ -828,7 +839,7 @@ button.app__mobiletitle > .superego-status { font-size: 12px; }
 /* Swiped, it isn't pressed; and a tap on one of its actions doesn't leave it lit (a finger's tap is a hover too). */
 .app__drawer > .app__sidebar .threads-swipe.is-swiped:not(.is-selected):active { background: transparent; }
 @media (hover: none) { .app__drawer > .app__sidebar .threads-swipe:hover:not(.is-selected, :active) { background: transparent; } }
-.app__drawer > .app__sidebar .superego-list-item__body > .threads-swipe__actions { position: absolute; top: 0; bottom: 0; display: flex; align-items: stretch; gap: 0; overflow: hidden; margin: 0; color: #fff; font-size: calc(12px * var(--superego-text-size)); font-weight: 500; line-height: 1.2; }
+.app__drawer > .app__sidebar .superego-list-item__body > .threads-swipe__actions { grid-area: auto; position: absolute; top: 0; bottom: 0; display: flex; align-items: stretch; gap: 0; overflow: hidden; margin: 0; color: #fff; font-size: calc(12px * var(--superego-text-size)); font-weight: 500; line-height: 1.2; }
 .threads-swipe__actions--trailing { left: 100%; width: max(0px, -1 * var(--swipe)); justify-content: flex-end; }
 .threads-swipe__actions--leading { right: 100%; width: max(0px, var(--swipe)); }
 .threads-swipe__action { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; margin-left: 6px; padding: 0; overflow: hidden; border: 0; border-radius: 12px; color: inherit; font: inherit; white-space: nowrap;

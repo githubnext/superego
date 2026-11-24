@@ -36,6 +36,9 @@
 .threads .superego-list-item__trailing { display: inline-flex; align-items: center; gap: 4px; }
 .threads__ago.is-new { color: var(--superego-accent); }
 .threads__pin { flex: none; color: var(--superego-faint); }
+/* The marks after the title (a pin, badges, where it is): no box of their own here; the phone's drawer puts them on a
+   line under the title (app.css). */
+.threads__more { display: contents; }
 .superego-list-item.threads-child { padding-left: calc(8px + var(--depth) * 14px); }
 /* A machine that isn't connected: its rows the last thing known, at half strength, their spinners still. */
 .threads-project.is-stale .superego-list-item, .threads-project.is-stale .threads-project__name { opacity: .5; }
@@ -94,7 +97,7 @@
 .threads-search__cancel:active { opacity: .5; }
 /* What it found: the rows as the list's, the archived under their heading; nothing, iOS's empty search, in the middle. */
 .threads-found { margin-top: 8px; }
-.threads-found__head { padding: 0 0 2px 8px; min-height: 32px; display: flex; align-items: center; font-size: calc(15px * var(--superego-text-size)); font-weight: 600; color: var(--superego-muted); }
+.threads-found__head { padding: 0 0 2px 12px; min-height: 32px; display: flex; align-items: center; font-size: calc(15px * var(--superego-text-size)); font-weight: 600; color: var(--superego-muted); }
 .threads-found__none { display: grid; gap: 6px; justify-items: center; padding: 72px 24px; text-align: center; font-size: calc(15px * var(--superego-text-size)); color: var(--superego-muted); }
 .threads-found__none strong { font-size: calc(20px * var(--superego-text-size)); font-weight: 700; color: var(--superego-text); overflow-wrap: anywhere; }
 

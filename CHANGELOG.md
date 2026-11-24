@@ -21,6 +21,9 @@
 - Claude Agent threads run in Auto permission mode by default, and Settings → Claude Agent offers Allow all.
 - A compacted conversation shows as a folded “Compacted conversation” row that opens to its summary, not as a
   message from you; a handoff's reset shows the same way, as “Conversation reset”.
+- On a phone, the drawer's thread rows are tidier: a quiet thread is one line with its time at the end, a second
+  line only shows when there's more to say (its branch, spelled out, or where it is), a folded thread's caret sits at
+  the row's end, and the headers and titles line up on one edge.
 - Archiving a thread that has a worktree no longer stalls for seconds in a big checkout, and the Changes pane loads
   quicker.
 - `superego/testing`'s daemon finds no local model server of the machine's (an Ollama running there): a test sees only
