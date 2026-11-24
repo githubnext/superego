@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 100" role="img" aria-label="Panes: opened in a thread with params, many of them, each the thread's">
+<style>
+  .display { fill: #eeeeee; stroke: #c9c9c9; }
+  .tile { fill: #f7f7f7; stroke: #1b1b1b; vector-effect: non-scaling-stroke; }
+  .soft { fill: #f7f7f7; stroke: #9a9a9a; vector-effect: non-scaling-stroke; }
+  .focus { stroke: #007aff; stroke-width: 2; }
+  .fill { fill: #dbe9fb; }
+  .empty { fill: none; stroke: #9a9a9a; stroke-dasharray: 3 3; vector-effect: non-scaling-stroke; }
+  .line { stroke: #b5b5b5; stroke-width: 2; stroke-linecap: round; }
+  .bubble { fill: #dbe9fb; stroke: none; }
+  .arrow { stroke: #1b1b1b; fill: none; vector-effect: non-scaling-stroke; }
+  text { fill: #1b1b1b; font: 7px ui-monospace, "SF Mono", Menlo, monospace; text-anchor: middle; dominant-baseline: central; }
+  text.small { font-size: 5.5px; fill: #6b6b6b; }
+  text.mark { fill: #007aff; }
+  text.big { font-size: 10px; font-weight: 600; }
+  @media (prefers-color-scheme: dark) {
+    .display { fill: #222222; stroke: #333333; }
+    .tile, .soft { fill: #1b1b1b; stroke: #d8d8d8; }
+    .soft { stroke: #6b6b6b; }
+    .focus { stroke: #4ea1ff; }
+    .fill, .bubble { fill: #1d3350; }
+    .empty { stroke: #6b6b6b; }
+    .line { stroke: #4a4a4a; }
+    .arrow { stroke: #d8d8d8; }
+    text { fill: #f7f7f7; }
+    text.small { fill: #9a9a9a; }
+    text.mark { fill: #4ea1ff; }
+  }
+</style>
+<rect class="display" x="0.5" y="0.5" width="159" height="99" rx="4" />
+<rect class="soft" x="5" y="5" width="150" height="7" rx="2" /><rect class="soft" x="5" y="15" width="9" height="80" rx="2" /><rect class="soft" x="6.5" y="18" width="6" height="6" rx="1" /><rect class="soft" x="6.5" y="26" width="6" height="6" rx="1" /><rect class="soft" x="6.5" y="34" width="6" height="6" rx="1" /><rect class="soft" x="6.5" y="42" width="6" height="6" rx="1" /><rect class="soft" x="17" y="15" width="34" height="80" rx="2" /><line class="line" x1="21" y1="24" x2="43" y2="24" /><line class="line" x1="21" y1="31" x2="47" y2="31" /><line class="line" x1="21" y1="38" x2="39" y2="38" /><rect class="soft" x="54" y="15" width="50" height="80" rx="2" /><text class="small" x="79" y="22">thread</text><line class="line" x1="59" y1="33" x2="95" y2="33" /><line class="line" x1="59" y1="39" x2="89" y2="39" /><line class="line" x1="59" y1="45" x2="99" y2="45" /><line class="line" x1="59" y1="51" x2="83" y2="51" /><rect class="tile focus" x="107" y="15" width="23" height="80" rx="2" /><text class="mark" x="118.5" y="55">pane</text><rect class="tile focus" x="132" y="15" width="23" height="80" rx="2" /><text class="mark" x="143.5" y="55">pane</text>
+</svg>

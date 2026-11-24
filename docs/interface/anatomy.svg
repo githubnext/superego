@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 150" role="img" aria-label="The window: a title bar across the top; down the left a rail and a sidebar; the main area; a column beside it">
+<style>
+  .display { fill: #eeeeee; stroke: #c9c9c9; }
+  .tile { fill: #f7f7f7; stroke: #1b1b1b; vector-effect: non-scaling-stroke; }
+  .soft { fill: #f7f7f7; stroke: #9a9a9a; vector-effect: non-scaling-stroke; }
+  .focus { stroke: #007aff; stroke-width: 2; }
+  .fill { fill: #dbe9fb; }
+  .empty { fill: none; stroke: #9a9a9a; stroke-dasharray: 3 3; vector-effect: non-scaling-stroke; }
+  .line { stroke: #b5b5b5; stroke-width: 2; stroke-linecap: round; }
+  .bubble { fill: #dbe9fb; stroke: none; }
+  .arrow { stroke: #1b1b1b; fill: none; vector-effect: non-scaling-stroke; }
+  text { fill: #1b1b1b; font: 7px ui-monospace, "SF Mono", Menlo, monospace; text-anchor: middle; dominant-baseline: central; }
+  text.small { font-size: 5.5px; fill: #6b6b6b; }
+  text.mark { fill: #007aff; }
+  text.big { font-size: 10px; font-weight: 600; }
+  @media (prefers-color-scheme: dark) {
+    .display { fill: #222222; stroke: #333333; }
+    .tile, .soft { fill: #1b1b1b; stroke: #d8d8d8; }
+    .soft { stroke: #6b6b6b; }
+    .focus { stroke: #4ea1ff; }
+    .fill, .bubble { fill: #1d3350; }
+    .empty { stroke: #6b6b6b; }
+    .line { stroke: #4a4a4a; }
+    .arrow { stroke: #d8d8d8; }
+    text { fill: #f7f7f7; }
+    text.small { fill: #9a9a9a; }
+    text.mark { fill: #4ea1ff; }
+  }
+</style>
+<rect class="display" x="0.5" y="0.5" width="239" height="149" rx="4" />
+<rect class="tile" x="6" y="6" width="228" height="11" rx="2" /><text x="42" y="11.5">title bar</text><rect class="tile" x="6" y="21" width="13" height="123" rx="2" /><rect class="soft" x="8.5" y="25" width="8" height="8" rx="1.5" /><rect class="soft" x="8.5" y="36" width="8" height="8" rx="1.5" /><rect class="soft" x="8.5" y="47" width="8" height="8" rx="1.5" /><rect class="soft" x="8.5" y="58" width="8" height="8" rx="1.5" /><rect class="tile" x="23" y="21" width="50" height="123" rx="2" /><text x="48" y="82.5">sidebar</text><rect class="tile" x="77" y="21" width="109" height="123" rx="2" /><text x="131.5" y="82.5">main area</text><text class="small" x="131.5" y="92.5">a thread, or a surface</text><rect class="tile" x="190" y="21" width="44" height="123" rx="2" /><text x="212" y="82.5">beside</text><text class="small" x="12.5" y="110" transform="rotate(-90 12.5 110)">rail</text>
+</svg>

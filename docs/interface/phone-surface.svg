@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 70 120" role="img" aria-label="On a phone, a surface fills the screen; its thread opens as the thread">
+<style>
+  .display { fill: #eeeeee; stroke: #c9c9c9; }
+  .tile { fill: #f7f7f7; stroke: #1b1b1b; vector-effect: non-scaling-stroke; }
+  .soft { fill: #f7f7f7; stroke: #9a9a9a; vector-effect: non-scaling-stroke; }
+  .focus { stroke: #007aff; stroke-width: 2; }
+  .fill { fill: #dbe9fb; }
+  .empty { fill: none; stroke: #9a9a9a; stroke-dasharray: 3 3; vector-effect: non-scaling-stroke; }
+  .line { stroke: #b5b5b5; stroke-width: 2; stroke-linecap: round; }
+  .bubble { fill: #dbe9fb; stroke: none; }
+  .arrow { stroke: #1b1b1b; fill: none; vector-effect: non-scaling-stroke; }
+  text { fill: #1b1b1b; font: 7px ui-monospace, "SF Mono", Menlo, monospace; text-anchor: middle; dominant-baseline: central; }
+  text.small { font-size: 5.5px; fill: #6b6b6b; }
+  text.mark { fill: #007aff; }
+  text.big { font-size: 10px; font-weight: 600; }
+  @media (prefers-color-scheme: dark) {
+    .display { fill: #222222; stroke: #333333; }
+    .tile, .soft { fill: #1b1b1b; stroke: #d8d8d8; }
+    .soft { stroke: #6b6b6b; }
+    .focus { stroke: #4ea1ff; }
+    .fill, .bubble { fill: #1d3350; }
+    .empty { stroke: #6b6b6b; }
+    .line { stroke: #4a4a4a; }
+    .arrow { stroke: #d8d8d8; }
+    text { fill: #f7f7f7; }
+    text.small { fill: #9a9a9a; }
+    text.mark { fill: #4ea1ff; }
+  }
+</style>
+<rect class="display" x="0.5" y="0.5" width="69" height="119" rx="4" />
+<rect class="soft" x="5" y="5" width="60" height="9" rx="2" /><rect class="tile" x="52" y="7" width="10" height="5" rx="1.5" /><rect class="tile focus" x="5" y="17" width="60" height="98" rx="2" /><text class="mark" x="35" y="66">surface</text><line class="line" x1="12" y1="30" x2="52" y2="30" /><line class="line" x1="12" y1="38" x2="42" y2="38" /><line class="line" x1="12" y1="46" x2="56" y2="46" />
+</svg>

@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 150" role="img" aria-label="A thread in the main area, two panes in columns beside it">
+<style>
+  .display { fill: #eeeeee; stroke: #c9c9c9; }
+  .tile { fill: #f7f7f7; stroke: #1b1b1b; vector-effect: non-scaling-stroke; }
+  .soft { fill: #f7f7f7; stroke: #9a9a9a; vector-effect: non-scaling-stroke; }
+  .focus { stroke: #007aff; stroke-width: 2; }
+  .fill { fill: #dbe9fb; }
+  .empty { fill: none; stroke: #9a9a9a; stroke-dasharray: 3 3; vector-effect: non-scaling-stroke; }
+  .line { stroke: #b5b5b5; stroke-width: 2; stroke-linecap: round; }
+  .bubble { fill: #dbe9fb; stroke: none; }
+  .arrow { stroke: #1b1b1b; fill: none; vector-effect: non-scaling-stroke; }
+  text { fill: #1b1b1b; font: 7px ui-monospace, "SF Mono", Menlo, monospace; text-anchor: middle; dominant-baseline: central; }
+  text.small { font-size: 5.5px; fill: #6b6b6b; }
+  text.mark { fill: #007aff; }
+  text.big { font-size: 10px; font-weight: 600; }
+  @media (prefers-color-scheme: dark) {
+    .display { fill: #222222; stroke: #333333; }
+    .tile, .soft { fill: #1b1b1b; stroke: #d8d8d8; }
+    .soft { stroke: #6b6b6b; }
+    .focus { stroke: #4ea1ff; }
+    .fill, .bubble { fill: #1d3350; }
+    .empty { stroke: #6b6b6b; }
+    .line { stroke: #4a4a4a; }
+    .arrow { stroke: #d8d8d8; }
+    text { fill: #f7f7f7; }
+    text.small { fill: #9a9a9a; }
+    text.mark { fill: #4ea1ff; }
+  }
+</style>
+<rect class="display" x="0.5" y="0.5" width="239" height="149" rx="4" />
+<rect class="soft" x="6" y="6" width="228" height="11" rx="2" /><rect class="soft" x="6" y="21" width="13" height="123" rx="2" /><rect class="soft" x="8.5" y="25" width="8" height="8" rx="1.5" /><rect class="soft" x="8.5" y="36" width="8" height="8" rx="1.5" /><rect class="soft" x="8.5" y="47" width="8" height="8" rx="1.5" /><rect class="soft" x="8.5" y="58" width="8" height="8" rx="1.5" /><rect class="soft" x="23" y="21" width="50" height="123" rx="2" /><line class="line" x1="28" y1="30" x2="64" y2="30" /><line class="line" x1="28" y1="38" x2="58" y2="38" /><line class="line" x1="28" y1="46" x2="66" y2="46" /><line class="line" x1="28" y1="54" x2="54" y2="54" /><line class="line" x1="28" y1="62" x2="62" y2="62" /><rect class="tile focus" x="77" y="21" width="70" height="123" rx="2" /><text class="mark" x="112" y="29">thread</text><rect class="bubble" x="107" y="41" width="34" height="9" rx="3" /><line class="line" x1="83" y1="61" x2="138" y2="61" /><line class="line" x1="83" y1="67" x2="131" y2="67" /><line class="line" x1="83" y1="73" x2="141" y2="73" /><line class="line" x1="83" y1="79" x2="113" y2="79" /><rect class="tile" x="82" y="129" width="60" height="10" rx="4" /><text class="small" x="112" y="134">composer</text><rect class="tile" x="151" y="21" width="40" height="123" rx="2" /><rect class="tile" x="151" y="21" width="40" height="9" rx="2" /><text class="small" x="171" y="25.5">diff</text><line class="line" x1="156" y1="39" x2="184" y2="39" /><line class="line" x1="156" y1="45" x2="178" y2="45" /><line class="line" x1="156" y1="51" x2="186" y2="51" /><line class="line" x1="156" y1="57" x2="174" y2="57" /><line class="line" x1="156" y1="63" x2="182" y2="63" /><rect class="tile" x="195" y="21" width="39" height="123" rx="2" /><rect class="tile" x="195" y="21" width="39" height="9" rx="2" /><text class="small" x="214.5" y="25.5">file</text><line class="line" x1="200" y1="39" x2="224" y2="39" /><line class="line" x1="200" y1="45" x2="228" y2="45" /><line class="line" x1="200" y1="51" x2="216" y2="51" /><line class="line" x1="200" y1="57" x2="226" y2="57" />
+</svg>

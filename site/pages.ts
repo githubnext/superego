@@ -19,6 +19,7 @@ export const sections: Section[] = [
     pages: [
       { slug: '', title: 'Getting started', src: 'docs/getting-started.md' },
       { slug: 'overview', title: 'Overview', src: 'docs/overview.md' },
+      { slug: 'interface', title: 'How the window is put together', src: 'docs/interface.md' },
       { slug: 'machines', title: 'Machines', src: 'docs/machines.md' },
       { slug: 'cli', title: 'The command', src: 'packages/cli/skill/cli.md' },
       { slug: 'profiles', title: 'Profiles', src: 'packages/cli/skill/profiles.md' },
