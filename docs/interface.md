@@ -104,10 +104,27 @@ window draws, so none of the extension's code runs in the window).
 | The app's bundled extensions | yes | yes, in every thread | yes |
 | A **global** profile of yours (`global: true`) | yes | yes, in every thread | yes |
 | Any other profile of yours | data views only | yes, in its own threads | no |
-| A project's profile | no | yes, in its own threads | no |
+| A project's profile | its spaces only, while you're in the project | yes, in its own threads | yes, its project's |
 
-A global profile is part of the app: the daemon loads it at start, and the window installs its UI as the app's. Notes
-and Canvas are global profiles. A remote machine's profile UI still asks before its code runs in your window.
+Where a profile lives says how far it reaches; there's no key to set. A global profile is part of the app: the daemon
+loads it at start, and the window installs its UI as the app's. Notes and Canvas are global profiles. A project's
+profile (in the repo's `.superego/profiles`) is part of its project: its spaces are the project's, and nothing it draws
+reaches outside it. A remote machine's profile UI still asks before its code runs in your window, and a project's runs
+only once allowed (`superego profile allow`), again after its files change.
+
+### A project's spaces
+
+Under the project's heading in Threads, each kind is a row (▦ and its title) above its threads. In the rail, while
+you're *in* the project (one of its threads selected, or one of its spaces open), they're a group of their own after
+the app's buttons, between lines, each lit while open; leave for another project and the group goes. On a phone,
+they're at the drawer's foot. Their links open them only from the project's threads and spaces. Of two of the
+project's profiles declaring one kind, its default profile's wins. A thread docked to one starts in the project's
+folder. A project shows once it has a thread, and its spaces with it.
+
+<figure class="wide">
+<img src="interface/project-spaces.svg" alt="A project's spaces: a group in the rail between lines, and rows under the project's heading in the Threads sidebar">
+<figcaption>In the shop: Board and Docs are a group in the rail, between lines, and rows under its heading above its threads. Board is open.</figcaption>
+</figure>
 
 ## On a phone
 

@@ -123,8 +123,9 @@ superego.view('orders.open', { title: 'Orders', icon: 'list', context: 'window',
 
 ### Spaces
 
-A **space** fills the main area where a thread otherwise shows: a notes page, a canvas. An app extension's UI half or
-a global profile's (`global: true`, [profiles.md](profiles.md#global-profiles)) registers it; other profiles can't.
+A **space** fills the main area where a thread otherwise shows: a notes page, a canvas. An app extension's UI half,
+a global profile's (`global: true`, [profiles.md](profiles.md#global-profiles)) or a project's profile's registers it
+(where the profile lives says how far it reaches); your other profiles can't.
 
 <!-- check: ui; import { NotebookIcon, type SpaceProps } from 'superego/ui'; declare const NotePage: (props: SpaceProps) => null -->
 ```tsx
@@ -137,10 +138,11 @@ superego.space('notes.page', {
   about: (params) => `The user has the note "${params.name}" open.`,  // a thread started on it is told this first
   profile: 'notes',                                // the profile that thread runs (default: the machine's)
   agent: 'docked',                                 // its thread as a column beside it, or 'floating': a card over it
+  entry: { name: 'Index' },                        // a project's: the params it opens with from the rail (default {})
 })
 ```
 
-- **Open one** with the window action `space.open` (`{ kind, params, machine? }`, default this computer):
+- **Open one** with the window action `space.open` (`{ kind, params, machine?, project? }`, default this computer):
   `superego.dispatch('space.open', { kind: 'notes.page', params: { name } })`. Another client can ask a window to
   (`client.perform`). In the component, `open(params)` replaces it with another of its kind.
 - The title bar shows its title and a button to show or hide its thread. Back and forward go through spaces as through
@@ -156,6 +158,15 @@ superego.space('notes.page', {
 - **Testing:** `mountUi({ profile: { extensions: [ui], global: true } })`; `render({ space: { kind, params } })` draws
   one with its thread; `window.space()` says what the main area shows.
 - On a phone, a space is the whole screen; its thread opens as the thread, from the title.
+- **A project's:** a project's profile's spaces are that project's, on its machine (its root: the folder whose
+  `.superego/profiles` holds the profile). Each kind is a row under the project's heading in Threads (▦ and its title,
+  above its threads) and, while you're in the project (its thread selected, or one of its spaces open), a rail button
+  in a group of their own after the app's, between lines; on a phone, at the drawer's foot. They open with `entry`
+  (`space.open` with `project: <root>`). Their links open them only from the project's threads and spaces. Of two of
+  the project's profiles declaring one kind, its `default`'s wins. A thread started on one starts in the project's
+  folder, on its `profile` or the project's default. Testing: `mountUi({ profile: { ref: { scope: 'project', name,
+  dir: '<root>/.superego/profiles/<name>' }, extensions } })`; `render({ space: { kind, params, project: root } })`.
+- While a space is open, only it is lit: its row and rail button, not the selected thread's row.
 
 ### On a phone
 

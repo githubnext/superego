@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 150" role="img" aria-label="A project's spaces: a group in the rail between lines while you're in the project, and rows under its heading in the Threads sidebar">
+<style>
+  .display { fill: #eeeeee; stroke: #c9c9c9; }
+  .tile { fill: #f7f7f7; stroke: #1b1b1b; vector-effect: non-scaling-stroke; }
+  .soft { fill: #f7f7f7; stroke: #9a9a9a; vector-effect: non-scaling-stroke; }
+  .focus { stroke: #007aff; stroke-width: 2; }
+  .fill { fill: #dbe9fb; }
+  .empty { fill: none; stroke: #9a9a9a; stroke-dasharray: 3 3; vector-effect: non-scaling-stroke; }
+  .line { stroke: #b5b5b5; stroke-width: 2; stroke-linecap: round; }
+  .bubble { fill: #dbe9fb; stroke: none; }
+  .arrow { stroke: #1b1b1b; fill: none; vector-effect: non-scaling-stroke; }
+  text { fill: #1b1b1b; font: 7px ui-monospace, "SF Mono", Menlo, monospace; text-anchor: middle; dominant-baseline: central; }
+  text.small { font-size: 5.5px; fill: #6b6b6b; }
+  text.mark { fill: #007aff; }
+  text.big { font-size: 10px; font-weight: 600; }
+  @media (prefers-color-scheme: dark) {
+    .display { fill: #222222; stroke: #333333; }
+    .tile, .soft { fill: #1b1b1b; stroke: #d8d8d8; }
+    .soft { stroke: #6b6b6b; }
+    .focus { stroke: #4ea1ff; }
+    .fill, .bubble { fill: #1d3350; }
+    .empty { stroke: #6b6b6b; }
+    .line { stroke: #4a4a4a; }
+    .arrow { stroke: #d8d8d8; }
+    text { fill: #f7f7f7; }
+    text.small { fill: #9a9a9a; }
+    text.mark { fill: #4ea1ff; }
+  }
+</style>
+<rect class="display" x="0.5" y="0.5" width="239" height="149" rx="4" />
+<rect class="soft" x="6" y="6" width="228" height="11" rx="2" /><text class="small" x="110" y="11.5">Board</text><rect class="soft" x="6" y="21" width="13" height="123" rx="2" /><rect class="tile" x="8.5" y="25" width="8" height="8" rx="1.5" /><rect class="soft" x="8.5" y="36" width="8" height="8" rx="1.5" /><line class="line" x1="9" y1="46.5" x2="16" y2="46.5" /><rect class="tile focus" x="8.5" y="49" width="8" height="8" rx="1.5" /><rect class="soft" x="8.5" y="60" width="8" height="8" rx="1.5" /><line class="line" x1="9" y1="71.5" x2="16" y2="71.5" /><rect class="soft" x="23" y="21" width="50" height="123" rx="2" /><text class="small" x="27" y="27" style="text-anchor: start">shop</text><rect class="tile focus" x="26" y="31" width="44" height="8" rx="1.5" /><text class="small mark" x="30" y="35">▦</text><text class="small" x="34" y="35" style="text-anchor: start">Board</text><rect class="soft" x="26" y="42" width="44" height="8" rx="1.5" /><text class="small" x="30" y="46">▦</text><text class="small" x="34" y="46" style="text-anchor: start">Docs</text><line class="line" x1="28" y1="57" x2="64" y2="57" /><line class="line" x1="28" y1="64" x2="58" y2="64" /><line class="line" x1="28" y1="71" x2="68" y2="71" /><text class="small" x="27" y="84" style="text-anchor: start">blog</text><line class="line" x1="28" y1="92" x2="62" y2="92" /><line class="line" x1="28" y1="99" x2="56" y2="99" /><rect class="tile focus" x="77" y="21" width="105" height="123" rx="2" /><text x="99" y="33">Board</text><line class="line" x1="87" y1="47" x2="167" y2="47" /><line class="line" x1="87" y1="53" x2="157" y2="53" /><line class="line" x1="87" y1="59" x2="172" y2="59" /><line class="line" x1="87" y1="71" x2="147" y2="71" /><line class="line" x1="87" y1="77" x2="159" y2="77" /><text class="mark" x="129.5" y="122">the project's space</text><text class="small" x="129.5" y="130">board.main</text><rect class="tile" x="186" y="21" width="48" height="123" rx="2" /><text class="small" x="210" y="29">thread</text><rect class="bubble" x="200" y="39" width="30" height="9" rx="3" /><line class="line" x1="191" y1="59" x2="227" y2="59" /><line class="line" x1="191" y1="65" x2="221" y2="65" /><line class="line" x1="191" y1="71" x2="229" y2="71" /><rect class="tile" x="190" y="130" width="40" height="9" rx="4" /><text class="small" x="210" y="122">in shop</text>
+</svg>

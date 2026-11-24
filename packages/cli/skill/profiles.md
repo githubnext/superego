@@ -97,6 +97,11 @@ file imported by path is fine wherever it is (`node_modules` too), and counts to
 Notes and Canvas are global profiles. A project's profile can't be global (its `problems` say so), and a profile
 extending a global one isn't, unless it says so itself.
 
+**A project's spaces.** A project's profile (`.superego/profiles/<name>` in the repo) may add spaces too, with no
+key to set: they're its project's, on its machine, under its heading in Threads and in the rail while you're in it;
+their links open them only from its threads and spaces. Of two of its profiles declaring one kind, its `default` wins.
+Its other UI stays its own threads', and nothing of it runs until it's allowed ([Allowing](#allowing)).
+
 A non-global profile of yours can still add a sidebar from its daemon half: a data view (`superego.view`,
 `context: 'window'`) that fits `sidebar`, shown while the profile is loaded. A project's can't.
 

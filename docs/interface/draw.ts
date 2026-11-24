@@ -193,6 +193,35 @@ function notes() {
   ].join(''))
 }
 
+/**
+ * A project's spaces, while you're in the project: a group of the rail's own after the app's buttons, between lines;
+ * rows under the project's heading in the Threads sidebar, above its threads. Its Board is open.
+ */
+function projectSpaces() {
+  const body: Box = { x: 77, y: 21, w: 105, h: 123 }
+  const dock: Box = { x: 186, y: 21, w: 48, h: 123 }
+  const sep = (y: number) => `<line class="line" x1="${rail.x + 3}" y1="${y}" x2="${rail.x + rail.w - 3}" y2="${y}" />`
+  const project = (b: Box, on = false) => r(b, on ? 'tile focus' : 'soft', 1.5)
+  const spaceRow = (y: number, label: string, on = false) => [
+    r({ x: 26, y, w: 44, h: 8 }, on ? 'tile focus' : 'soft', 1.5), t(30, y + 4, '▦', on ? 'small mark' : 'small'), `<text class="small" x="34" y="${y + 4}" style="text-anchor: start">${label}</text>`,
+  ].join('')
+  return svg(W, H, "A project's spaces: a group in the rail between lines while you're in the project, and rows under its heading in the Threads sidebar", [
+    r(bar, 'soft'), t(110, 11.5, 'Board', 'small'),
+    r(rail, 'soft'), r(railButton(0), 'tile', 1.5), r(railButton(1), 'soft', 1.5),
+    sep(46.5), project({ x: 8.5, y: 49, w: 8, h: 8 }, true), project({ x: 8.5, y: 60, w: 8, h: 8 }), sep(71.5),
+    r(side, 'soft'),
+    `<text class="small" x="27" y="27" style="text-anchor: start">shop</text>`,
+    spaceRow(31, 'Board', true), spaceRow(42, 'Docs'),
+    lines(28, 57, [36, 30, 40], 7),
+    `<text class="small" x="27" y="84" style="text-anchor: start">blog</text>`, lines(28, 92, [34, 28], 7),
+    r(body, 'tile focus'), t(body.x + 22, body.y + 12, 'Board'), lines(body.x + 10, body.y + 26, [80, 70, 85]), lines(body.x + 10, body.y + 50, [60, 72]),
+    t(body.x + body.w / 2, 122, "the project's space", 'mark'), t(body.x + body.w / 2, 130, 'board.main', 'small'),
+    r(dock), t(dock.x + dock.w / 2, dock.y + 8, 'thread', 'small'), `<rect class="bubble" x="${dock.x + 14}" y="${dock.y + 18}" width="30" height="9" rx="3" />`,
+    lines(dock.x + 5, dock.y + 38, [36, 30, 38]), r({ x: dock.x + 4, y: dock.y + dock.h - 14, w: dock.w - 8, h: 9 }, 'tile', 4),
+    t(dock.x + dock.w / 2, 122, 'in shop', 'small'),
+  ].join(''))
+}
+
 /** Going somewhere: the main area shows a thread, a space, another of its kind; back goes back. */
 function step(label: string, what: 'thread' | 'space') {
   const body: Box = { x: 54, y: 15, w: 101, h: 80 }
@@ -235,6 +264,7 @@ write('kind-space', kindSpace())
 write('docked', docked())
 write('floating', floating())
 write('notes', notes())
+write('project-spaces', projectSpaces())
 write('step-thread', step('a thread', 'thread'))
 write('step-note-a', step('note:a', 'space'))
 write('step-note-b', step('note:b', 'space'))

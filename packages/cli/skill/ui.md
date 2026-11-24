@@ -12,6 +12,8 @@ The window loads a profile's UI as soon as it lists one of its threads (sidebar 
 so its marks, slots, tool rows and pane kinds are there from the start.
 
 - Archived and hidden threads don't count.
+- A project's own allowed profiles load as soon as the project is listed, whatever its threads run, so its
+  [spaces](window.md#spaces) are there; and again when one of them is allowed (`profile.allow`).
 - It loads once per profile per machine, and loads the profile's daemon half too.
 - Another machine's profile loads this way only if its UI was allowed here before; otherwise when a thread of it is
   opened, which asks.
@@ -69,7 +71,7 @@ Nothing else: no npm packages, no CSS imports. The daemon compiles TSX and TS wi
 | | |
 |---|---|
 | `pane(kind, { title, component, icon?, file?, menu?, opens?, fallback?, folders?, urls?, width? })` | a kind of pane. `title`: a string or `(pane) => string`. `component` gets `{ machine, thread, pane }` (`pane.params`: what it was opened with). `icon`: a Phosphor icon for its tab. `file: true`: its title is a file name. `menu: true`: in the pane menu (needs no params). `opens: (path) => boolean`: files named in a thread open in it, ahead of the editor (`/\.csv$/.test(path)`); `fallback: true`: any file no kind `opens`; `folders: true`: folders (`params.path`, `''` for the thread's own); `urls: true`: web pages opened beside (`params.url`). `width`: share of the row (0.5) |
-| `space(kind, { title, component, icon?, match?, params?, about?, profile?, agent? })` | a view filling the main area, with a thread docked beside it: an app extension's or a global profile's only ([window.md](window.md#spaces)) |
+| `space(kind, { title, component, icon?, match?, params?, about?, profile?, agent? })` | a view filling the main area, with a thread docked beside it: an app extension's, a global profile's, or a project's profile's (its project's); not your other profiles' ([window.md](window.md#spaces)) |
 | `view(id, { title, icon?, context, fits, default?, component, order? })` | a view `<name>.<view>` the layout places. A profile's fits `beside`, `pane` (the pane menu; also a pane kind of its id) or `header`. `context: 'thread'`: `component` gets `{ place, machine, thread }`. `default`: a place, several, or none (offered only). The user can move or hide it, so don't assume where it is ([window.md](window.md#views-and-the-layout)) |
 | `slot(slot, component, { order? })` | a component in a [slot](#slots) |
 | `tool(name, row, { fold? })` | how a tool's calls look: [Tool rows](#tool-rows) |

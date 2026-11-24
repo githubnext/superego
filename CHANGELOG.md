@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- A project's own profiles can add spaces to their project: they're listed under the project's heading in Threads,
+  and in the rail while you're in that project.
 - Claude Agent threads run in Auto permission mode by default, and Settings → Claude Agent offers Allow all.
 
 ## 0.3.0
