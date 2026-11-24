@@ -77,7 +77,8 @@ it('offers Claude Agent in the model menus where Claude Code is installed, its m
   const section = settings.value.sections.find((s) => s.id === SECTION)!
   expect(section).toMatchObject({ title: 'Claude Agent', ui: SECTION, value: CLAUDE })
   expect(section.settings.map((s) => s.key)).toEqual([SETTINGS.permissionMode, SETTINGS.parallel])
-  expect(settings.value.values).toMatchObject({ [SETTINGS.permissionMode]: 'default', [SETTINGS.parallel]: 3 })
+  expect(section.settings[0]).toMatchObject({ options: expect.arrayContaining([{ value: 'bypassPermissions', label: 'Allow all' }]) })
+  expect(settings.value.values).toMatchObject({ [SETTINGS.permissionMode]: 'auto', [SETTINGS.parallel]: 3 })
   expect((await daemon.watch(CLAUDE)).value).toEqual({ installed: true, path: signedIn, version: '2.1.325', loggedIn: true, how: 'claude.ai', plan: 'pro' })
   await daemon.close()
 

@@ -18,7 +18,7 @@ import { claudeEnv } from '../src/claude.ts'
 import { claudeAgent } from '../src/daemon.ts'
 import { nestedSkills, projectConfig, ProjectAllowances } from '../src/project.ts'
 import { about, ALLOW, ANSWER, CHECK, KEPT, LIMIT, limitNote, SETTINGS, SIGN_IN, SIGNED_OUT, WAITING, type Approval, type Kept, type Limit, type ProjectFacts } from '../src/shared.ts'
-import { mockAnthropic, type MockAnthropic } from './mock-anthropic.ts'
+import { CLASSIFIER, mockAnthropic, type MockAnthropic } from './mock-anthropic.ts'
 
 /** This checkout's `superego` command line. */
 const CLI = fileURLToPath(new URL('../../../app/bin/superego.ts', import.meta.url))
@@ -493,8 +493,28 @@ describe.skipIf(!claude)("a Claude Agent thread, on the user's claude against a 
   })
 
   describe('approvals', () => {
-    it('blocks the thread on a permission while Claude Code asks, and Allow lets the call run', async () => {
+    // Auto, the default, lets the mock's calls through without asking: these ask, as `default` does.
+    const asking = profileOf({ permissionMode: 'default' })
+    /** The permission modes Claude Code was started in for turns, in order. */
+    const modes = () => readFileSync(join(dir, 'runs'), 'utf8').split('\n').filter((l) => l.includes('stream-json')).map((l) => /--permission-mode=(\S+)/.exec(l)?.[1])
+
+    it('runs in Auto when neither the profile nor Settings picks a mode, not asking for the call', async () => {
       const d = await start()
+      const cwd = folder()
+      const thread = await d.thread(undefined, { cwd })
+      const done = await d.send(thread, 'Run touch auto.txt')
+      expect(done.status.state).toBe('done')
+      expect(existsSync(join(cwd, 'auto.txt'))).toBe(true)
+      expect(modes()).toEqual(['auto'])
+      // Superego's own tools go ahead without Claude Code asking its classifier, a model request of its own.
+      const before = api.requests.length
+      expect((await d.send(thread, 'Use thread_list {}')).status.state).toBe('done')
+      expect((await d.toolCalls(thread)).find((c) => c.name === 'thread_list')!.result).toMatchObject({ isError: false })
+      expect(api.requests.slice(before).filter((r) => r.system.includes(CLASSIFIER))).toEqual([])
+    }, 60_000)
+
+    it('blocks the thread on a permission while Claude Code asks, and Allow lets the call run', async () => {
+      const d = await start({ profile: asking })
       const cwd = folder()
       const thread = await d.thread(undefined, { cwd })
       const { approval, waiting } = await ask(d, thread, 'Run touch allowed.txt')
@@ -516,7 +536,7 @@ describe.skipIf(!claude)("a Claude Agent thread, on the user's claude against a 
     }, 60_000)
 
     it('Deny refuses the call, with what the user said', async () => {
-      const d = await start()
+      const d = await start({ profile: asking })
       const cwd = folder()
       const thread = await d.thread(undefined, { cwd })
       const { approval } = await ask(d, thread, 'Run touch denied.txt')
@@ -529,7 +549,7 @@ describe.skipIf(!claude)("a Claude Agent thread, on the user's claude against a 
     }, 60_000)
 
     it('"Always" allows it, and Superego remembers it for the folder: the same call goes ahead next time without asking', async () => {
-      const d = await start()
+      const d = await start({ profile: asking })
       const cwd = folder()
       const thread = await d.thread(undefined, { cwd })
       const { approval } = await ask(d, thread, 'Run touch always.txt')
@@ -546,7 +566,7 @@ describe.skipIf(!claude)("a Claude Agent thread, on the user's claude against a 
     }, 60_000)
 
     it('Stop withdraws what waits, and closes its call', async () => {
-      const d = await start()
+      const d = await start({ profile: asking })
       const cwd = folder()
       const thread = await d.thread(undefined, { cwd })
       const { approval, waiting } = await ask(d, thread, 'Run touch stopped.txt')
@@ -562,7 +582,7 @@ describe.skipIf(!claude)("a Claude Agent thread, on the user's claude against a 
     }, 60_000)
 
     it('after a restart, an approval that was waiting is interrupted: send again', async () => {
-      const d = await start()
+      const d = await start({ profile: asking })
       const cwd = folder()
       const thread = await d.thread(undefined, { cwd })
       const { approval } = await ask(d, thread, 'Run touch restarted.txt')
@@ -606,23 +626,36 @@ describe.skipIf(!claude)("a Claude Agent thread, on the user's claude against a 
       expect((await d.toolCalls(thread)).find((c) => c.name === 'ExitPlanMode')!.result).toMatchObject({ isError: false })
     }, 60_000)
 
-    it('applies bypassPermissions only when the profile says so, not from Claude Code\'s own settings', async () => {
+    it('bypasses every check only when Settings or the profile says so, not from Claude Code\'s own settings', async () => {
       mkdirSync(join(dir, 'config'), { recursive: true })
       writeFileSync(join(dir, 'config', 'settings.json'), JSON.stringify({ permissions: { defaultMode: 'bypassPermissions' } }))
       const d = await start()
       const cwd = folder()
+      // Claude Code's own default doesn't apply: Superego's (Auto) does, or what Settings picks.
+      expect((await d.send(await d.thread(undefined, { cwd }), 'Say hi')).status.state).toBe('done')
+      await d.call('settings.set', { key: SETTINGS.permissionMode, value: 'default' })
       const thread = await d.thread(undefined, { cwd })
       const { approval } = await ask(d, thread, 'Run touch asked.txt')
       expect(approval.tool).toBe('Bash')
       await d.dispatch(ANSWER, { id: approval.id, choice: 'deny' })
       await d.idle(thread)
+      expect(existsSync(join(cwd, 'asked.txt'))).toBe(false)
+
+      // Allow all, in Settings: the call goes ahead without asking.
+      await d.call('settings.set', { key: SETTINGS.permissionMode, value: 'bypassPermissions' })
+      const allowing = await d.thread(undefined, { cwd })
+      const allowed = await d.send(allowing, 'Run touch allowed-all.txt')
+      expect(allowed.status.state).toBe('done')
+      expect(existsSync(join(cwd, 'allowed-all.txt'))).toBe(true)
       await d.close()
 
+      // Or the profile's.
       const bypassing = await start({ profile: profileOf({ permissionMode: 'bypassPermissions' }) })
       const other = await bypassing.thread(undefined, { cwd })
       const done = await bypassing.send(other, 'Run touch bypassed.txt')
       expect(done.status.state).toBe('done')
       expect(existsSync(join(cwd, 'bypassed.txt'))).toBe(true)
+      expect(modes()).toEqual(['auto', 'default', 'bypassPermissions', 'bypassPermissions'])
     }, 60_000)
   })
 

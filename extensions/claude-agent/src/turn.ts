@@ -236,12 +236,15 @@ async function runTurn(runtime: Runtime, executable: string, host: TurnHost, con
   const cwd = agent.cwd ?? process.cwd()
   const may = await host.sources(conversationId, cwd)
   const settingSources: SettingSource[] = (choices.settingSources ?? [...SETTING_SOURCES]).filter((source) => may.includes(source))
-  // The profile's, and what the user said to always allow in the folder.
-  const allowedTools = [...choices.allowedTools ?? [], ...host.rules(cwd)]
+  // Superego's own tools (the server this turn gives it, which stands in for any of Claude Code's of that name), the
+  // profile's, and what the user said to always allow in the folder. Superego's are allowed here, not only in
+  // `canUseTool`: in `auto`, Claude Code would ask its classifier first, a model request for every call.
+  const allowedTools = [`mcp__${SERVER}`, ...choices.allowedTools ?? [], ...host.rules(cwd)]
   const tools = offeredTools(agent)
   const append = await appendedPrompt(runtime, agent, tools, context, { skill: Boolean(host.plugin) })
-  // The profile's mode, else `default` (ask): never one Claude Code's own settings pick, bypassing included.
-  const mode = choices.permissionMode ?? 'default'
+  // The profile's mode, else the machine's (Settings), else `auto`: never one Claude Code's own settings pick, bypassing
+  // included.
+  const mode = choices.permissionMode ?? 'auto'
   const options = {
     pathToClaudeCodeExecutable: executable,
     env: host.env(thread),
@@ -252,9 +255,9 @@ async function runTurn(runtime: Runtime, executable: string, host: TurnHost, con
     // The thread's model and effort (picked in the model menu), else its profile's, else Claude Code's own.
     ...(choices.model ? { model: choices.model } : {}),
     ...(choices.effort ? { effort: choices.effort } : {}),
-    // Bypassing every check only when the profile says so; never from Claude Code's own settings.
+    // Bypassing every check only when the profile or Settings says so; never from Claude Code's own settings.
     ...(mode === 'bypassPermissions' ? { allowDangerouslySkipPermissions: true } : {}),
-    ...(allowedTools.length ? { allowedTools } : {}),
+    allowedTools,
     ...(choices.disallowedTools?.length ? { disallowedTools: choices.disallowedTools } : {}),
     settingSources,
     systemPrompt: { type: 'preset', preset: 'claude_code', append },

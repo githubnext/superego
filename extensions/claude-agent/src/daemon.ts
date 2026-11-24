@@ -275,7 +275,7 @@ export function claudeAgent({ skills = [], executable, env = () => claudeEnv(), 
         description: 'Threads that run your own Claude Code, on its sign-in and your plan’s limits.',
         settings: [
           {
-            key: SETTINGS.permissionMode, title: 'Permission mode', description: "For threads whose profile doesn't pick one.", default: 'default',
+            key: SETTINGS.permissionMode, title: 'Permission mode', description: "For threads whose profile doesn't pick one.", default: 'auto',
             type: { type: 'choice', options: DEFAULT_MODES.map((m) => ({ ...m })) },
           },
           {

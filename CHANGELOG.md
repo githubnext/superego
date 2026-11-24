@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Claude Agent threads run in Auto permission mode by default, and Settings → Claude Agent offers Allow all.
+
 ## 0.3.0
 
 - **Upgrade (extension authors):** the place called `space` is now `sidebar`: `fits: ['sidebar']`,

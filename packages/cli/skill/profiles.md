@@ -205,7 +205,7 @@ superego profile revoke-ui default -m box    # Settings → Machines lists them 
 
 | Key | |
 |---|---|
-| `permissionMode` | `default`, `acceptEdits`, `plan`, `auto` or `bypassPermissions`; unset: the machine's (Settings → Claude Agent; `default`: ask) |
+| `permissionMode` | `default`, `acceptEdits`, `plan`, `auto` or `bypassPermissions`; unset: the machine's (Settings → Claude Agent; `auto` by default) |
 | `settingSources` | Claude Code's `user`, `project`, `local`: narrows what it loads, never adding a folder's not allowed |
 | `allowedTools`, `disallowedTools` | Claude Code's tool lists |
 | `model`, `effort` | an alias or id; `low` … `max`. Apply where a thread didn't pick its own |

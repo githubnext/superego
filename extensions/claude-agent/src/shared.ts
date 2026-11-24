@@ -83,15 +83,16 @@ export type Approval = {
 export type Choice = 'allow' | 'always' | 'deny'
 export type Answer = { choice: Choice; message?: string }
 
-/** Permission modes a profile may pick; `bypassPermissions` only by saying so. */
+/** Permission modes a profile, or Settings, may pick; `bypassPermissions` only when one says so. */
 export const PERMISSION_MODES = ['default', 'acceptEdits', 'plan', 'auto', 'bypassPermissions'] as const
 export type PermissionMode = (typeof PERMISSION_MODES)[number]
-/** The modes Settings offers as the machine's default, each as said there: never bypassing every check. */
+/** The modes Settings offers as the machine's default, each as said there; `auto` unless the user picks another. */
 export const DEFAULT_MODES = [
   { value: 'default', label: 'Ask before tools it isn’t allowed' },
   { value: 'acceptEdits', label: 'Accept edits' },
   { value: 'plan', label: 'Plan first' },
   { value: 'auto', label: 'Auto' },
+  { value: 'bypassPermissions', label: 'Allow all' },
 ] as const satisfies readonly { value: PermissionMode; label: string }[]
 /**
  * Where Claude Code reads its settings from (its `CLAUDE.md`, skills, hooks, MCP servers): the user's own, and the

@@ -13,6 +13,7 @@
 //  - anything else: "OK (mock saw N messages)", streamed a few characters at a time, N the messages the request
 //    carried (so a resumed session's history shows).
 // A tool the request doesn't offer (a deferred one: Superego's, say) is loaded with ToolSearch first, as a model would.
+// What auto mode's classifier asks (is this call safe?) it answers as harmless: `<severity>0</severity>`.
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import type { AddressInfo } from 'node:net'
 
@@ -29,6 +30,9 @@ const resultText = (block: Block) => typeof block.content === 'string' ? block.c
   : Array.isArray(block.content) ? (block.content as Block[]).map((b) => b.text ?? '').join('') : ''
 
 type Call = { name: string; input: Record<string, unknown> }
+
+/** What auto mode's classifier is told it is, in its system prompt. */
+export const CLASSIFIER = 'You are a security monitor for autonomous AI coding agents.'
 
 /** The tools a prompt asks for, in order. */
 function planOf(said: string, everything: string): Call[] {
@@ -101,6 +105,11 @@ export async function mockAnthropic(): Promise<MockAnthropic> {
     const tools = (request.tools ?? []).map((t) => t.name)
     const system = typeof request.system === 'string' ? request.system : (request.system ?? []).map((b) => b.text ?? '').join('\n')
     requests.push({ messages, tools, stream: Boolean(request.stream), system, ...(request.model ? { model: request.model } : {}) })
+    if (system.includes(CLASSIFIER)) {
+      const verdict = { id: `msg_mock_${++n}`, type: 'message', role: 'assistant', model: request.model, content: [{ type: 'text', text: '<severity>0</severity>' }], stop_reason: 'end_turn', stop_sequence: null, usage: { input_tokens: 10, output_tokens: 5 } }
+      res.writeHead(200, { 'content-type': 'application/json', ...mock.headers }).end(JSON.stringify(verdict))
+      return
+    }
     const prompt = [...messages].reverse().find((m) => m.role === 'user' && !isToolResult(m))
     const since = messages.slice(prompt ? messages.indexOf(prompt) : 0)
     const said = textOf(prompt)

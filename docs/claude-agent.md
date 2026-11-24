@@ -37,7 +37,7 @@ Settings → Claude Agent:
 
 | Setting | |
 |---|---|
-| Permission mode | for threads whose profile doesn't pick one: Ask (`default`), Accept edits, Plan first, Auto |
+| Permission mode | for threads whose profile doesn't pick one: Auto (`auto`, default), Ask (`default`), Accept edits, Plan first, or Allow all (`bypassPermissions`). Claude Code's own `defaultMode` never applies |
 | Threads at once | how many run at once on this machine (default 3); the rest wait |
 
 ## In a profile
@@ -53,7 +53,7 @@ export default defineProfile({
 
 | `claudeAgent` key | |
 |---|---|
-| `permissionMode` | `default`, `acceptEdits`, `plan`, `auto`, or `bypassPermissions` (profile only) |
+| `permissionMode` | `default`, `acceptEdits`, `plan`, `auto`, or `bypassPermissions` (over the one in Settings) |
 | `settingSources` | Claude Code's `user`, `project`, `local`: narrows what it loads |
 | `allowedTools`, `disallowedTools` | Claude Code's tool lists |
 | `model`, `effort` | an alias or id; `low` … `max` |
