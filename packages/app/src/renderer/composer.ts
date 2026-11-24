@@ -1,7 +1,8 @@
 // What extensions add to the composer. Completions: a provider recognises the word being typed at the caret (`$co`,
 // `/skill:co`), offers items for it, and says what each puts in its place; the composer draws the menu and keeps its
-// keys (↑↓ pick, ⇥ or ⏎ take, esc leaves the word). And what goes with a sent message: an extension finds the blocks
-// it put in one (a skill's instructions, say) and draws them under it, kept out of the message's own text.
+// keys (↑↓ pick, ⇥ or ⏎ take, esc leaves the word). Providers that find the same word share one menu (`/` opening the
+// message: the composer's commands and skills). And what goes with a sent message: an extension finds the blocks it put
+// in one (a skill's instructions, say) and draws them under it, kept out of the message's own text.
 import type { ComponentType, ReactNode } from 'react'
 import type { ThreadInfo } from '@superego/protocol'
 import type { MachineEntry } from '../shared/bridge.ts'
@@ -11,9 +12,10 @@ export type CompletionWord = { start: number; query: string }
 
 /**
  * One thing offered: `label` in the menu, `detail` beside it, `icon` before it (to tell kinds apart in one menu); taken,
- * `insert` replaces the word (end it with a space to go on typing).
+ * `insert` replaces the word (end it with a space to go on typing). `submit`: a command, run as it's chosen. ⏎ (or a
+ * click) takes it and sends the message as it then is; ⇥ only puts it in, to type more after it.
  */
-export type Completion = { label: string; detail?: string; icon?: ReactNode; insert: string }
+export type Completion = { label: string; detail?: string; icon?: ReactNode; insert: string; submit?: boolean }
 
 /**
  * Where the composer is: on a machine, writing for work in `cwd` (as typed: may start with `~`, or be empty for the
@@ -25,47 +27,65 @@ export type ComposerWhere = { machine: MachineEntry; cwd: string; thread?: Threa
 export type CompletionProvider<W extends CompletionWord = CompletionWord> = {
   /** What its items are, for the menu's label: "Skills". */
   title: string
-  /** The word at the caret this provider completes, if there is one. The first provider to find one completes it. */
+  /**
+   * The word at the caret this provider completes, if there is one. The first provider to find one completes it, with
+   * every other that finds a word starting where it does (a `/` opening the message: commands and skills).
+   */
   word(text: string, caret: number): W | undefined
   /** What it offers for `word`, best first. Asked again as the word changes; may take a call to the machine. */
   items(word: W, where: ComposerWhere): Completion[] | Promise<Completion[]>
 }
 
-/** The word being completed at the caret, and by which provider: the first of `providers` that finds one. */
-export function completing(providers: readonly CompletionProvider<any>[], text: string, caret: number): { provider: CompletionProvider<any>; word: CompletionWord } | undefined {
-  for (const provider of providers) {
-    const word = provider.word(text, caret)
-    if (word) return { provider, word }
-  }
-  return undefined
-}
-
-/** What a provider offered for a word. */
-export type Offered = { provider: CompletionProvider<any>; word: CompletionWord; items: Completion[] }
+/** A provider, and the word it found at the caret. */
+export type Found = { provider: CompletionProvider<any>; word: CompletionWord }
 
 /**
- * Ask `found`'s provider what it offers; `offer` gets it, unless the returned cancel came first (the word changed before
- * the answer did). A provider that fails offers nothing.
+ * The word being completed at the caret, and by which providers: the first of `providers` that finds one, and those
+ * after it that find one starting at the same place, in order. None: no word.
  */
-export function askFor(found: { provider: CompletionProvider<any>; word: CompletionWord }, where: ComposerWhere, offer: (offered: Offered) => void): () => void {
+export function completing(providers: readonly CompletionProvider<any>[], text: string, caret: number): Found[] {
+  const found: Found[] = []
+  for (const provider of providers) {
+    const word = provider.word(text, caret)
+    if (word && (!found.length || word.start === found[0]!.word.start)) found.push({ provider, word })
+  }
+  return found
+}
+
+/** What the providers offered for a word: their items, in their order, and the titles of those that offered any. */
+export type Offered = { found: readonly Found[]; items: Completion[]; title: string }
+
+/**
+ * Ask each of `found`'s providers what it offers; `offer` gets them together once all have answered, unless the
+ * returned cancel came first (the word changed before the answer did). A provider that fails offers nothing.
+ */
+export function askFor(found: readonly Found[], where: ComposerWhere, offer: (offered: Offered) => void): () => void {
   let current = true
-  const { provider, word } = found
-  const done = (items: Completion[]) => { if (current) offer({ provider, word, items }) }
-  const failed = (error: unknown) => { console.error('Completing failed', error); done([]) }
-  try { void Promise.resolve(provider.items(word, where)).then(done, failed) } catch (error) { failed(error) }
+  const ask = async ({ provider, word }: Found): Promise<Completion[]> => {
+    try { return await provider.items(word, where) } catch (error) { console.error(`Completing (${provider.title}) failed`, error); return [] }
+  }
+  void Promise.all(found.map(ask)).then((lists) => {
+    if (!current) return
+    const title = found.filter((_, index) => lists[index]!.length).map(({ provider }) => provider.title).join(' · ')
+    offer({ found, items: lists.flat(), title })
+  })
   return () => { current = false }
 }
 
 /** A word but its query: the same while it's typed further, another if it moved or a field of the provider's changed. */
 const stem = (word: CompletionWord) => JSON.stringify({ ...word, query: undefined })
 
+/** Whether two finds are of the same word, as typed so far: by the same providers, each with the same stem. */
+const sameWord = (a: readonly Found[], b: readonly Found[]) =>
+  a.length === b.length && a.every((f, index) => f.provider === b[index]!.provider && stem(f.word) === stem(b[index]!.word))
+
 /**
- * The menu for the word being completed: what was offered for it, or for it as typed so far (the same provider and
- * stem), so the menu doesn't blink while it grows and is asked again. None once dismissed (esc) where the word starts.
+ * The menu for the word being completed: what was offered for it, or for it as typed so far (the same providers and
+ * stems), so the menu doesn't blink while it grows and is asked again. None once dismissed (esc) where the word starts.
  */
-export function menuFor(found: { provider: CompletionProvider<any>; word: CompletionWord } | undefined, offered: Offered | undefined, dismissed?: number): Completion[] | undefined {
-  if (!found || !offered || offered.provider !== found.provider || stem(offered.word) !== stem(found.word)) return undefined
-  return offered.items.length && dismissed !== found.word.start ? offered.items : undefined
+export function menuFor(found: readonly Found[], offered: Offered | undefined, dismissed?: number): Completion[] | undefined {
+  if (!found.length || !offered || !sameWord(found, offered.found)) return undefined
+  return offered.items.length && dismissed !== found[0]!.word.start ? offered.items : undefined
 }
 
 /** `text` with the word from `start` to the caret replaced by `insert`, and where the caret goes: after it. A space it ends with isn't doubled. */

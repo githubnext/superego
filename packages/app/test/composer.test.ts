@@ -18,10 +18,15 @@ const hash: CompletionProvider = {
 const at: CompletionProvider = { title: 'People', word: (text, caret) => text[caret - 1] === '@' ? { start: caret - 1, query: '' } : undefined, items: () => [] }
 
 describe('composer completions', () => {
-  it('completes the word at the caret by the first provider that finds one', () => {
-    expect(completing([hash, at], 'see #wo', 7)).toEqual({ provider: hash, word: { start: 4, query: 'wo' } })
-    expect(completing([hash, at], 'ask @', 5)?.provider).toBe(at)
-    expect(completing([hash, at], 'plain', 5)).toBeUndefined()
+  it('completes the word at the caret by the first provider that finds one, with those finding a word at the same place', () => {
+    expect(completing([hash, at], 'see #wo', 7)).toEqual([{ provider: hash, word: { start: 4, query: 'wo' } }])
+    expect(completing([hash, at], 'ask @', 5).map((f) => f.provider)).toEqual([at])
+    expect(completing([hash, at], 'plain', 5)).toEqual([])
+    // Two that find the same word (`/` opening the message: commands and skills) complete it together, in order; one
+    // finding a word starting elsewhere doesn't join.
+    const slash = (title: string, from = 0): CompletionProvider => ({ title, word: (text, caret) => text.startsWith('/') ? { start: from, query: text.slice(1, caret) } : undefined, items: () => [] })
+    const [commands, skills, elsewhere] = [slash('Commands'), slash('Skills'), slash('Other', 1)]
+    expect(completing([commands, elsewhere, skills], '/cl', 3).map((f) => f.provider.title)).toEqual(['Commands', 'Skills'])
   })
   it('puts an item in place of the word, the caret after it, without doubling the space after', () => {
     expect(complete('see #wo now', 7, 4, '#work ')).toEqual({ text: 'see #work now', caret: 10 })
@@ -102,7 +107,7 @@ describe('asking a provider as the word is typed', () => {
     const { provider, asked } = slow()
     let offered: Offered | undefined
     const offer = (o: Offered) => { offered = o }
-    const at = (text: string) => completing([provider], text, text.length)!
+    const at = (text: string) => completing([provider], text, text.length)
     const co = at('$co')
     askFor(co, where, offer)
     asked[0]!.answer([item('$commit'), item('$code')])
@@ -121,7 +126,7 @@ describe('asking a provider as the word is typed', () => {
     await settle()
     expect(menuFor(comm, offered)?.map((i) => i.label)).toEqual(['$commit'])
     // Esc where the word starts closes it; another word at the same place, by another trigger, isn't the same word.
-    expect(menuFor(comm, offered, comm.word.start)).toBeUndefined()
+    expect(menuFor(comm, offered, comm[0]!.word.start)).toBeUndefined()
     expect(menuFor(at('/skill:comm'), offered)).toBeUndefined()
     // Nothing offered: no menu.
     expect(menuFor(comm, { ...offered!, items: [] })).toBeUndefined()
@@ -132,10 +137,14 @@ describe('asking a provider as the word is typed', () => {
     const offers: Offered[] = []
     const throws: CompletionProvider = { title: 'x', word: () => ({ start: 0, query: '' }), items: () => { throw new Error('no') } }
     const rejects: CompletionProvider = { title: 'y', word: () => ({ start: 0, query: '' }), items: async () => { throw new Error('no') } }
-    askFor({ provider: throws, word: { start: 0, query: '' } }, where, (o) => offers.push(o))
-    askFor({ provider: rejects, word: { start: 0, query: '' } }, where, (o) => offers.push(o))
+    const fine: CompletionProvider = { title: 'z', word: () => ({ start: 0, query: '' }), items: () => [{ label: 'ok', insert: 'ok' }] }
+    askFor([{ provider: throws, word: { start: 0, query: '' } }], where, (o) => offers.push(o))
+    askFor([{ provider: rejects, word: { start: 0, query: '' } }], where, (o) => offers.push(o))
+    // Beside another, it leaves the menu to that one's.
+    askFor([throws, fine].map((provider) => ({ provider, word: { start: 0, query: '' } })), where, (o) => offers.push(o))
     await settle()
-    expect(offers.map((o) => o.items)).toEqual([[], []])
+    expect(offers.map((o) => o.items.map((i) => i.label))).toEqual([[], [], ['ok']])
+    expect(offers[2]!.title).toBe('z')
     vi.restoreAllMocks()
   })
 })

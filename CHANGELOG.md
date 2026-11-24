@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- `/clear` (or `/new`) in a thread's composer starts over in a new thread with the same folder, profile, model and
+  thinking, and archives the old one. Anything typed after it becomes the new thread's first message.
+- Typing `/` at the start of a message offers commands and skills together.
 - A project's own profiles can add spaces to their project: they're listed under the project's heading in Threads,
   and in the rail while you're in that project.
 - While a space is open, Threads highlights only that space, not the thread selected behind it.

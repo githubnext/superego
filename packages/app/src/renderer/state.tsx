@@ -83,6 +83,8 @@ type ShellState = {
   /** The thread docked to each space, by `spaceKey`. */
   docked: Record<string, Selection>
   dock(space: SpaceAt, thread: Selection | undefined): void
+  /** Dock `to` to every space `from` is docked to. */
+  redock(from: Selection, to: Selection): void
   /** What each space says it's called now (`useSpaceTitle`), by `spaceKey`. */
   spaceTitles: Record<string, string>
   titleSpace(space: SpaceAt, title: string | undefined): void
@@ -146,7 +148,7 @@ export const spaceKey = (space: SpaceAt) => `${space.machine}\u0000${space.proje
  * its thread shows.
  */
 export function useSpace() {
-  const { space, openSpace, docked, dock, spaceAgent, showSpaceAgent, spaceTitles, titleSpace } = useShellState()
+  const { space, openSpace, docked, dock, redock, spaceAgent, showSpaceAgent, spaceTitles, titleSpace } = useShellState()
   return {
     space, open: openSpace,
     /** What `at` (the open one, unless given) says it's called, if it has said. */
@@ -154,6 +156,7 @@ export function useSpace() {
     setTitle: titleSpace,
     docked: space ? docked[spaceKey(space)] : undefined,
     dock: (thread: Selection | undefined) => { if (space) dock(space, thread) },
+    redock,
     agentShown: spaceAgent, showAgent: showSpaceAgent,
   }
 }
@@ -344,6 +347,9 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
       const { [spaceKey(at)]: _, ...rest } = all
       return thread ? { ...rest, [spaceKey(at)]: thread } : rest
     }),
+    redock: (from, to) => setDocked((all) => Object.values(all).some((at) => at.machine === from.machine && at.thread === from.thread)
+      ? Object.fromEntries(Object.entries(all).map(([key, at]) => [key, at.machine === from.machine && at.thread === from.thread ? to : at]))
+      : all),
     showSpaceAgent: (shown) => setSpaceAgent((was) => shown ?? !was),
     spaceTitles,
     titleSpace: (at, title) => setSpaceTitles((all) => {

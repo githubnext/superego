@@ -35,6 +35,10 @@ export type WindowContext = {
   openSpace(space: SpaceAt | undefined): void
   /** Whether a space of `kind` is registered in this window: the app's, or (`project`, its root on `machine`) a project's. */
   hasSpace(kind: string, at?: { machine?: string; project?: string }): boolean
+  /** The thread docked to the space open, if one is. */
+  docked: Selection | undefined
+  /** Dock `to` to every space `from` is docked to: a thread that takes another's place (`thread.clear`). */
+  redock(from: Selection, to: Selection): void
   /** Settings: at a tab (its target, see settings/tabs.ts), or as it was left. */
   openSettings(at?: string): void
   newThread(start?: NewThreadStart): void

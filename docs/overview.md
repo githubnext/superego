@@ -14,6 +14,8 @@ machine    this computer, or one reached over ssh
 ## Threads
 
 - New thread (`⌘N`) starts like the thread shown: same machine, project, profile, model, thinking and worktree choice.
+- **`/clear`** (or `/new`) in a thread's composer starts it over: a new thread like it, in the same folder, takes its
+  place (and its pin), and it's archived. Words after it (`/clear fix the tests`) and attached files go to the new one.
 - **Worktrees.** Tick the New thread checkbox (or `superego -w`) and the thread works in
   `~/.superego/worktrees/<repo>/<slug>` on branch `superego/<slug>`. Archiving removes a clean worktree and keeps its
   branch.

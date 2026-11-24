@@ -66,7 +66,7 @@ export function Shell() {
   const machines = useMachines()
   const { selection, select, machine, thread, hidden: alone, listed } = useSelection()
   // A space open fills the main area instead of the thread.
-  const { space, open: openSpace } = useSpace()
+  const { space, open: openSpace, docked, redock } = useSpace()
   const settings = useSettingsDialog()
   const newThread = useNewThreadDialog()
   const { openSettings, newThread: openNewThread } = useShell()
@@ -130,7 +130,7 @@ export function Shell() {
   // Actions read the shell as it is when they run.
   registry.router.setContext({
     app: registry.app, machines, selection, select, openSettings, newThread: openNewThread,
-    space, openSpace, hasSpace: (kind, at) => Boolean(spaceFor(registry, { kind, ...at })),
+    space, openSpace, docked, redock, hasSpace: (kind, at) => Boolean(spaceFor(registry, { kind, ...at })),
     togglePalette: () => { setNavigator(false); setPanePicker(false); setPalette((open) => !open) },
     toggleNavigator: () => { setPalette(false); setPanePicker(false); setNavigator((open) => !open) },
     togglePanePicker: () => { setPalette(false); setNavigator(false); setPanePicker((open) => !open) },

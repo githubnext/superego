@@ -13,6 +13,14 @@ import { readAttachment } from './attachments.ts'
 import { askFor, complete, completing, menuFor, type Completion, type ComposerWhere, type Offered } from './composer.ts'
 import { useNarrow } from './media.ts'
 
+/** A number for each provider, to tell when the providers completing a word change. */
+const ids = new WeakMap<object, number>()
+let lastId = 0
+const idOf = (provider: object) => {
+  if (!ids.has(provider)) ids.set(provider, ++lastId)
+  return ids.get(provider)!
+}
+
 export type ComposerBoxProps = {
   where: ComposerWhere
   /** On the outermost element, which files are dropped on: `dock` under a thread. */
@@ -34,6 +42,8 @@ export type ComposerBoxProps = {
   onError(message: string): void
   /** Keys the completions' menu didn't take. */
   onKeyDown(event: KeyboardEvent<HTMLTextAreaElement>): void
+  /** Send `text`, as a command taken from the menu (`Completion.submit`) asks; without it, a command is only put in. */
+  onSubmit?(text: string): void
   inputRef: Ref<HTMLTextAreaElement>
   /** At the box's end: Send, say. */
   action?: ReactNode
@@ -45,7 +55,7 @@ export type ComposerBoxProps = {
   autoFocus?: boolean
 }
 
-export function ComposerBox({ where, className, text, setText, files, setFiles, items = [], onRemoveItem, open = true, disabled, placeholder, error, onError, onKeyDown, inputRef, action, footer = {}, children, autoFocus, ...aria }: ComposerBoxProps) {
+export function ComposerBox({ where, className, text, setText, files, setFiles, items = [], onRemoveItem, open = true, disabled, placeholder, error, onError, onKeyDown, onSubmit, inputRef, action, footer = {}, children, autoFocus, ...aria }: ComposerBoxProps) {
   const registry = useRegistry()
   const input = useRef<HTMLTextAreaElement | null>(null)
   const setInput = (node: HTMLTextAreaElement | null) => {
@@ -63,7 +73,8 @@ export function ComposerBox({ where, className, text, setText, files, setFiles, 
     } catch (e) { onError((e as Error).message) }
   }
 
-  // Completing a word as it's typed, as extensions offer: ↑↓ pick, ⇥ or ⏎ takes one, esc leaves the word as typed.
+  // Completing a word as it's typed, as extensions offer: ↑↓ pick, ⇥ or ⏎ takes one (⏎ runs a command), esc leaves the
+  // word as typed.
   useSyncExternalStore(registry.subscribe, () => registry.version)
   const [caret, setCaret] = useState(0)
   // Wherever the text came from (typed, filled in, sent and emptied), the caret is where the box has it now.
@@ -71,20 +82,22 @@ export function ComposerBox({ where, className, text, setText, files, setFiles, 
   const [pick, setPick] = useState(0)
   const [dismissed, setDismissed] = useState<number>()
   const { machine, thread, cwd } = where
-  const found = open ? completing(completionsIn(registry, thread ? { machine: machine.id, thread } : undefined), text, caret) : undefined
-  const word = found?.word
-  // What the provider offered for the word, kept while it's asked again as the word grows (see menuFor).
+  const found = open ? completing(completionsIn(registry, thread ? { machine: machine.id, thread } : undefined), text, caret) : []
+  const word = found[0]?.word
+  // What the providers offered for the word, kept while they're asked again as the word grows (see menuFor).
   const [offered, setOffered] = useState<Offered>()
   useEffect(() => {
-    if (!found) return setOffered(undefined)
+    if (!found.length) return setOffered(undefined)
     return askFor(found, where, setOffered)
-  }, [found?.provider, JSON.stringify(word), machine.id, thread?.id, cwd])
+  }, [JSON.stringify(found.map((f) => [idOf(f.provider), f.word])), machine.id, thread?.id, thread?.archived, thread?.hidden, cwd])
   const menu = menuFor(found, offered, dismissed)
   useEffect(() => { setPick(0) }, [word?.query, word?.start])
   useEffect(() => { if (!word) setDismissed(undefined) }, [word === undefined])
-  const take = (item: Completion) => {
+  /** Put `item` in place of the word; `run`, a command (`submit`) is sent as it's taken. */
+  const take = (item: Completion, run = false) => {
     if (!word) return
     const next = complete(text, caret, word.start, item.insert)
+    if (run && item.submit && onSubmit) { setDismissed(undefined); onSubmit(next.text); return }
     setText(next.text)
     requestAnimationFrame(() => { input.current?.setSelectionRange(next.caret, next.caret); input.current?.focus(); setCaret(next.caret) })
   }
@@ -95,7 +108,7 @@ export function ComposerBox({ where, className, text, setText, files, setFiles, 
         setPick((pick + (event.key === 'ArrowDown' ? 1 : -1) + menu.length) % menu.length)
         return
       }
-      if (event.key === 'Tab' || (event.key === 'Enter' && !event.shiftKey)) { event.preventDefault(); take(menu[pick] ?? menu[0]!); return }
+      if (event.key === 'Tab' || (event.key === 'Enter' && !event.shiftKey)) { event.preventDefault(); take(menu[pick] ?? menu[0]!, event.key === 'Enter'); return }
       // Only the menu closes: not a dialog the box is in.
       if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); setDismissed(word.start); return }
     }
@@ -119,10 +132,10 @@ export function ComposerBox({ where, className, text, setText, files, setFiles, 
       )}
       {error && <div className="composer__error">{error}</div>}
       {menu && (
-        <div className="completions" role="listbox" aria-label={found!.provider.title}>
+        <div className="completions" role="listbox" aria-label={offered!.title}>
           {menu.map((item, index) => (
             <div key={`${item.label}-${index}`} role="option" aria-selected={index === pick} className={`completions__item ${index === pick ? 'is-active' : ''}`}
-              onMouseEnter={() => setPick(index)} onMouseDown={(e) => { e.preventDefault(); take(item) }}>
+              onMouseEnter={() => setPick(index)} onMouseDown={(e) => { e.preventDefault(); take(item, true) }}>
               {item.icon && <span className="completions__icon" aria-hidden>{item.icon}</span>}
               <span className="completions__label">{item.label}</span>
               {item.detail && <span className="completions__detail">{item.detail}</span>}

@@ -15,7 +15,9 @@ import { useLocalState } from './local-state.ts'
 import { splitMessage } from './attachments.ts'
 import { readSent } from './composer.ts'
 import { ComposerBox } from './composer-box.tsx'
-import { composerItems, focusTaken, setComposerItems, useComposerItems, useFocusAsked } from './composer-items.ts'
+import { composerItems, focusTaken, setComposerItems, useComposerItems, useFocusAsked, type HeldItem } from './composer-items.ts'
+import { commandIn, takesCommands } from './slash-commands.ts'
+import { ArchiveFailed } from './clear-thread.ts'
 import { onGivenBack, takeBack } from './returned.ts'
 import { ProfileSwitch } from './profile-pick.tsx'
 import { UnarchiveButton } from './thread-actions.tsx'
@@ -183,6 +185,9 @@ export function ComposerView({ machine, thread, busy, inbox, onJump }: { machine
     const sendingItems = claim ? [] : items
     const attachments = [...sending, ...sendingItems.flatMap((item) => item.files)]
     if (!value && !attachments.length) return
+    // A command (`/clear`) runs instead, with what's typed after it and what goes with it.
+    const command = !claim && takesCommands(thread) ? commandIn(value) : undefined
+    if (command) return clear(value, command.rest, sending, sendingItems)
     setText('')
     setFiles([])
     if (sendingItems.length) setComposerItems(where, [])
@@ -196,6 +201,26 @@ export function ComposerView({ machine, thread, busy, inbox, onJump }: { machine
       setText(value)
       setFiles(sending)
       if (sendingItems.length) setComposerItems(where, [...sendingItems, ...composerItems(where)])
+      setError(error as { kind?: string; message: string })
+    }
+  }
+  /** Start the thread over (`/clear`): a new one like it, sent `prompt` and the files, shown in its place. */
+  const clear = async (typed: string, prompt: string, sending: Attachment[], sendingItems: readonly HeldItem[]) => {
+    const attachments = [...sending, ...sendingItems.flatMap((item) => item.files)]
+    setText('')
+    setFiles([])
+    if (sendingItems.length) setComposerItems(where, [])
+    setError(undefined)
+    try {
+      await dispatch('thread.clear', { machine: machine.id, thread: thread.id, ...prompt ? { prompt } : {}, ...attachments.length ? { attachments } : {} }, { source: 'composer' })
+    } catch (error) {
+      console.error('Clearing the thread failed', error)
+      // Not started, what was typed comes back to try again; started, it went with the new thread.
+      if (!(error instanceof ArchiveFailed)) {
+        setText(typed)
+        setFiles(sending)
+        if (sendingItems.length) setComposerItems(where, [...sendingItems, ...composerItems(where)])
+      }
       setError(error as { kind?: string; message: string })
     }
   }
@@ -249,7 +274,7 @@ export function ComposerView({ machine, thread, busy, inbox, onJump }: { machine
     {/* The box holds the words and one button at their end: Send, Steer or Answer, one key, ⏎ (Unarchive, archived). */}
     <ComposerBox className="dock" where={{ machine, cwd: thread.cwd, thread }} text={text} setText={setText} files={files} setFiles={setFiles}
       items={items} onRemoveItem={(id) => setComposerItems(where, composerItems(where).filter((item) => item.id !== id))}
-      open={!claim} disabled={disabled} inputRef={input} onKeyDown={onKeyDown}
+      open={!claim} disabled={disabled} inputRef={input} onKeyDown={onKeyDown} onSubmit={(typed) => void send('steer', typed)}
       onError={(message) => setError({ message })}
       placeholder={archived ? 'Archived: read only' : disabled ? `${machine.label} is ${machine.state}` : claim ? claim.placeholder : busy ? 'Steer the agent…' : suggested ? `${suggested}  ⏎` : 'Reply…'}
       error={error && (

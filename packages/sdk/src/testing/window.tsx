@@ -498,14 +498,14 @@ export async function mountUi(options: MountOptions = {}): Promise<TestWindow> {
   } = { select() {}, threads: {}, openSpace() {} }
   function Shell({ children }: { children: ReactNode }) {
     const { selection, select } = useSelection()
-    const { space, open: openSpace } = useSpace()
+    const { space, open: openSpace, docked, redock } = useSpace()
     const all = useAllThreads()
     const list = useMachines()
     shell = { select, ...(selection ? { selection } : {}), threads: all, ...(space ? { space } : {}), openSpace }
     // The whole window drawn: its shell says what actions see, as the app's does.
     if (options.window) return <>{children}</>
     registry.router.setContext({
-      app, machines: list, selection, select, space, openSpace, hasSpace: (kind, at) => Boolean(spaceFor(registry, { kind, ...at })), openSettings() {}, newThread() {}, togglePalette() {}, toggleNavigator() {}, togglePanePicker() {}, showLog() {},
+      app, machines: list, selection, select, space, openSpace, docked, redock, hasSpace: (kind, at) => Boolean(spaceFor(registry, { kind, ...at })), openSettings() {}, newThread() {}, togglePalette() {}, toggleNavigator() {}, togglePanePicker() {}, showLog() {},
       threadOf: (s) => all[s.machine]?.find((t) => t.id === s.thread), projects: [], sidebar: { pinned: [], projects: [], folded: [] }, lastThread: {}, fold() {},
       appSetting: (key) => appSide.settings.get(key) as never, toggleSidebar() {}, focusSidebar() { throw new Error('No sidebar to focus: mount the whole window (window: true)') }, back() {}, forward() {}, railTabs: () => [],
     })

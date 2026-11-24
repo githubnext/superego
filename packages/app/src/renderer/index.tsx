@@ -28,6 +28,8 @@ import { PINS, SHOW_PINNED } from './pins.ts'
 import { DEFAULT_WIDTH, MAX_WIDTH, MIN_WIDTH, SIDEBAR_WIDTH } from './sidebar-width.ts'
 import { ShellStateProvider } from './state.tsx'
 import { coreActions, defineWindowAction } from './actions.tsx'
+import { clearThreadAction } from './clear-thread.ts'
+import { commandCompletions } from './slash-commands.ts'
 import { webBridge } from './web-bridge.ts'
 import { registerBuiltInPanes } from './panes.tsx'
 import { registerToolRows } from './tool-rows.tsx'
@@ -121,6 +123,10 @@ export function windowRegistry(app: AppConfig, extensions: UiExtension[]) {
     registerProfileUi(core)
     registerNotifications(core)
     for (const action of coreActions(app)) core.action(action)
+    // The registry when it runs: being made, it isn't there yet.
+    core.action(clearThreadAction(() => registry))
+    // Its own commands, `/clear`, completed before the skills a `/` also names.
+    core.composer.complete(commandCompletions)
     // Every thread in a menu, and a new one: at the title bar's start while there's no sidebar.
     core.view('core.picker', { title: 'Threads', context: 'window', fits: ['titlebar'], withoutSidebar: 'titlebar', component: ThreadPicker })
     // A view put in a place, or taken out (toggled, unless `on` says); `from`: taken out of that one too, moved there.
