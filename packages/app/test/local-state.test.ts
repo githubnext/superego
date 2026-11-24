@@ -29,22 +29,22 @@ describe("a desktop window's state", () => {
 
   it('starts as a copy of the window it was opened from, taken once', async () => {
     const from = await load('?window=a&first=1')
-    from.setLocalState('space', 'files', undefined)
+    from.setLocalState('sidebar', 'files', undefined)
     const seed = JSON.stringify(from.windowState())
     const copy = await load(`?window=b&seed=${encodeURIComponent(seed)}#x`)
-    expect(copy.createStore('space', undefined, { persist: true }).get()).toBe('files')
+    expect(copy.createStore('sidebar', undefined, { persist: true }).get()).toBe('files')
     expect(location.search).toBe('?window=b')
     expect(location.hash).toBe('#x')
   })
 
   it('drops the state of windows gone for good', async () => {
     const { setLocalState, forgetWindows } = await load('?window=a')
-    setLocalState('space', 'files', undefined)
-    localStorage.setItem('superego.window.b.space', '"git"')
-    localStorage.setItem('superego.window.c.space', '"git"')
+    setLocalState('sidebar', 'files', undefined)
+    localStorage.setItem('superego.window.b.sidebar', '"git"')
+    localStorage.setItem('superego.window.c.sidebar', '"git"')
     localStorage.setItem('superego.draft.x', '"kept"')
     forgetWindows(['b'])
-    expect(Object.keys({ ...localStorage }).sort()).toEqual(['superego.draft.x', 'superego.window.a.space', 'superego.window.b.space'])
+    expect(Object.keys({ ...localStorage }).sort()).toEqual(['superego.draft.x', 'superego.window.a.sidebar', 'superego.window.b.sidebar'])
   })
 })
 

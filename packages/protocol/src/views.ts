@@ -68,7 +68,6 @@ export function dataViewProblem(view: DataView): string | undefined {
   if (view.context !== 'window' && view.context !== 'thread') return 'needs a context, window or thread'
   if (!Array.isArray(view.fits) || !view.fits.length) return 'fits no place'
   const bad = view.fits.find((p) => !DATA_PLACES.includes(p) || (view.context === 'window' && p === 'pane'))
-  if ((bad as string) === 'space') return "can't be drawn in space: the place is called sidebar now (fits: ['sidebar'])"
   if (bad) return `can't be drawn in ${bad}${view.context === 'window' ? ' (a window view fits sidebar and beside)' : ''}`
   if (Boolean(view.value) === Boolean(view.method)) return 'needs one source: a value or a method'
   if (view.icon && !DATA_ICONS.includes(view.icon)) return `has no icon ${view.icon}`

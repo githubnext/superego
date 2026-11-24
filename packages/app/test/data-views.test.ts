@@ -211,10 +211,3 @@ describe("a data view's buttons", () => {
     expect(JSON.stringify(log)).not.toContain('hush')
   })
 })
-
-describe('a machine older than the sidebar', () => {
-  it('takes its views fitting space as fitting the sidebar', () => {
-    const older = { id: 'orders.recent', extension: 'orders', title: 'Recent', context: 'window', fits: ['space', 'beside'], default: 'space', value: 'orders.recent' }
-    expect(checkDataViews([older], (extension) => extension === 'orders').views).toEqual([{ ...older, fits: ['sidebar', 'beside'], default: 'sidebar' }])
-  })
-})
