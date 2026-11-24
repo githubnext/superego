@@ -17,7 +17,7 @@
 // It also draws the thread tools' rows and `thread:` links (rows.tsx); the tools themselves are thread-tools'.
 import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type KeyboardEvent } from 'react'
 import {
-  call, defineAction, defineUiExtension, fold, isPinned, listArchived, MachineDrift, useProjectSpaces, search, shownRows, threadPath, useFold, useNarrow, RailButton, SHOW_PINNED, showProject, Slot, SORT, unreadList, useAppSetting, useDispatch, useLocalState, useMachines, usePlacement, useSelection, useProjects, useThreadView, useShell, useShortcut, useRailShortcut,
+  call, defineAction, defineUiExtension, fold, isPinned, listArchived, MachineDrift, useProjectSpaces, useSpace, search, shownRows, threadPath, useFold, useNarrow, RailButton, SHOW_PINNED, showProject, Slot, SORT, unreadList, useAppSetting, useDispatch, useLocalState, useMachines, usePlacement, useSelection, useProjects, useThreadView, useShell, useShortcut, useRailShortcut,
   type ArchivedThreads, type MachineEntry, type Pin, type Project, type ShownRow, type ShownSection, type Sort, type SidebarRailProps, type WindowContext,
 } from '@superego/app/ui'
 import { rollup, statusLabel, statusShape, unread, type ThreadInfo } from '@superego/protocol'
@@ -75,6 +75,7 @@ function Threads() {
   const machines = useMachines().filter((m) => m.state !== 'disabled')
   const { projects, sidebar, lastThread, hold } = useProjects()
   const { selection, select } = useSelection()
+  const lit = useLit()
   const shown = useMemo(() => shownRows(sidebar, selection), [sidebar, selection?.machine, selection?.thread])
   const setFold = useFold()
   // While the pointer is over the list, rows keep their places: a thread changing state doesn't move under it. The
@@ -143,7 +144,7 @@ function Threads() {
             <List>
               {section.rows.map((row) => (
                 <ThreadRow key={row.thread.id} machine={project.machine} thread={row.thread} row={row}
-                  selected={selection?.machine === project.machine.id && selection.thread === row.thread.id} />
+                  selected={lit(project.machine.id, row.thread.id)} />
               ))}
             </List>
           )}
@@ -153,6 +154,16 @@ function Threads() {
       </>}
     </div>
   )
+}
+
+/**
+ * Whether the thread `thread` on `machine` is lit as the selected one: not while a space is open, where only the space
+ * is (its row under its project, its rail button).
+ */
+function useLit() {
+  const { selection } = useSelection()
+  const { space } = useSpace()
+  return (machine: string, thread: string) => !space && selection?.machine === machine && selection.thread === thread
 }
 
 /** A project's spaces (its profiles' `superego.space`), above its threads: a row each, lit while it's open. */
@@ -212,7 +223,7 @@ type Match = { machine: MachineEntry; thread: ThreadInfo; project?: Project; arc
  * under their heading, to open read only. Nothing found, iOS's empty search: no results, and what was searched for.
  */
 function Found({ query, found, archived, where }: { query: string; found: Match[]; archived: ArchivedThreads | undefined; where(project: Project): string }) {
-  const { selection } = useSelection()
+  const lit = useLit()
   const live = found.filter((match) => !match.archived)
   const put = found.filter((match) => match.archived)
   return (
@@ -221,7 +232,7 @@ function Found({ query, found, archived, where }: { query: string; found: Match[
         <List>
           {live.map(({ machine, thread, project }) => (
             <ThreadRow key={`${machine.id}/${thread.id}`} machine={machine} thread={thread} where={where(project!)}
-              selected={selection?.machine === machine.id && selection.thread === thread.id} />
+              selected={lit(machine.id, thread.id)} />
           ))}
         </List>
       )}
@@ -250,7 +261,7 @@ const DRAGGED = 'application/x-superego-thread'
  */
 function Pinned({ section, where }: { section: ShownSection; where(project: Project): string }) {
   const { sidebar } = useProjects()
-  const { selection } = useSelection()
+  const lit = useLit()
   const dispatch = useDispatch()
   const setFold = useFold()
   // The gap a drop would land in: before the row at this index (the count: after the last).
@@ -293,7 +304,7 @@ function Pinned({ section, where }: { section: ShownSection; where(project: Proj
           {/* Folded, only the selected one shows, and it isn't a place to drop. */}
           {section.rows.map(({ project, thread }, index) => (
             <ThreadRow key={`${project.machine.id}/${thread.id}`} machine={project.machine} thread={thread} where={where(project)}
-              selected={selection?.machine === project.machine.id && selection.thread === thread.id}
+              selected={lit(project.machine.id, thread.id)}
               className={`${project.machine.state !== 'connected' ? 'is-stale' : ''} ${!section.folded && gap === index ? 'is-drop-before' : ''} ${!section.folded && gap === index + 1 && index === section.rows.length - 1 ? 'is-drop-after' : ''}`}
               {...(section.folded ? {} : { 'data-pin': index })} />
           ))}
@@ -496,8 +507,9 @@ function Archived({ machines, live }: { machines: MachineEntry[]; live: Project[
 /** An archived thread's row: its title, where it was, when it was last active; picked, shown read only. */
 function ArchivedRow({ machine, thread }: { machine: MachineEntry; thread: ThreadInfo }) {
   const { selection, select } = useSelection()
+  const lit = useLit()
   return (
-    <ListItem trailing={ago(thread.activeAt)} selected={selection?.machine === machine.id && selection.thread === thread.id}
+    <ListItem trailing={ago(thread.activeAt)} selected={lit(machine.id, thread.id)}
       onClick={() => select({ machine: machine.id, thread: thread.id })}>
       <span className="threads-archived__title">{thread.title}</span>
       <em className="threads-archived__where">{thread.project.name}{machine.id !== 'local' ? ` · ${machine.label}` : ''}</em>
@@ -551,6 +563,7 @@ function Options() {
 function ThreadsRail({ open, sidebarHidden, show }: SidebarRailProps) {
   const { projects, sidebar } = useProjects()
   const { selection, select } = useSelection()
+  const lit = useLit()
   const hidden = open && sidebarHidden
   const toggleKeys = useShortcut(SIDEBAR)
   const tabKeys = useRailShortcut()
@@ -580,7 +593,7 @@ function ThreadsRail({ open, sidebarHidden, show }: SidebarRailProps) {
               {index > 0 && <div className="threads-rail__sep" />}
               {group.threads.map(({ project, thread }) => (
                 <HoverCard key={`${project.machine.id}/${thread.id}`} card={<ThreadCard machine={project.machine} thread={thread} />}>
-                  <button className={`threads-rail__dot ${selection?.machine === project.machine.id && selection.thread === thread.id ? 'is-on' : ''} ${project.machine.state !== 'connected' ? 'is-stale' : ''}`}
+                  <button className={`threads-rail__dot ${lit(project.machine.id, thread.id) ? 'is-on' : ''} ${project.machine.state !== 'connected' ? 'is-stale' : ''}`}
                     aria-label={`${thread.title}, ${statusLabel(thread.status, thread.quiet)}`} onClick={() => select({ machine: project.machine.id, thread: thread.id })}>
                     <StatusGlyph status={thread.status} quiet={thread.quiet} />
                   </button>

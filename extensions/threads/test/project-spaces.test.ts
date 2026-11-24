@@ -59,6 +59,9 @@ it("shows a project's spaces under its heading and, while you're in it, in the r
   expect(ui.space()).toEqual({ machine: 'local', kind: 'board.main', params: { lane: 'todo' }, project: root })
   await ui.until(() => railGroup()?.querySelector('[aria-label="Board"]')?.classList.contains('is-on') === true, 'its rail button lit')
   expect(section('shop')!.querySelector('[data-space="board.main"]')!.classList.contains('is-selected')).toBe(true)
+  // Only the space is lit: not the thread still selected under it.
+  const threadRow = () => [...section('shop')!.querySelectorAll<HTMLElement>('.superego-list-item')].find((li) => li.querySelector('.threads__title')?.textContent === 'in the shop')!
+  expect(threadRow().classList.contains('is-selected')).toBe(false)
 
   // Another project's thread: out of the shop, the group goes.
   await ui.dispatch('thread.select', { machine: 'local', thread: blog.id })
@@ -82,4 +85,21 @@ it("puts them at a phone's drawer foot while you're in the project, apart", asyn
   $('.app__mobilebar button')!.click()
   await ui.until(() => Boolean($('.app__drawer .app__drawer-bar .app__project-spaces [aria-label="Board"]')), "the board at the drawer's foot")
   expect($('.app__drawer .app__drawer-bar .app__project-spaces')!.previousElementSibling?.classList.contains('app__drawer-sep')).toBe(true)
+})
+
+it("lights only the open space, an app's too, not the thread selected under it", async () => {
+  const notes = defineUiExtension({
+    name: 'notes',
+    setup(superego) { superego.space('notes.page', { title: 'Note', component: () => h('p', { className: 'note' }, 'A note') }) },
+  })
+  const first = await daemon.thread('hello', { title: 'first' })
+  ui = await mountUi({ window: true, extensions: [threads, notes], machines: [daemon], select: { thread: first.id } })
+  const row = () => $$('.threads-project .superego-list-item').find((li) => li.querySelector('.threads__title')?.textContent === 'first')
+  await ui.until(() => row()?.classList.contains('is-selected') === true, 'the thread lit')
+  await ui.dispatch('space.open', { kind: 'notes.page', params: {} })
+  await ui.until(() => Boolean($('.note')), 'the note open')
+  await ui.until(() => row()?.classList.contains('is-selected') === false, 'the thread no longer lit')
+  // Back to the thread, it's lit again.
+  await ui.dispatch('thread.select', { machine: 'local', thread: first.id })
+  await ui.until(() => row()?.classList.contains('is-selected') === true, 'lit again')
 })
