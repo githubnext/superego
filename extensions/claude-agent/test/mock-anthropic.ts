@@ -13,7 +13,9 @@
 //  - anything else: "OK (mock saw N messages)", streamed a few characters at a time, N the messages the request
 //    carried (so a resumed session's history shows).
 // A tool the request doesn't offer (a deferred one: Superego's, say) is loaded with ToolSearch first, as a model would.
-// What auto mode's classifier asks (is this call safe?) it answers as harmless: `<severity>0</severity>`.
+// What auto mode's classifier asks (is this call safe?) it answers as harmless: `<severity>0</severity>`. Its answers
+// carry no verdict of the API's own, though, which is all newer Claude Code goes on in Auto: a call that needs one (an
+// `Agent`, say) is refused there, so a test making one picks another mode.
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
 import type { AddressInfo } from 'node:net'
 

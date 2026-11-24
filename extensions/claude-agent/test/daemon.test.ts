@@ -780,7 +780,8 @@ describe.skipIf(!claude)("a Claude Agent thread, on the user's claude against a 
   })
 
   it("nests a subagent's steps under its Agent call", async () => {
-    const d = await start()
+    // Not in Auto: its check of the Agent call is a verdict Anthropic's API sends back, which the mock can't give.
+    const d = await start({ profile: profileOf({ permissionMode: 'default' }) })
     const cwd = folder()
     const thread = await d.thread(undefined, { cwd })
     const done = await d.send(thread, `Delegate Read ${join(cwd, 'notes.txt')}`)
