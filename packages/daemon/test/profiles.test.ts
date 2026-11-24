@@ -3,7 +3,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { DATA_VIEWS, GLOBAL_PROFILES, defineApp, MESSAGE_ENTRY, PROTOCOL_VERSION, type Hello, type DataViewInfo, type ProfileInfo, type RpcPeer, type ThreadInfo } from '@superego/protocol'
+import { DATA_VIEWS, GLOBAL_PROFILES, PROFILES_ALLOWED, defineApp, MESSAGE_ENTRY, PROTOCOL_VERSION, type Hello, type DataViewInfo, type ProfileInfo, type RpcPeer, type ThreadInfo } from '@superego/protocol'
 import { connectSocket, defineDaemonExtension, listen, openDaemon } from '../src/index.ts'
 import { until } from './until.ts'
 import { hashProfile, loadProfile, Allowances, type ProfileRef } from '../src/profiles.ts'
@@ -910,6 +910,24 @@ export default defineDaemonExtension({ name: 'notes', setup(superego) { superego
   expect(theirs?.global).toBeUndefined()
   expect(theirs?.problems).toContainEqual(expect.stringMatching(/global: only one of your own/))
   expect(JSON.stringify(now)).not.toContain(shop)
+  await close()
+})
+
+it('tells the window which project profiles are allowed, as one is: from a window or the command line alike', async () => {
+  const shop = join(project, '.superego', 'profiles', 'shop')
+  write(shop, { 'profile.ts': profileTs([]) })
+  const { peer, close } = await open()
+  const allowed = await peer.call<{ sub: string; value: unknown }>('value.watch', { key: PROFILES_ALLOWED })
+  let now = allowed.value
+  peer.on('value.changed', (p: { sub: string; value: unknown }) => { if (p.sub === allowed.sub) now = p.value })
+  await until(async () => JSON.stringify(now) === '[]')
+  const { hash } = await peer.call<{ hash: string }>('profile.allow', { cwd: project, name: 'shop' })
+  await until(async () => JSON.stringify(now) === JSON.stringify([{ dir: shop, hash }]))
+  // Allowed again after a change: at its new hash.
+  write(shop, { 'profile.ts': profileTs([]) + '// changed\n' })
+  const again = await peer.call<{ hash: string }>('profile.allow', { cwd: project, name: 'shop' })
+  expect(again.hash).not.toBe(hash)
+  await until(async () => JSON.stringify(now) === JSON.stringify([{ dir: shop, hash: again.hash }]))
   await close()
 })
 

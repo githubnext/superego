@@ -2,7 +2,7 @@
 // number of components show them), which thread is selected, and the Settings dialog; those two kept in the window
 // across reloads; and where the window has been, to go back and forward.
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { AUTH_REJECTED, DATA_VIEWS, GLOBAL_PROFILES, type Json, type ProfileRef, type ProviderRejection, type ThreadInfo } from '@superego/protocol'
+import { AUTH_REJECTED, DATA_VIEWS, GLOBAL_PROFILES, PROFILES_ALLOWED, type Json, type ProfileRef, type ProviderRejection, type ThreadInfo } from '@superego/protocol'
 import type { MachineEntry } from '../shared/bridge.ts'
 import { has, machine as client, useAppSetting, useHiddenThreads, useMachineList, useThreads as useThreadsWatch, useValue } from './client.ts'
 import { checkDataViews, warnDropped } from './data-view-check.ts'
@@ -407,7 +407,7 @@ function MachineThreads({ machine, onThreads, onHidden, onRejections }: {
   useEffect(() => { if (connected) void router.load(machine.id) }, [machine.state, machine.machine?.id, offered])
   useEffect(() => { if (threads) onThreads(machine.id, threads) }, [threads])
   // Its listed threads' profiles' UI, loaded before any of them is shown: their marks in the sidebar, say.
-  useListedProfileUis(machine.id, connected, threads)
+  useListedProfileUis(machine.id, connected, threads, useValue<unknown>(machine, PROFILES_ALLOWED))
   // Its global profiles' UI, as the app's: their sidebars and spaces are there whatever threads there are.
   useGlobalProfileUis(machine.id, connected, useValue<ProfileRef[]>(machine, GLOBAL_PROFILES))
   // The window's extensions, told to the machine: one whose work is all here is known there too (Settings, `without`).

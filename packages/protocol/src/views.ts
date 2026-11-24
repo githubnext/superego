@@ -13,6 +13,13 @@ export const DATA_VIEWS = 'view.list'
  */
 export const GLOBAL_PROFILES = 'profile.globals'
 
+/**
+ * The core's live value of the project profiles allowed to run on a machine (`profile.allow`), each by its folder and
+ * the hash it was allowed at (`{ dir, hash }[]`): changed by an allow from anywhere (a window, the command line), so the
+ * window loads a project's profile, and its spaces, as soon as it's allowed.
+ */
+export const PROFILES_ALLOWED = 'profile.allowed'
+
 /** The places a data view can be drawn in: a sidebar (on a phone, the drawer), beside the thread, a pane. */
 export type DataPlace = 'sidebar' | 'beside' | 'pane'
 export const DATA_PLACES: DataPlace[] = ['sidebar', 'beside', 'pane']

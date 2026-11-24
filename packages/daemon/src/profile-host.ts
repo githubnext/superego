@@ -5,7 +5,7 @@
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import type { Extension } from '@earendil-works/pi-durable'
-import { bool, GLOBAL_PROFILES, Lifetime, obj, opt, RpcError, str, type Json, type ProfileRef as Ref } from '@superego/protocol'
+import { bool, GLOBAL_PROFILES, Lifetime, PROFILES_ALLOWED, obj, opt, RpcError, str, type Json, type ProfileRef as Ref } from '@superego/protocol'
 import { describeProfile } from './extension-settings.ts'
 import type { ExtensionHost } from './extension-host.ts'
 import { defineAction } from './extension.ts'
@@ -111,6 +111,12 @@ export function createProfileHost(host: Host, extensions: ExtensionHost, later: 
     globalsNow = JSON.stringify(now)
     setGlobals(now as unknown as Json)
   }
+  // The project profiles allowed here, for the window (PROFILES_ALLOWED): it loads one's UI as it's allowed.
+  const setAllowed = host.values.core(PROFILES_ALLOWED, [] as Json)
+  const publishAllowed = () => allowances.list().then((list) => setAllowed(list as unknown as Json), (error: Error) => {
+    console.error(`Reading the allowed profiles: ${error.message}`)
+  })
+  void publishAllowed()
   /** Profile loads, one at a time: two never set up the same extension at once, nor an older version last. */
   let loads: Promise<unknown> = Promise.resolve()
   /**
@@ -228,7 +234,9 @@ export function createProfileHost(host: Host, extensions: ExtensionHost, later: 
       const dir = folderOf(cwd)
       const ref = findProfile(dir, profileSources.roots(), name?.trim() || undefined)
       if (!ref) throw new RpcError('not_found', `No profile in ${dir}`)
-      return { ...ref, hash: await allowances.allow(ref) }
+      const hash = await allowances.allow(ref)
+      await publishAllowed()
+      return { ...ref, hash }
     },
   }))
   router.register(defineAction({

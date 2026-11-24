@@ -271,12 +271,13 @@ export function useProfileUi(machine: string, thread: ThreadInfo) {
  * listed), so their badges, slots, tool rows and pane kinds are there before any of those threads is shown; and those of
  * the listed projects' own profiles that may run (`profile.list` in each project's folder), whatever profile its
  * threads run, so a project's spaces are there with it. Once per profile, not per thread: asked again only when the set
- * of profiles (or projects) listed changes or the machine connects again.
+ * of profiles (or projects) listed changes, the machine connects again, or it allows a project profile (`allowedThere`:
+ * its PROFILES_ALLOWED, as it says it).
  * Another machine's profile is fetched only when this computer allowed a UI of it before: one never allowed waits for
  * a thread of it to be shown, which asks (ProfileUiNotice). A profile whose last listed thread goes stays loaded until
  * the window reloads: what it registered shows only on its own threads, so it shows nowhere.
  */
-export function useListedProfileUis(machine: string, connected: boolean, threads: ThreadInfo[] | undefined) {
+export function useListedProfileUis(machine: string, connected: boolean, threads: ThreadInfo[] | undefined, allowedThere?: unknown) {
   const registry = useRegistry()
   const profiles = new Map<string, ProfileRef>()
   for (const thread of threads ?? []) if (thread.profile) profiles.set(thread.profile.dir, thread.profile)
@@ -288,12 +289,14 @@ export function useListedProfileUis(machine: string, connected: boolean, threads
   // Asked once the machine says it lists profiles (its actions loaded): a machine that doesn't has none to give.
   useSyncExternalStore(registry.router.onChange, registry.router.version)
   const lists = registry.router.all(machine).some((a) => a.id === 'profile.list')
+  // Listed again when the machine allows a project profile (PROFILES_ALLOWED), from a window or its command line.
+  const allows = JSON.stringify(allowedThere ?? null)
   useEffect(() => {
     if (!connected || !roots || !lists) return
     let alive = true
     void projectProfiles(registry, machine, roots.split('\n')).then((refs) => { if (alive && refs.length) return loadListedProfileUis(registry, machine, refs) })
     return () => { alive = false }
-  }, [machine, connected, roots, lists])
+  }, [machine, connected, roots, lists, allows])
 }
 
 /**

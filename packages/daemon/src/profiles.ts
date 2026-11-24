@@ -309,6 +309,8 @@ export class Allowances {
   constructor(dataDir: string) { this.#path = join(dataDir, 'allowed-profiles.json') }
   async #load() { return this.#allowed ??= JSON.parse(await readFile(this.#path, 'utf8').catch(() => '{}')) as Allowed }
   async #of(ref: ProfileRef) { return (await this.#load())[ref.dir] }
+  /** Every project profile allowed here: its folder, and the hash it was allowed at. */
+  async list() { return Object.entries(await this.#load()).map(([dir, { hash }]) => ({ dir, hash })).sort((a, b) => a.dir.localeCompare(b.dir)) }
   async allowed(ref: ProfileRef, hash: string) { return ref.scope === 'user' || (await this.#of(ref))?.hash === hash }
   /** Whether `file`, listed from outside the profile's folder, is as it was when the profile was allowed. */
   async allowedFile(ref: ProfileRef, file: string) { return ref.scope === 'user' || (await this.#of(ref))?.files[file] === await hashProfile(file) }
