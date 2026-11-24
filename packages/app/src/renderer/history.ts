@@ -4,14 +4,14 @@
 
 import type { Json } from '@superego/protocol'
 
-/** A space open in the main area: its kind, on a machine, with its params. */
-export type SpaceAt = { machine: string; kind: string; params: Record<string, Json> }
+/** A space open in the main area: its kind, on a machine, with its params; a project's, with the project's root. */
+export type SpaceAt = { machine: string; kind: string; params: Record<string, Json>; project?: string }
 
 export type Place = { thread: { machine: string; thread: string } } | { space: SpaceAt } | { settings: true }
 
-/** Whether two spaces are the same one: of a kind, on a machine, with the same params. */
+/** Whether two spaces are the same one: of a kind, on a machine (in a project), with the same params. */
 export const sameSpace = (a: SpaceAt | undefined, b: SpaceAt | undefined) =>
-  !a || !b ? a === b : a.machine === b.machine && a.kind === b.kind && JSON.stringify(a.params) === JSON.stringify(b.params)
+  !a || !b ? a === b : a.machine === b.machine && a.kind === b.kind && a.project === b.project && JSON.stringify(a.params) === JSON.stringify(b.params)
 
 export type History = { places: Place[]; at: number }
 

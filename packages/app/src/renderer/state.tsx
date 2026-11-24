@@ -8,6 +8,7 @@ import { has, machine as client, useAppSetting, useHiddenThreads, useMachineList
 import { checkDataViews, warnDropped } from './data-view-check.ts'
 import { clearProblem, reportProblem } from './machine-problems.ts'
 import { useRegistry } from './registry.tsx'
+import { spaceFor } from './lookups.ts'
 import { useImageRechecks } from './images.tsx'
 import { useGlobalProfileUis, useListedProfileUis } from './profile-ui.ts'
 import { emptyHistory, sameSpace, step, visit, type History, type Place, type SpaceAt } from './history.ts'
@@ -138,7 +139,7 @@ export function useSidebar() {
   return { hidden: sidebarHidden, show: showSidebar }
 }
 /** What a space is known by, for the thread docked to it. */
-export const spaceKey = (space: SpaceAt) => `${space.machine}\u0000${space.kind}\u0000${JSON.stringify(space.params)}`
+export const spaceKey = (space: SpaceAt) => `${space.machine}\u0000${space.project ? `${space.project}\u0000` : ''}${space.kind}\u0000${JSON.stringify(space.params)}`
 
 /**
  * The space the main area shows, if one is open; how to open one (or none); the thread docked to it, and whether
@@ -315,7 +316,7 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
   const place: Place | undefined = settingsOpen ? { settings: true } : space ? { space }
     : selection ? { thread: { machine: selection.machine, thread: selection.thread } } : undefined
   useEffect(() => { if (place) setHistory((h) => visit(h, place)) }, [settingsOpen, selection?.machine, selection?.thread, space && JSON.stringify(space)])
-  const exists = (p: Place) => 'settings' in p || ('space' in p ? registry.spaces.some((s) => s.kind === p.space.kind)
+  const exists = (p: Place) => 'settings' in p || ('space' in p ? Boolean(spaceFor(registry, p.space))
     : Boolean(hiddenAll[p.thread.machine]?.some((t) => t.id === p.thread.thread)) || Boolean(threads[p.thread.machine]?.some((t) => t.id === p.thread.thread)))
   const value = useMemo<ShellState>(() => ({
     machines, threads, rejections, selection, settingsOpen, settingsAtTab, newThread, projects, sidebar, pins, hold, fold, lastThread, sidebarHidden: sidebarIsHidden(sidebarMode, tight), archived, hidden, hiddenAll, listed,

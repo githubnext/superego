@@ -2,7 +2,7 @@
 // The window's parts a test harness puts together (`superego/testing`'s `mountUi`): not for extensions.
 export type { BehaviourSlot, SlotProps, UiExtension, ViewProps } from './extension-api.ts'
 export { createRegistry, RegistryProvider, seenIn, type Registry } from './registry.tsx'
-export { linkHandler, paneKind, toolRow, urlKind } from './lookups.ts'
+export { linkHandler, paneKind, projectSpaces, spaceFor, toolRow, urlKind } from './lookups.ts'
 export { layoutOf, placedFor, PlacedViews, scopedViews, Slot, ViewScopeProvider } from './placement.tsx'
 export { PaneBody } from './panes.tsx'
 export { closeWebViews } from './kept-web-views.ts'

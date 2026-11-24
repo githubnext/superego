@@ -33,8 +33,8 @@ export type WindowContext = {
   /** The space the main area shows instead of the selected thread, if one is open; and opening one (none: the thread). */
   space: SpaceAt | undefined
   openSpace(space: SpaceAt | undefined): void
-  /** Whether a space of `kind` is registered in this window. */
-  hasSpace(kind: string): boolean
+  /** Whether a space of `kind` is registered in this window: the app's, or (`project`, its root on `machine`) a project's. */
+  hasSpace(kind: string, at?: { machine?: string; project?: string }): boolean
   /** Settings: at a tab (its target, see settings/tabs.ts), or as it was left. */
   openSettings(at?: string): void
   newThread(start?: NewThreadStart): void
@@ -350,15 +350,16 @@ export const coreActions = (app: AppConfig): WindowAction[] => [
     params: obj({ machine: str(), thread: str() }),
     run: ({ machine, thread }, c) => c.select({ machine, thread }),
   }),
-  // A space in the main area (extensions' and global profiles' `superego.space`): `kind` with `params`, on `machine`
-  // (this computer unless given).
+  // A space in the main area (extensions', global profiles' and projects' `superego.space`): `kind` with `params`, on
+  // `machine` (this computer unless given); a project's, in `project` (its root).
   defineWindowAction({
     id: 'space.open', title: 'Open a space',
-    description: '`kind`: a space kind (`notes.page`); `params`: what it shows; `machine`: where (this computer unless given)',
-    params: obj({ kind: str(), params: opt(obj({}, { open: true })), machine: opt(str()) }),
-    run: ({ kind, params, machine }, c) => {
-      if (!c.hasSpace(kind)) throw new Error(`No space ${kind} in this window`)
-      c.openSpace({ machine: machine ?? 'local', kind, params: (params ?? {}) as Record<string, Json> })
+    description: "`kind`: a space kind (`notes.page`); `params`: what it shows; `machine`: where (this computer unless given); `project`: a project's space, that project's root",
+    params: obj({ kind: str(), params: opt(obj({}, { open: true })), machine: opt(str()), project: opt(str()) }),
+    run: ({ kind, params, machine, project }, c) => {
+      const at = { machine: machine ?? 'local', ...(project ? { project } : {}) }
+      if (!c.hasSpace(kind, at)) throw new Error(project ? `No space ${kind} in ${project} in this window` : `No space ${kind} in this window`)
+      c.openSpace({ ...at, kind, params: (params ?? {}) as Record<string, Json> })
     },
   }),
 ]

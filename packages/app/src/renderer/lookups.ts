@@ -3,7 +3,7 @@
 // first, else the app's (`preferProfile`).
 import type { Pane } from '@superego/protocol'
 import type { LinkHandler, LinkWhere, PaneKind, ToolRow, WorkPart, WorkRun } from './extension-api.ts'
-import { drawsFor, lookUp, preferProfile, scopeIsOn, scopeOf, seenIn, type Owner, type Registry, type Where } from './registry.tsx'
+import { drawsFor, lookUp, preferProfile, sameProject, scopeIsOn, scopeOf, seenIn, type InProject, type Owner, type Registry, type Where } from './registry.tsx'
 
 /** The composer's completion providers for `where`, in the order registered; for no thread yet, the app's. */
 export const completionsIn = (registry: Registry, where: Where | undefined) => seenIn(registry.completions, where)
@@ -55,8 +55,14 @@ export function linkHandler(registry: Registry, href: string, kind: 'link' | 'co
   return [...seen].sort((a, b) => rank(a.owner) - rank(b.owner)).find(claims)
 }
 
-/** The link handlers `where` has: its thread's profile's, and the app's but those of extensions the thread goes without. */
-const linksSeen = (registry: Registry, where: LinkWhere) => seenIn(registry.links, where.machine && where.thread ? { machine: where.machine, thread: where.thread } : undefined)
+/**
+ * The link handlers `where` has: its thread's profile's, and the app's but those of extensions the thread goes without;
+ * and its project's (a project's spaces'), in a thread of it or one of its spaces.
+ */
+const linksSeen = (registry: Registry, where: LinkWhere) => seenIn(
+  registry.links, where.machine && where.thread ? { machine: where.machine, thread: where.thread } : undefined,
+  where.machine && (where.thread?.project?.root ?? where.project) ? { machine: where.machine, root: (where.thread?.project?.root ?? where.project)! } : undefined,
+)
 
 /** The schemes `where`'s handlers claim by name (`ticket:` → `ticket`), for its HTML's links to keep. */
 export const linkSchemes = (registry: Registry, where: LinkWhere) => [...new Set(linksSeen(registry, where).flatMap(({ match, scheme }) => [
@@ -128,3 +134,28 @@ export function shownPanes(registry: Registry, where: Where): Pane[] {
   const gone = (kind: string) => !paneKind(registry, kind, where) && registry.panes.some((p) => p.kind === kind && !p.owner.profile && !drawsFor(p.owner, where))
   return (where.thread.panes ?? []).filter((pane) => !gone(pane.kind))
 }
+
+/** A space kind as the registry has it, with its owner. */
+export type SpaceEntry = Registry['spaces'][number]
+
+/**
+ * The space of `kind` that `at` opens: of its project, for a project's (`project`, its root on `machine`), else the
+ * app's (an extension's, a global profile's). Of two of the project's profiles that declare it, the project's default
+ * profile's; else the first set up.
+ */
+export function spaceFor(registry: Registry, at: { kind: string; machine?: string; project?: string | undefined }): SpaceEntry | undefined {
+  const of = registry.spaces.filter((s) => s.kind === at.kind && (at.project
+    ? sameProject(s.owner.project, { machine: at.machine ?? 'local', root: at.project })
+    : !s.owner.project))
+  return of.find((s) => s.owner.project?.profile === DEFAULT_PROFILE) ?? of[0]
+}
+
+/** A project's spaces, one per kind (`spaceFor`'s), in the order they were set up. */
+export function projectSpaces(registry: Registry, project: InProject | undefined): SpaceEntry[] {
+  if (!project) return []
+  const kinds = [...new Set(registry.spaces.filter((s) => sameProject(s.owner.project, project)).map((s) => s.kind))]
+  return kinds.map((kind) => spaceFor(registry, { kind, machine: project.machine, project: project.root })!)
+}
+
+/** The profile a thread starts with where none is named: a project's, of this name, before the user's. */
+const DEFAULT_PROFILE = 'default'

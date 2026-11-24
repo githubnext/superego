@@ -5,7 +5,8 @@
 //                                         → this window's own copies, so a profile's components share its React
 //   './other.ts'                          → that module of the profile, loaded the same way
 // Their default exports are UI halves, installed for that profile's threads only (see Registry.installProfile); a global
-// profile's (`global: true`, the machine's GLOBAL_PROFILES) as the app's, from the moment the machine says it has it.
+// profile's (`global: true`, the machine's GLOBAL_PROFILES) as the app's, from the moment the machine says it has it; a
+// project's profile's spaces as its project's, from the moment the project is listed (`useListedProfileUis`).
 //
 // The window runs with the user's full access to every machine, so a machine other than this computer gets no say in
 // what runs in it: a remote profile's UI runs only once it is allowed on this computer, for that machine, that profile
@@ -16,11 +17,12 @@
 // Revoking it takes out what it registered, but not what its code already did (timers, listeners, globals, requests
 // under way): the window offers a reload for that (RevokedUiNotice).
 import { useEffect, useSyncExternalStore } from 'react'
-import type { ProfileRef, ThreadInfo } from '@superego/protocol'
+import type { ProfileInfo, ProfileRef, ThreadInfo } from '@superego/protocol'
 import {
   collectProfileUi, filesOf, hashProfileUi, isAllowed, pointImports, resolveSpecifier, type AllowedUi, type ProfileUiSources,
 } from '@superego/client/profile-ui'
 import { machine as client } from './client.ts'
+import { clearProblem, reportProblem } from './machine-problems.ts'
 import type { UiExtension } from './extension-api.ts'
 import { profileScope, scopeIsOn, useRegistry, type Registry } from './registry.tsx'
 import { APP } from '../shared/app-settings.ts'
@@ -266,8 +268,10 @@ export function useProfileUi(machine: string, thread: ThreadInfo) {
 
 /**
  * Load the UIs of the profiles of a machine's listed threads (the sidebar's and the navigator's; archived ones aren't
- * listed), so their badges, slots, tool rows and pane kinds are there before any of those threads is shown. Once per
- * profile, not per thread: asked again only when the set of profiles listed changes or the machine connects again.
+ * listed), so their badges, slots, tool rows and pane kinds are there before any of those threads is shown; and those of
+ * the listed projects' own profiles that may run (`profile.list` in each project's folder), whatever profile its
+ * threads run, so a project's spaces are there with it. Once per profile, not per thread: asked again only when the set
+ * of profiles (or projects) listed changes or the machine connects again.
  * Another machine's profile is fetched only when this computer allowed a UI of it before: one never allowed waits for
  * a thread of it to be shown, which asks (ProfileUiNotice). A profile whose last listed thread goes stays loaded until
  * the window reloads: what it registered shows only on its own threads, so it shows nowhere.
@@ -280,6 +284,33 @@ export function useListedProfileUis(machine: string, connected: boolean, threads
   useEffect(() => {
     if (connected && profiles.size) void loadListedProfileUis(registry, machine, [...profiles.values()])
   }, [machine, connected, dirs])
+  const roots = [...new Set((threads ?? []).map((t) => t.project?.root).filter((root): root is string => Boolean(root)))].sort().join('\n')
+  // Asked once the machine says it lists profiles (its actions loaded): a machine that doesn't has none to give.
+  useSyncExternalStore(registry.router.onChange, registry.router.version)
+  const lists = registry.router.all(machine).some((a) => a.id === 'profile.list')
+  useEffect(() => {
+    if (!connected || !roots || !lists) return
+    let alive = true
+    void projectProfiles(registry, machine, roots.split('\n')).then((refs) => { if (alive && refs.length) return loadListedProfileUis(registry, machine, refs) })
+    return () => { alive = false }
+  }, [machine, connected, roots, lists])
+}
+
+/**
+ * The profiles of the projects at `roots` on `machine` that may run there (allowed): theirs alone, not the user's a
+ * thread there could start with too. A project its machine can't list for is told of (the machine's problems), and
+ * left out.
+ */
+export async function projectProfiles(registry: Pick<Registry, 'router'>, machine: string, roots: string[]): Promise<ProfileRef[]> {
+  const what = "Listing its projects' profiles"
+  const lists = await Promise.all(roots.map((root) => registry.router.dispatch('profile.list', { cwd: root }, { machine, source: 'profiles' })
+    .then((list) => list as ProfileInfo[], (error: unknown) => {
+      reportProblem(machine, what, error)
+      return undefined
+    })))
+  if (lists.every(Boolean)) clearProblem(machine, what)
+  return lists.flatMap((list) => (list ?? []).filter((p) => p.scope === 'project' && p.allowed)
+    .map(({ scope, name, dir, source }): ProfileRef => ({ scope, name, dir, ...(source ? { source } : {}) })))
 }
 
 /**

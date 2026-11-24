@@ -9,7 +9,7 @@ import {
 } from '@superego/protocol'
 import type { MachineEntry, SuperegoBridge, SuperegoEvent } from '@superego/app/shared'
 import {
-  bound, closeWebViews, DescribedCall, describeRun, LAYOUT, layoutOf, linkHandler, mainKind, normalize, pageApp, PaneBody, paneKind, placedFor, PlacedViews, profileUisLoaded, provideProfileUi, RegistryProvider, resetProfileUi,
+  bound, closeWebViews, DescribedCall, describeRun, LAYOUT, layoutOf, linkHandler, mainKind, normalize, pageApp, PaneBody, paneKind, placedFor, PlacedViews, profileUisLoaded, provideProfileUi, RegistryProvider, resetProfileUi, spaceFor,
   scopedViews, seenIn, setLocalState, Shell as Window, ShellStateProvider, Slot, SpaceMain, toolRow, urlKind, ViewScopeProvider, useAllThreads, useMachines, useSelection, useSpace, windowRegistry,
   type BehaviourSlot, type SpaceAt, type Layout, type Place, type Registry, type SlotProps, type UiExtension, type ViewProps,
 } from '@superego/app/internals'
@@ -249,7 +249,8 @@ export type MountOptions = {
    * UI halves set up as a profile's: drawn only in threads of that profile, on that machine (the first, unless given).
    * One that fails to start throws. `ref`, the profile as its threads name it: unless given, the test daemon's that
    * machine is (`daemon.profile`), else the profile under test. `testThread()` makes threads of it while it's mounted.
-   * `global`: set up as a global profile's (`global: true`), as the app's: its sidebars and spaces too. The window
+   * `global`: set up as a global profile's (`global: true`), as the app's: its sidebars and spaces too. A project's
+   * profile (`ref` of `scope: 'project'`, in `<root>/.superego/profiles`) adds its project's spaces. The window
    * doesn't fetch this profile's UI from the daemon: these are it.
    */
   profile?: { ref?: ProfileRef; machine?: string; extensions: UiExtension[]; global?: boolean }
@@ -286,9 +287,10 @@ export type RenderWhat<S extends BehaviourSlot = BehaviourSlot> = { machine?: st
   | { tool: { name: string; arguments?: Record<string, unknown>; id?: string } & Partial<Pick<ToolRowCall, 'state' | 'result' | 'live'>> }
   /**
    * A space of a kind (`superego.space`), opened with its params on `machine`, as the main area draws it, its
-   * thread beside it: what it opens next (its `open`, a link it claims) shows here, as `space()` says.
+   * thread beside it: what it opens next (its `open`, a link it claims) shows here, as `space()` says. A project's
+   * profile's: `project`, its root (the folder whose `.superego/profiles` holds it).
    */
-  | { space: { kind: string; params?: Record<string, Json> } }
+  | { space: { kind: string; params?: Record<string, Json>; project?: string } }
 )
 
 /** Where in the window a lookup is for: a machine (the first, unless given) and a thread, as `render` takes them. */
@@ -503,7 +505,7 @@ export async function mountUi(options: MountOptions = {}): Promise<TestWindow> {
     // The whole window drawn: its shell says what actions see, as the app's does.
     if (options.window) return <>{children}</>
     registry.router.setContext({
-      app, machines: list, selection, select, space, openSpace, hasSpace: (kind) => registry.spaces.some((s) => s.kind === kind), openSettings() {}, newThread() {}, togglePalette() {}, toggleNavigator() {}, togglePanePicker() {}, showLog() {},
+      app, machines: list, selection, select, space, openSpace, hasSpace: (kind, at) => Boolean(spaceFor(registry, { kind, ...at })), openSettings() {}, newThread() {}, togglePalette() {}, toggleNavigator() {}, togglePanePicker() {}, showLog() {},
       threadOf: (s) => all[s.machine]?.find((t) => t.id === s.thread), projects: [], sidebar: { pinned: [], projects: [], folded: [] }, lastThread: {}, fold() {},
       appSetting: (key) => appSide.settings.get(key) as never, toggleSidebar() {}, focusSidebar() { throw new Error('No sidebar to focus: mount the whole window (window: true)') }, back() {}, forward() {}, railTabs: () => [],
     })
@@ -578,12 +580,12 @@ export async function mountUi(options: MountOptions = {}): Promise<TestWindow> {
       if (typeof given === 'string' && !threadOf(at, given)) throw new Error(`No thread ${given} on ${at}: give it to the machine (threads), or give a ThreadInfo`)
       let node: ReactNode
       if ('space' in what) {
-        const { kind, params = {} } = what.space
-        if (!registry.spaces.some((s) => s.kind === kind)) {
-          const theirs = registry.spaces.map((s) => s.kind)
-          throw new Error(`No space ${kind} in the window (a profile's are there only when it's global: mountUi({ profile: { …, global: true } })): ${theirs.join(', ') || 'none'}`)
+        const { kind, params = {}, project } = what.space
+        if (!spaceFor(registry, { kind, machine: at, ...(project ? { project } : {}) })) {
+          const theirs = registry.spaces.map((s) => s.owner.project ? `${s.kind} (in ${s.owner.project.root})` : s.kind)
+          throw new Error(`No space ${kind}${project ? ` in ${project}` : ''} in the window (a profile's are there only when it's global, or a project's: mountUi({ profile: { …, global: true } })): ${theirs.join(', ') || 'none'}`)
         }
-        node = <DrawSpace at={{ machine: at, kind, params }} narrow={narrow} />
+        node = <DrawSpace at={{ machine: at, kind, params, ...(project ? { project } : {}) }} narrow={narrow} />
       } else if ('tool' in what) {
         const { name, arguments: args = {}, id = 'call-1', state = 'done', ...rest } = what.tool
         const thread = given ?? defaultThread(at)

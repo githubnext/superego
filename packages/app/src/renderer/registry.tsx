@@ -3,7 +3,9 @@
 // `Lifetime`: its signal aborts, its setup's cleanup runs, and what it registers after is refused). What it draws is
 // drawn apart (`Contained`): a component that throws takes only its own place. A profile's UI is owned by that profile
 // on its machine too, and draws only in that profile's threads there (`seenIn`); its styles reach only what it draws
-// (profile-style.ts).
+// (profile-style.ts). Where a profile lives says how far its UI reaches: a project's profile's spaces (and their links)
+// are its project's (`Owner.project`), seen in that project's threads and spaces only; the user's global profile's are the
+// app's; any other profile of the user's adds none.
 import { createContext, useContext, type ComponentType, type ReactNode } from 'react'
 import { contractProblem, Lifetime, parseVersion, UNVERSIONED } from '@superego/protocol'
 import type { AppConfig, DataViewInfo, DeclaredSection, ExtensionAbout, ExtensionManifest, ProfileRef, SettingsSnapshot, ThreadInfo } from '@superego/protocol'
@@ -31,6 +33,26 @@ export type Owner = {
   extension: string; optional: boolean; profile?: string; data?: true; speaks?(machine: string): boolean
   /** A global profile's UI (`global: true`): installed as the app's, but taken down with its profile (its scope). */
   global?: string
+  /**
+   * A project's profile's spaces and the links that open them: its project's, seen in that project's threads and spaces
+   * only (`seenIn`), whichever profile those run. `profile`: which of the project's profiles it is, by name (its default
+   * wins a kind two of them declare: `spaceFor`). Its other registrations are its threads' alone, as any profile's.
+   */
+  project?: InProject & { profile: string }
+}
+
+/** A project on a machine, by its root: a repository's main checkout, or a folder (`ThreadInfo.project.root`). */
+export type InProject = { machine: string; root: string }
+export const sameProject = (a: InProject | undefined, b: InProject | undefined) => Boolean(a && b && a.machine === b.machine && a.root === b.root)
+
+/**
+ * The project a project's profile is of, on `machine`: the folder whose `.superego/profiles` holds it. None for the
+ * user's own profiles.
+ */
+export function projectOfProfile(machine: string, profile: Pick<ProfileRef, 'scope' | 'dir' | 'name'>): (InProject & { profile: string }) | undefined {
+  if (profile.scope !== 'project') return undefined
+  const root = /^(.*?)[\\/]\.superego[\\/]profiles[\\/][^\\/]+[\\/]?$/.exec(profile.dir)?.[1]
+  return root ? { machine, root, profile: profile.name } : undefined
 }
 
 /**
@@ -80,7 +102,10 @@ export type Registry = {
   entries: Owned<{ kind: string; component: ComponentType<EntryProps> }>[]
   links: Owned<LinkHandler>[]
   panes: Owned<PaneKind & { kind: string }>[]
-  /** Spaces (`superego.space`), by kind, each with the machine it opens on (a global profile's, its own). */
+  /**
+   * Spaces (`superego.space`), by kind, each with the machine it opens on (a global or project profile's, its own). A
+   * project's (`owner.project`) are that project's: the same kind in two projects is two (`spaceFor`, `projectSpaces`).
+   */
   spaces: Owned<SpaceKind & { kind: string; machine?: string }>[]
   work: Owned<{ divide: (run: WorkRun) => WorkPart[] | undefined }>[]
   settings: Owned<{ ui: string; component: ComponentType<SettingsComponentProps> }>[]
@@ -103,7 +128,8 @@ export type Registry = {
   /**
    * Set up a profile's UI halves on `machine`, after tearing down what that profile set up before. One that fails
    * to start is logged and left out, the rest set up; the failures are returned. `global`: a global profile's
-   * (`global: true`), set up as the app's: in any place, for every thread.
+   * (`global: true`), set up as the app's: in any place, for every thread. Otherwise its threads' own, but for a
+   * project's profile (`scope: 'project'`), whose spaces are its project's (`Owner.project`).
    */
   installProfile(machine: string, profile: ProfileRef, extensions: UiExtension[], options?: { global?: boolean }): { extension: string; error: unknown }[]
   /** Tear down every extension set up, the core's last: as the window closing would (a test's end). */
@@ -166,7 +192,7 @@ export function createRegistry(app: AppConfig, extensions: UiExtension[], core: 
       for (const [key, teardown] of [...teardowns]) if (key.startsWith(`${scope}/`)) teardown()
       const failed: { extension: string; error: unknown }[] = []
       for (const extension of list) {
-        try { setUp(extension, scope, options.global) } catch (error) {
+        try { setUp(extension, scope, options.global ? 'global' : projectOfProfile(machine, profile)) } catch (error) {
           console.error(`Profile extension ${extension.name} failed to start`, error)
           failed.push({ extension: extension.name, error })
         }
@@ -214,8 +240,11 @@ export function createRegistry(app: AppConfig, extensions: UiExtension[], core: 
   }
 
   /** Set up one extension: everything it adds is owned by it, and its teardown takes all of it away again. */
-  function setUp(extension: UiExtension, scope?: string, global = false) {
-    // A global profile's is the app's in all but its teardown (by its scope): `profile` is a thread-bound profile's.
+  function setUp(extension: UiExtension, scope?: string, reach?: 'global' | Owner['project']) {
+    // A global profile's is the app's in all but its teardown (by its scope): `profile` is a thread-bound profile's
+    // (a project's too, but for its spaces: `project`).
+    const global = reach === 'global'
+    const project = typeof reach === 'object' ? reach : undefined
     const profile = global ? undefined : scope
     if (!/^[a-z][a-z0-9-]*$/.test(extension.name)) throw new Error(`Extension name "${extension.name}" must be lowercase letters, digits and dashes`)
     // One whose versions don't read, or that needs an extension API this window isn't, is refused before it runs.
@@ -243,9 +272,9 @@ export function createRegistry(app: AppConfig, extensions: UiExtension[], core: 
     if (teardowns.has(ownerKey(owner)) || (scope && teardowns.has(`/${extension.name}`))) throw new Error(`An extension named ${extension.name} is already set up`)
     // Everything it registers goes through its lifetime: undone together at teardown, and refused after.
     const life = new Lifetime(`${scope ? 'Profile extension' : 'Extension'} ${extension.name}`)
-    const add = <T,>(list: Owned<T>[], item: T) => {
+    const add = <T,>(list: Owned<T>[], item: T, by: Owner = owner) => {
       life.live('anything')
-      const entry = { ...item, owner } as Owned<T>
+      const entry = { ...item, owner: by } as Owned<T>
       list.push(entry)
       life.add(() => { const at = list.indexOf(entry); if (at >= 0) list.splice(at, 1) })
       return entry
@@ -259,11 +288,11 @@ export function createRegistry(app: AppConfig, extensions: UiExtension[], core: 
       throw new Error(`Extension ${extension.name} must name its ${what} "${extension.name}.<name>", not "${name}"`)
     }
     /** One of a kind per scope: a second registration of the same name is refused (the first stays), with a warning. */
-    const unique = <T extends Record<K, string>, K extends keyof T>(list: Owned<T>[], key: K, item: T, what: string) => {
+    const unique = <T extends Record<K, string>, K extends keyof T>(list: Owned<T>[], key: K, item: T, what: string, by: Owner = owner) => {
       life.live(`the ${what} ${item[key]}`)
       const taken = list.find((e) => e[key] === item[key] && e.owner.profile === profile)
       if (taken) return console.warn(`Extension ${extension.name}: ${what} ${item[key]} is already drawn by ${taken.owner.extension}; keeping that one`)
-      add(list, item)
+      add(list, item, by)
     }
     /** A view, checked: a profile's fit only the places that show one of its threads. */
     const declare = (id: string, view: View) => {
@@ -322,18 +351,22 @@ export function createRegistry(app: AppConfig, extensions: UiExtension[], core: 
       },
       space(kind, space) {
         own(kind, 'spaces')
-        // Bound to a profile's threads, it'd have nowhere to open: only the app's and a global profile's.
-        if (profile) return console.warn(`Profile extension ${extension.name}: space ${kind} needs its profile to be global (global: true)`)
+        // Bound to a profile's threads, it'd have nowhere to open: only the app's, a global profile's (the app's) and
+        // a project's profile's (its project's, `Owner.project`).
+        if (profile && !project) return console.warn(`Profile extension ${extension.name}: space ${kind} needs its profile to be global (global: true) or a project's`)
         const machine = scope?.slice(0, scope.indexOf('\u0000'))
-        unique(registry.spaces, 'kind', { ...space, kind, ...(machine ? { machine } : {}) }, 'space')
+        // A project's, and its links, are seen in its project only.
+        const by: Owner = project ? { ...owner, project } : owner
+        unique(registry.spaces, 'kind', { ...space, kind, ...(machine ? { machine } : {}) }, 'space', by)
         // Its links open it.
         if (space.match) {
           const scheme = space.match
           add(registry.links, {
             match: scheme,
-            open: (href) => registry.router.dispatch('space.open', { kind, params: space.params?.(href) ?? { href }, ...(machine ? { machine } : {}) }, { source: 'link' })
-              .then(() => undefined, (error: Error) => error.message),
-          })
+            open: (href) => registry.router.dispatch('space.open', {
+              kind, params: space.params?.(href) ?? { href }, ...(machine ? { machine } : {}), ...(project ? { project: project.root } : {}),
+            }, { source: 'link' }).then(() => undefined, (error: Error) => error.message),
+          }, by)
         }
       },
       pane(kind, pane) {
@@ -470,13 +503,20 @@ export const useOptionalRegistry = () => useContext(RegistryContext)
 /** The app this UI belongs to. */
 export const useApp = () => useRegistry().app
 
+/** The project `where`'s thread is in, on its machine. */
+export const projectOf = (where: Where | undefined): InProject | undefined =>
+  where?.thread.project ? { machine: where.machine, root: where.thread.project.root } : undefined
+
 /**
- * What `where` sees of `list`: the app's, but not those of optional extensions its thread goes without; and its own
- * profile's (only that profile's, on that machine).
+ * What `where` sees of `list`: the app's, but not those of optional extensions its thread goes without; its own
+ * profile's (only that profile's, on that machine); and its project's (`Owner.project`: a project's spaces and their
+ * links), whatever profile it runs. `project`: the project it's in, without a thread (a project's space); default, its
+ * thread's.
  */
-export const seenIn = <T,>(list: Owned<T>[], where: Where | undefined) => {
+export const seenIn = <T,>(list: Owned<T>[], where: Where | undefined, project: InProject | undefined = projectOf(where)) => {
   const scope = scopeOf(where)
-  return list.filter(({ owner }) => owner.profile ? owner.profile === scope : !where || drawsFor(owner, where))
+  return list.filter(({ owner }) => owner.project ? sameProject(owner.project, project)
+    : owner.profile ? owner.profile === scope : !where || drawsFor(owner, where))
 }
 
 /**

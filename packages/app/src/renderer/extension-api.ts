@@ -171,10 +171,15 @@ export type SpaceKind = {
   params?(href: string): Record<string, Json>
   /** What a thread started on it is told first: what the user has open. */
   about?(params: Record<string, Json>): string
-  /** The profile a thread started on it runs (by name, one of the user's); default the machine's. */
+  /**
+   * The profile a thread started on it runs, by name: one of the user's; for a project's space, one of that project's
+   * too. Default: the machine's (a project's space: the project's default, in its folder).
+   */
   profile?: string
   /** Its thread as a column beside it (`docked`, the default), or as a card over its right side (`floating`). */
   agent?: 'docked' | 'floating'
+  /** The params it opens with from the rail or the Threads sidebar (a project's space); default `{}`. */
+  entry?: Record<string, Json>
 }
 
 /**
@@ -250,6 +255,8 @@ export type ToolRow = {
 export type LinkWhere = {
   machine?: string
   thread?: ThreadInfo
+  /** The project it's in, by its root on `machine`, where there's no thread: a project's space. A thread's is its own. */
+  project?: string
   /**
    * Open a file or folder by the name the text gives it (from the thread's folder, or beside the file it's in); resolves
    * to why it couldn't. A link's name is looked up as Obsidian's are, by name too; `exact`, only as the path it is.
@@ -427,8 +434,10 @@ export type UiApi = {
   pane(kind: string, pane: PaneKind): void
   /**
    * A kind of space, `<extension>.<name>`: a view that fills the main area, opened by `space.open` (`{ kind,
-   * params, machine? }`) or a link its `match` claims, with a thread docked beside it. An app extension's, or a global
-   * profile's (`global: true`); not a thread-bound profile's.
+   * params, machine?, project? }`) or a link its `match` claims, with a thread docked beside it. An app extension's, a
+   * global profile's (`global: true`), or a project's profile's: that project's, shown in the rail while you're in it and
+   * under its heading in the Threads sidebar, its links opening it only from that project's threads and spaces. Not
+   * one of your other profiles'.
    */
   space(kind: string, space: SpaceKind): void
   /**
