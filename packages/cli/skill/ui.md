@@ -1,23 +1,22 @@
 # The UI half
 
-New to this? Start with [the guide](guide.md) (`superego --skill guide`): the big picture, a first extension end to end, and testing; and [the cheat sheet](cheatsheet.md) of both halves.
+New here? Start with [the guide](guide.md) and the [cheat sheet](cheatsheet.md).
 
-A profile's UI runs in the window, for that profile's threads only (on the machine it came from): panes, things beside
-a thread, and how its tool calls look in the transcript. List modules in the profile's `ui`; each default-exports
-`defineUiExtension`. Everything a module registers belongs to it, and goes when the profile's files change and the
-window loads them again.
+A profile's UI runs in the window, in that profile's threads on the machine it came from: panes, views beside a
+thread, slots, and how its tool calls look. List modules in the profile's `ui`; each default-exports
+`defineUiExtension`. What a module registers goes when the profile's files change and the window reloads them.
 
 ## When the UI loads
 
-The window loads a profile's UI as soon as it lists one of that profile's threads, in the sidebar or the navigator. It
-doesn't wait for one to be opened, so its badges, slots, tool rows and pane kinds are there from the start.
+The window loads a profile's UI as soon as it lists one of its threads (sidebar or navigator), not when one is opened,
+so its marks, slots, tool rows and pane kinds are there from the start.
 
 - Archived and hidden threads don't count.
-- It loads once per profile per machine, however many threads share it. That loads the profile's daemon half too.
-- Another machine's profile loads this way only if its UI was allowed here before. One never allowed waits until a
-  thread of it is opened, which asks.
-- It stays loaded until the window reloads, even once its last listed thread goes; it shows only on its own threads.
-- After you change its files, it loads again when a shown thread of it moves on: send that thread a message.
+- It loads once per profile per machine, and loads the profile's daemon half too.
+- Another machine's profile loads this way only if its UI was allowed here before; otherwise when a thread of it is
+  opened, which asks.
+- It stays loaded until the window reloads, and shows only on its own threads.
+- After an edit, it reloads when a shown thread of it moves on: send that thread a message.
 
 ## A first module
 
@@ -49,65 +48,101 @@ export default defineUiExtension({
 })
 ```
 
-Then, in `profile.ts`: `ui: ['./ui/order.tsx'], panes: { order: 'an order, with its lines. Params: { id }' }` (or, in
-a daemon half's `defineDaemonExtension`, `panes: { order: '…' }`). The agent opens it with `pane_open({ kind: 'order', params: { id: '1234' } })`; so can you, with
+Then in `profile.ts`: `ui: ['./ui/order.tsx'], panes: { order: 'an order, with its lines. Params: { id }' }` (or
+`panes` in a daemon half's `defineDaemonExtension`). The agent opens it with
+`pane_open({ kind: 'order', params: { id: '1234' } })`; you with
 `superego do pane.open --params '{"thread":"<thread>","kind":"order","params":{"id":"1234"}}'`.
 
 ## What a module can import
 
-- `'react'` and `'react/jsx-runtime'`: the window's own React (19); `'react-dom'` and `'react-dom/client'`, its own too.
-- `'superego/ui'`: the hooks and components below: the stable surface. `'superego/unstable'`: the window's own
-  workings (`useRegistry`, `useShell`, …), which change with it.
-- Its own files, by relative path (`'./chart.ts'`), plain `.js` among them: a library vendored as one ESM bundle, with
-  React left as bare imports (`esbuild --bundle --format=esm --external:react --external:react-dom …`).
+- `'react'`, `'react/jsx-runtime'`, `'react-dom'`, `'react-dom/client'`: the window's own (React 19).
+- `'superego/ui'`: the stable surface. `'superego/unstable'`: the window's workings (`useRegistry`, `useShell`, …),
+  which change with it.
+- Its own files by relative path (`'./chart.ts'`), `.js` too: vendor a library as one ESM bundle with React external
+  (`esbuild --bundle --format=esm --external:react --external:react-dom …`).
 
-Nothing else: no npm packages, no CSS imports. TSX and TS are compiled by the daemon (types stripped, JSX for React),
-which doesn't type-check them: `superego extension test` does.
+Nothing else: no npm packages, no CSS imports. The daemon compiles TSX and TS without type-checking;
+`superego extension test` checks.
 
 ## The setup API
 
 | | |
 |---|---|
-| `superego.pane(kind, { title, component, icon?, file?, menu?, opens?, fallback?, folders?, urls?, width? })` | a kind of pane. `title`: a string, or `(pane) => string`. `component` gets `{ machine, thread, pane }`; `pane.params` is what it was opened with. `icon`: its glyph on the pane's tab (a Phosphor icon from `superego/ui`). `file: true`: its title is a file name, and the tab shows it as one. `menu: true` offers it in the thread's pane menu (it needs no params). `opens: (path) => boolean` makes files named in the thread open in it (`/\.csv$/.test(path)`), ahead of the editor (`fallback: true`: any file no kind `opens`); `folders: true`, folders (`params.path`, `''` for the thread's own); `urls: true`, web pages a thread links to, when opened beside (`params.url`). `width`: share of the row, 0.5 by default |
-| `superego.space(kind, { title, component, icon?, match?, params?, about?, profile?, agent? })` | a view that fills the main area, with a thread docked beside it: an app extension's or a global profile's only ([window.md](window.md#spaces)) |
-| `superego.tool(name, row, { fold? })` | how calls to a tool look in the transcript, described: `{ icon?, verbs?, verb?, subject?, stat?, meta?, body?, phrase?, file?, weight? }`. `verbs`: done, working, failed (`['Read', 'Reading', 'Read failed']`); `verb(call)`, a call's own instead, where one needs another. The functions get the call (below) and its `state` (`idle`, `working`, `done`, `error`): `subject` is what it acted on, after the verb (text in mono, or a node such as `<ThreadRef machine id />`); `stat` its lines `{ added, removed }`; `meta` a little more at the row's end; `body` what it opens to. `phrase(count)` says what `count` calls did in a run's line (`read 2 files`); `file(args)` names the one file a lone call was about there; `weight` decides which kind leads that line. Anything left out (or returning `undefined`) is the default: its name, its `command`/`path`/`pattern`, its output; `null` from `subject` or `body` is nothing. `fold: false` shows them under their run of work, open, instead of folded into it: for what the agent shows you (as `images` does) |
-| `superego.tool(name, component, { fold? })` | draw calls to a tool whole, yourself. Gets `{ machine, thread, call: { id, name, arguments }, result?: { text, isError, details, images? }, live?: { status, output, details } }`; `text` is the output, then a failed call's error message, as the user should read it (not in the `<harness>` wrapper the model saw); `images` are those the model was shown, as `ImageItem`s: where each is in the transcript (`entry`), its `mimeType`, `width` and `height`, not its pixels; read one with `call(machine.id, 'image.read', { thread: thread.id, image: { entry: entry.id, message: entry.message, block: entry.block }, thumbnail: true })` (`{ data, mimeType }`, base64; leave out `thumbnail` for the whole of it) |
-| `superego.tool('prefix*', row \| component)` | a name ending in `*` matches every tool whose name starts so (`mcp__*`), where the tool has no row of its own; the longest prefix wins. Tools of one prefix's row with a `phrase` count as one kind in a run's line. |
-| `superego.link({ match, open, render?, target? })` | claim links in Markdown: a scheme (`match: 'ticket:'`), a pattern (`/^https:\/\/linear\.app\//`), or a test `(href, kind, where) => boolean` that also sees inline code (`kind: 'code'`, its text as `href`). `open(href, { machine, thread, beside, kind, openFile, openUrl })` follows one, on a click (⌘: `beside`) or from ⌃O's list; return a string to say why it couldn't. `render` gets `{ href, children, code, title, where, open(beside) }` (default: a link that follows it). `target(href)`: where it goes, in ⌃O's list. `scheme`: the scheme a pattern or test claims (`'ticket'`), so HTML files keep its links, as they do a `'ticket:'` match's. `[[Note#Heading|alias]]` comes as `wikilink:Note#Heading` (each part URI-encoded; `parseWikilink(href)` gives `{ target, heading?, block? }`), its alias as its text, so a profile can open it its own way. Asked in turn: the thread's profile's, then the app's extensions' (the threads extension's `thread:`), then the core's defaults (files, `wikilink:`, web pages). The same handlers follow links in messages, in ⌃O's list, and in a file's rendered text and live preview |
-| `superego.view(id, { title, icon?, context, fits, default?, component, order? })` | a view, `<name>.<view>`, that the layout puts in a place: for a profile, `beside` (a column beside the thread), `pane` (the thread's pane menu; it's a pane kind of its id too) or `header` (right of the title). `context: 'thread'`: `component` gets `{ place, machine, thread }`. `default`: where it goes (a place, several, or none: offered only); the user moves, reorders or hides it (`~/.superego/layout.json`, which is `app.layout`; or a right-click on it), so don't assume one place |
-| `superego.slot(slot, component, { order? })` | put a component in a slot whose place behaviour decides (below) |
-| `superego.signal` | an `AbortSignal`, aborted when this UI is torn down (its profile's files changed, it was revoked): for timers, listeners and fetches of its own. `setup` may also return a cleanup, run then. Registering after that throws. Each component it draws is drawn apart: one that throws shows "<name> failed to draw" with Retry, in its place |
-| `superego.on(event, listener)` | hear what happens in the window, in the desktop app and a browser alike; returns a function that stops it (teardown does too). `'thread.status'`: `{ machine, thread, before }`, a thread's status changed (`before` undefined the first time the window sees it; only your profile's threads). `'select'`: `{ selection, before }`, the thread shown changed. `'focus'`: `{ focused }`. `'visibility'`: `{ visible }`. `superego.window` is how things are now: `{ focused, visible, selection, thread, machines, threads }` (`threads`: each machine's threads in use, by machine id) |
-| `superego.style(css)` | bring CSS, scoped to what this profile draws ([Styling](#styling)). Gone at teardown; also returns a function that takes it out sooner |
-| `superego.theme({ id, name, appearance, syntax?, terminal?, ui?, accent? })` | a theme for code and the terminal (and the window, if it matches), offered in Settings → Appearance's picker for its `appearance` (`'light'` or `'dark'`), under your extension's name ([Themes](#themes)). `id` starts with your extension's name. One that doesn't read throws, saying what's wrong. Needs extension API `^5.5` |
-| `superego.appSetting(key)` | one of the app's settings as it is now, outside React (`useAppSetting` in components) |
-| `superego.entry(kind, component)` | draw transcript entries of a kind an extension writes |
-| `superego.settings(ui, component)` | draw below the settings section (of its daemon half) that names `ui` |
-| `superego.composer.complete({ title, word, items })` | complete a word as it's typed. `word(text, caret)` returns the word at the caret it completes, `{ start, query }` (and anything of its own), or nothing; the first provider to find one wins. `items(word, { machine, cwd, thread })` returns (`cwd`: the folder it writes for, as typed; no `thread` in the New thread dialog, before there's one) (or resolves to) `{ label, detail?, icon?, insert }[]`, best first (`icon`, a React node before the label, tells kinds apart in one menu); taken, `insert` replaces the word (end it with a space to go on typing). The composer draws the menu: ↑↓ pick, ⇥ or ⏎ take, esc leaves the word |
-| `superego.composer.sentWith({ read, component?, words? })` | draw what the daemon half's `beforeSend` put in sent messages. `read(blocks)` returns `{ items, blocks }`: what to draw and the indexes of the blocks it found them in, which the message's text then leaves out; `component` gets `{ machine, thread, items }` and draws under the message (a `<Chip icon title>` each, like a file's); `words(text, items)` returns the message's own words as Markdown to draw (`mentions` turns `@thread:42` into a `thread:` link). Drawn for threads that go without the extension now too |
-| `superego.store(key, initial, { persist?, shared? })` | state of the extension kept in the window: `get()`, `set(next)`, `subscribe`, and `use()` in a component. Give the bare key (`superego.store('columns', [])`): it's kept as `<name>.columns`, and `'<name>.columns'` is the same store. `persist` keeps it across reloads, for this window alone (each desktop window has its own), or for all of them with `shared` |
-| `superego.dispatch(id, params, { machine })` | run an action outside React |
+| `pane(kind, { title, component, icon?, file?, menu?, opens?, fallback?, folders?, urls?, width? })` | a kind of pane. `title`: a string or `(pane) => string`. `component` gets `{ machine, thread, pane }` (`pane.params`: what it was opened with). `icon`: a Phosphor icon for its tab. `file: true`: its title is a file name. `menu: true`: in the pane menu (needs no params). `opens: (path) => boolean`: files named in a thread open in it, ahead of the editor (`/\.csv$/.test(path)`); `fallback: true`: any file no kind `opens`; `folders: true`: folders (`params.path`, `''` for the thread's own); `urls: true`: web pages opened beside (`params.url`). `width`: share of the row (0.5) |
+| `space(kind, { title, component, icon?, match?, params?, about?, profile?, agent? })` | a view filling the main area, with a thread docked beside it: an app extension's or a global profile's only ([window.md](window.md#spaces)) |
+| `view(id, { title, icon?, context, fits, default?, component, order? })` | a view `<name>.<view>` the layout places. A profile's fits `beside`, `pane` (the pane menu; also a pane kind of its id) or `header`. `context: 'thread'`: `component` gets `{ place, machine, thread }`. `default`: a place, several, or none (offered only). The user can move or hide it, so don't assume where it is ([window.md](window.md#views-and-the-layout)) |
+| `slot(slot, component, { order? })` | a component in a [slot](#slots) |
+| `tool(name, row, { fold? })` | how a tool's calls look: [Tool rows](#tool-rows) |
+| `tool(name, component, { fold? })` | draw a tool's calls yourself: [Tool rows](#tool-rows) |
+| `link({ match, open, render?, target?, scheme? })` | claim links: [Links](window.md#links) |
+| `on(event, listener)` | hear the window, returns an unsubscribe (teardown unsubscribes too): `'thread.status'` `{ machine, thread, before }` (`before` undefined the first time; your profile's threads only), `'select'` `{ selection, before }`, `'focus'` `{ focused }`, `'visibility'` `{ visible }`. `superego.window` is now: `{ focused, visible, selection, thread, machines, threads }` (`threads`: each machine's in use) |
+| `style(css)` | CSS scoped to what this profile draws ([Styling](#styling)); returns a remover |
+| `theme({ id, name, appearance, syntax?, terminal?, ui?, accent? })` | (API ^5.5) a theme ([Themes](#themes)) |
+| `store(key, initial, { persist?, shared? })` | window state: `get()`, `set(next)`, `subscribe`, `use()`. Kept as `<name>.<key>` (`'<name>.<key>'` is the same store). `persist`: across reloads, this window only; `shared`: every window |
+| `composer.complete({ title, word, items })` | complete a word as it's typed. `word(text, caret)` finds it (`{ start, query, … }`) or nothing; the first to find one wins. `items(word, { machine, cwd, thread })` returns (or resolves to) `{ label, detail?, icon?, insert }[]`, best first (no `thread` in New thread). `insert` replaces the word (end with a space to keep typing). ↑↓ pick, ⇥ or ⏎ take, esc leaves |
+| `composer.sentWith({ read, component?, words? })` | draw what `beforeSend` added to sent messages. `read(blocks)` returns `{ items, blocks }`, the indexes of the blocks found, which leave the text. `component` gets `{ machine, thread, items }`, drawn under the message (a `<Chip icon title>` each). `words(text, items)` rewrites the message's Markdown (`mentions` turns `@thread:42` into a link). Drawn even for threads now without the extension |
+| `entry(kind, component)` | transcript entries of a kind it writes |
+| `settings(ui, component)` | drawn below the daemon half's settings section that names `ui` |
+| `appSetting(key)` | an app setting now, outside React (`useAppSetting` in components) |
+| `dispatch(id, params, { machine })` | run an action outside React |
+| `signal` | aborted at teardown (files changed, revoked). `setup` may also return a cleanup. Registering after throws |
 
-A profile's module may draw its tool calls the way it likes; if two draw the same tool, the first stays (with a warning
-in the console). A profile's own wins over a bundled extension's in its threads.
+Each component draws apart: one that throws shows "<name> failed to draw" with Retry, in its place. Window places (sidebars,
+the rail) are for bundled extensions and global profiles; work dividers, app settings and New thread fields for bundled
+extensions only ([bundled](bundled.md)). A window action (`defineAction` with `keys`) is in the
+[cheat sheet](cheatsheet.md).
 
-Slots a profile can fill, each given `{ machine, thread }` (and for the editor ones, `path` and `open(path)`):
+### Tool rows
+
+`tool(name, { icon?, verbs?, verb?, subject?, stat?, meta?, body?, phrase?, file?, weight? }, { fold? })` describes a
+row; what's left out (or returns `undefined`) is the default: its name, its `command`/`path`/`pattern`, its output.
+
+| | |
+|---|---|
+| `verbs` | done, working, failed: `['Read', 'Reading', 'Read failed']`; `verb(call)` for a call's own |
+| `subject` | what it acted on, after the verb: text (in mono) or a node (`<ThreadRef machine id />`); `null`: nothing |
+| `stat` | `{ added, removed }` lines |
+| `meta` | a little more at the row's end |
+| `body` | what it opens to; `null`: nothing |
+| `phrase(count)` | what `count` calls did, in a run's line (`read 2 files`) |
+| `file(args)` | the one file a lone call was about |
+| `weight` | which kind leads a run's line |
+| `fold: false` | show calls open under their run, not folded in (as `images` does) |
+
+The functions get the call and its `state` (`idle`, `working`, `done`, `error`).
+
+`tool(name, Component, { fold? })` draws calls whole. It gets `{ machine, thread, call: { id, name, arguments },
+result?: { text, isError, details, images? }, live?: { status, output, details } }`. `text` is the output then a failed
+call's error, as the user should read it (not the model's `<harness>` wrapper). `images` are `ImageItem`s (`entry`,
+`mimeType`, `width`, `height`; no pixels): read one with `call(machine.id, 'image.read', { thread: thread.id, image:
+{ entry: entry.id, message: entry.message, block: entry.block }, thumbnail: true })` → `{ data, mimeType }`, base64
+(leave out `thumbnail` for the whole).
+
+`tool('mcp__*', …)`: a name ending in `*` is a prefix, for tools without a row of their own; the longest wins, and its
+tools count as one kind in a run's line.
+
+If two modules draw the same tool, the first stays (with a console warning); a profile's own wins over a bundled
+extension's in its threads.
+
+### Slots
+
+Each gets `{ machine, thread }`; the editor's also `path` and `open(path)`.
 
 | Slot | |
 |---|---|
-| `header.chips` | among the chips that say where a thread works (a branch): draw a `<HeaderChip title>` |
-| `thread.badge` | after a thread's title in the sidebar: a small mark of something about it. Draw a `<ThreadBadge label>` around a 12px icon, or nothing ([below](#a-mark-in-the-sidebar)) |
+| `header.chips` | among the chips saying where a thread works (a branch): a `<HeaderChip title>` |
+| `thread.badge` | after a thread's title in the sidebar: a `<ThreadBadge label>` around a 12px icon, or nothing ([below](#a-mark-in-the-sidebar)) |
 | `composer.above` | above the message box: something waiting on the user |
-| `details.section` | in thread details (⌘I), after what the core says: an `<h5>` and what you know of the thread. |
+| `details.section` | in thread details (⌘I), after the core's: an `<h5>` and what you know of the thread |
 | `editor.side`, `editor.bar` | beside a file in the editor, and in its bar |
-| `overlay` | over everything: a dialog of your own, drawn while you want it. Mark its surface `data-superego-overlay` (Base UI popovers and dialogs from `superego/ui` are already known) so a web page in a pane, drawn above the window, steps aside while it's open |
-| `onboarding` | on first-run setup (Set up models…), among what was found on the machine: `{ machine, use }`, drawing a `SetupRow` for what yours offers to run models with, and calling `use({ label, detail, model })` once it's ready (API ^5.9; `model`: your kind of agent's, `<kind>/<model>`, made the machine's default, so new threads given none run on it). Claude Agent's finds Claude Code |
+| `overlay` | over everything: a dialog of your own. Mark its surface `data-superego-overlay` (the kit's popovers and dialogs already are) so a web page in a pane steps aside |
+| `onboarding` | (API ^5.9) in first-run setup, among what was found: `{ machine, use }`. Draw a `SetupRow`; call `use({ label, detail, model })` when ready (`model`: `<kind>/<model>`, made the machine's default). Claude Agent's finds Claude Code |
 
 ### A mark in the sidebar
 
-A mark on some threads' rows goes from the daemon half to the window in four steps: the daemon half keeps what it found
-in the thread's `state`, publishes it with `facts`, each `ThreadInfo` carries it as `thread.facts.<name>` (read it with
-`factsOf<T>(thread, name)`), and a `thread.badge` slot draws it. The daemon half for this one is in [Watching tool calls](daemon.md#watching-tool-calls):
+The daemon half keeps what it found in the thread's `state`, publishes it with `facts`; each `ThreadInfo` carries it
+as `thread.facts.<name>` (`factsOf<T>(thread, name)`), and a `thread.badge` slot draws it. The daemon half is in
+[Watching tool calls](daemon.md#watching-tool-calls):
 
 ```tsx
 // ui/db.tsx; in profile.ts: extensions: ['./db.ts'], ui: ['./ui/db.tsx']
@@ -122,40 +157,38 @@ function DbMark({ thread }: SlotProps['thread.badge']) {
 export default defineUiExtension({ name: 'db', setup: (superego) => superego.slot('thread.badge', DbMark) })
 ```
 
-The mark shows before the thread is opened: [the UI loads](#when-the-ui-loads) as soon as the window lists it.
+It shows before the thread is opened, since [the UI loads](#when-the-ui-loads) when the window lists it.
 
-Sidebars, the rail, spaces, work dividers, window actions, app settings and New thread fields are for bundled extensions
-(`superego --skill bundled`).
+### Inside a pane
 
-Inside a pane: `<PaneHeader>` puts small things in the pane's header beside its title: a `<PaneNote>` (a count, a path;
-`code`, `href`) and `<PaneButton>`s (Refresh). `<PaneMessage>` stands in for what the pane shows while there's nothing
-(Loading…, an error). `useTabNote(note, key)` shows a note on its tab in the strip (Changes shows
-`<DiffStat added removed />`, +3 −1); `useTabGlyph(glyph, key)` shows a glyph there in place of its kind's (Browser's
-spinner while a page loads: `<Glyph shape="working" quiet />`), null for its kind's own.
+| | |
+|---|---|
+| `<PaneHeader>` | small things beside the pane's title: a `<PaneNote>` (a count, a path; `code`, `href`), `<PaneButton>`s |
+| `<PaneMessage>` | stands in while there's nothing to show (Loading…, an error) |
+| `useTabNote(note, key)` | a note on its tab (Changes: `<DiffStat added removed />`) |
+| `useTabGlyph(glyph, key)` | a glyph in place of its kind's (`<Glyph shape="working" quiet />`); null for its kind's |
 
-A web page in a pane: `<WebView src partition="browser" title sandbox onEvent ref>` shows it as Browser does, as a browser
-tab on the desktop (its own cookies, back and forward through `ref`'s `go(-1)`, `reload()`, `stop()`, `load(url)`, `focus()`; `onEvent` hears where it is
-now, whether it's loading and how far (`state.loading`, `state.progress`), a file it saved, what it was refused), framed in a browser (`sandbox` is the frame's). `hasWebViews()` says which.
-`ref`'s `run(fn, ...args)` runs a self-contained function in the page (`(window, ...args) => …`, its source alone
-goes there; on the desktop in a world of the app's own, framed only in a page of the window's origin) and gives back
-what it returns; `capture(rect)` gives a part of the page as a PNG (none framed).
-Focused, the pane keeps the keyboard until Return (or a click) passes it into the page; `onWaiting(waiting)` says when
-it's waiting for that, for a hint.
+**A web page:** `<WebView src partition="browser" title sandbox onEvent ref>` shows one as Browser does: a browser tab
+on the desktop (own cookies), a frame in a browser (`sandbox` is the frame's); `hasWebViews()` says which.
+
+- `ref`: `go(-1)`, `reload()`, `stop()`, `load(url)`, `focus()`; `run(fn, ...args)` runs a self-contained function in
+  the page (`(window, ...args) => …`, only its source goes; on the desktop in the app's own world, framed only on the
+  window's origin) and returns its result; `capture(rect)` a PNG of part of the page (not framed).
+- `onEvent`: where it is, `state.loading`, `state.progress`, a file it saved, what it was refused.
+- Focused, the pane keeps the keyboard until Return (or a click) passes it in; `onWaiting(waiting)` says when, for a
+  hint.
 
 ## From 'superego/ui'
 
-Talking to the daemon:
+**Talking to the daemon:**
 
-- `call(machine.id, 'orders.find', params)`: a read, a daemon half's method (or any protocol method). A promise of
-  its result.
-- `useDispatch()` → `dispatch(id, params, { machine: machine.id })`: run an action (a daemon half's, or a
-  built-in like `pane.open`, `thread.send`): something that changes things. Returns a promise of its result.
-- `useValue<T>(machine, 'orders.recent')`: a daemon half's live value, kept current (`{ scope: thread.id }`: a
-  scoped value's part for that thread). Undefined until it arrives, null while nothing publishes it yet (the profile hasn't loaded). However many
-  components watch the same value, the window holds one subscription.
-- `useThreads`, `useAllThreads`, `useProjects`, `useSelection`, `useMachines`: what the window knows ("Reading threads", below).
-
-Opening things:
+| | |
+|---|---|
+| `call(machine.id, 'orders.find', params)` | a read: a daemon half's method (or any protocol method); a promise |
+| `useMethod(machine.id, method, params, { enabled, refresh })` | a method's answer in a component, with `error`, `loading`, `refetch`; called again as `params` or `refresh` change, stale answers dropped |
+| `useDispatch()` → `dispatch(id, params, { machine: machine.id })` | run an action (a daemon half's, or `pane.open`, `thread.send`); a promise |
+| `useValue<T>(machine, key, { scope? })` | a live value, kept current: undefined until it arrives, null while nothing publishes it. One subscription however many components watch |
+| `has(machine, 'ext:x@^1.2')`, `version(machine, 'x')` | whether a machine has an extension on (at a version): [Versions](lifecycle.md#versions-and-compatibility) |
 
 <!-- check: ui; declare const dispatch: import('superego/ui').Dispatch, thread: ThreadInfo -->
 ```ts
@@ -164,63 +197,66 @@ dispatch('pane.open', { thread: thread.id, kind: 'browser', params: { url: 'http
 dispatch('thread.send', { thread: thread.id, text: 'Ship it' }, { machine: machine.id })
 ```
 
-Components: `Button`, `IconButton`, `TextField`, `TextArea`, `Select`, `Switch`, `List`, `ListItem`, `Panel`,
-`Dialog`, `Menu`, `Popover`, `Tooltip`, `StatusGlyph`, `StatusWord`, `Glyph`, `Markdown` (an agent's text set exactly as the transcript sets it, its links followed by the same handlers: `<Markdown text={answer} />`; for a preview, `<Markdown text={answer} compact lines={4} />`: `lines` cuts it to that many lines with an ellipsis, `compact` sets it at the UI's size with tighter spacing), `FileEditor` (the file editor,
-Markdown in live preview: `<FileEditor machine={machine} thread={thread} path={path} actions={…} />`; its links follow the link handlers, as a message's do), `TextEditor` (the same editor for text kept anywhere: `<TextEditor value={text} onChange={save} mode="live" />`, `mode` one of `TEXT_MODES`' (`rendered`, `live`, `source`); a new `value` from outside, the agent's edit, goes in as the least change, so the cursor stays put, and isn't told to `onChange`; `revision` takes the same `value` in again; `place` keeps the cursor and scroll; `links`, where its links are from; `readOnly`), `Diff`
-(a unified diff, file by file: `<Diff diff={text} />`; `parseDiff(text)` for its files and counts), `Picker` (a dialog
-with a list that narrows as you type, as the palette is: `<Picker label placeholder items={list} filter={(items, query) => …}
-row={(item) => ({ key, title, glyph?, detail?, keys? })} onPick={(item, { beside }) => …} onClose digits? empty? footer? />`;
-↑↓ move, ⏎ picks, ⌘⏎ beside, `digits`: ⌃1–⌃9 pick the first nine), `ThreadRef` (a thread named as itself, kept
-current: `<ThreadRef machine={id} id={thread} />`), `SignInFlow` (a sign-in flow drawn as Settings → Providers draws one,
-for an action of the daemon half that answers with `superego.auth.flow`'s `{ flow }`: `<SignInFlow machine={id}
-title="Signing in to Linear" start={() => dispatch('x.signIn', { … }, { machine: id })} onClose={…} />`; it starts as it
-mounts, opens the page in the browser, asks what the flow asks, and has Cancel), and the Phosphor icons the app
-uses (`ArchiveIcon`, …).
+**Components:**
 
-Others: `useComposer()` (the message box), `useComposerClaim({ placeholder, submit })` (take the message box over while
-something waits on the user), `addToComposer({ machine, thread }, { label, detail?, files })` (a chip in a thread's
-composer, its files sent with the next message; it takes the keyboard), `useLocalState(key, initial, { shared? })` (state kept in the window across reloads; `shared` by every window), `useShortcut(actionId)` (its key's
-label), `score` (fuzzy matching), `transcriptLinks(machine, thread)` (the links a thread's transcript shows, in order: `{ text, href, target, open(beside) }`), `h` (`React.createElement`, for modules without JSX).
+| | |
+|---|---|
+| `Button`, `IconButton`, `TextField`, `TextArea`, `Select`, `Switch`, `List`, `ListItem`, `Panel`, `Dialog`, `Menu`, `Popover`, `Tooltip` | the window's controls |
+| `StatusGlyph`, `StatusWord`, `Glyph` | a status's mark and word ([Reading threads](#reading-threads)) |
+| `Markdown` | an agent's text as the transcript sets it, links followed by the same handlers: `<Markdown text={answer} />`; `compact` (UI size, tighter) and `lines={4}` (cut with an ellipsis) for a preview |
+| `FileEditor` | the file editor, Markdown in live preview: `<FileEditor machine={machine} thread={thread} path={path} actions={…} />` |
+| `TextEditor` | the same editor for text kept anywhere: `<TextEditor value={text} onChange={save} mode="live" />`. `mode`: one of `TEXT_MODES` (`rendered`, `live`, `source`). A new `value` from outside goes in as the least change, cursor kept, without `onChange`; `revision` takes the same `value` again; `place` keeps cursor and scroll; `links`, where its links are from; `readOnly` |
+| `Diff` | a unified diff, file by file: `<Diff diff={text} />`; `parseDiff(text)` for its files and counts |
+| `Picker` | a narrowing list, like ⌘K: `<Picker label placeholder items={list} filter={(items, query) => …} row={(item) => ({ key, title, glyph?, detail?, keys? })} onPick={(item, { beside }) => …} onClose digits? empty? footer? />`. ↑↓, ⏎ picks, ⌘⏎ beside, `digits`: ⌃1–⌃9 |
+| `ThreadRef` | a thread named as itself, kept current: `<ThreadRef machine={id} id={thread} />` |
+| `SignInFlow` | a sign-in flow as Settings → Providers draws one, for an action answering `auth.flow`'s `{ flow }`: `<SignInFlow machine={id} title="Signing in to Linear" start={() => dispatch('x.signIn', { … }, { machine: id })} onClose={…} />`. Starts on mount, opens the browser, asks what the flow asks, has Cancel. On the desktop, a remote flow's loopback `callback` is caught here |
+| `HeaderChip`, `ThreadBadge`, `Chip`, `RailButton` | for slots (`RailButton`: bundled extensions' rail) |
+| Phosphor icons | `ArchiveIcon`, … |
+
+**Others:** `useComposer()` (the message box); `useComposerClaim({ placeholder, submit })` (take it over while
+something waits on the user); `addToComposer({ machine, thread }, { label, detail?, files })` (a chip whose files go
+with the next message; takes the keyboard); `useLocalState(key, initial, { shared? })` (window state across reloads;
+`shared`: every window); `useShortcut(actionId)` (its key's label); `score` (fuzzy matching);
+`transcriptLinks(machine, thread)` (a transcript's links in order: `{ text, href, target, open(beside) }`);
+`factsOf(thread, name)`; `parseWikilink(href)`; `h` (`React.createElement`, without JSX).
 
 ## Reading threads
 
-The window follows every connected machine's threads, live, with one subscription per machine however many components
-read them. A profile's UI sees them all, not just its own profile's.
+The window follows every connected machine's threads live, one subscription per machine. A profile's UI sees them
+all, not only its profile's.
 
 | Hook | Gives |
 |---|---|
-| `useThreads(machine.id)` | that machine's threads, `ThreadInfo[]`, newest first; `undefined` until the machine says (or while it's away and never answered) |
-| `useAllThreads()` | every machine's: `Record<machineId, ThreadInfo[] \| undefined>` |
-| `useProjects()` | `{ projects, lastThread, hold }`: `projects` in the sidebar's order, each a `Project`, `{ key, machine, root, name, threads, depth, activeAt, status }` (a project's threads, `depth` how far each is nested under the thread that started it, `status` the most pressing of theirs); `lastThread[key]` the thread last shown in it |
-| `useSelection()` | `{ selection, select, machine, thread }`: the thread shown (`selection` is `{ machine, thread }` ids, `thread` its `ThreadInfo`), and `select({ machine, thread })` to show another, or `select(undefined)` |
-| `useMachines()` | every machine, `MachineEntry`: `id`, `label`, `state` (`'connected'`, …) |
+| `useThreads(machine.id)` | that machine's `ThreadInfo[]`, newest first; `undefined` until it answers |
+| `useAllThreads()` | `Record<machineId, ThreadInfo[] \| undefined>` |
+| `useProjects()` | `{ projects, lastThread, hold }`: `projects` in sidebar order, each `{ key, machine, root, name, threads, depth, activeAt, status }` (`depth`: nesting under the thread that started it; `status`: the most pressing); `lastThread[key]`: the thread last shown there |
+| `useSelection()` | `{ selection, select, machine, thread }`: the thread shown (`selection`: `{ machine, thread }` ids; `thread`: its info); `select({ machine, thread })` or `select(undefined)` |
+| `useMachines()` | every `MachineEntry`: `id`, `label`, `state` (`'connected'`, …) |
 
-Archived threads aren't in the lists, nor hidden ones (an extension's own agent, like Ego's).
+None list archived or hidden threads.
 
-A `ThreadInfo` (type from `'superego/ui'`): `id`, `title`, `cwd` (where it works), `createdAt`, `activeAt` (when
-anything last happened in it: a dependency for `useMethod`'s `refresh`), `project` (`{ root, name }`: its project),
-`parent` (the thread that started it), `profile` (`{ name, scope: 'user' | 'project', dir }`; absent: none), `model`,
-`cost` (dollars), `panes` and `pane` (what's open beside it), `without` (optional extensions it goes without), `facts`
-(each extension's facts about it, by name: `facts.worktrees`), and `status`.
+`ThreadInfo`: `id`, `title`, `cwd`, `createdAt`, `activeAt` (last activity; use as `useMethod`'s `refresh`),
+`project` (`{ root, name }`), `parent`, `profile` (`{ name, scope: 'user' | 'project', dir }`; absent: none), `model`,
+`cost` (dollars), `panes` and `pane`, `without` (optional extensions it lacks), `facts` (by extension name), `status`.
 
-`status` is `{ state, kind?, msg? }` (type `Status`). The states, most pressing first:
+`status` is `{ state, kind?, msg? }` (`Status`), most pressing first:
 
 | `state` | Means | `msg` |
 |---|---|---|
-| `blocked` | it needs the user: `kind` is `question` (an `ask_user`), `permission`, or `auth` (its provider refused the credentials; it goes on by itself once signed in again) | what it waits on |
-| `error` | its last run failed, and nobody has looked since | why |
-| `done` | it finished with an answer the user hasn't seen yet | what the run did, in a line (when there's a recap) |
+| `blocked` | needs the user: `kind` is `question` (`ask_user`), `permission`, or `auth` (provider refused the credentials; resumes once signed in) | what it waits on |
+| `error` | its last run failed, unseen | why |
+| `done` | finished with an answer, unseen | the run's recap, if any |
 | `working` | a run is going | |
-| `idle` | nothing to see: never run, or its answer or failure seen (showing the thread marks it seen) | |
+| `idle` | nothing to see (never run, or seen) | |
 
-So `done` and `error` turn `idle` once the user opens the thread: they mean "unseen", not "finished" or "failed for
-good". `StatusGlyph` draws a status's mark as every list does (`<StatusGlyph status={t.status} quiet={t.quiet} />`;
-`quiet`: a thread that reports to another, its work grey and its finished runs not new), `StatusWord` its word in its
-colour, and `statusWord(status)` and `statusLabel(status)` say it as the app, the CLI and notifications do: "Question",
-"Permission", "Sign in", "Failed", "Done", "Working" (the label adds what it did or why: "Done: <recap>"). `Glyph`
-draws the same marks by name (`<Glyph shape="landed" />`), with a few that aren't a thread's status: `queued`,
-`stalled`, `landed`, `offline`, `connecting`. To act on a change
-outside React, `superego.on('thread.status', …)` (the setup API, above).
+`done` and `error` mean *unseen*: opening the thread turns them `idle`.
+
+- `<StatusGlyph status={t.status} quiet={t.quiet} />` draws a status's mark as every list does (`quiet`: a thread that
+  reports to another, grey, its finished runs not new). `StatusWord` draws its word in its colour.
+- `statusWord(status)`, `statusLabel(status)`: the words the app, CLI and notifications use ("Question", "Permission",
+  "Sign in", "Failed", "Done", "Working"; the label adds the recap or reason).
+- `<Glyph shape="landed" />` draws marks by name, including `queued`, `stalled`, `landed`, `offline`, `connecting`.
+- Outside React: `superego.on('thread.status', …)`.
 
 A board of one machine's threads, a column per state:
 
@@ -252,54 +288,44 @@ function Board({ machine }: PaneProps) {
 export default defineUiExtension({ name: 'board', setup: (superego) => superego.pane('board', { title: 'Board', component: Board, menu: true }) })
 ```
 
-Every machine's instead: `Object.entries(useAllThreads())`, with `useMachines()` for each one's `label`.
+Every machine's instead: `Object.entries(useAllThreads())`, with `useMachines()` for labels.
 
 ## Styling
 
-Bring styles with `superego.style(css)` in `setup` (a profile's UI can't import CSS), and use the theme's variables so
-they follow light and dark mode, the user's accent, and with Match window to theme on, the chosen theme:
+`superego.style(css)` in `setup` (a profile's UI can't import CSS). Use the theme's variables so it follows light, dark,
+the accent and the chosen theme:
 
 <!-- check: ui -->
 ```ts
 superego.style(`.order-pane { padding: var(--superego-space-3); color: var(--superego-muted); border-radius: var(--superego-radius); }`)
 ```
 
-They go with the UI when it's reloaded or revoked. They apply only to what your profile draws on its machine: its panes,
-views, slots, tool rows, entries, links and settings, with the menus, popovers, dialogs and `PaneHeader` contents those
-open. The window's own UI and other profiles' don't get them, and neither does the same profile from another machine at
-another version. So two profiles, or two versions of one, can use the same class names.
+Styles go with the UI when it reloads or is revoked, and apply only to what your profile draws on its machine: its
+panes, views, slots, tool rows, entries, links, settings, and the menus, popovers, dialogs and `PaneHeader` contents
+they open. Not to the window's UI, other profiles', or this profile from another machine at another version, so class
+names can't clash.
 
-What that means for your CSS:
+- `:root`, `html` and `body` don't match; `:scope` is the box-less element your component is drawn in.
+- `@media`, `@supports`, `@container` and nesting work. `@import` doesn't.
+- `@keyframes`, `@font-face` and `@property` names are global: prefix them with your extension's name.
+- An element you portal yourself (`createPortal` to `document.body`) isn't styled: portal through `Menu`, `Popover`,
+  `Dialog`, `Tooltip`, `PaneHeader`.
+- A `<style>` you append to `document.head` styles the whole window, every profile included.
 
-- `:root`, `html` and `body` don't match: style your own elements. `:scope` matches the box-less element your component
-  is drawn in.
-- `@media`, `@supports`, `@container` and nesting work as usual. `@import` doesn't.
-- `@keyframes`, `@font-face` and `@property` names are still the window's: prefix them with your extension's name.
-- An element you portal yourself (`createPortal` to `document.body`) is outside your UI and doesn't get them. Portal
-  through the window's components (`Menu`, `Popover`, `Dialog`, `Tooltip`, `PaneHeader`) instead.
-
-A `<style>` you append to `document.head` yourself still works, but it styles the whole window, every profile's threads
-included. Use it only for something truly window-wide.
-
-Useful variables: `--superego-bg`, `--superego-raised`, `--superego-border`, `--superego-muted`, `--superego-faint`,
+Variables: `--superego-bg`, `--superego-raised`, `--superego-border`, `--superego-muted`, `--superego-faint`,
 `--superego-accent`, `--superego-hover`, `--superego-selected`, `--superego-font`, `--superego-mono`,
-`--superego-radius`, `--superego-radius-lg`, `--superego-space-1` … `--superego-space-7`. Name your own classes after
-your extension (`board-lane`); the window's own look comes through its components (`PaneMessage`, `HeaderChip`, …), not
-its class names.
+`--superego-radius`, `--superego-radius-lg`, `--superego-space-1` … `--superego-space-7`. Name classes after your
+extension (`board-lane`); get the window's look from its components, not its class names.
 
-A pane is a column that can be narrow (and a whole screen on a phone): lay it out to fill its parent with flex, and
-let it scroll.
+A pane can be narrow (a whole screen on a phone): fill the parent with flex, and let it scroll.
 
 ## Themes
 
-Bring a theme for code and the terminal with `superego.theme(theme)`. The user picks one theme for light and one for
-dark in Settings → Appearance; yours is listed in the picker for its `appearance`, under your extension's name. Chosen,
-it colours code in the editor, in messages and in rendered files, diffs, and the terminal, everywhere in the window (a
-profile's theme too, not only in its own threads); the window's own backgrounds and text only with Match window to
-theme on (below). `accent` colours the window's accent too, unless the user chose their own.
-With Match window to theme on (Settings → Appearance), the window's backgrounds, text and lines follow the theme's
-ground and text (`ui.bg`/`ui.fg`, else the terminal's), derived by a few fixed steps, and its links `ui.link`;
-`ui['accent-text']` is the text on its accent.
+`superego.theme(theme)` adds a theme to Settings → Appearance's picker for its `appearance`, under your extension's
+name. Chosen, it colours code (editor, messages, rendered files), diffs and the terminal everywhere, not only in your
+threads; `accent` colours the window's accent unless the user chose their own. With Match window to theme, the
+window's backgrounds, text and lines follow `ui.bg`/`ui.fg` (else the terminal's), links `ui.link`, and
+`ui['accent-text']` is text on the accent.
 
 <!-- check: ui -->
 ```ts
@@ -311,18 +337,16 @@ superego.theme({
 })
 ```
 
-Every part but `id`, `name` and `appearance` is optional, and a role you leave out keeps Superego's own colour. Colours
-are hex (`#rrggbb`, with alpha too) or CSS colour functions (`rgb()`, `oklch()`, `color(display-p3 …)`). The roles:
-
+- `id` (starting with your extension's name), `name` and `appearance` (`'light'` or `'dark'`) are required; a role
+  left out keeps Superego's. A theme that doesn't read throws, saying why.
+- Colours: hex (`#rrggbb`, with alpha too) or CSS colour functions (`rgb()`, `oklch()`, `color(display-p3 …)`).
 - `syntax`: `keyword`, `string`, `number`, `comment`, `function`, `type`, `tag`, `attribute`, `definition`, `meta`,
-  `inserted`, `deleted` (a diff's lines, in code and the Diff pane), `invalid`.
-- `terminal`: `fg`, `bg`, `cursor`, `selection`, and the 16 ANSI colours, `black` … `white` and `bright-black` …
-  `bright-white`.
+  `inserted`, `deleted` (a diff's lines), `invalid`.
+- `terminal`: `fg`, `bg`, `cursor`, `selection`, and `black` … `white`, `bright-black` … `bright-white`.
 
-The `Theme` type is in `superego/ui`. The same format is what Settings → Appearance → Import theme… reads, besides VS
-Code themes and Ghostty and iTerm2 colour files.
+The `Theme` type is in `superego/ui`; Import theme… reads the same format.
 
 ## A complete example
 
-[`examples/build-queue-ui`](examples/build-queue-ui): a daemon half with a tool, a scoped value and an action, and a
-UI half that draws the thread's queue beside it, with tests on `superego/testing`.
+[`examples/build-queue-ui`](examples/build-queue-ui): a daemon half with a tool, a scoped value and an action, and a UI
+half drawing the thread's queue beside it, with tests.

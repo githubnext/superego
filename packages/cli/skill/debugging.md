@@ -10,28 +10,28 @@
 | a profile's UI didn't load or a component threw | the window's developer tools console (View → Toggle Developer Tools, ⌥⌘I) |
 | the daemon itself | `~/.superego/daemon.log` |
 
-Load a profile without waiting for a model: `superego start . -P <name>` loads it and prints an error if it can't (and starts an
-empty thread when it can: archive it after).
-With `SUPEREGO_MODEL=faux` in the daemon's environment, turns echo instead of calling a provider.
+To load a profile without a model, `superego start . -P <name>`: it prints the error if it can't load (else it starts
+an empty thread; archive it). `SUPEREGO_MODEL=faux` in the daemon's environment makes turns echo.
 
 ## Common causes
 
-- **"allow it first"**: a project's profile changed since it was allowed (any file in its folder). The user looks it
-  over and allows it: in the window (where the thread asks, or Settings → Profiles), or `superego profile allow <name>`
-  in the project, in their own terminal. An agent can't: tell them.
-- **"No profile …"**: profiles are found from the thread's folder up to its repository's top (the folder alone outside
-  one) (`.superego/profiles/<name>/profile.ts`), then in `~/.superego/profiles`. One in a folder another user can write
-  isn't. Check with `superego profile` in that folder.
+- **"allow it first"**: a project's profile changed since it was allowed. The user allows it in the window (where the
+  thread asks, or Settings → Profiles) or with `superego profile allow <name>` in their own terminal. An agent can't:
+  tell them.
+- **"No profile …"**: profiles are looked for from the thread's folder up to its repository's top (the folder alone
+  outside one), then in `~/.superego/profiles`; never in a folder another user can write. Check with
+  `superego profile` in that folder.
 - **"must export default …"**: `profile.ts` exports `defineProfile({ … })`; each `extensions` module exports an
   extension with a `name`; each `ui` module exports `defineUiExtension({ name, setup })`.
 - **"must name things \"orders.<name>\""**: a daemon half's actions and values start with its own name.
 - **"Action … is already defined"**: two extensions (or two profiles) define the same id; ids are per machine.
 - **A UI module "imports X"**: a profile's UI can import only `react`, `react/jsx-runtime`, `superego/ui` and its own
   files.
-- **A change doesn't show**: the daemon reloads a profile on the thread's next turn; the window reloads its UI when a
-  shown thread of it next moves on ([ui.md](ui.md#when-the-ui-loads)). Send the thread a message. Changes to Superego's own code need `superego daemon restart`.
-- **A pane kind isn't found**: it is registered by the profile's UI, which draws only for threads with that profile;
-  check `ui` in `profile.ts` and the console.
+- **A change doesn't show**: send the thread a message. The daemon reloads a profile on the next turn; the window its
+  UI when a shown thread of it moves on ([ui.md](ui.md#when-the-ui-loads)). Superego's own code needs
+  `superego daemon restart`.
+- **A pane kind isn't found**: the profile's UI registers it, only for that profile's threads. Check `ui` in
+  `profile.ts`, and the console.
 - **The agent never opens the pane**: describe it under `panes` in `profile.ts`, with its params, and say in `prompt`
   when to open it.
 

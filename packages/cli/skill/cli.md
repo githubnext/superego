@@ -1,139 +1,122 @@
 # The superego command
 
-Every command talks to a machine's daemon, starting this computer's when it isn't running. Two options work
-everywhere:
+Every command talks to a machine's daemon, starting this computer's if it isn't running.
 
-- `-m <machine>` works on another machine (by name or id from `superego machines`). Default: this computer.
-- `--json` prints JSON instead of a table. Use it whenever a program (or you) reads the output.
+| Option | |
+|---|---|
+| `-m <machine>` | work on another machine (name or id from `superego machines`); default: this computer |
+| `--json` | JSON instead of a table: use it whenever a program (or you) reads the output |
+| `--help` | one command's usage, options and examples (`superego extension test --help`); `superego help` lists every command |
 
-`superego help` lists every command; `superego <command> --help` (`superego extension test --help`, say) gives one
-command's usage, options and examples.
-
-Settings → Command line installs `superego` in `~/.local/bin`, running the CLI built into the app.
-`superego --skill` prints a skill for agents on using and extending Superego;
-`superego --skill > ~/.agents/skills/superego/SKILL.md` installs it, and `superego --skill <topic>` prints one topic.
+Settings → Command line installs `superego` in `~/.local/bin`. `superego --skill` prints this skill
+(`superego --skill > ~/.agents/skills/superego/SKILL.md` installs it); `superego --skill <topic>` prints one topic.
 
 ## Threads
 
 ```sh
-superego [dir] [-p prompt] [-P profile] [-w]   # start a thread in dir (default: here) and open it in the app
+superego [dir] [-p prompt] [-P profile] [-w]         # start a thread in dir (default: here) and open it in the app
 superego start [dir] [-p prompt] [-P profile] [-w]   # the same without the app; prints the id (also: new)
-superego open <thread>                         # show a thread in the app
-superego send <thread> <text...>               # send a message
-superego threads [--archived]                  # list them (also: ls)
-superego read <thread> [--wait]                # its state and last answer; --wait: once it stops working
-superego unread [--count]                      # what's done, failed or needs you, unseen: the app icon's count
+superego open <thread>                               # show a thread in the app
+superego send <thread> <text...>                     # send a message
+superego threads [--archived]                        # list them (also: ls)
+superego read <thread> [--wait]                      # its state and last answer; --wait: once it stops working
+superego unread [--count]                            # what's done, failed or needs you, unseen: the app icon's count
 ```
 
-- `-P <profile>` picks a profile; without it a thread gets the folder's `default` profile, the project's before
-  yours, or none.
-- `-w` gives the thread a git worktree of its own: `~/.superego/worktrees/<repo>/<slug>`, branch `superego/<slug>`.
-- On another machine (`-m`), `dir` is a path there.
-- `superego do thread.start --parent <thread> …` starts it as that thread's child (nested under it in the sidebar).
-  Inside a thread, agents have `thread_start`, `thread_read` (`wait: true`), `thread_send`, `thread_list` and
-  `thread_archive` (a thread that isn't working, or with no `thread` their own, once the turn ends), and name threads in
-  messages as `[title](thread:<id>)`.
+- `-P <profile>`: without it, the folder's `default` profile, the project's before yours, or none.
+- `-w`: a git worktree of its own, `~/.superego/worktrees/<repo>/<slug>` on branch `superego/<slug>`.
+- With `-m`, `dir` is a path on that machine.
+- `superego do thread.start --parent <thread> …` starts a child, nested under that thread. Inside a thread, agents
+  have the [thread tools](thread-tools.md).
 
-A thread's status is `idle`, `working`, `done`, `blocked` (waiting on the user: a question, say) or `error`. Blocked
-with kind `auth` is waiting for sign-in: its provider rejected the machine's credentials, and it goes on by itself
-once they change (`superego threads` says which provider, and how to sign in again). To wait for an answer from a
-script, `read --wait` (it waits for the answer to a message just sent too; `--json` for `{ thread, answer }`):
+A thread's status is `idle`, `working`, `done`, `blocked` (waiting on the user) or `error`. Blocked with kind `auth`
+waits for sign-in: its provider rejected the machine's credentials, and it goes on once they change (`superego threads`
+says which provider).
 
 ```sh
 id=$(superego start . -p "Summarise the open TODOs")
-superego read "$id" --wait
-superego send "$id" "Now the tests" && superego read "$id" --wait
+superego read "$id" --wait                          # also waits for the answer to a message just sent
+superego send "$id" "Now the tests" && superego read "$id" --wait   # --json: { thread, answer }
 ```
 
-The command line prints a thread's last answer, not its transcript; open it in the app (`superego open <id>`).
+`read` prints the last answer, not the transcript; `superego open <id>` shows that.
 
-`superego unread` counts by the app icon's rule, on this computer and every machine its daemon is connected to. It
-never starts the daemon (with none running it prints 0), so a status bar can poll it:
-`superego unread --count`, or `--json` for `{ count, threads: [{ machine, id, title, state }] }`.
+`superego unread` counts as the app icon does, across every connected machine. It never starts the daemon (none
+running: 0), so a status bar can poll `superego unread --count`, or `--json` for
+`{ count, threads: [{ machine, id, title, state }] }`.
 
 ## Actions
 
-Everything the app can do is an action. `superego actions` lists those a machine takes from the command line, with
-their parameters (`?` marks optional ones, `a|b` choices); `--all` lists every action, window ones too.
+`superego actions` lists the actions a machine takes from the command line, with parameters (`?` optional, `a|b`
+choices); `--all` adds the window's.
 
 ```sh
-superego actions
-superego do <action> --<param> <value> ...      # values are coerced to the action's schema
-superego do <action> --params '<json object>'   # all parameters at once, for nested values
+superego do <action> --<param> <value> ...      # values coerced to the action's schema
+superego do <action> --params '<json object>'   # all at once, for nested values
 superego actions log                            # the latest runs, from anywhere, with errors
 ```
 
-Useful ones:
-
 | Action | Does |
 |---|---|
-| `thread.start` `cwd? title? prompt? profile? model? parent? options?` | start a thread; `options: { worktrees: true }` gives it a git worktree of its own |
+| `thread.start` `cwd? title? prompt? profile? model? parent? options?` | start a thread; `options: { worktrees: true }` gives it a worktree |
 | `thread.send` `thread text whenBusy?=steer\|followUp` | send a message |
-| `thread.stop` `thread` | stop the agent, and the messages waiting their turn: answers `{ returned }`, the user's own (each its `content` and `attachments`), to write again; another thread's or an extension's are withdrawn, and the transcript says so |
-| `thread.rename` `thread title`, `thread.archive` `thread`, `thread.unarchive` `thread` | `thread.archive` answers `{ notes }`, what extensions did (its worktree removed, say). Ego is never archived |
-| `pane.open` `thread kind title? params?` | open a pane beside a thread (`editor`, `thread`; `diff` from git, `browser` (`{ url }` or `{ path }`) from browser; a profile's own) |
+| `thread.stop` `thread` | stop the agent and its queued messages. Answers `{ returned }`: the user's own (each its `content` and `attachments`), to write again; others' are withdrawn, and the transcript says so |
+| `thread.rename` `thread title`, `thread.archive` `thread`, `thread.unarchive` `thread` | `thread.archive` answers `{ notes }`, what extensions did (removed its worktree, say). Ego is never archived |
+| `pane.open` `thread kind title? params?` | open a pane: `editor`, `thread`; `diff` (git); `browser` (`{ url }` or `{ path }`); a profile's own |
 | `pane.close` `thread pane`, `pane.focus` `thread pane?` | |
-| `pane.move` `thread pane to` | move a pane to another place beside the thread (`to`: 0 first) |
-| `pane.resize` `thread pane? width? last?` | how wide the thread's column (no `pane`) or a pane's is, a factor of the window's width (no `width`: the default) |
-| `profile.list` `cwd? user?`, `profile.allow` `cwd? name?` | `user`: yours only, wherever they come from |
+| `pane.move` `thread pane to` | move a pane (`to`: 0 is first) |
+| `pane.resize` `thread pane? width? last?` | the thread's column (no `pane`) or a pane's width, a share of the window (no `width`: the default) |
+| `profile.list` `cwd? user?`, `profile.allow` `cwd? name?` | `user`: yours only |
 | `profile.sources`, `profile.install` `source`, `profile.remove` `source`, `profile.update` `source?` | profile sources (`install` is the user's consent) |
-| `ego.ask` `prompt?` | ask Ego, Superego's own agent (one hidden thread per machine): it answers, changes settings and machines, and starts threads for any other work |
-| `ego.clear` | clear Ego's conversation: the same thread, empty again |
-
-`pane.open` takes nested `params`, so give it JSON:
+| `ego.ask` `prompt?` | ask Ego, Superego's own agent (one hidden thread per machine) |
+| `ego.clear` | empty Ego's thread |
 
 ```sh
 superego do pane.open --params '{"thread":"<thread>","kind":"editor","params":{"path":"README.md"}}'
 ```
 
-Extensions add their own actions (`agent-ui.answer`, `vault.graph`); they show in the list too.
+Extensions' actions (`agent-ui.answer`, `vault.graph`) are listed too.
 
 ## Outside agents
 
-`superego mcp` serves a machine's actions to agents outside Superego (outside agents), as an MCP server on stdio:
+`superego mcp` serves a machine's actions to agents outside Superego, as an MCP server on stdio:
 
 ```sh
 claude mcp add superego -- superego mcp         # or {"command": "superego", "args": ["mcp"]} in a client's config
 superego mcp -m <machine>                       # one server per machine
 ```
 
-Each action exposed to `outside` is a tool named for its id with `_` for `.` (`thread.start` is `thread_start`, the
-same name as the tool agents inside have), its schema the action's; it runs through `action.run` with
-`exposure: 'outside'`, so `superego actions log` shows it from `outside`.
-Exposed: `thread.send`, `thread.stop`, `thread.rename`, `thread.archive`, `thread.unarchive`, `pane.open`,
-`profile.list`, `ego.ask` (the machine's Ego; its answer comes as any thread's), and `thread.start` once the machine
-allows it:
-
-```sh
-superego settings set outside.startThreads true   # Settings → Outside agents → Can start threads; off by default
-```
-
-Two tools of the server's own read: `thread_list` (`archived?`) and `thread_read` (`thread wait?`: its state and last
-answer, after it stops working with `wait`; Ego's thread too). Nothing that changes settings, signs in, allows a
-profile, writes files or restarts the daemon is a tool; an extension's action becomes one by adding `'outside'` to its
-`expose`. The tools follow the machine's extensions and settings as they change (`tools/list_changed`).
+- Each action exposed to `outside` is a tool named for its id with `_` for `.` (`thread_start`), its schema the
+  action's. It runs with `exposure: 'outside'` (`superego actions log` shows it so).
+- Exposed: `thread.send`, `thread.stop`, `thread.rename`, `thread.archive`, `thread.unarchive`, `pane.open`,
+  `profile.list`, `ego.ask`, and `thread.start` once the machine allows it:
+  `superego settings set outside.startThreads true` (Settings → Outside agents → Can start threads; off by default).
+- Its own tools: `thread_list` (`archived?`) and `thread_read` (`thread wait?`; Ego's thread too).
+- Nothing that changes settings, signs in, allows a profile, writes files or restarts the daemon. An extension's action
+  becomes a tool by adding `'outside'` to its `expose`.
+- The tool list follows the machine's extensions and settings (`tools/list_changed`).
 
 ## Profiles
 
 ```sh
 superego profile                    # the profiles a thread here could start with
-superego profile new [name]         # .superego/profiles/<name>/profile.ts in this project, allowed (an agent's waits for the user)
+superego profile new [name]         # .superego/profiles/<name>/profile.ts here, allowed (an agent's waits for the user)
 superego profile new [name] --user  # ~/.superego/profiles/<name>: yours, everywhere
 superego profile types [name]       # types for an editor: tsconfig.json, node_modules → ~/.superego/types (--user: yours)
 superego profile allow [name]       # let this project's profile run (again, after it changed)
-superego profile allow-ui <name> -m <machine>   # let that machine's profile UI run in this computer's window, as it is now
+superego profile allow-ui <name> -m <machine>   # let that machine's profile UI run in this window, as it is now
 superego profile revoke-ui <name> -m <machine>
-superego profile install <source>   # yours from a git repo (git:<host>/<owner>/<repo>[@ref]) or a folder: trusted code
+superego profile install <source>   # yours from git (git:<host>/<owner>/<repo>[@ref]) or a folder: trusted code
 superego profile remove <source>    # drop it (a git one's clone too)
 superego profile update [source]    # git pull --ff-only the git sources
 superego profile sources            # each source, its state and profiles
 ```
 
-`name` defaults to `default`. See `superego --skill profiles`.
+`name` defaults to `default`. See [profiles](profiles.md).
 
-Allowing records the user's consent, so only the user does it: an agent's command line (run in a thread's shell,
-which `SUPEREGO_THREAD` marks) is refused `profile allow`, `profile allow-ui`, `machines trust`, `web pair` and every
-action marked `consent`. As an agent, tell the user what to allow and where.
+Allowing is the user's consent. From an agent's shell (marked by `SUPEREGO_THREAD`), `profile allow`,
+`profile allow-ui`, `machines trust`, `web pair` and every `consent` action are refused: tell the user what to allow
+and where.
 
 ## Extensions
 
@@ -147,57 +130,57 @@ superego extension reload                  # load the profile's changes now
 superego extensions [--thread <thread>]    # every extension here, and what it registered
 ```
 
-Each takes `-P <profile>` (default: `default`) and `--user` (yours, in `~/.superego/profiles`). Each shape `new` makes
-passes `extension test` as made. See `superego --skill guide`.
+Each takes `-P <profile>` (default: `default`) and `--user`. What `new` makes passes `extension test`. See
+[the guide](guide.md).
 
 ## Machines
 
 ```sh
-superego machines                              # each, whether it answers, and if it runs an older or newer Superego
+superego machines                              # each, whether it answers, and whether it runs another version
 superego machines add <ssh-target> [--name N] [--command C]
-superego machines login <machine>     # ssh in this terminal: a password or code; links then ride that connection
 superego machines add --via '<command>' [--name N]   # any command piping stdio to the far side
+superego machines login <machine>              # ssh in this terminal (password, code); links then use that connection
 superego machines rm|enable|disable|trust <machine>
-superego machines update <machine> [--now]     # run its install-machine.sh there; --now even while agents work
+superego machines update <machine> [--now]     # run install-machine.sh there; --now even while agents work
 ```
 
-A remote machine needs `superego` installed there (`scripts/install-machine.sh` in the Superego repo); the app reaches it
-with `ssh <target> superego connect --start`. `superego daemon install` on a machine runs its daemon as a service (systemd
-user unit, launchd agent) so it outlives logouts and reboots. A host that needs a password or code shows as "needs login"
-until `machines login`.
+A remote machine needs `superego` installed (`scripts/install-machine.sh` in the Superego repo); the app runs
+`ssh <target> superego connect --start`. `superego daemon install` there runs its daemon as a service (systemd user
+unit, launchd agent) that outlives logouts and reboots.
 
 ## Settings and sign-in
 
 ```sh
 superego settings                     # every setting and its value
-superego settings set <key> <value>   # value is JSON, or plain text; --all: every enabled machine
+superego settings set <key> <value>   # JSON or plain text; --all: every enabled machine
 superego settings reset <key>
-superego secrets                      # extensions' secrets (keys, tokens): set or not, never their values; and those left set that no extension asks for now
-superego secrets set <key>            # asked for without echo, or from stdin; yours alone: refused from a thread's shell
+superego secrets                      # extensions' secrets: set or not (never values); and unclaimed ones still set
+superego secrets set <key>            # prompted without echo, or from stdin; refused from a thread's shell
 superego secrets clear <key>
-superego layout                       # the window's layout.json: the views there are, the places each fits, and where they are
-superego providers                    # every provider pi-ai has and how each is signed in, signed-in first
-superego providers key <provider>     # sign in with an API key (prompted, or from stdin); asks more where it needs more
+superego layout                       # the window's layout.json: the views, the places each fits, where they are
+superego providers                    # every provider and how it's signed in, signed-in first
+superego providers key <provider>     # sign in with an API key (prompted, or from stdin)
 superego providers sign-out <provider>
 superego providers retry [provider]   # retry the threads waiting for sign-in now
 superego providers add --name Ollama --base-url http://localhost:11434/v1 [--key -] [--model <id>...]
 superego providers remove <provider>  # one you added
 superego models                       # the signed-in providers' models, favourites (★) first
-superego models favourite <provider/model>   # or unfavourite: the model menus list favourites first
+superego models favourite <provider/model>   # or unfavourite
 ```
 
-Each machine has its own settings (models, providers, favourites, which extensions are on). OAuth sign-in (ChatGPT,
-GitHub Copilot, OpenRouter) happens in the app's Settings. Providers you add are OpenAI-compatible endpoints, kept in
-`~/.superego/models.json` in pi's format (`providers.<id>.{ name, baseUrl, api, models: [{ id }] }`); their keys are in
-`auth.json` with the others. Credentials in the environment count too (`GROQ_API_KEY`, `AWS_PROFILE`, …).
+- Each machine has its own settings: models, providers, favourites, which extensions are on.
+- OAuth sign-in (ChatGPT, GitHub Copilot, OpenRouter) is in the app's Settings.
+- Added providers are OpenAI-compatible endpoints, in `~/.superego/models.json` in pi's format
+  (`providers.<id>.{ name, baseUrl, api, models: [{ id }] }`); keys in `auth.json`.
+- Credentials in the environment count too (`GROQ_API_KEY`, `AWS_PROFILE`, …).
 
 ## MCP servers
 
-The MCP servers a machine's agents use (Settings → MCP servers), from the bundled `mcp-servers` extension:
+The servers a machine's agents use (Settings → MCP servers; the bundled `mcp-servers` extension):
 
 ```sh
 superego mcp-servers                         # each, and how it stands
-superego mcp-servers --thread <thread>       # the servers its last turn had, and those it went without, and why
+superego mcp-servers --thread <thread>       # the servers its last turn had, those left out, and why
 superego mcp-servers logs <name> [--lines N] # its log (secrets hidden)
 superego mcp-servers restart <name>
 superego mcp-servers set-secret <name> [VAR] # its API key or a secret env var (prompted, or from stdin)
@@ -209,18 +192,16 @@ superego mcp-servers sign-out <name>
 
 ```sh
 superego settings set web.access local       # off | local (this computer) | tailscale (https://<machine>.<tailnet>.ts.net)
-superego web pair                            # a link, its QR code, and a code to type: one device, once, for 5 minutes
-superego web devices                         # paired devices, and your own on the tailnet (approved or waiting)
-superego web approve <device>                # let in a device of yours on the tailnet that's waiting
-superego web revoke <device>                 # unpaired; its connections close at once
+superego web pair                            # a link, its QR code, and a code: one device, once, within 5 minutes
+superego web devices                         # paired devices, and yours on the tailnet (approved or waiting)
+superego web approve <device>                # let in a waiting device of yours on the tailnet
+superego web revoke <device>                 # its connections close at once
 superego web rename <device> <name>
 ```
 
-A browser gets in as a paired device (an HttpOnly cookie; nothing secret in an address). With `tailscale`, the daemon
-runs `tailscale serve` itself (Tailscale 1.94 or later), proxying to a socket in the data folder that only you and
-tailscaled can open. A device logged in to Tailscale as you may skip pairing: it waits, listed, until you approve it
-(`web approve`, or Settings → Web access); your login alone lets nothing in.
-A device unused for 90 days is forgotten.
+A paired browser holds an HttpOnly cookie; addresses carry no secret. With `tailscale`, the daemon runs
+`tailscale serve` (Tailscale 1.94 or later) to a socket only you and tailscaled can open. A device logged in to
+Tailscale as you may skip pairing, once approved. Devices unused for 90 days are forgotten.
 
 ## The daemon
 
@@ -231,7 +212,7 @@ superego daemon stop
 superego daemon                   # run it in the foreground
 ```
 
-Its data is in `~/.superego` (`SUPEREGO_HOME`), its log in `~/.superego/daemon.log`.
+Data in `~/.superego` (`SUPEREGO_HOME`), log in `~/.superego/daemon.log`.
 
 ## Environment
 

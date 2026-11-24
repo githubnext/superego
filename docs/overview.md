@@ -1,11 +1,8 @@
 # Overview
 
-Superego is a desktop app for running agents. A daemon on each machine runs them, so they keep working when the app
-is closed, and the same window works in a browser and on a phone. What an agent is (its model, prompt, tools,
-extensions and panes) comes from a [profile](../packages/cli/skill/profiles.md): files in `~/.superego/profiles/` or in
-a project's own `.superego/profiles/`, so a repository can carry the agent it needs.
-
-## Projects, threads and panes
+Superego runs agents. A daemon on each machine runs them, so they keep working while the app is closed, and the same
+window works in a browser and on a phone. A [profile](../packages/cli/skill/profiles.md) says what an agent is (model,
+prompt, tools, extensions, panes): files in `~/.superego/profiles/` or a project's `.superego/profiles/`.
 
 ```text
 machine    this computer, or one reached over ssh
@@ -14,56 +11,66 @@ machine    this computer, or one reached over ssh
       └─ pane   a view beside the thread: changes, a file, a web page, a terminal, a profile's own
 ```
 
-- **A thread** starts in the folder you give it. New thread (`⌘N`) starts like the thread shown: its machine, project,
-  profile, model, thinking and worktree choice. Ask for a worktree (the New thread checkbox, `superego -w`) and the
-  thread works in `~/.superego/worktrees/<repo>/<slug>` on branch `superego/<slug>`; archiving removes a clean worktree
-  and keeps its branch. Archived threads stay readable from the sidebar's Archived list and take no messages until you
-  unarchive them.
-- **Threads start threads.** An agent can start a thread of its own for separate work, read it, message it and archive
-  it ([thread tools](../packages/cli/skill/thread-tools.md)). A child is nested under its parent in the sidebar, and
-  tells its parent when it finishes, fails or waits on a question. A message names a thread as
-  `[its title](thread:<id>)`, shown as a link to it (`⌘`-click opens it beside).
-- **Panes** sit beside the thread as a row of columns that scrolls sideways, or stacked in one column as tabs
-  (Settings → Appearance → Panes, or `⌘⇧\`). Panes are kept with the thread, so every client shows the same ones. The
-  agent opens them too (`pane_open`). Maximize one with its tab's button, a double click on its title or `⌘⇧↩`; `Esc`
-  restores it. Built in: the file editor (Markdown in live preview, or as source) and another thread. Bundled
-  extensions add Changes (git's diff), Browser, Terminal and the file tree.
-- **The Browser pane** shows a web page or an HTML file the agent wrote. A page on another machine's `localhost` is
-  forwarded to this computer, so a dev server there opens here (see [Machines](machines.md#localhost-on-another-machine)).
-  A page the agent opens beyond this computer and its network waits for you to press Open page, since its address
-  could carry what the agent read. Pages ask for the camera, microphone, notifications and the local network as a
-  browser does; Settings → Site permissions forgets your answers.
-- **Files** named in a thread (`[[Note]]`, a relative link, `` `src/app.ts` ``) open beside it. `⌘P` opens any file in
-  the thread's folder.
-- **Messages** take files: attach, drop or paste them. Images go to the model as images; every file is saved on the
-  thread's machine and named to the agent by its path. `@` names another thread or a file, and the agent is told what
-  it is.
-- **Images** an agent shows (`show_images`) appear in the thread: one alone, a few in a grid, more in a carousel. Click
-  one to zoom. An image on the web isn't fetched until you click it, since its address could carry what the agent read.
-- **Questions and UI.** An agent can ask you something with options (`ask_user`), show a form (`ask_ui`), or draw
-  [blocks](blocks.md) in the transcript or a pane. A question waits above the message box, and the thread shows as
-  blocked until you answer.
-- **The layout** of the window (what sits in the rail, beside the thread, in the pane menu and the thread's header) is
-  text: Edit layout… in `⌘K` opens `~/.superego/layout.json`, which applies as you save. Right-click a view to move it.
-  Thread details (`⌘I`) is one such view.
+## Threads
+
+- New thread (`⌘N`) starts like the thread shown: same machine, project, profile, model, thinking and worktree choice.
+- **Worktrees.** Tick the New thread checkbox (or `superego -w`) and the thread works in
+  `~/.superego/worktrees/<repo>/<slug>` on branch `superego/<slug>`. Archiving removes a clean worktree and keeps its
+  branch.
+- **Archived** threads are in the sidebar's Archived list, readable, and take no messages until unarchived.
+- **Threads start threads.** An agent can start, read, message and archive threads of its own
+  ([thread tools](../packages/cli/skill/thread-tools.md)). A child is nested under its parent and reports back when it
+  finishes, fails or waits on a question.
+- **Thread links.** `[title](thread:<id>)` in a message links to a thread; `⌘`-click opens it beside.
+
+## Messages
+
+- Attach, drop or paste files. Images go to the model as images; every file is saved on the thread's machine and named
+  to the agent by its path.
+- `@` names a thread or a file. `$name` sends a [skill](#skills-and-agentsmd).
+- Files named in a thread (`[[Note]]`, a relative link, `` `src/app.ts` ``) open beside it. `⌘P` opens any file in the
+  thread's folder.
+- An agent can ask you something (`ask_user`), show a form (`ask_ui`) or draw [blocks](blocks.md). A question waits
+  above the message box, and the thread shows as blocked until you answer.
+- Images an agent shows (`show_images`) appear in the thread; click to zoom. An image on the web loads only when you
+  click it.
+
+## Panes
+
+Panes sit beside the thread, as columns or stacked as tabs (Settings → Appearance → Panes, or `⌘⇧\`). They're kept
+with the thread, so every client shows the same ones; the agent opens them too (`pane_open`). Maximize one with its
+tab's button, a double click on its title or `⌘⇧↩`; `Esc` restores it.
+
+| Pane | From |
+|---|---|
+| File editor (Markdown in live preview, or source), another thread | built in |
+| Changes (git's diff), Browser, Terminal, file tree | bundled extensions |
+
+**Browser.** A web page or an HTML file the agent wrote. A `localhost` page on another machine is forwarded here
+([Machines](machines.md#localhost-on-another-machine)). A page beyond this computer and its network that the agent
+opened waits for you to press Open page. Pages ask for camera, microphone, notifications and local network as a browser
+does; Settings → Site permissions forgets your answers.
+
+**Layout.** Where views sit (the rail, beside the thread, the pane menu, the header) is
+`~/.superego/layout.json`: Edit layout… in `⌘K` opens it, and it applies as you save. Or right-click a view to move it.
+See [How the window is put together](interface.md).
 
 ## Ego
 
-Ego is Superego's own agent: the lifebuoy in the rail, or Ask Ego in `⌘K`. It answers questions about Superego and
-how this computer has it set up: settings, profiles, skills, machines, MCP servers, projects and threads. It changes
-settings and machines itself; other work (a profile, a skill, code) it hands to a thread it starts in the right
-project, and links you to it. There's one Ego thread per machine, kept for good; Clear in its title bar empties it.
-From a shell: `superego do ego.ask --prompt "…"`.
+Ego is Superego's own agent: the lifebuoy in the rail, or Ask Ego in `⌘K`. It answers questions about Superego and how
+this computer has it set up, changes settings and machines itself, and hands other work (a profile, a skill, code) to a
+thread it starts in the right project. One Ego thread per machine; Clear in its title bar empties it. From a shell:
+`superego do ego.ask --prompt "…"`.
 
 ## Skills and AGENTS.md
 
-Skills are the folders in `~/.agents/skills` on the thread's machine, each with a `SKILL.md`. The agent is told each
-one's name and description and reads one when it fits. `$name` in a message (completed as you type) sends that skill
-with it; `disable-model-invocation: true` in a skill's front matter keeps it to being named.
+- **Skills** are the folders in `~/.agents/skills` on the thread's machine, each with a `SKILL.md`. The agent sees each
+  one's name and description and reads it when it fits. `$name` in a message sends it along;
+  `disable-model-invocation: true` in its front matter makes it `$name`-only.
+- **AGENTS.md**: `~/.agents/AGENTS.md`, and every `AGENTS.md` from the project's top down to the thread's folder, are
+  standing instructions. One another user on the machine could have written is skipped.
 
-`~/.agents/AGENTS.md`, and any `AGENTS.md` from the project's top down to the thread's folder, are standing
-instructions. One that another user on the machine could have written is skipped. A profile can go without either
-(`without: ['skills', 'agents-md']`), and a machine can turn either off in Settings → Extensions.
+Turn either off for a profile (`without: ['skills', 'agents-md']`) or a machine (Settings → Extensions).
 
 ## Keys
 
@@ -84,7 +91,7 @@ instructions. One that another user on the machine could have written is skipped
 | `⌘⌥⇧←` `⌘⌥⇧→` | Move the focused pane left / right |
 | `⌘⇧\` | Panes side by side or stacked |
 | `⌘⇧↩` | Maximize the focused column, or restore it |
-| `⌃I` | Focus the message box (`Esc` there leaves it, to read and scroll) |
+| `⌃I` | Focus the message box (`Esc` leaves it, to read and scroll) |
 | `⌃D` `⌃U` | Scroll half a page down / up |
 | `⌃O` | The links in the thread |
 | `⌘I` | Thread details |
@@ -98,13 +105,5 @@ instructions. One that another user on the machine could have written is skipped
 | `⌘⇧W` | Close the window (Superego keeps running) |
 | `⌘,` | Settings |
 
-Every key runs an action: Settings → Hotkeys changes them, `⌘K` lists them, and `superego do <id>` runs one from a
-shell.
-
-## More
-
-- [Machines](machines.md): agents on other computers, and the app in a browser or on a phone.
-- [The command](../packages/cli/skill/cli.md): `superego` in a terminal, and Superego as an MCP server for other agents.
-- [Profiles](../packages/cli/skill/profiles.md) and [extensions](../packages/cli/skill/SKILL.md): changing what an agent
-  is and what the window shows.
-- [MCP servers](mcp.md): other people's tools for the agents in threads.
+Every key runs an action: change them in Settings → Hotkeys, find them in `⌘K`, run one from a shell with
+`superego do <id>`.

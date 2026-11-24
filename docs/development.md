@@ -82,7 +82,7 @@ Besides the variables in [the command's docs](../packages/cli/skill/cli.md#envir
 
 ## A machine on main
 
-A remote machine can run a checkout of `main` instead of a release ([machines](machines.md#installing-superego-there)):
+A remote machine can run a checkout of `main` instead of a release ([machines](machines.md#install-superego-there)):
 
 ```sh
 gh repo clone githubnext/superego ~/dev/superego && ~/dev/superego/scripts/install-machine.sh   # again to update

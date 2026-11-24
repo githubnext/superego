@@ -1,10 +1,10 @@
 # Writing extensions
 
-An extension has up to two halves: a **daemon half** next to the agents on a machine, and a **UI half** in the window.
-Either can be left out. Everything either half registers is its own, and goes when it does.
+An extension has up to two halves: a **daemon half** beside the agents on a machine, and a **UI half** in the window.
+Either is optional. What a half registers goes when it does.
 
-This topic builds one and tests it. Beside it: the [cheat sheet](cheatsheet.md) of both halves, [the window](window.md)
-(views and places, links, window events), and [lifecycle](lifecycle.md) (teardown, a thread's hooks, versions).
+See also: the [cheat sheet](cheatsheet.md), [the window](window.md) (places, links, events), [lifecycle](lifecycle.md)
+(teardown, a thread's hooks, versions).
 
 ## The big picture
 
@@ -21,7 +21,8 @@ Where they come from:
 
 <picture><source media="(prefers-color-scheme: dark)" srcset="guide/loading-dark.svg"><img src="guide/loading.svg" alt="Bundled extensions are built into the app; profiles in ~/.superego/profiles or a project's .superego/profiles name their extensions and UI modules"></picture>
 
-A profile's halves import `'superego'` and `'superego/ui'`. A bundled extension's halves import the packages directly (`@superego/daemon`, `@superego/app/ui`, …), see [bundled.md](bundled.md).
+A profile's halves import `'superego'` and `'superego/ui'`; a bundled extension's import the packages directly
+(`@superego/daemon`, `@superego/app/ui`, …: [bundled.md](bundled.md)).
 
 ### What to import
 
@@ -32,34 +33,30 @@ A profile's halves import `'superego'` and `'superego/ui'`. A bundled extension'
 | `'superego/testing'` | test helpers: a daemon with a scripted model, a window with a fake bridge, `isRunning(pid)` (see [Testing](#testing)) | stable |
 | `'superego/unstable'` | the window's workings the bundled extensions build on: `useRegistry`, `useShell`, `fileKind`, `Slot`, the project list, `useThreadView`, `channel`, `MONO_FONT`, … | none: changes with the window |
 
-On a `DaemonApi`, `threads.conversation` and `threads.entries`' records are pi-durable's shapes, unstable too.
-Everything else in the [cheat sheet](cheatsheet.md) is stable.
+`threads.conversation` and `threads.entries`' records are pi-durable's shapes, unstable too. The rest of the
+[cheat sheet](cheatsheet.md) is stable.
 
 ## Starting one
 
 ```sh
-superego extension new notes              # an agent tool, in a daemon half
-superego extension new notes --ui         # a pane, UI half only
-superego extension new notes --badge      # a sidebar mark: a daemon half sets a fact, a UI half draws it
-superego extension new notes --tool --ui  # a tool, and a pane of what it did
+superego extension new notes              # an agent tool that counts words, in a daemon half
+superego extension new notes --ui         # a pane of the thread it's beside (described in the profile's panes)
+superego extension new notes --badge      # a mark on threads whose last command failed (toolCalls → state → facts → thread.badge)
+superego extension new notes --tool --ui  # a tool that adds to the thread's items, and a pane of them (about.panes)
 superego extension test notes             # check its types and run its tests
 ```
 
-`new` makes the extension in a folder of its own in this project's profile (`.superego/profiles/default`; `-P name`
-for another, `--user` for yours in `~/.superego/profiles`), making the profile if there's none, and lists it there.
-It's the smallest working one of its shape to change: a tool that counts words; a pane of the thread it's beside
-(described to the agent in the profile's `panes`); a mark on threads whose last command failed (`toolCalls` → `state` →
-`facts` → `thread.badge`); or a tool that adds to the thread's items and a pane of them (`about.panes`). Each has its
-`version` and the extension `api` it needs, a test on [`superego/testing`](#testing) that passes as made, a README, and
-the profile's types, as `superego profile types` gives them: a `tsconfig.json`, and `node_modules` linked to
-`~/.superego/types`, the declarations of `'superego'`, `'superego/ui'`, `'superego/testing'`, React and vitest built
-from this Superego's own source, so `test` (and an editor) checks the types. Send one of the profile's threads a message
-and it's there; after an edit, the next turn loads it again (`superego extension reload` loads it now). A project's profile runs as it was allowed: the user allows it again
-after an edit (`superego profile allow`, or in the window). That's their consent: an agent's is refused, so ask them.
+`new` makes the extension in its own folder in this project's `default` profile (`-P name` for another, `--user` for
+yours), creating the profile if needed. It writes `version`, `api`, a passing test on [`superego/testing`](#testing), a
+README, and the profile's types (`tsconfig.json`, `node_modules` linked to `~/.superego/types`), so `test` and an
+editor check types.
 
-A thread keeps the profile it started with, so a profile made after it started (the first `default`, made by `new`)
-doesn't reach it: not the thread that made it, nor the user's other open threads. Start a new thread to use it, or move
-an idle one onto it (`superego do thread.setProfile --thread <thread> --profile <name>`).
+- Send one of the profile's threads a message and it's there. After an edit, the next turn reloads it;
+  `superego extension reload` reloads now.
+- A project's profile needs the user to allow it again after an edit (`superego profile allow`, or in the window).
+  An agent's allow is refused: ask them.
+- A thread keeps the profile it started with: a profile made after (the first `default`, made by `new`) doesn't reach
+  it. Start a new thread, or move an idle one: `superego do thread.setProfile --thread <thread> --profile <name>`.
 
 ## A first extension, end to end
 
@@ -115,17 +112,15 @@ function Notes({ machine, thread }: PaneProps) {
 export default defineUiExtension({ name: 'notes', version: '1.0.0', api: '^5', setup: (superego) => superego.pane('notes', { title: 'Notes', component: Notes, menu: true }) })
 ```
 
-Send a thread a message: the daemon loads the profile and the agent has `add_note`. The window loads its UI as soon as it
-lists the thread ([ui.md](ui.md#when-the-ui-loads)). After an edit, the daemon half reloads on the thread's next turn, the UI once the thread moves on.
+Send a thread a message: the daemon loads the profile and the agent has `add_note`. The window loads the UI as soon
+as it lists the thread ([ui.md](ui.md#when-the-ui-loads)).
 
 ## The build queue, two ways
 
-A project's build queue: a tool the agent queues work with, the thread's queue beside it, a Cancel button on each
-build, and a shortcut to show it. Both versions are in [`examples/`](examples), each a profile folder to copy,
-with its tests; a test builds both from there as an author would.
+A tool the agent queues builds with, the thread's queue beside it, a Cancel button on each build, and a shortcut to
+show it. Both versions are in [`examples/`](examples), each a profile folder with tests.
 
-The queue is per thread, so it's a **scoped value**: each thread's in its own scope, and a window showing a thread
-watches that scope alone, never another thread's queue.
+The queue is per thread, so it's a **scoped value**: a window showing a thread watches that thread's scope only.
 
 <!-- check: daemon -->
 ```ts
@@ -143,13 +138,14 @@ superego.agent(defineExtension({
 }))
 ```
 
-Running a build is the part to get right. Its command starts processes of its own (a compiler, a test runner's
-workers), and stopping its shell leaves those running, still writing to the thread's folder. So run it with
-**`spawnGroup`**, as a process group of its own, and stop the group: `stop()` sends it SIGTERM, then SIGKILL after a
-grace (`grace`, 5s), and resolves once nothing of it is left; given `superego.signal`, teardown stops it the same way.
-`exited` waits for the whole group too, and says whether it was `stopped`. Say a build is cancelled only once it has
-stopped, and claim a build (mark it running) before anything is awaited, so two calls can't both start it. (POSIX
-stops a group with the grace; Windows has no groups, so there it ends the tree at once with `taskkill /T /F`.)
+Run builds with **`spawnGroup`**: a build's command starts processes of its own, and stopping only its shell leaves
+them writing to the thread's folder.
+
+- `stop()` sends the group SIGTERM, then SIGKILL after `grace` (5s), and resolves once nothing of it is left. Given
+  `superego.signal`, teardown stops it the same way. On Windows it ends the tree at once (`taskkill /T /F`).
+- `exited` waits for the whole group, and says whether it was `stopped`.
+- Mark a build running before anything is awaited, so two calls can't both start it; say it's cancelled only once it
+  has stopped.
 
 <!-- check: daemon; declare const queue: import('superego').ScopedValue<Build[]> -->
 ```ts
@@ -175,10 +171,9 @@ superego.action(defineAction({
 }))
 ```
 
-**Data-only** ([`build-queue`](examples/build-queue/builds/daemon.ts)): no UI code. The daemon half keeps a second
-scoped value, what the view shows as blocks, with a Cancel button on each build; the view reads it, each thread its
-own scope. The shortcut is a machine action with `keys`, offered while one of that machine's threads is shown
-(`thread: true` fills in its `thread`); it opens the view as a pane, which a `thread` view that fits `pane` is.
+**Data-only** ([`build-queue`](examples/build-queue/builds/daemon.ts)): no UI code. A second scoped value holds the
+view's blocks per thread, a Cancel button on each build. The shortcut is a machine action with `keys`, offered while
+one of that machine's threads is shown (`thread: true` fills in `thread`); it opens the view as a pane.
 
 <!-- check: daemon; declare const queue: import('superego').ScopedValue<Build[]> -->
 ```ts
@@ -195,9 +190,8 @@ superego.action(defineAction({
 }))
 ```
 
-**With a UI half** ([`build-queue-ui`](examples/build-queue-ui/builds/ui.tsx)): the window draws the queue with a
-component of its own, watching the thread's scope, and the shortcut is a window action of the profile's UI, offered in
-its own threads, that shows or hides the view beside the thread.
+**With a UI half** ([`build-queue-ui`](examples/build-queue-ui/builds/ui.tsx)): a component draws the queue from
+the thread's scope, and the shortcut is a window action that shows or hides the view beside the thread.
 
 <!-- check: ui -->
 ```tsx
@@ -219,13 +213,13 @@ superego.action(defineAction({
 
 ## Testing
 
-`'superego/testing'` runs an extension as it runs in Superego: the daemon half in a real daemon with a scripted model,
-the UI half in the window's own registry and shell, in a DOM of its own, over a fake machine or that daemon.
-`superego extension test` runs a profile's `*.test.ts` and `*.test.tsx` with it, after checking the types. It needs
-nothing installed: the app carries TypeScript's compiler and a test runner of its own for vitest's `describe`, `it`,
-`test`, their hooks, `expect` and `vi` (`vi.fn`, `vi.spyOn`, fake timers, `vi.waitFor`); snapshots, `vi.mock` and
-`expect.poll` aren't there. A `.ts` file loads as the daemon loads it, its types stripped by Node (import a type as one:
-`import { type Name }`), a `.tsx` as the window loads it.
+`'superego/testing'` runs an extension as Superego does: the daemon half in a real daemon with a scripted model, the
+UI half in the window's own registry and shell, in a DOM, over a fake machine or that daemon.
+
+`superego extension test` type-checks, then runs the profile's `*.test.ts` and `*.test.tsx`. Nothing to install: it
+has vitest's `describe`, `it`, `test`, their hooks, `expect` and `vi` (`vi.fn`, `vi.spyOn`, fake timers,
+`vi.waitFor`); no snapshots, `vi.mock` or `expect.poll`. A `.ts` file loads as the daemon loads it, types stripped
+(import types as `import { type Name }`); a `.tsx` as the window does.
 
 ```ts
 // builds.test.ts, beside the extension in its profile
@@ -250,73 +244,84 @@ it('queues builds and shows the thread its own', async () => {
 })
 ```
 
-- **`testDaemon({ profile, extensions, model })`**: `profile` is a folder (copied) or files by path; `extensions` are
-  set up as the app's own (a factory's with the options a test needs: `ordersExtension({ clock })`). `model` is the
-  model's turns in order: `say(text)`, `callTool(name, args)`, `callTools(…)`; or `'echo'`, a model that answers every
-  request with the last user message (side calls to the thread's model too). `dataDir` runs it on a folder you made
-  (and keeps it). It has `thread(prompt)`, `send`, `idle`, `info`, `call`, `dispatch` (an `action.run` call),
-  `watch(key, { scope })` (`value`, `seen`, `until(check)`), `until(check)` (a function that returns true, or a promise
-  of it); `toolCalls(thread)`, the calls a thread made in order (`{ name, args, result: { isError, text } }`),
-  `facts(thread)`, what extensions say of it (`superego.facts`), and `transcript(thread)`, its entries as JSON text
-  (a thread is its id or its info); `setSecret(key, value)` sets a `secret` setting as the user would (`null` clears
-  it), kept in the test's data folder, never your keychain, which also holds each extension's `superego.dir`; `extensions` (the manifests of those set up and on there, kept current: where yours shows) and
-  `features` (protocol features only); `app` (its own id), `dataDir` and `agentsDir` (skills go in `skills/`); `peer`,
-  the connection (`Channels.of(daemon.peer)` opens a channel), and `connect()` for another client's, as a second
-  window; `profile`, the ref its threads have; `edit(path, content)` then `reload()` to load a change (a helper edited
-  alone loads too); `restart({ model, whileStopped })` on the same folder (`whileStopped` runs while no daemon does),
-  after which the same handle, its watches and a window over it reach the new daemon; `close()`.
+### `testDaemon({ profile, extensions, model, dataDir })`
 
-  <!-- check: daemon; import { expect } from 'vitest'; import { callTool, say, testDaemon } from 'superego/testing'; declare const profile: string -->
-  ```ts
-  const daemon = await testDaemon({ profile, model: [callTool('enqueue_build', { command: 'make' }), say('Queued.')] })
-  const thread = await daemon.thread('Build it')
-  expect(await daemon.toolCalls(thread)).toMatchObject([{ name: 'enqueue_build', args: { command: 'make' }, result: { isError: false } }])
-  await daemon.restart({ model: [say('Still here.')] })      // the same daemon object, on the same folder
-  expect((await daemon.send(thread, 'Still there?')).status.msg).toBe('Still here.')
-  ```
-- **`isRunning(pid)`**: whether a process is still there, to check that what an extension started stopped with it.
-  The queue examples' tests cancel a build whose command starts a `sleep` of its own, and check it's gone once the
-  build says cancelled.
-- **`mountUi({ extensions, profile, machines, layout, narrow, select, window })`**: `extensions` are set up as the app's,
-  `profile: { extensions }` as that profile's (drawn only in its threads): the test daemon's profile when the machine
-  is one, else the profile `extension test` runs (`ref` for another). `machines` are test daemons
-  (`daemonMachine(daemon, id)`) or fakes: `fakeMachine({ threads, values, methods, extensions, features })`, whose
-  `setValue(key, value, scope)` changes a live value, and whose `calls` say what the window asked. Without setup, a
-  fake is `local`, connected, with this build's features and no extensions. `threads.watch` and `thread.list` answer
-  `threads` (none archived or hidden), `value.watch` a key's value from `values` (`null` if it isn't there; give a scoped
-  value as `{ [scope]: value }`), `action.list` answers `actions`, and settings are empty. Any other method, and an
-  action, runs `methods[name]`; with none, it fails `not_found`. `calls` leaves out the watches. `mountUi` has
-  `render({ view, place, thread })` (`text()`, `find(selector)`, `click(text)`: a button, link, tab, menu item, list
-  row or any element by its text or `aria-label`, else a selector; it fails naming what there is to click),
-  `placed(place, { thread })`,
-  `press(keys)`, `dispatch`, `select`, `setMachine(id, { state: 'disconnected' })`, `installProfile`, `until`, and
-  `unmount()`, which lets a profile's UI the window is still fetching land, then tears every extension down (their
-  `signal`s abort): unmount before closing the daemons it's on. `window: true` draws the whole window, as the app does
-  (`ui.window`: the rail, the sidebar, the thread, ⌘K, Settings, and what opens over them), to see your view in place
-  and drive it as a person would: `key('mod+k')` presses keys where the focus is, `type(selector, text)` types into a
-  field. Its app settings are the app's own. Give its test file `// @vitest-environment happy-dom`: the window's menus
-  and dialogs open, and its fields take typing, only in a DOM that was there as React and they loaded.
-- **A pane kind or a slot**: `render({ pane: { kind, params } })` and `render({ slot, props })` draw them as the
-  window does, for `thread`: an id the machine has, or a `ThreadInfo` as it is (`testThread({ cwd, without })`, a thread
-  of `mountUi`'s profile while it's mounted, else of the profile under test; `profile: null` for none);
-  without one, the selected thread, the machine's first, or a made-up one of `mountUi`'s profile. A kind or slot that
-  thread wouldn't see (a profile's in another profile's thread, one it goes `without`) throws, saying what it has.
-- **Tool rows and links**: `render({ tool: { name, arguments, state, result }, thread })` draws a call's row as the
-  transcript does, from what your `superego.tool` said; `toolRow(name, { thread })` is that description,
-  `describeRun(['read', 'mcp__x__y'], { thread })` a run's folded line and `mainKind` the tool it's shown as.
-  `linkHandler(href, 'link' | 'code', { thread })` is what claims a link there (no thread: outside any, a settings page),
-  and `urlKind({ thread })` the pane kind web pages open in.
+| Option | |
+|---|---|
+| `profile` | a folder (copied) or files by path |
+| `extensions` | set up as the app's own (a factory's with what the test needs: `ordersExtension({ clock })`) |
+| `model` | the model's turns in order: `say(text)`, `callTool(name, args)`, `callTools(…)`; or `'echo'`, answering every request (side calls too) with the last user message |
+| `dataDir` | run on a folder you made (kept) |
 
-  <!-- check: ui; import { expect } from 'vitest'; import { testThread, type TestWindow } from 'superego/testing'; declare const window: TestWindow; declare const thread: ThreadInfo -->
-  ```ts
-  const card = await window.render({ pane: { kind: 'board.card', params: { card: 'c1' } }, thread: thread.id })
-  const badge = await window.render({ slot: 'thread.badge', thread: testThread({ cwd: '/work/db' }) })
-  expect(badge.find('.thread-badge')?.title).toBe('database')
-  ```
-- The cases worth a test each, in the kit's own tests (`packages/sdk/test/kit.test.ts` in Superego's source): teardown (`unmount`, an edit and
-  `reload`), set up twice (`installProfile` again), a helper edited, one profile on two machines (two daemons in one
-  window), a machine away or older (`setMachine`, `fakeMachine({ features: [], extensions: [{ name, version: '0.9.0' }] })`),
-  and a phone with no sidebars (`mountUi({ narrow: true })`).
+| Member | |
+|---|---|
+| `thread(prompt)`, `send`, `idle`, `info` | start a thread with the profile (sent, run waited out), message it, wait, read it. A thread is its id or its info |
+| `call`, `dispatch` | a method; an `action.run` |
+| `watch(key, { scope })` | a live value: `value`, `seen`, `until(check)` |
+| `until(check)` | wait until a function returns true (or a promise of it) |
+| `toolCalls(thread)` | the calls a thread made, in order: `{ name, args, result: { isError, text } }` |
+| `facts(thread)`, `transcript(thread)` | what extensions say of it (`superego.facts`); its entries as JSON text |
+| `setSecret(key, value)` | set a `secret` setting as the user would (`null` clears), kept in the test's data folder, never your keychain |
+| `extensions`, `features` | manifests of those set up and on, kept current; protocol features only |
+| `app`, `dataDir`, `agentsDir` | its id; its folders (skills go in `agentsDir/skills/`; each extension's `superego.dir` is under `dataDir`) |
+| `peer`, `connect()` | the connection (`Channels.of(daemon.peer)` opens a channel); another client's, as a second window |
+| `profile` | the ref its threads have |
+| `edit(path, content)`, `reload()` | change a file and load it (a helper alone too) |
+| `restart({ model, whileStopped })` | restart on the same folder (`whileStopped` runs in between); the handle, its watches and a window over it reach the new daemon |
+| `close()` | |
+
+<!-- check: daemon; import { expect } from 'vitest'; import { callTool, say, testDaemon } from 'superego/testing'; declare const profile: string -->
+```ts
+const daemon = await testDaemon({ profile, model: [callTool('enqueue_build', { command: 'make' }), say('Queued.')] })
+const thread = await daemon.thread('Build it')
+expect(await daemon.toolCalls(thread)).toMatchObject([{ name: 'enqueue_build', args: { command: 'make' }, result: { isError: false } }])
+await daemon.restart({ model: [say('Still here.')] })      // the same daemon object, on the same folder
+expect((await daemon.send(thread, 'Still there?')).status.msg).toBe('Still here.')
+```
+
+`isRunning(pid)` says whether a process is still there: the queue examples cancel a build that started a `sleep`, and
+check it's gone.
+
+### `mountUi({ extensions, profile, machines, layout, narrow, select, window })`
+
+| Option | |
+|---|---|
+| `extensions` | set up as the app's |
+| `profile: { extensions, global? }` | set up as that profile's, drawn only in its threads: the test daemon's profile when the machine is one, else the profile `extension test` runs (`ref` for another) |
+| `machines` | test daemons (`daemonMachine(daemon, id)`) or fakes (below) |
+| `narrow` | a phone, with no sidebars |
+| `window: true` | the whole window as the app draws it (rail, sidebar, thread, ⌘K, Settings), with the app's own settings. Needs `// @vitest-environment happy-dom` in the test file for menus, dialogs and fields to work |
+
+`fakeMachine({ threads, values, methods, extensions, features })`: by default `local`, connected, this build's
+features, no extensions. `threads.watch` and `thread.list` answer `threads` (none archived or hidden); `value.watch`
+answers from `values` (`null` if absent; scoped as `{ [scope]: value }`); `action.list` answers `actions`; settings are
+empty; any other method or action runs `methods[name]`, else fails `not_found`. `setValue(key, value, scope)` changes a
+value; `calls` records what the window asked (watches aside).
+
+| Member | |
+|---|---|
+| `render({ view, place, thread })` | draw a view: `text()`, `find(selector)`, `click(text)` (a button, link, tab, menu item, row or element by text or `aria-label`, else a selector; fails naming what's clickable) |
+| `render({ pane: { kind, params } })`, `render({ slot, props })` | a pane kind or slot as the window draws it, for `thread`: an id, or a `ThreadInfo` (`testThread({ cwd, without })`: of the mounted profile, else the one under test; `profile: null` for none). Default: the selected thread, the machine's first, or a made-up one. One the thread wouldn't see throws |
+| `render({ space: { kind, params } })`, `space()` | a space with its thread beside it; what the main area shows now |
+| `render({ tool: { name, arguments, state, result }, thread })` | a tool call's row, from your `superego.tool` |
+| `toolRow(name, { thread })`, `describeRun([...names], { thread })`, `mainKind` | a row's description; a run's folded line, and the tool it's shown as |
+| `linkHandler(href, 'link' \| 'code', { thread })`, `urlKind({ thread })` | what claims a link there (no thread: outside any); the pane kind web pages open in |
+| `placed(place, { thread })`, `press(keys)`, `dispatch`, `select`, `until` | |
+| `setMachine(id, { state: 'disconnected' })`, `installProfile` | |
+| `key(keys)`, `type(selector, text)` | with `window: true`: keys where the focus is; typing into a field |
+| `unmount()` | lets a profile UI still loading land, then tears every extension down (signals abort). Unmount before closing the daemons |
+
+<!-- check: ui; import { expect } from 'vitest'; import { testThread, type TestWindow } from 'superego/testing'; declare const window: TestWindow; declare const thread: ThreadInfo -->
+```ts
+const card = await window.render({ pane: { kind: 'board.card', params: { card: 'c1' } }, thread: thread.id })
+const badge = await window.render({ slot: 'thread.badge', thread: testThread({ cwd: '/work/db' }) })
+expect(badge.find('.thread-badge')?.title).toBe('database')
+```
+
+Worth a test each (see the kit's own, `packages/sdk/test/kit.test.ts` in Superego's source): teardown (`unmount`, an
+edit and `reload`), set up twice (`installProfile` again), a helper edited, one profile on two machines (two daemons in
+one window), a machine away or older (`setMachine`, `fakeMachine({ features: [], extensions: [{ name, version: '0.9.0' }] })`),
+and a phone (`mountUi({ narrow: true })`).
 
 ## When it doesn't show
 
@@ -326,18 +331,22 @@ superego extensions --thread 12       # and what thread 12 goes without, and why
 superego extension reload             # load the profile's changes now
 ```
 
-For each extension: where it's from (the core, bundled, a profile and its file, or a window, with no daemon half), its
-state (`set up`, `off`, or `failed`, `refused` or `timed out` with the error), what it registered (methods, actions with
-their keys, values, views and what they read, hooks), and who watches its values, whole or in how many scopes. Then
-each profile's load (a project's not allowed says so), and with `--thread`, each extension that thread goes without:
-switched off here, its profile's `without`, another extension's `agentFor`, or a profile's of another profile. `--json`
-for all of it as data (`extension.inspect`). What a UI half draws is the window's: one that throws says so in its
-place, and the window's console has why.
+It shows, for each extension:
+
+- where it's from: the core, bundled, a profile and its file, or a window (no daemon half);
+- its state: `set up`, `off`, or `failed`, `refused` or `timed out` with the error;
+- what it registered (methods, actions and keys, values, views and their sources, hooks) and who watches its values;
+- each profile's load (a project's not allowed says so);
+- with `--thread`, why the thread goes without each it lacks: switched off, its profile's `without`, another
+  extension's `agentFor`, or another profile's.
+
+`--json` gives it as data (`extension.inspect`). A UI half that throws says so in its place; the window's console has
+why.
 
 ## Real ones to read
 
-The build queue ships with this guide, in [`examples/`](examples) beside it. The bundled extensions are in Superego's
-source, at `extensions/<name>/src`, so only a checkout has them.
+The build queue is in [`examples/`](examples). The bundled extensions are in Superego's source, at
+`extensions/<name>/src` (a checkout only).
 
 | Extension | Shows |
 |---|---|

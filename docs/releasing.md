@@ -72,7 +72,7 @@ the new app restarts it. Afterwards: `superego daemon stop` with `SUPEREGO_HOME=
 
 [`scripts/install-machine.sh --release [version]`](../scripts/install-machine.sh) puts a machine on a release (the
 newest by default): on macOS the release's app, with no checkout; on Linux a checkout at the release's tag. Users'
-side of it is in [Machines](machines.md#installing-superego-there).
+side of it is in [Machines](machines.md#install-superego-there).
 
 - It restarts a running daemon, unless agents are working there: `SUPEREGO_RESTART_NOW=1` restarts it anyway (they
   resume after).

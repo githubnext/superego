@@ -1,21 +1,20 @@
 # Profiles
 
-A profile is what an agent is: a folder with a `profile.ts`, and whatever files it names.
+A profile is what an agent is: a folder with a `profile.ts`, and the files it names.
 
 | Where | Whose | Runs |
 |---|---|---|
 | `~/.superego/profiles/<name>/` | yours, for every folder on this machine | always |
-| `<source>/profiles/<name>/` | yours, from a profile source you installed (see below) | always |
-| `<project>/.superego/profiles/<name>/` | the project's, for threads in it and below (up to its repository's top) | once allowed |
+| `<source>/profiles/<name>/` | yours, from an installed [profile source](#profile-sources) | always |
+| `<project>/.superego/profiles/<name>/` | the project's, for threads in it and below (up to its repository's top) | once [allowed](#allowing) |
 
-A thread takes its profile when it starts and keeps it. Without `-P`, it gets the profile called `default`: the
-project's if there is one, else yours, else none (plain Superego). A project's profile of a name replaces yours of
-that name, unless it `extends` it.
+A thread takes its profile when it starts and keeps it. Without `-P`, it gets `default`: the project's, else yours,
+else none. A project's profile replaces yours of the same name, unless it `extends` it.
 
 ```sh
-superego profile new support           # scaffolds .superego/profiles/support/profile.ts here, and allows it
+superego profile new support           # .superego/profiles/support/profile.ts here, allowed
 superego profile new --user            # ~/.superego/profiles/default
-superego profile types                 # types for this project's profiles that were there already (--user: yours)
+superego profile types                 # types for this project's existing profiles (--user: yours)
 superego -P support -p "Order 1234?"   # a thread with it
 ```
 
@@ -28,93 +27,93 @@ export default defineProfile({
   description: 'Answers customer mail',              // shown where a profile is picked
   model: 'anthropic/claude-sonnet-4-5',              // provider/model; else the machine's default
   thinking: 'medium',
-  // agent: 'claude-agent',                          // another kind of agent, for its threads' whole life (below)
+  // agent: 'claude-agent',                          // another kind of agent, for its threads' whole life
   prompt: 'You answer customer email for Acme. Be brief.',
-  extensions: ['./orders.ts'],                       // daemon side: see below
+  extensions: ['./orders.ts'],                       // daemon side
   ui: ['./ui/order.tsx'],                            // window side: defineUiExtension modules
-  panes: {                                           // pane kinds its UI adds, listed to the agent for pane_open
+  panes: {                                           // pane kinds its UI adds, told to the agent for pane_open
     order: 'an order, with its lines and status. Params: { id }',
   },
-  without: ['agent-ui'],                             // built-ins to leave out
-  options: { worktrees: true },                      // what its threads ask extensions for, by name: a worktree each
+  without: ['agent-ui'],                             // optional extensions to leave out
+  options: { worktrees: true },                      // what its threads ask extensions for, by name
   extends: 'user:default',                           // start from your profile of that name, and add to it
-  // global: true,                                   // yours only: part of the app, not only of its threads (below)
-  mcpServers: [                                      // the mcp-servers extension's key: MCP servers its threads use
+  // global: true,                                   // yours only: part of the app, not only of its threads
+  mcpServers: [                                      // the mcp-servers extension's key
     'linear',                                        // the machine's, by name
     { docs: { command: 'node', args: ['./tools/docs-mcp.js'], auth: { type: 'env', names: ['DOCS_TOKEN'] } } },  // its own
   ],
 })
 ```
 
-**Global profiles.** `global: true` makes one of your own profiles part of the app, not only of its threads: the daemon
-loads it as it starts (its daemon halves run for the daemon's life, whatever threads there are), and the window installs
-its UI as the app's: its views go in any place (a sidebar in the rail), its slots and tool rows apply to every thread, its
-styles are the window's, and it can add **spaces** (views that fill the main area, with a thread docked beside them:
-`superego --skill window`). A Notes app or a canvas is a global profile. A project's profile can't be global (it's
-told so in its `problems`), and a profile extending a global one isn't global unless it says so itself.
+Every field is optional and no other is taken: a misspelt key fails the type check. One that loads anyway (a key no
+extension reads, a `without` naming no extension) is reported on the profile's card (its name in the title bar) and in
+`profile.list`'s `problems`.
 
-Every field is optional, and no other is taken: a misspelt key, or one that's gone, fails the type check. A profile
-that loads with one anyway (a key no extension here reads, a `without` naming no extension) is told so on its card
-(the profile's name in the title bar) and in `profile.list`'s `problems`.
+| Field | |
+|---|---|
+| `prompt` | the agent's instructions, after its extensions' prompt sections. With `extends`, the two are joined |
+| `extensions` | paths from the profile's folder. Each default-exports an **agent part**, `defineExtension({ name, tools, sections })` ([tools](tools.md)), or a **daemon half**, `defineDaemonExtension({ name, setup(superego) { … } })` ([daemon](daemon.md)) |
+| `ui` | window modules ([ui](ui.md)), drawn only in this profile's threads unless it's global |
+| `panes` | each pane kind its UI registers, with its params, so the agent can open one |
+| `without` | optional extensions (Settings → Extensions, `superego extensions`) its threads go without: the core's `coding-tools` (read, write, edit, bash), `panes` (pane_open) and `agents-md`; bundled ones such as `skills`, `thread-tools` ([thread-tools.md](thread-tools.md)), `agent-ui`, `terminal`, `mcp-servers`. No tools, prompt sections or UI of theirs. Required ones (the sidebar) can't be left out |
+| `options` | what its threads ask extensions for, as `thread.start`'s `options` (a thread's own win): `{ worktrees: true }` gives each a git worktree. Not for threads they start ([thread-tools.md](thread-tools.md#what-a-child-gets)) |
+| `model`, `thinking` | apply where a thread hasn't chosen its own |
+| `agent` | another kind of agent (an extension's `superego.agentKind`), fixed for each thread's life; see [Claude Agent](#claude-agent) |
+| `extends` | `'user:<name>'`: start from your profile of that name |
+| `global` | yours only: see [Global profiles](#global-profiles) |
 
-- **`prompt`** is the agent's instructions, after the prompt sections of its extensions. With `extends`, the two
-  prompts are joined.
-- **`extensions`** are paths from the profile's folder. A module's default export is either
-  - an **agent part**, `defineExtension({ name, tools, sections })`: tools and prompt sections
-    (`superego --skill tools`), or
-  - a **daemon half**, `defineDaemonExtension({ name, setup(superego) { … } })`: actions the UI and command
-    line run, live values, a thread's blocked status, and agent parts of its own (`superego --skill daemon`).
-- **`ui`** are modules for the window (`superego --skill ui`). They draw only in this profile's threads, unless it's
-  global. A sidebar (a rail tab and what it opens) can come from a daemon half instead: a data view (`superego.view`,
-  `context: 'window'`) of one of your own profiles' may fit `sidebar`, and shows while the profile is loaded (a
-  project's may not).
-- **`panes`** describes each pane kind the UI registers, so the agent knows it can open one and with which params.
-- **`without`** takes the names of optional extensions, the ones Settings → Extensions lists (and `superego
-  extensions`): the core's `coding-tools` (read, write, edit, bash), `panes` (pane_open) and `agents-md`, and bundled
-  ones such as `thread-tools` (thread_start, thread_read, …: [thread-tools.md](thread-tools.md)), `agent-ui`, `terminal` or `mcp-servers`. Its threads get
-  none of their tools or prompt sections, and the window shows none of their UI there. Required ones (the
-  sidebar) can't be left out.
-- **`options`** is what its threads ask extensions for, by name, as `thread.start`'s `options` (a thread's own win):
-  `{ worktrees: true }` gives each a git worktree of its own, in a git repository. Not the threads they start: those
-  take their own profile's ([thread-tools.md](thread-tools.md#what-a-child-gets)).
-- **Extensions' keys.** Besides these, a profile takes keys a bundled extension registers (`superego.profileKey`,
-  [daemon.md](daemon.md); `defineProfile`'s type lists them); that extension checks them as the profile loads (a problem fails it) and merges them over
-  `extends`. The one bundled: **`mcpServers`**, the `mcp-servers` extension's, a list of the MCP servers its threads
-  use: a string names one the machine has (Settings → MCP servers; a name it has none of is left out), and an object
-  defines servers of the profile's own, by name, each a `command` (with `args`, `cwd`, plain `env`) or a `url` (with
-  `headers`), and how it signs in (`auth`: `oauth`, `api-key`, or secret `env` names, their values entered in Settings,
-  never in the file). Names are lower-case letters, digits and hyphens, up to 24. With `extends`, the two lists add
-  up, a server of its own by name this profile's winning. The extension reads it each turn; a machine without it (or a
-  profile `without` it) runs no servers. A command of the profile's runs in the project's root (its `cwd` defaults
-  there), and only once the profile is allowed: its command line is part of `profile.ts`, so changing it means allowing
-  the profile again. Their secrets (`auth.names`' values, an API key) are set in Settings → MCP servers → From
-  profiles, or `superego mcp-servers set-secret`; OAuth signs in there too, or with `superego mcp-servers sign-in`. A
-  server of its own named as one of the machine's replaces it in this profile's threads. The thread's header says
-  which servers it has (`3 servers`), and why any it names were left out; `superego mcp-servers --thread <id>` too.
+**Extensions' keys.** A bundled extension can add a key (`superego.profileKey`, [daemon.md](daemon.md));
+`defineProfile`'s type lists them. It checks the value as the profile loads (a problem fails the load) and merges it
+over `extends`.
 
-Profile files are TypeScript (the daemon strips the types as it loads them) or JavaScript. They may import each other
-and Node's built-ins (`node:fs/promises`, …). `'superego'` is the only package they get (and `'superego/ui'` and
-`'react'` in UI modules); there is no `npm install`. Anything else imported by name, a package or a `#` alias from a
-`package.json`, is refused, and the profile doesn't load: what it would run is resolved by what's around the profile,
-outside what allowing it vouches for. A file imported by its path is fine wherever it is (`node_modules` too), and is
-part of what's allowed.
+**`mcpServers`** (the `mcp-servers` extension's) lists the MCP servers its threads use:
+
+- A string names one of the machine's (Settings → MCP servers); an unknown name is left out.
+- An object defines the profile's own by name: a `command` (with `args`, `cwd`, plain `env`) or a `url` (with
+  `headers`), and `auth`: `oauth`, `api-key`, or secret `env` names. Names: lower-case letters, digits and hyphens, up
+  to 24. One named like a machine's replaces it here.
+- A command runs in the project's root (its `cwd` default), only once the profile is allowed; changing it means
+  allowing again. Secrets and OAuth: Settings → MCP servers → From profiles, or `superego mcp-servers set-secret` /
+  `sign-in`. Never in the file.
+- With `extends` the lists add up, this profile's winning by name. Read each turn; a machine without the extension,
+  or a profile `without` it, runs none.
+- The thread's header says which it has (`3 servers`) and why any were left out; so does
+  `superego mcp-servers --thread <id>`.
+
+**Imports.** Profile files are TypeScript (types stripped on load) or JavaScript. They may import each other, Node's
+built-ins (`node:fs/promises`) and `'superego'` (and `'superego/ui'`, `'react'` in UI modules). There's no
+`npm install`: a package or a `package.json` `#` alias imported by name is refused, and the profile doesn't load. A
+file imported by path is fine wherever it is (`node_modules` too), and counts toward what's allowed.
+
+## Global profiles
+
+`global: true` makes one of your own profiles part of the app:
+
+- the daemon loads it at start, and its daemon halves run for the daemon's life;
+- the window installs its UI as the app's: views in any place (a sidebar in the rail), slots and tool rows in every
+  thread, styles window-wide;
+- it can add **spaces**, views that fill the main area with a thread docked beside them ([window](window.md#spaces)).
+
+Notes and Canvas are global profiles. A project's profile can't be global (its `problems` say so), and a profile
+extending a global one isn't, unless it says so itself.
+
+A non-global profile of yours can still add a sidebar from its daemon half: a data view (`superego.view`,
+`context: 'window'`) that fits `sidebar`, shown while the profile is loaded. A project's can't.
 
 ## Types
 
-`superego profile new` (and `extension new`) gives the profile what an editor needs to check it; `superego profile
-types [name]` gives it to profiles that were there before (all of this project's, the one named, or yours with
-`--user`), and again after a fresh clone:
+`profile new` and `extension new` give a profile what an editor needs; `superego profile types [name]` gives it to
+existing ones (all of this project's, the one named, or yours with `--user`), and again after a fresh clone:
 
-- `tsconfig.json`: strict, JSX for React, Node's and the DOM's types. Nothing in it is about this computer, so a
-  project commits it. One you've changed is left as it is.
-- `node_modules`: a link to `~/.superego/types/node_modules`, declarations only, for `superego`, `superego/ui`,
-  `superego/unstable`, `superego/testing`, React, Node and vitest. They're built from Superego's own sources with each
-  build, and the app copies its own there whenever it starts, so an upgrade brings new ones; the link stays.
-- `.gitignore`: `node_modules`, since the link is this computer's.
+| File | |
+|---|---|
+| `tsconfig.json` | strict, JSX for React, Node's and the DOM's types. Nothing machine-specific: commit it. One you changed is left alone |
+| `node_modules` | a link to `~/.superego/types/node_modules`: declarations for `superego`, `superego/ui`, `superego/unstable`, `superego/testing`, React, Node and vitest, refreshed as the app starts |
+| `.gitignore` | `node_modules` |
 
-The daemon doesn't load packages from `node_modules`, and neither it nor the `.gitignore` counts toward a project
-profile's allowance; the `tsconfig.json` does, so `profile types` allows again a profile that was allowed. `superego extension test`
-checks types with the same tsconfig before it runs the tests.
+The daemon doesn't load packages from `node_modules`. The `tsconfig.json` counts toward a project profile's allowance
+(so `profile types` allows again one that was allowed); `node_modules` and `.gitignore` don't. `superego extension
+test` type-checks with the same tsconfig.
 
 ## What 'superego' exports
 
@@ -130,50 +129,47 @@ import {
 
 ## Profile sources
 
-Your profiles can live in a repo or folder of their own, installed as a source the way Pi installs packages. A source
-is a git repo, `git:<host>/<owner>/<repo>[@ref]` (an `https://` URL works too), cloned to
-`~/.superego/sources/<host>/<owner>/<repo>`, or a folder, `~/…` or absolute (a path from here, from the command line),
-read in place. Its profiles are its `profiles/<name>/profile.ts`.
+Keep your profiles in a repo or folder of their own and install it as a source. Its profiles are its
+`profiles/<name>/profile.ts`.
 
 ```sh
-superego profile install git:github.com/mikker/superego-profiles   # clone it; again, nothing changes
-superego profile install ~/dev/superego-profiles                    # a checkout of it, read in place
+superego profile install git:github.com/mikker/superego-profiles   # clone it (an https:// URL works too); again: no change
+superego profile install ~/dev/superego-profiles                    # a folder, read in place
 superego profile install git:github.com/acme/profiles@v1.2          # pinned: a tag, branch or commit
 superego profile sources                                            # each source, its state and its profiles
 superego profile update [source]                                    # git pull --ff-only (pinned ones stay)
 superego profile remove <source>                                    # drop it; a git one's clone is deleted
 ```
 
-Their profiles are yours: they run without being allowed, like those in `~/.superego/profiles`, so **installing a
-source is trusting its code**, and an agent can't install one for the user. `extends: 'user:<name>'`, `-P <name>
---user` and `profile types --user` find them by name like any of yours.
-
-Yours are looked for in `~/.superego/profiles` first, then each source in the order installed: of two of one name,
-the first is used, and the other is told of as shadowed (`superego profile`, `profile sources`, Settings → Profiles).
-The list is `~/.superego/profile-sources.json` (`{ "sources": [...] }`); edited by hand, it's read again, and
-`profile update` clones a git source it lists that isn't cloned yet. A source's edits (or a pull) apply as any of your
-profiles' do: from each thread's next turn.
+- Git sources are cloned to `~/.superego/sources/<host>/<owner>/<repo>`.
+- Their profiles are yours: they run without being allowed. **Installing a source is trusting its code**, so an agent
+  can't install one for the user.
+- `extends: 'user:<name>'`, `-P <name> --user` and `profile types --user` find them like any of yours.
+- Lookup order: `~/.superego/profiles`, then each source in install order. The first of a name wins; the other is
+  reported as shadowed (`superego profile`, `profile sources`, Settings → Profiles).
+- The list is `~/.superego/profile-sources.json` (`{ "sources": [...] }`); edits are read again, and `profile update`
+  clones a listed git source that isn't cloned yet.
+- Edits (or a pull) apply from each thread's next turn.
 
 ## Allowing
 
-A project's profile runs code from that repository, so the daemon refuses it until it is allowed, and again whenever
-any file it runs changes: any file in its folder (`node_modules` and dotfiles aside), and every file its code
-imports, wherever it is:
+A project's profile runs that repository's code, so the daemon refuses it until it's allowed, and again whenever any
+file it runs changes: any file in its folder (`node_modules` and dotfiles aside), and every file its code imports,
+wherever it is.
 
 ```sh
 superego profile allow support     # in the project
 ```
 
-`superego profile new` allows what it scaffolds; after you edit a project's profile yourself, allow it again. Your own
-profiles in `~/.superego/profiles` are never asked about.
+`profile new` allows what it scaffolds; allow again after editing. Your own profiles are never asked about.
 
-Allowing is the user's consent, never an agent's: run in a thread's shell, `profile allow` (and `allow-ui`) is refused,
-and `profile new` and `extension new` leave a project's profile waiting. An agent that made or changed one tells the
-user to allow it: in the window (where its thread asks, or Settings → Profiles), or in their own terminal.
+Allowing is the user's consent, never an agent's: from a thread's shell, `profile allow` and `allow-ui` are refused,
+and `profile new` and `extension new` leave a project's profile waiting. Tell the user to allow it in the window
+(where its thread asks, or Settings → Profiles) or in their own terminal.
 
-A profile's UI from another machine is asked about on this computer too, since it runs in the window with reach to
-every machine: once for exactly the sources the window received, again after any change. Allow it from the notice in
-one of its threads, or:
+Another machine's profile UI is asked about on this computer too, since it runs in the window with reach to every
+machine: once for exactly the sources received, again after any change. Allow it from the notice in one of its
+threads, or:
 
 ```sh
 superego profile allow-ui default -m box     # as it is now; a name, or the profile's folder there
@@ -183,37 +179,41 @@ superego profile revoke-ui default -m box    # Settings → Machines lists them 
 ## When changes apply
 
 - **A thread keeps the profile it started with.** A profile made after a thread started (your first `default`, a
-  project's new one) never reaches that thread, the one that wrote it included, so the user's open threads don't gain
-  its tools: say so. Start a new thread to use it (`superego -p "…"`), or move an idle one onto it with `superego do
-  thread.setProfile --thread <thread> --profile <name>` (refused while it's working).
-- The daemon loads a profile when a thread with it takes a turn, and again when its files changed: edit, then send the
-  thread another message (a thread mid-run keeps what it started the run with). `superego extension reload` loads it
-  now, and says why if it doesn't load. Daemon halves are torn down (their cleanup runs) and set up again.
-- The window loads a profile's UI as soon as it lists one of its threads (sidebar or navigator), and again when a
-  shown thread of it moves on after a change ([ui.md](ui.md#when-the-ui-loads)).
-- `model`, `thinking` and `options` apply where a thread hasn't chosen its own.
-- `agent` picks another kind of agent for the threads that start with the profile, fixed for each thread's life: an
-  extension's (`superego.agentKind`). `'claude-agent'` (experimental) runs the user's own Claude Code, signed in with its
-  own `/login`. Picking one of its models in the model menu (`claude-agent/opus`, `sonnet`, `haiku`, where `claude` is
-  installed) starts a thread with the user's `claude` profile, which is just `{ agent: 'claude-agent' }` (made then if
-  it isn't there). Superego's model doesn't apply to those threads; its thread, pane, question, UI, image and task tools
-  reach Claude Code over MCP, and the profile's `prompt` is appended to Claude Code's. It loads the user's own Claude
-  Code settings, and a folder's (`.claude/`, `.mcp.json`, `CLAUDE.md`, `CLAUDE.local.md` and what they import) only
-  once the user allowed them as they are: their hooks, MCP servers and permissions run commands, and Claude Code follows
-  the instructions. The thread asks (Allow, over its composer), and again after they change;
-  `superego do claude-agent.allow --cwd "$PWD"` allows them from a terminal. Claude Code reads them from every folder
-  above too, so where another user could put one there (under a shared `/tmp`, say), a folder's settings can't be
-  allowed. Skills in `.claude/skills` folders below it count as the folder's (they load with it). `claudeAgent:
-  { permissionMode, settingSources, allowedTools, disallowedTools, model, effort }` says how it runs: `permissionMode`
-  is the machine's (Settings → Claude Agent, `default`: ask) unless set to `default`, `acceptEdits`, `plan`, `auto` or
-  `bypassPermissions`; `settingSources` (Claude Code's `user`, `project`, `local`) narrows what it loads of those, never
-  adding a folder's not allowed; `model` (an alias or id) and `effort` (`low` … `max`) apply where a thread didn't pick
-  its own.
+  project's new one) never reaches it, the thread that wrote it included: say so. Start a new thread, or move an idle
+  one onto it: `superego do thread.setProfile --thread <thread> --profile <name>` (refused while it's working).
+- The daemon loads a profile when a thread with it takes a turn, and again after its files change: edit, then send the
+  thread a message (a run in progress keeps what it started with). `superego extension reload` loads it now and says
+  why if it can't. Daemon halves are torn down (their cleanup runs) and set up again.
+- The window loads a profile's UI as soon as it lists one of its threads, and again when a shown thread of it moves on
+  after a change ([ui.md](ui.md#when-the-ui-loads)).
+
+## Claude Agent
+
+`agent: 'claude-agent'` (experimental) runs the user's own Claude Code, signed in with its own `/login`.
+
+- Picking a Claude Agent model (`claude-agent/opus`, `sonnet`, `haiku`, where `claude` is installed) starts a thread
+  on the user's `claude` profile, `{ agent: 'claude-agent' }`, made then if missing.
+- Superego's model doesn't apply. Its thread, pane, question, UI, image and task tools reach Claude Code over MCP, and
+  the profile's `prompt` is appended to Claude Code's.
+- It loads the user's Claude Code settings. A folder's (`.claude/`, `.mcp.json`, `CLAUDE.md`, `CLAUDE.local.md` and
+  what they import, plus skills in `.claude/skills` below it) load only once the user allowed them as they are, since
+  they run commands: the thread asks (Allow, over its message box), and again after they change. From a terminal:
+  `superego do claude-agent.allow --cwd "$PWD"`. Where another user could write a folder above (a shared `/tmp`), they
+  can't be allowed.
+
+`claudeAgent: { permissionMode, settingSources, allowedTools, disallowedTools, model, effort }`:
+
+| Key | |
+|---|---|
+| `permissionMode` | `default`, `acceptEdits`, `plan`, `auto` or `bypassPermissions`; unset: the machine's (Settings → Claude Agent; `default`: ask) |
+| `settingSources` | Claude Code's `user`, `project`, `local`: narrows what it loads, never adding a folder's not allowed |
+| `allowedTools`, `disallowedTools` | Claude Code's tool lists |
+| `model`, `effort` | an alias or id; `low` … `max`. Apply where a thread didn't pick its own |
 
 ## An example
 
-[`examples/build-queue-ui`](examples/build-queue-ui) is a complete one: a tool, a scoped value per thread, a Cancel
-action, a view of its own beside the thread, and tests. Read it for a working pattern.
+[`examples/build-queue-ui`](examples/build-queue-ui) is complete: a tool, a scoped value per thread, a Cancel action, a
+view beside the thread, and tests.
 
 A minimal one with a tool:
 

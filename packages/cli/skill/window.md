@@ -4,9 +4,9 @@
 
 <picture><source media="(prefers-color-scheme: dark)" srcset="guide/places-dark.svg"><img src="guide/places.svg" alt="The window: the rail and the open sidebar beside it, the thread with its header, transcript and composer.above, the column beside it, panes from the pane menu with the editor's bar and side; the title bar's stand-in, a phone's drawer and an overlay over everything"></picture>
 
-An extension declares **views**: what it offers, and the kinds of place each fits. The shell has **places**, and knows
-no extension. The **layout** decides what goes where: each view's `default`, then the user's changes, kept in the app
-setting `app.layout` as `app.keys` keeps shortcuts.
+An extension declares **views** and the places each fits. The window has **places** and knows no extension. The
+**layout** decides what goes where: each view's `default`, then the user's changes, kept in the app setting
+`app.layout`.
 
 <!-- check: ui; import { ChatsIcon, LifebuoyIcon, type SidebarRailProps } from 'superego/ui'; declare const Threads: (props: ViewProps<'window'>) => null, DetailsPane: (props: ViewProps<'thread'>) => null, EgoButton: (props: ViewProps<'window'>) => null, ThreadsRail: (props: SidebarRailProps) => null -->
 ```ts
@@ -17,74 +17,76 @@ superego.view('ego.button', { title: 'Ask Ego', icon: LifebuoyIcon, context: 'wi
 
 | Place | What it is | A view there gets |
 |---|---|---|
-| `sidebar` | a button in the rail (its `icon`, or its own `railButton` component), and the sidebar while it's the open one; on a phone, the drawer. The sidebar is shown or hidden (⌘/, the open sidebar's button, its edge dragged narrow; a tight window hides it by itself): its `railButton` is told so (`sidebarHidden`), and can draw more in the rail while it's hidden (Threads' status dots); a space without one just hides | `{ place }`; a `thread` view, the thread shown |
-| `rail` | a button in the rail that isn't a sidebar (Ego's) | `{ place }` |
-| `drawer` | on a phone, at the drawer's foot beside Settings, where there's no rail | `{ place }` |
-| `titlebar` | at the title bar's start: what stands in for a sidebar while there's none (the core's thread picker) | `{ place }` |
+| `sidebar` | a rail button (its `icon`, or its own `railButton` component) and the sidebar while it's the open one; on a phone, the drawer. Hidden with ⌘/, its button, dragging its edge narrow, or a tight window: `railButton` is told (`sidebarHidden`) and can draw more in the rail meanwhile (Threads' status dots) | `{ place }`; a `thread` view, the thread shown |
+| `rail` | a rail button that isn't a sidebar (Ego's) | `{ place }` |
+| `drawer` | on a phone, at the drawer's foot beside Settings | `{ place }` |
+| `titlebar` | the title bar's start, standing in for a sidebar while there's none (the thread picker) | `{ place }` |
 | `beside` | a column beside the thread | `{ place, machine, thread }` |
 | `pane` | the thread's pane menu: a `thread` view that fits `pane` is a pane kind of its id | `{ place, machine, thread }` |
 | `header` | right of the thread's title: a button, a badge | `{ place, machine, thread }` |
 
-- `default` is a place, several, or none (offered, not placed: the user puts it somewhere). `narrow` is where it goes
-  on a phone instead. `withoutSidebar` is where it goes while no view is in `sidebar` (Unread's bell in the rail, the core's
-  picker in the title bar).
-- `app.layout` holds only what the user changed: `{ place: { 'threads.details': 'beside', 'ego.button': null }, order:
-  { pane: ['git.changes'] }, narrow: { place: { … } } }`. A view it names that isn't there (an extension removed) is
-  ignored, and a place a view doesn't fit is too. A view can be in two places at once.
-- What the user says beats what a view says, and on a phone the phone's layer beats the wide one. On a phone a view
-  goes where `narrow` in the layout puts it; else where `place` does (hidden is hidden everywhere; a place a phone
-  doesn't draw, the rail, gives way to the view's own `narrow`); else its `narrow`; else its `default`.
-- The layout names views by id, whatever scope declares them: a profile's view on two machines is one entry. A
-  thread's places are resolved from the views that thread sees, its profile's (on its machine) over the app's, so each
-  id is there once, as that scope declares it.
-- To put a view in a place or take it out, dispatch `layout.place` with `{ view, place, on? }` (toggled without
-  `on`); `from` takes it out of that place in the same change (moved), `narrow` changes the phone's layer. In a
-  component, `usePlacement(view, place)` gives `[placed, toggle]`. ⌘I is `threads.details` in the `beside`, or not.
-- Both read and change a place as it's drawn: a thread's place (`beside`, `pane`, `header`) for a thread, as the views
-  that thread sees declare them; the window's places for the window. `layout.place` takes the thread as `machine` and
-  `thread` (its id), else the selected one; `usePlacement` the thread its view is drawn for (in a thread's place or
-  pane), else the selected one, or `usePlacement(view, place, { machine, thread })`. The change is kept by view id, as
-  the layout keeps it, so it applies in every thread that has the view: a profile's view taken out of one machine's
-  header is out of the other's too. The view's menu says so (*For every thread with Notes*) when the id is declared
-  in more than one scope; and the layout file's list gives such an id every place any of them fits.
-- The user edits the layout as text: *Edit layout…* (⌘K) opens `~/.superego/layout.json`, `app.layout` as a file,
-  applied as it's saved; a mistake (bad JSON, a place there isn't, a place a view doesn't fit) is noted and the last
-  good layout stays, and the file is left as typed until it reads. A view it names that no window has now is applied
-  all the same and only noted, for when it's back. Its head of `//` comments lists the views the windows declared and
-  the places each fits, and `superego layout` prints it; comments of your own below it are kept. For example:
+| Option | |
+|---|---|
+| `default` | a place, several, or none (offered only, for the user to place) |
+| `narrow` | where it goes on a phone instead |
+| `withoutSidebar` | where it goes while no view is in `sidebar` (Unread's bell in the rail, the picker in the title bar) |
 
-  ```jsonc
-  {
-    "place": { "threads.details": "beside", "files.folder": ["sidebar", "pane"], "ego.button": null },
-    "order": { "pane": ["files.folder", "git.changes"] },
-    "narrow": { "place": { "threads.details": "pane" } }
-  }
-  ```
+**Where a view ends up:** the user's choice beats the view's, and on a phone the phone's layer beats the wide one. On
+a phone: the layout's `narrow`, else its `place` (hidden is hidden everywhere; a place a phone lacks, like the rail,
+gives way to the view's `narrow`), else the view's `narrow`, else its `default`. A view can be in two places.
 
-  A right-click on a view in the window (its ··· beside the thread, its entry in the pane menu) has *Move to*, *Remove
-  from here* and *Edit layout…*; a pane's ··· has *Move to* among the pane's own (*Maximize*, *Close*). ⌘K offers each view in each place it fits and isn't in (*Show Files beside the thread*), and *Reset
-  layout*. Settings → Appearance → Layout has *Edit layout…* and *Reset*, and no layout can take Settings away: the
-  rail always has it, and a phone's drawer, or its top bar while there's no sidebar. A browser keeps its layout itself:
-  there *Edit layout…* opens it in a dialog. So `default` is only where a view starts. Draw it to work in every place it `fits`
-  (read `place` when it must differ: a menu's side, a button's size), never assume another view sits beside it, and
-  don't keep a setting of your own for where it shows: `usePlacement` and `layout.place` are that setting. Declare
-  only the places it can really be drawn in.
+**`app.layout`** holds only the user's changes: `{ place: { 'threads.details': 'beside', 'ego.button': null }, order:
+{ pane: ['git.changes'] }, narrow: { place: { … } } }`. A view or place in it that doesn't exist or fit is ignored.
+Views are named by id whatever declares them: a profile's view on two machines is one entry. A thread's places are
+resolved from the views that thread sees, its profile's over the app's.
+
+**Changing it from code:** dispatch `layout.place` with `{ view, place, on? }` (toggles without `on`; `from` moves it
+out of that place in the same change; `narrow` changes the phone's layer). In a component,
+`usePlacement(view, place)` gives `[placed, toggle]`. Both act on a thread's places for a thread (`layout.place`'s
+`machine` and `thread`, else the selected one; `usePlacement`'s view's thread, else the selected one, or
+`usePlacement(view, place, { machine, thread })`), and the change applies wherever the view is: a profile's view taken
+out of one machine's header is out of the other's too (its menu says *For every thread with Notes*). ⌘I is
+`threads.details` in `beside`.
+
+**The user edits it as text:** Edit layout… (⌘K) opens `~/.superego/layout.json`, applied as it's saved. A mistake
+(bad JSON, an unknown place, a place a view doesn't fit) is noted and the last good layout stays; a view no window has
+now is kept, for when it's back. Its head of `//` comments lists the views and the places each fits
+(`superego layout` prints it); your own comments below are kept.
+
+```jsonc
+{
+  "place": { "threads.details": "beside", "files.folder": ["sidebar", "pane"], "ego.button": null },
+  "order": { "pane": ["files.folder", "git.changes"] },
+  "narrow": { "place": { "threads.details": "pane" } }
+}
+```
+
+Also: right-click a view (its ··· beside the thread, its pane-menu entry) for *Move to*, *Remove from here* and *Edit
+layout…*; a pane's ··· has *Move to*, *Maximize*, *Close*. ⌘K offers each view in each place it fits (*Show Files
+beside the thread*) and *Reset layout*; so does Settings → Appearance → Layout. Settings can't be laid out away (the
+rail, a phone's drawer, or its top bar). A browser keeps its own layout; *Edit layout…* opens it in a dialog.
+
+So `default` is only where a view starts:
+
+- Draw it to work in every place it `fits` (read `place` where it must differ), and don't assume what's beside it.
+- Don't keep a setting of your own for where it shows: `usePlacement` and `layout.place` are that setting.
+- Declare only places it can really be drawn in. A profile's views fit only `beside`, `pane` and `header`, in its own
+  threads.
 - `pane(kind, { menu: true })` is a view of the pane menu, of the kind's name, placed there by default.
-- A profile's views fit only the places that show a thread (`beside`, `pane`, `header`), in its own threads.
 
-Slots are places that behaviour decides, so the layout doesn't move them: a question card sits on the composer it asks
-for. They get `{ machine, thread }`; the editor's also `path` and `open(path)`.
+**Slots** are places behaviour decides, so the layout doesn't move them (a question card sits on its composer). They
+get `{ machine, thread }`; the editor's also `path` and `open(path)`.
 
 ### Data-only views
 
-A daemon half can declare a view as data, and the window draws it with its own components: no UI code ships, so a
-remote machine's, or a project profile's, needs no consent to run code in the window, as its UI code would. That's
-not no authority: its buttons run that machine's actions. What a view shows is blocks (`Block[]` from `'superego'`),
-the schema agents draw with: `markdown`, `callout`, `code`, `table`, `image`, `kv`, `list` (rows: `title`, `subtitle`,
-`detail`, `status`, a `thread` to link, `buttons`), layout (`stack`, `row`, `card`, `divider`), inputs, `buttons`, and
-`html` (a sandboxed page, display only). A button runs one of the extension's own actions (`action`:
-`<extension>.<name>`) on that machine with its `params`, as the window may (one exposed to `ui`); the inputs' values go
-into the params by input id. `[]` or null shows "Nothing here yet."; say more with a `markdown` block.
+A daemon half can declare a view as data, drawn by the window's own components. No UI code ships, so a remote
+machine's or a project profile's needs no consent to run in the window; its buttons still run that machine's actions.
+
+A view shows blocks (`Block[]` from `'superego'`, the schema agents draw with): `markdown`,
+`callout`, `code`, `table`, `image`, `kv`, `list` (`title`, `subtitle`, `detail`, `status`, a `thread` link,
+`buttons`), `stack`, `row`, `card`, `divider`, inputs, `buttons`, and `html` (sandboxed, display only). A button runs
+one of the extension's own actions (`action`: `<extension>.<name>`, exposed to `ui`) on that machine with its
+`params`, the inputs' values added by input id. `[]` or null shows "Nothing here yet."
 
 <!-- check: daemon; type Order = { id: string; customer: string; late: boolean }; declare function ship(id: string): Promise<Order[]> -->
 ```ts
@@ -99,33 +101,30 @@ superego.action(defineAction({ id: 'orders.ship', title: 'Ship an order', params
 superego.view('orders.open', { title: 'Orders', icon: 'list', context: 'window', fits: ['sidebar', 'beside'], default: 'sidebar', value: 'orders.open' })
 ```
 
-- The source is a live value of the extension's (`value`), or a method of its (`method`), read again as the thread
-  moves on and after a button ran. A `thread` view's value is a `scopedValue`, each thread's blocks in its scope (or a
-  plain value holding each thread's by its id: the window watches only that entry), and its method is called with
-  `{ thread }`. A thread view's buttons say their thread in `params`.
-- Blocks bind to nothing: to change what a view shows, set its value again. The inputs keep what the user typed, by id.
-- Data views fit `sidebar`, `beside` and `pane` (a `window` view: `sidebar` and `beside`), and the layout places them as any
-  other. A `thread` view in `pane` is a pane kind of its id; with `about`, the agent is told it can open it.
-- The window hears of them as every daemon's live value `view.list`. A view a machine's extension declares shows a
-  thread only from that machine, and a `window` view gathers every machine's, each under its name. A profile's fit only
-  `beside` and `pane`, in its own threads; but a `window` view of one of the user's own profiles (not a project's) is
-  the window's, as a bundled extension's: a sidebar too. It's there while the profile is loaded: once a thread of it is
-  in use (the daemon loads those as it starts) or starts. An extension's UI half that declares a view of the same id
-  draws it instead.
-- The window checks what it's sent as it lands, not on the machine's word. A declaration must be of one of that
-  machine's extensions that's on, named for it (its id and its source `<extension>.<name>`), in places there are (a
-  view carrying a profile's folders never a sidebar), and within bounds; one that isn't is left out, with a warning on the console. Blocks are
-  checked whole (`blockErrors(blocks, { by: 'extension', extension, thread })`, from `'superego'`, says what a window
-  would): a button that runs another's action or none, a params key that's also an input's id, inputs with no button,
-  a `window` view's `open` link or image by path, or more than the limits allow refuses the view, which shows its first
-  error in its place.
-- The `skills` extension's *Skills* is one (`extensions/skills/src/daemon.ts`).
+- **Source:** a live value (`value`) or a method (`method`), read again as the thread moves on and after a button ran.
+  A `thread` view's value is a `scopedValue` (each thread's blocks in its scope, or a plain value keyed by thread id,
+  of which the window watches one entry); its method gets `{ thread }`. A thread view's buttons name their thread in
+  `params`.
+- To change it, set the value again. Inputs keep what the user typed, by id.
+- **Places:** `thread` views fit `beside` and `pane` (a pane kind of its id; with `about`, the agent is told it can
+  open it); `window` views, `sidebar` and `beside`. A profile's fit only its own threads' `beside` and `pane`, except a
+  `window` view of one of the user's own profiles, which can be a sidebar while the profile is loaded (a thread of it
+  in use or starting).
+- A view a machine declares shows that machine's threads only; a `window` view gathers every machine's, each under
+  its name. A UI half declaring a view of the same id draws it instead. The window hears of them as each daemon's
+  `view.list` value.
+- **Checked on arrival.** A declaration must belong to one of that machine's extensions that's on, be named for it (id
+  and source `<extension>.<name>`), name places that exist (one carrying a profile's folders is never a sidebar), and
+  stay in bounds; else it's left out, with a console warning. Blocks are checked whole
+  (`blockErrors(blocks, { by: 'extension', extension, thread })`): a button running another's action or none, a params
+  key that's also an input id, inputs with no button, a `window` view's `open` link or image by path, or anything over
+  the limits refuses the view, which shows its first error.
+- Example: the `skills` extension's *Skills* (`extensions/skills/src/daemon.ts`).
 
 ### Spaces
 
-A **space** fills the window's main area, where a thread otherwise shows: a notes page, a canvas. An app extension's
-UI half registers it, or a global profile's (`global: true`, [profiles.md](profiles.md)); a thread-bound profile's
-can't, as it would have nowhere to open.
+A **space** fills the main area where a thread otherwise shows: a notes page, a canvas. An app extension's UI half or
+a global profile's (`global: true`, [profiles.md](profiles.md#global-profiles)) registers it; other profiles can't.
 
 <!-- check: ui; import { NotebookIcon, type SpaceProps } from 'superego/ui'; declare const NotePage: (props: SpaceProps) => null -->
 ```tsx
@@ -141,50 +140,58 @@ superego.space('notes.page', {
 })
 ```
 
-- Open one with the window action `space.open` (`{ kind, params, machine? }`, this computer unless given):
-  `superego.dispatch('space.open', { kind: 'notes.page', params: { name } })`, a sidebar's list say. Another client
-  may ask a window to (`client.perform`). In the component, `open(params)` shows another of its kind in its place.
-- The title bar shows its title, and a button that shows or hides its thread. Back and forward go through spaces as
-  through threads; selecting a thread leaves the space for it.
-- **Its thread.** One thread is docked to each space (by kind, machine and params), remembered in the window. With
-  none, the column asks: what you send starts a thread with the space's `profile`, its first message `about(params)`
-  then yours, and docks it. It's listed in the sidebar like any other; the column's ↗ opens it as the thread, ✕
-  undocks it. The component gets it as `thread`. How the agent works on what the space shows is the profile's: tools
-  in its daemon half, and live values the component watches.
-- **Its title.** `useSpaceTitle(title)` (from `superego/ui`), in the component, says what it's called now (a note's
-  heading): the title bar and a thread started on it take that, remembered for when it opens again; until it says,
-  `title(params)`. `inset.right` says how much of its right side a floating thread covers (also
-  `--space-inset-right`), to keep its own controls clear. A global profile's window views get `machine`, the one its
-  profile is on.
-- **Testing:** `mountUi({ profile: { extensions: [ui], global: true } })` mounts a global profile's UI;
-  `render({ space: { kind, params } })` draws a space with its thread beside it, and `window.space()` says what
-  the main area shows (after a click on a sidebar's row, say).
-- On a phone the space is the whole screen; its thread opens as the thread, from the title.
+- **Open one** with the window action `space.open` (`{ kind, params, machine? }`, default this computer):
+  `superego.dispatch('space.open', { kind: 'notes.page', params: { name } })`. Another client can ask a window to
+  (`client.perform`). In the component, `open(params)` replaces it with another of its kind.
+- The title bar shows its title and a button to show or hide its thread. Back and forward go through spaces as through
+  threads; selecting a thread leaves the space.
+- **Its thread:** one per space (kind, machine, params), remembered by the window. With none, sending in the column
+  starts one on the space's `profile`, its first message `about(params)` then yours, and docks it. It's listed in the
+  sidebar; ↗ opens it as the thread, ✕ undocks it. The component gets it as `thread`. The profile's daemon half gives
+  the agent tools to work on what the space shows, and live values the component watches.
+- **Its title:** `useSpaceTitle(title)` (`superego/ui`) says what it's called now (a note's heading): the title bar
+  and a thread started on it take that, remembered; until then, `title(params)`.
+- `inset.right` (also `--space-inset-right`) is how much a floating thread covers, to keep controls clear.
+- A global profile's window views get `machine`, the one its profile is on.
+- **Testing:** `mountUi({ profile: { extensions: [ui], global: true } })`; `render({ space: { kind, params } })` draws
+  one with its thread; `window.space()` says what the main area shows.
+- On a phone, a space is the whole screen; its thread opens as the thread, from the title.
 
 ### On a phone
 
-Below 600px wide there's no rail and no title bar. `sidebar` views are the drawer, with the others to switch to at its
-foot beside `drawer` views (Ego, Unread) and Settings. The thread's title opens its **sheet**, which holds the title
-bar's (`header` views, where it runs, archiving), the pane menu, and the `beside` views. With no sidebar there's no
-drawer: `titlebar` views (the thread picker) and Settings are in the bar at the top instead.
-`narrow` moves a view elsewhere on a phone.
+Below 600px wide there's no rail and no title bar. `sidebar` views are the drawer, the others to switch to at its
+foot with `drawer` views (Ego, Unread) and Settings. The thread's title opens its **sheet**: `header` views, where it
+runs, archiving, the pane menu and `beside` views. With no sidebar there's no drawer: `titlebar` views and Settings
+go in the top bar. `narrow` moves a view elsewhere on a phone.
 
 ## Links
 
-A link in a message, in ⌃O's list, or in a Markdown file (rendered, or clicked in live preview) is followed by the
-first handler that claims it, asked in this order:
+A link in a message, ⌃O's list, or a Markdown file (rendered or live preview) is followed by the first handler that
+claims it:
 
-1. **the thread's profile's** (its `ui` files' `superego.link`), only in that profile's threads;
-2. **the extensions'**, in the order they're set up, but not those of an optional one the thread goes without
-   (`threads` claims `thread:<id>`, and `thread:<machine>/<id>` for one on another machine, by its name or id);
-3. **the core's**, the defaults: files a thread names (relative links, inline code that reads as a path, and
-   `wikilink:`), which open in the pane kind that takes the file, and web pages (`http:`, `https:`, `mailto:`), which
-   open in the browser, or beside in a pane that shows web pages (`urls: true`, `browser`'s Browser).
+1. **the thread's profile's** (`superego.link` in its `ui`), in its own threads;
+2. **the extensions'**, in set-up order, minus optional ones the thread goes without (`threads` claims `thread:<id>`,
+   and `thread:<machine>/<id>` by machine name or id);
+3. **the core's**: files a thread names (relative links, inline code that reads as a path, `wikilink:`) open in the
+   pane kind that takes the file; web pages (`http:`, `https:`, `mailto:`) open in the browser, or beside in a pane
+   with `urls: true` (Browser).
 
-A link no handler claims opens in the browser; an HTML link of a scheme none claims there is dropped. So to open
-links your own way, claim them: nothing else to switch off. `[[Note#Heading|alias]]` reaches handlers as
-`wikilink:Note#Heading` (each part URI-encoded), saying "alias"; `parseWikilink(href)` gives
-`{ target: 'Note', heading: 'Heading' }` (or `block` for `#^id`). A profile that keeps notes its own way, say:
+Unclaimed links open in the browser; in HTML, an unclaimed scheme's links are dropped. To open links your own way,
+claim them: nothing else to switch off.
+
+`superego.link({ match, open, render?, target?, scheme? })`:
+
+| | |
+|---|---|
+| `match` | a scheme (`'ticket:'`), a pattern (`/^https:\/\/linear\.app\//`), or `(href, kind, where) => boolean`, which also sees inline code (`kind: 'code'`, its text as `href`) |
+| `open(href, { machine, thread, beside, kind, openFile, openUrl })` | follow one: a click (⌘: `beside`) or from ⌃O. Return (or resolve to) a string to say why it couldn't: the link is struck through with it |
+| `render` | gets `{ href, children, code, title, where, open(beside) }`; default: a link that follows it |
+| `target(href)` | where it goes, in ⌃O's list |
+| `scheme` | the scheme a pattern or test claims (`'ticket'`), so HTML files keep its links |
+
+`[[Note#Heading|alias]]` arrives as `wikilink:Note#Heading` (each part URI-encoded), with "alias" as its text;
+`parseWikilink(href)` gives `{ target: 'Note', heading: 'Heading' }` (or `block` for `#^id`). A profile that keeps
+notes its own way:
 
 <!-- check: ui -->
 ```tsx
@@ -200,15 +207,14 @@ superego.link({
 })
 ```
 
-Return (or resolve to) a string to say why it couldn't: the link is struck through with it. Claiming files is the
-same with a test: `match: (href, kind) => /\.md$/.test(href)` takes Markdown links and paths in code alike, ahead of
-the core's. The core's file and web handlers stay the core's rather than `files`' or `browser`'s: both extensions
-are optional, and a link to a file or a page has to work in a thread that goes without them.
+Claiming files takes a test: `match: (href, kind) => /\.md$/.test(href)` takes Markdown links and paths in code,
+ahead of the core's. The core keeps the file and web defaults (not `files` or `browser`, which are optional), so links
+work in threads without them.
 
 ## Hearing the window
 
-`on` tells a UI half what happens in the window, whatever it draws. Listening is owned like everything else, and stops
-at teardown. A thread that goes without the extension isn't heard of; a profile hears only its own threads.
+`superego.on` tells a UI half what happens in the window. It's owned like any registration and stops at teardown. A
+thread that goes without the extension isn't heard of; a profile hears only its own threads.
 
 <!-- check: ui; import { unread } from 'superego/unstable' -->
 ```ts
@@ -219,12 +225,11 @@ superego.on('thread.status', ({ thread, before }) => {
 })
 ```
 
-Notifications and the app icon's count are the app's own (Settings → Notifications): an extension needn't notify.
+`superego.window` is the state as the event arrives: `focused`, `visible`, the `selection` and its `thread`, the
+`machines` and each one's `threads` in use (by machine id). The core marks a finished thread seen the same way, on
+`select`, `focus` and `thread.status`. Notifications and the app icon's count are the app's (Settings →
+Notifications): an extension needn't notify.
 
-`window` is how things are as the event arrives: `focused`, `visible`, the `selection` and the `thread` it shows, the
-`machines` the window reaches and each one's `threads` in use (by machine id). The core marks a finished thread seen the same way, on `select`, `focus` and `thread.status`.
-
-`auth.rejected` is a machine's provider rejecting its credentials (`{ machine, rejection }`, a `ProviderRejection`):
-once, however many threads it stops. Those threads are `blocked` with kind `auth` (`waitingForSignIn`), quiet on their
-own, and go on by themselves once the machine is signed in again; `unread` says nothing of them, and the app notifies
-once for all.
+`auth.rejected` (`{ machine, rejection }`, a `ProviderRejection`) is a machine's provider rejecting its credentials,
+once however many threads it stops. Those threads are `blocked` with kind `auth` (`waitingForSignIn`), quiet, and
+resume once signed in again; `unread` ignores them, and the app notifies once for all.

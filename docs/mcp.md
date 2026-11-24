@@ -1,46 +1,43 @@
 # MCP servers
 
-The agents in Superego's threads can use MCP servers: other people's tools (Linear, GitHub, Sentry, a browser), named
-`mcp__<server>__<tool>`. Each machine has its own list of servers, and signs in to each once.
+Agents in threads can use MCP servers: other people's tools (Linear, GitHub, Sentry, a browser), named
+`mcp__<server>__<tool>`. Each machine has its own list, and signs in to each server once.
 
-The other way round, Superego is an MCP server itself, for agents outside it (Claude Code, Codex, an editor's):
-`superego mcp`, in [the command's docs](../packages/cli/skill/cli.md#outside-agents). Settings calls that Outside agents.
+Superego is also an MCP server itself, for agents outside it (Claude Code, Codex, an editor's): `superego mcp`, see
+[Outside agents](../packages/cli/skill/cli.md#outside-agents).
 
-## Adding a server
+## Add a server
 
-Settings → MCP servers → Add server. A server is either:
+Settings → MCP servers → Add server, or ask Ego ("connect Linear"). Start from the list of well-known servers, or give:
 
-- **a command** the machine runs (stdio), such as `npx -y @sentry/mcp-server`;
-- **a URL** it reaches (Streamable HTTP, or SSE), such as `https://mcp.linear.app/mcp`. Only `https`, except on
-  loopback.
+- **a command** the machine runs (stdio): `npx -y @sentry/mcp-server`;
+- **a URL** (Streamable HTTP or SSE): `https://mcp.linear.app/mcp`. `https` only, except on loopback.
 
-Add server offers a list of well-known servers to start from. On save, Superego starts the server once to check it
-and shows "Connected · 23 tools", or the error. You can also ask Ego ("connect Linear"); a command Ego adds waits for
-you to press **Allow** in Settings, which shows the whole command line.
+On save, Superego starts it once and shows "Connected · 23 tools", or the error. A command Ego adds waits for you to
+press **Allow** in Settings, which shows the whole command line.
 
-Each server signs in one of these ways:
-
-- **OAuth:** Sign in opens the server's page in your browser. This works for a remote machine too: the app catches the
-  redirect on this computer and passes it to the machine. Elsewhere (a browser, a phone, or the port taken), paste the
-  address the browser ends up on.
-- **An API key:** Set key. It's sent as `Authorization: Bearer <key>`, or in the header the config names.
-- **Secret environment variables**, for a command: their names in the config, their values set in Settings.
+| Sign-in | How |
+|---|---|
+| OAuth | Sign in opens the server's page in your browser (a remote machine's too). From a browser, a phone, or with the port taken, paste the address the browser ends on |
+| API key | Set key. Sent as `Authorization: Bearer <key>`, or in the header the config names |
+| Secret environment variables | for a command: names in the config, values set in Settings |
 
 Secrets stay on the machine, in `~/.superego/mcp-auth.json` (mode 0600). Settings and the command line only say
 whether each is set.
 
 ## Which threads use it
 
-- **A thread with a profile** uses the servers its profile names: `mcpServers: ['linear', 'sentry']`.
-- **A thread without a profile** uses the servers switched to *Use in threads without a profile* (off by default).
-- Ego's own thread uses none.
+| Thread | Servers |
+|---|---|
+| with a profile | those its profile names: `mcpServers: ['linear', 'sentry']` |
+| without a profile | those switched to *Use in threads without a profile* (off by default) |
+| Ego's | none |
 
-A server that's off, waiting for Allow or not on this machine is left out. The thread's header shows a plug and how
-many servers it has; it opens a list with each one's state, and why any were left out. A server that needs signing in
-puts a notice over the thread's message box. A thread works out its servers again on every turn, so edits apply from
-the next one.
+A server that's off, waiting for Allow, or not on this machine is left out. The thread's header shows a plug with how
+many servers it has, and opens a list of each one's state and why any were left out. A server that needs signing in
+puts a notice over the message box. Edits apply from the next turn.
 
-In the transcript, each call is a row: *Called Linear · create_issue*, with its arguments and result.
+Each call is a row in the transcript (*Called Linear · create_issue*), with its arguments and result.
 
 ## In a profile
 
@@ -58,17 +55,16 @@ export default defineProfile({
 })
 ```
 
-- A string names one of the machine's servers.
-- An object defines servers of the profile's own, each the shape of a Settings entry (below). A command runs in the
-  project's root. A server of its own named like one of the machine's replaces it in this profile's threads.
-- A project's servers run only once its profile is allowed, and their command lines are part of `profile.ts`, so
-  changing one means allowing the profile again. Their secrets are set in Settings → MCP servers → From profiles.
-- With `extends`, the two lists add up. `without: ['mcp-servers']` drops every server.
+- A string names one of the machine's servers. An object defines the profile's own, each shaped like a config entry
+  (below); one named like a machine's replaces it in this profile's threads.
+- A command runs in the project's root, only once the profile is allowed; changing it means allowing again. Set its
+  secrets in Settings → MCP servers → From profiles.
+- With `extends`, the lists add up. `without: ['mcp-servers']` drops every server.
 
 ## The config
 
-A machine's servers are in `~/.superego/mcp-servers.json`, which holds no secrets. Its field names follow Claude Code's
-and Cursor's `mcpServers`.
+A machine's servers are in `~/.superego/mcp-servers.json`, without secrets. Field names follow Claude Code's and
+Cursor's `mcpServers`.
 
 ```jsonc
 {
@@ -91,28 +87,26 @@ and Cursor's `mcpServers`.
 | `command`, `args`, `cwd`, `env` | a command to run; `env` holds plain values only |
 | `url`, `headers` | a URL to reach |
 | `auth` | `{ type: 'oauth', scopes?, clientId? }`, `{ type: 'api-key', header?, scheme? }` or `{ type: 'env', names }` |
-| `lifetime` | `machine` (default): one process, shared by every thread; `thread`: one per thread, run in the thread's folder |
+| `lifetime` | `machine` (default): one process shared by every thread; `thread`: one per thread, in the thread's folder |
 | `tools` | `auto` (default): offered directly up to 15 tools, else found by search (`tool_search`); `all`; `search` |
 | `timeout` | seconds per call, reset by progress (default 300) |
 | `unprofiled` | used by threads without a profile |
 | `enabled` | `false` turns it off |
 
-Names are lower-case letters, digits and hyphens, up to 24, starting with a letter.
+Names: lower-case letters, digits and hyphens, up to 24, starting with a letter.
 
 ## How servers run
 
-- A server starts when a thread that has it starts a turn, and stops after 10 minutes unused. Its tool list is cached,
-  so the model is offered its tools before it runs.
+- Starts when a thread that has it starts a turn; stops after 10 minutes unused. Its tool list is cached, so the model
+  sees its tools before it runs.
 - Three crashes within a minute mark it failed until you restart it or change its config.
-- A call in flight when the daemon restarts isn't sent again: the model is told it may or may not have taken effect,
-  and the row says *Interrupted: may have run*.
-- Each server's log is in `~/.superego/logs/mcp/<name>.log`, with secrets hidden: Show log in Settings, or
-  `superego mcp-servers logs <name>`.
+- A call cut off by a daemon restart isn't sent again: the model is told it may have taken effect, and the row says
+  *Interrupted: may have run*.
+- Logs: `~/.superego/logs/mcp/<name>.log`, secrets hidden (Show log in Settings).
 - A command gets a clean environment (`HOME`, `PATH`, `SHELL`, `TERM`, `USER`, `LOGNAME`, then its `env` and secrets),
   not the daemon's.
-
-Outside agents (`superego mcp`) can't list, add or change servers, and the servers' tools aren't offered to them. A
-thread an outside agent starts uses its profile's servers like any other.
+- Outside agents (`superego mcp`) can't list, add or change servers, and don't get their tools. A thread an outside
+  agent starts uses its profile's servers as usual.
 
 ## From a shell
 

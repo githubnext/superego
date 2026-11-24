@@ -1,9 +1,9 @@
 # Blocks
 
 Blocks are UI as JSON, drawn by the window's own components. Agents draw them with `show_ui`, `ask_ui`, `open_ui` and
-`update_ui` (the bundled `agent-ui` extension); an extension's daemon half draws them in a data-only view
-(`superego.view`, see [the window](../packages/cli/skill/window.md#data-only-views)). The schema, its checker and its
-renderer are the same for both. What differs is who drew them, which decides what pressing a button does.
+`update_ui` (the bundled `agent-ui` extension); a daemon half draws them in a data view (`superego.view`, see
+[the window](../packages/cli/skill/window.md#data-only-views)). Same schema, checker and renderer for both; who drew
+them decides what a button does.
 
 ## The blocks
 
@@ -19,12 +19,11 @@ renderer are the same for both. What differs is who drew them, which decides wha
 | Links | `open {label, kind, params?, title?}`: opens a pane beside the thread |
 | HTML | `html {html, height?, id?}`: a page of your own in a sandboxed frame |
 
-An `image`'s `src` is a file in the thread's folder, a `data:` URL, or an `https:` URL, which shows only once the user
-clicks to load it. An `html` page has no network: everything it needs is inline. It gets theme variables
-(`--superego-text`, `--superego-accent`, `--superego-surface`, …) that follow light and dark.
-
-`'superego'` exports the types (`Block`, `ListItem`, `Button`, `Value`) and `blockErrors(blocks, use)`, the check, for
-tests.
+- `image`'s `src`: a file in the thread's folder, a `data:` URL, or an `https:` URL (shown once the user clicks to load
+  it).
+- `html` has no network: inline everything. It gets theme variables (`--superego-text`, `--superego-accent`,
+  `--superego-surface`, …) that follow light and dark.
+- `'superego'` exports the types (`Block`, `ListItem`, `Button`, `Value`) and `blockErrors(blocks, use)`, the check.
 
 ## Who can do what
 
@@ -38,20 +37,18 @@ tests.
 | `open` | a pane of its thread | `thread` views only |
 | `image` by path | a file of the thread's | `thread` views only; `window` views take `https:` and `data:` |
 
-An agent never gets a button that runs an action: its label is the model's, and the model may be following injected
-text. An agent that wants something done asks with a button and does it with its own tools.
+An agent's button never runs an action: its label comes from the model, which may be following injected text. To get
+something done, ask with a button and act with the agent's own tools.
 
 ## Live data
 
-An extension's view is one value on its machine: a live value it sets, or a method the window calls again as the
-thread moves on and after a button ran. Nothing inside blocks binds to anything: to change what's shown, publish new
-blocks. What the user typed in an input is kept across redraws by its `id`.
-
-An agent's `update_ui` replaces a pane's blocks, with its inputs starting over.
+An extension's view is one value on its machine: a live value, or a method the window calls again as the thread moves
+on and after a button ran. To change what's shown, publish new blocks. Inputs keep what the user typed across redraws,
+by `id`. An agent's `update_ui` replaces a pane's blocks, resetting its inputs.
 
 ## Limits
 
-Every window checks blocks before drawing them, and refuses a set that fails whole, showing its first error in place.
+The window checks blocks before drawing and refuses a set that fails, showing its first error in place.
 
 | | Limit |
 |---|---|

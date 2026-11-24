@@ -1,49 +1,44 @@
 # Claude Agent (experimental)
 
-A Claude Agent thread runs your own installed Claude Code (`claude`) instead of Superego's agent, on Claude Code's own
-sign-in. Superego keeps the rest: the transcript, status, panes, notifications, phone and web access, and other
-machines. Superego doesn't install, update or sign in to Claude Code, and never reads its credentials.
+A Claude Agent thread runs your installed Claude Code (`claude`) instead of Superego's agent, on Claude Code's own
+sign-in, with Superego's transcript, panes, notifications and machines around it. Superego never reads its
+credentials.
 
-## Starting one
+## Start one
 
-You need Claude Code installed on the thread's machine and signed in there (`claude`, then `/login`). Then either:
+Install Claude Code on the thread's machine and sign in there (`claude`, then `/login`). Then either:
 
-- pick one of the Claude Agent models in the New thread dialog (Opus, Sonnet or Haiku, with Claude Code's effort
-  levels as thinking). The thread starts with your `claude` profile, which first-run model setup or the first such
-  thread makes: `{ agent: 'claude-agent' }`;
+- pick a Claude Agent model in New thread (Opus, Sonnet or Haiku; thinking is Claude Code's effort level). It runs on
+  your `claude` profile, `{ agent: 'claude-agent' }`, made by model setup or the first such thread;
 - or start a thread with any profile that says `agent: 'claude-agent'`.
 
-A thread stays a Claude Agent thread for its whole life: the two kinds keep different histories.
+A thread stays a Claude Agent thread for life.
 
-Settings → Claude Agent shows the machine's Claude Code and how it's signed in. Signed out, Open a terminal runs
-`claude` beside the thread for you to `/login`; a thread whose turn failed for it goes on once Check again finds it
-signed in.
+Settings → Claude Agent shows how the machine's Claude Code is signed in. Signed out, Open a terminal runs `claude`
+beside the thread for you to `/login`; Check again resumes a turn that failed for it. If Claude Code is your default
+and gets signed out or uninstalled, New thread says so and offers Set up models….
 
 ## What it gets
 
-- **Superego's tools over MCP:** starting, reading and messaging threads, panes, questions and UI, images and tasks. The
-  profile's `prompt` is appended to Claude Code's own.
-- **Claude Code's own settings,** skills, hooks and MCP servers from `~/.claude`.
-- **A folder's settings** (`.claude/`, `.mcp.json`, `CLAUDE.md`, `CLAUDE.local.md`) only once you allow them, since their
-  hooks, MCP servers and permissions run commands. The thread asks over its message box, and again after they change.
-  From a terminal: `superego do claude-agent.allow --cwd "$PWD"`.
-- **The `superego` skill,** and `superego` in its shell, acting as its thread.
+- Superego's thread, pane, question, UI, image and task tools, over MCP; the profile's `prompt`, after Claude Code's.
+- Claude Code's own settings, skills, hooks and MCP servers (`~/.claude`), not those in Settings → MCP servers.
+- The `superego` skill, and `superego` in its shell, acting as its thread.
+- A folder's `.claude/`, `.mcp.json`, `CLAUDE.md` and `CLAUDE.local.md` once you allow them (the thread asks, and again
+  after they change), since they can run commands. From a terminal: `superego do claude-agent.allow --cwd "$PWD"`.
 
-What it doesn't get: Superego's models, its compaction, its coding tools (Claude Code has its own), and other
-extensions' tools and hooks. Its MCP servers are Claude Code's, not the ones in Settings → MCP servers.
+Not Superego's models, compaction or coding tools, nor other extensions' tools and hooks.
 
 ## Permissions
 
-When Claude Code asks to use a tool, the thread shows as blocked, with Allow, Deny and, where Claude Code offers one,
-Always allow. Always allow is kept per folder by Superego. Claude Code's questions and plans show the same way.
+A tool request, question or plan blocks the thread, with Allow, Deny and, where offered, Always allow (kept per
+folder). A rate-limit warning shows over the message box.
 
 Settings → Claude Agent:
 
-- **Permission mode:** for threads whose profile doesn't pick one. Ask before tools it isn't allowed (`default`),
-  Accept edits, Plan first, or Auto.
-- **Threads at once:** how many work at the same time on this machine (default 3); the rest wait their turn.
-
-When Claude Code warns of a plan's rate limit, a line over the message box says how much is used and when it resets.
+| Setting | |
+|---|---|
+| Permission mode | for threads whose profile doesn't pick one: Ask (`default`), Accept edits, Plan first, Auto |
+| Threads at once | how many run at once on this machine (default 3); the rest wait |
 
 ## In a profile
 
@@ -56,12 +51,16 @@ export default defineProfile({
 })
 ```
 
-`claudeAgent` takes `permissionMode` (also `bypassPermissions`, only from a profile), `settingSources` (Claude Code's
-`user`, `project`, `local`, to narrow what it loads), `allowedTools`, `disallowedTools`, `model` and `effort`. See
-[Profiles](../packages/cli/skill/profiles.md#when-changes-apply).
+| `claudeAgent` key | |
+|---|---|
+| `permissionMode` | `default`, `acceptEdits`, `plan`, `auto`, or `bypassPermissions` (profile only) |
+| `settingSources` | Claude Code's `user`, `project`, `local`: narrows what it loads |
+| `allowedTools`, `disallowedTools` | Claude Code's tool lists |
+| `model`, `effort` | an alias or id; `low` … `max` |
+
+See [Profiles](../packages/cli/skill/profiles.md#claude-agent).
 
 ## The binary and its environment
 
-The daemon runs the `claude` on the machine's login shell's `PATH`, or `SUPEREGO_CLAUDE`. It passes Claude Code the
-daemon's environment without Anthropic and Claude Code credentials (`ANTHROPIC_API_KEY` and the like), so it uses its
-own sign-in and doesn't bill an API key you didn't pick.
+The daemon runs the `claude` on the login shell's `PATH`, or `SUPEREGO_CLAUDE`. It passes the daemon's environment
+without Anthropic and Claude Code credentials (`ANTHROPIC_API_KEY` and the like), so Claude Code uses its own sign-in.

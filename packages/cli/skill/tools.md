@@ -1,7 +1,7 @@
 # Agent parts: tools and prompt sections
 
-An agent part gives a profile's agents tools and pieces of system prompt. Superego's agents run on pi-durable,
-and agent parts are its extensions: `defineExtension`, `defineTool` and `section`, imported from `'superego'`.
+An agent part gives a profile's agents tools and prompt sections: `defineExtension`, `defineTool` and `section`
+from `'superego'` (pi-durable's extensions underneath).
 
 <!-- check: module; declare const findOrder: ReturnType<typeof defineTool> -->
 ```ts
@@ -14,8 +14,8 @@ export default defineExtension({
 })
 ```
 
-Name it in a profile's `extensions` (a module's default export), or hand it to `superego.agent(…)` from a daemon
-extension's `setup` when it needs the daemon's API too (`superego --skill daemon`).
+Name it in a profile's `extensions`, or pass it to `superego.agent(…)` in a daemon half's `setup` when it needs the
+daemon's API ([daemon](daemon.md)).
 
 ## Tools
 
@@ -39,35 +39,33 @@ const findOrder = defineTool({
 })
 ```
 
-- **`parameters`** is JSON Schema, built with these (from `'superego'`). Arguments arrive validated and typed.
+**Parameters** are JSON Schema from these builders; arguments arrive validated and typed.
 
-  | Builder | Takes |
-  |---|---|
-  | `str(o?)` | `minLength`, `maxLength`, `pattern`, `format` |
-  | `num(o?)`, `int(o?)` | `minimum`, `maximum`, `exclusiveMinimum`, `exclusiveMaximum`, `multipleOf` |
-  | `bool(o?)`, `unknown(o?)` | |
-  | `lit(value, o?)` | exactly `value`: a string, number, boolean or null |
-  | `union([schemas], o?)` | any of them. Fixed choices: `union([lit('metric'), lit('imperial')])` |
-  | `arr(items, o?)` | `minItems`, `maxItems`, `uniqueItems` |
-  | `obj({ props }, o?)` | `open: true` allows other keys. A prop is required unless wrapped in `opt(schema)` |
-  | `nullable(schema, o?)` | the schema or `null` |
+| Builder | Takes |
+|---|---|
+| `str(o?)` | `minLength`, `maxLength`, `pattern`, `format` |
+| `num(o?)`, `int(o?)` | `minimum`, `maximum`, `exclusiveMinimum`, `exclusiveMaximum`, `multipleOf` |
+| `bool(o?)`, `unknown(o?)` | |
+| `lit(value, o?)` | exactly `value`: a string, number, boolean or null |
+| `union([schemas], o?)` | any of them. Fixed choices: `union([lit('metric'), lit('imperial')])` |
+| `arr(items, o?)` | `minItems`, `maxItems`, `uniqueItems` |
+| `obj({ props }, o?)` | `open: true` allows other keys. A prop is required unless wrapped in `opt(schema)` |
+| `nullable(schema, o?)` | the schema or `null` |
 
-  Every builder's options also take `description`, `title`, `default`, `examples` and `deprecated`. None takes
-  `enum`.
-- **The result**: `output` is a list of content (`{ type: 'text', text }`, or images) for the model. `details` is
-  JSON for UIs (a tool renderer reads it; `superego --skill ui`). Throw an `Error` to give the model an error result
-  with its message.
-- **`api`**: `api.callId` (this call's id), `api.conversationId`, `api.env?.cwd` (the thread's folder),
-  `api.output(text)` (live output), `await api.details(value, context)` (details while it runs, for a UI to show
-  progress), `api.now()`, `api.executeTool(name, args, context)` (call another tool).
-- **`context.abortSignal`** fires when the user stops the agent: pass it to `fetch` and long waits. It may be
-  undefined.
-- **`replay: 'safe'`** says the call may run again after a daemon restart cut it off (it's idempotent, or waits for
-  something). Without it, an interrupted call gives the model an `interrupted` error instead.
-- **`executionMode: 'sequential'`** keeps it from running in parallel with other calls of the same round.
+Every builder also takes `description`, `title`, `default`, `examples` and `deprecated`. None takes `enum`.
 
-Tools should do one thing and say plainly what they return. The model reads `description` and the parameters'
-descriptions to decide when to call it: write them for the model.
+| | |
+|---|---|
+| `output` | content for the model: `{ type: 'text', text }`, or images |
+| `details` | JSON for a tool row to draw ([ui](ui.md)) |
+| throw an `Error` | the model gets an error result with its message |
+| `api` | `callId`, `conversationId`, `env?.cwd` (the thread's folder), `output(text)` (live output), `await details(value, context)` (details while it runs), `now()`, `executeTool(name, args, context)` |
+| `context.abortSignal` | fires when the user stops the agent; pass it to `fetch` and long waits. May be undefined |
+| `replay: 'safe'` | the call may run again after a daemon restart cut it off (idempotent, or a wait). Without it, the model gets an `interrupted` error |
+| `executionMode: 'sequential'` | don't run in parallel with other calls of the same round |
+
+The model decides when to call a tool from `description` and the parameters' descriptions: write them for it, and say
+plainly what the tool returns.
 
 ## Prompt sections
 
@@ -77,22 +75,22 @@ section('vault_agents_md', async ({ env }) => readAgentsMd(env?.cwd))   // rende
 section('preamble', () => 'You are terse.', { tag: false })              // without the tags
 ```
 
-A section renders before each request; returning `undefined` leaves it out. Sections are cached by what they return,
-so one that changes every time (the current time) defeats prompt caching: keep them stable.
-
-A profile's `prompt` is simpler for fixed text. Use a section for text computed from the thread's folder or other
-state.
+A section renders before each request; `undefined` leaves it out. Keep its text stable: one that changes every time
+(the current time) defeats prompt caching. For fixed text, the profile's `prompt` is simpler.
 
 ## Replacing built-in tools
 
-A profile's tool with the name of a built-in one (`read`, `bash`, …) replaces it in that profile's threads. To leave
-built-ins out entirely, use the profile's `without` (`coding-tools`, `agent-ui`, `panes`, `thread-tools`, …).
+A tool named like a built-in (`read`, `bash`, …) replaces it in that profile's threads. To drop built-ins, use the
+profile's `without` (`coding-tools`, `agent-ui`, `panes`, `thread-tools`, …).
 
-`wrapTool`, `wrapSection` and `hook` are pi-durable's lower-level decorators (wrapping a tool or a section by name);
-prefer tools and sections. To hear every tool call a thread makes, a daemon half has `superego.toolCalls`:
-[Watching tool calls](daemon.md#watching-tool-calls).
+`wrapTool`, `wrapSection` and `hook` are pi-durable's lower-level decorators, by name; prefer tools and sections. To
+hear every tool call, see [Watching tool calls](daemon.md#watching-tool-calls).
 
 ## Testing a tool
 
-Start a thread with the profile, ask for it, and read its answer: `id=$(superego start . -P <profile> -p "Use
-find_order for 1234") && superego read "$id" --wait`. Tool calls and errors show in the transcript. Edits load on the thread's next turn (a project's profile needs allowing again).
+```sh
+id=$(superego start . -P <profile> -p "Use find_order for 1234") && superego read "$id" --wait
+```
+
+Tool calls and errors show in the transcript. Edits load on the thread's next turn (a project's profile needs allowing
+again). For automated tests, see [the guide](guide.md#testing).
