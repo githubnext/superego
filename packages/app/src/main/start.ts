@@ -25,7 +25,7 @@ import { createService } from './service.ts'
 import { serveAppSocket, type AppSocket } from './app-socket.ts'
 import { createAppUpdates } from './app-updates.ts'
 import { appMoveIO } from './app-move.ts'
-import { isTranslocated, moveToApplications, offerMove } from './translocation.ts'
+import { isTranslocated, moveToApplications, offerMove, type MoveWording } from './translocation.ts'
 import { themeFiles } from './theme-files.ts'
 
 /**
@@ -43,8 +43,9 @@ export function startApp(appConfig: AppConfig) {
   // kept as it is, it neither updates nor installs its command line.
   const translocated = isTranslocated({ platform: process.platform, execPath: process.execPath, dir: import.meta.dirname })
   const moveIO = appMoveIO(appConfig)
-  /** From Settings → About or the menu: moved, it quits (its windows come back) for the copy in Applications to start. */
+  // Moved (from Settings → About, or offered from the menu), it quits (its windows come back) for the copy in Applications to start.
   const moveApp = async () => { if (await moveToApplications(moveIO)) app.quit() }
+  const offerMoveApp = async (wording: MoveWording) => { if (await offerMove(moveIO, wording)) app.quit() }
   // Which build this is, for the windows to compare theirs with; none in a packaged app, whose build never changes.
   const build = readMainBuild(import.meta.dirname)
   // Under `pnpm dev` (scripts/dev.ts), restarting is quitting with this code: the dev script builds the main process
@@ -120,7 +121,7 @@ export function startApp(appConfig: AppConfig) {
   })
   // The released app updating itself; Settings → About shows where that stands.
   const updates = createAppUpdates({
-    app: appConfig, headless, translocated, move: moveApp, service,
+    app: appConfig, headless, translocated, offerMove: offerMoveApp, service,
     quitting: () => windows.quitting(),
     changed(state) {
       windows.broadcast({ machine: APP, method: 'update.changed', params: state })
@@ -175,7 +176,10 @@ export function startApp(appConfig: AppConfig) {
   app.whenReady().then(async () => {
     if (!primary) return
     // Before anything starts: moved, the copy in Applications starts once this one has exited.
-    if (translocated && !headless && await offerMove(moveIO)) return app.exit(0)
+    if (translocated && !headless && await offerMove(moveIO, {
+      message: `Move ${appConfig.name} to Applications?`,
+      detail: `${appConfig.name} is running from a temporary folder, like Downloads. From there it can't update, and moving or deleting the download can freeze it.`,
+    })) return app.exit(0)
     serveAppSocket(appSocketPath(appConfig, dataDir), router).then((socket) => { appSocket = socket }, (error) => console.error('app socket:', error))
     serveWebViews({ windowOf: windows.of, linkOf: machines.linkOf, sites })
     desktop.start()

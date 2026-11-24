@@ -10,6 +10,7 @@ import { appEnv } from '@superego/daemon/client'
 import { envName, type AppConfig } from '@superego/protocol'
 import type { UpdateState } from '../shared/updates.ts'
 import type { Service } from './service.ts'
+import type { MoveWording } from './translocation.ts'
 import { Updates } from './updates.ts'
 
 const FIRST_CHECK = 10_000
@@ -37,13 +38,13 @@ export function updateFeed(appConfig: AppConfig, dir: string): string | undefine
 
 export type AppUpdates = ReturnType<typeof createAppUpdates>
 
-export function createAppUpdates({ app: appConfig, headless, translocated, move, service, quitting, changed }: {
+export function createAppUpdates({ app: appConfig, headless, translocated, offerMove, service, quitting, changed }: {
   app: AppConfig
   headless: boolean
   /** Run by macOS from a temporary copy: it can't update until it's moved to Applications. */
   translocated: boolean
-  /** Move the app to Applications, as the menu's Check for Updates… offers when it's translocated. */
-  move(): Promise<void>
+  /** Offer, in `wording`, to move the app to Applications, as the menu's Check for Updates… does when it's translocated. */
+  offerMove(wording: MoveWording): Promise<void>
   service: Pick<Service, 'stopForUpdate' | 'relink'>
   /** The app is about to quit: every window open comes back after the update. */
   quitting(): void
@@ -89,15 +90,10 @@ export function createAppUpdates({ app: appConfig, headless, translocated, move,
   async function checkFromMenu() {
     const state = await updates.check(true)
     if (state.phase === 'translocated') {
-      const { response } = await dialog.showMessageBox({
-        type: 'warning',
+      await offerMove({
         message: `Move ${appConfig.name} to Applications to receive updates`,
         detail: `It's running from a temporary folder, like Downloads, where it can't update.`,
-        buttons: ['Move to Applications', 'Not Now'],
-        defaultId: 0,
-        cancelId: 1,
       })
-      if (response === 0) await move()
     } else if (state.phase === 'idle') {
       await dialog.showMessageBox({ message: `${appConfig.name} ${state.version} is up to date.` })
     } else if (state.phase === 'error') {

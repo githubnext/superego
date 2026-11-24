@@ -14,9 +14,12 @@ export function isTranslocated({ platform, execPath, dir }: { platform: NodeJS.P
   return platform === 'darwin' && /\.asar([/\\]|$)/.test(dir) && execPath.includes('/AppTranslocation/')
 }
 
+/** What the offer to move says: why, in a dialog's message and detail. */
+export type MoveWording = { message: string; detail: string }
+
 export type MoveIO = {
-  /** At launch: ask whether to move the app to Applications. True: the user said move. */
-  ask(): Promise<boolean>
+  /** Ask, in `wording`, whether to move the app to Applications. True: the user said move. */
+  ask(wording: MoveWording): Promise<boolean>
   /**
    * Move it (Electron's `app.moveToApplicationsFolder`), asking `conflict` what to do with a copy already there. True:
    * moved, and the copy in Applications starts as this one quits. False: the user cancelled. Throws if it failed.
@@ -44,8 +47,8 @@ export async function moveToApplications(io: MoveIO): Promise<boolean> {
   }
 }
 
-/** At launch, translocated: offer the move. True: moved, so quit rather than start; false: launch as it is. */
-export async function offerMove(io: MoveIO): Promise<boolean> {
-  if (!await io.ask()) return false
+/** Offer the move, in `wording`. True: moved, so quit (or, at launch, don't start); false: it stays as it is. */
+export async function offerMove(io: MoveIO, wording: MoveWording): Promise<boolean> {
+  if (!await io.ask(wording)) return false
   return moveToApplications(io)
 }

@@ -6,11 +6,11 @@ import type { MoveIO } from './translocation.ts'
 export function appMoveIO(appConfig: AppConfig): MoveIO {
   const { name } = appConfig
   return {
-    async ask() {
+    async ask({ message, detail }) {
       const { response } = await dialog.showMessageBox({
         type: 'warning',
-        message: `Move ${name} to Applications?`,
-        detail: `${name} is running from a temporary folder, like Downloads. From there it can't update, and moving or deleting the download can freeze it.`,
+        message,
+        detail,
         buttons: ['Move to Applications', 'Not Now'],
         defaultId: 0,
         cancelId: 1,

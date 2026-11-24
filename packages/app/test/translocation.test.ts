@@ -29,6 +29,8 @@ describe('isTranslocated', () => {
   })
 })
 
+const WORDING = { message: 'Move Superego to Applications?', detail: 'It runs from a temporary folder.' }
+
 function mover(overrides: Partial<MoveIO> = {}) {
   const io: MoveIO = {
     ask: vi.fn(async () => true),
@@ -45,41 +47,42 @@ afterEach(() => { vi.restoreAllMocks() })
 describe('offerMove', () => {
   it('moves when the user says so, and the app stops starting', async () => {
     const io = mover()
-    expect(await offerMove(io)).toBe(true)
+    expect(await offerMove(io, WORDING)).toBe(true)
+    expect(io.ask).toHaveBeenCalledWith(WORDING)
     expect(io.move).toHaveBeenCalledOnce()
   })
 
   it('launches as it is when the user says not now', async () => {
     const io = mover({ ask: vi.fn(async () => false) })
-    expect(await offerMove(io)).toBe(false)
+    expect(await offerMove(io, WORDING)).toBe(false)
     expect(io.move).not.toHaveBeenCalled()
   })
 
   it('asks before replacing a copy already in Applications, and goes on as it is if told not to', async () => {
     const io = mover({ replace: vi.fn(() => false), move: vi.fn((conflict) => conflict('exists')) })
-    expect(await offerMove(io)).toBe(false)
+    expect(await offerMove(io, WORDING)).toBe(false)
     expect(io.replace).toHaveBeenCalledOnce()
     const yes = mover({ move: vi.fn((conflict) => conflict('exists')) })
-    expect(await offerMove(yes)).toBe(true)
+    expect(await offerMove(yes, WORDING)).toBe(true)
   })
 
   it('hands over to a copy running from Applications without asking', async () => {
     const io = mover({ move: vi.fn((conflict) => conflict('existsAndRunning')) })
-    expect(await offerMove(io)).toBe(true)
+    expect(await offerMove(io, WORDING)).toBe(true)
     expect(io.replace).not.toHaveBeenCalled()
   })
 
   it('logs and tells of a move that fails, and launches as it is', async () => {
     const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
     const io = mover({ move: vi.fn(() => { throw new Error('Read-only file system') }) })
-    expect(await offerMove(io)).toBe(false)
+    expect(await offerMove(io, WORDING)).toBe(false)
     expect(io.failed).toHaveBeenCalledWith(expect.objectContaining({ message: 'Read-only file system' }))
     expect(logged).toHaveBeenCalledWith('Moving the app to Applications:', expect.any(Error))
   })
 })
 
 describe('moveToApplications', () => {
-  it('moves without asking first (Settings → About, the menu)', async () => {
+  it('moves without asking first (Settings → About)', async () => {
     const io = mover()
     expect(await moveToApplications(io)).toBe(true)
     expect(io.ask).not.toHaveBeenCalled()
