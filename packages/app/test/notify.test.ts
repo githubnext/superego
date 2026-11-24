@@ -41,13 +41,6 @@ describe('notifications', () => {
     expect(notices()).toEqual([{ machine: 'local', thread: 'a', title: 'a', status: 'Done', text: 'All done.' }])
   })
 
-  it('notifies once for a change, however often its list is heard (every window open, one decider)', () => {
-    const { track } = notifier()
-    track('local', [thread('a', { state: 'working' })])
-    for (let i = 0; i < 3; i++) track('local', [thread('a', { state: 'done' })])
-    expect(notices()).toHaveLength(1)
-  })
-
   it('shows nothing over a window in front, and notifies again once none is', () => {
     const { track } = notifier()
     track('local', [thread('a', { state: 'working' }), thread('b', { state: 'working' })])

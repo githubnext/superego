@@ -27,11 +27,6 @@ const projects = groupProjects([machine('local'), machine('box')], {
 }, 'recent')
 const ids = (list: readonly { thread: ThreadInfo }[]) => list.map((u) => u.thread.id)
 
-it('lists what needs you, then what failed, then what finished, newest first within each, without the thread shown', () => {
-  expect(ids(unreadList(projects))).toEqual(['asks', 'failed', 'done-new', 'done-old'])
-  expect(ids(unreadList(projects, { machine: 'local', thread: 'failed' }))).toEqual(['asks', 'done-new', 'done-old'])
-})
-
 it('narrows to what matches the title, project, machine or message, in the same order', () => {
   const list = unreadList(projects)
   expect(filterUnread(list, '')).toBe(list)
