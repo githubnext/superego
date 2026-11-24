@@ -28,6 +28,9 @@ Or connect another way:
 Once a provider works, its recommended model becomes the default. Star the models you use most: they come first in
 every model menu.
 
+Below the model, setup introduces Ego, the agent that builds tools, panes and boards for you (Open Ego, or its circle at
+the top of the rail), and lists the extensions with a switch each. Change them later in Settings → Extensions.
+
 To open setup again: Set up models… in Settings → Providers or `⌘K`. A message that can't be sent for want of a model
 offers it too.
 

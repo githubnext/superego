@@ -45,6 +45,11 @@ export type BehaviourSlot =
    * and `use` once it's ready (`{ label, detail, model }`: your kind of agent's model, made the machine's default).
    */
   | 'onboarding'
+  /**
+   * On first-run setup, after the model, for the machine it's setting up: a short word on what yours offers, and a way
+   * to it (Ego's: what to ask it for, and where it is).
+   */
+  | 'welcome'
 
 /** What a slot beside a file editor gets: the file, and a way to show another. */
 export type EditorSlotProps = { machine: MachineEntry; thread: ThreadInfo; path: string; open(path: string, options?: { beside?: boolean }): void }
@@ -59,6 +64,7 @@ export type SlotProps = {
   'editor.bar': EditorSlotProps
   'overlay': Record<string, never>
   'onboarding': { machine: MachineEntry; use(found: SetupFound): void }
+  'welcome': { machine: MachineEntry }
 }
 
 /** What a view needs to be drawn: nothing but the window, or a thread. */

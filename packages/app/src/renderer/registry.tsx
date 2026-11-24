@@ -149,7 +149,7 @@ export function createRegistry(app: AppConfig, extensions: UiExtension[], core: 
       name, ...(title ? { title } : {}), ...(description ? { description } : {}), ...(required ? { required } : {}),
       ...(version ? { version } : {}), ...(api ? { api } : {}), ...(panes ? { panes } : {}),
     })),
-    slots: { 'header.chips': [], 'thread.badge': [], 'composer.above': [], 'details.section': [], 'editor.side': [], 'editor.bar': [], 'overlay': [], 'onboarding': [] },
+    slots: { 'header.chips': [], 'thread.badge': [], 'composer.above': [], 'details.section': [], 'editor.side': [], 'editor.bar': [], 'overlay': [], 'onboarding': [], 'welcome': [] },
     views: [], dataViews: {}, machineExtensions: {}, tools: [], entries: [], links: [], panes: [], spaces: [], work: [], settings: [], newThreadFields: [], router: createWindowRouter(), appSettings: [], themes: [], completions: [], sentWith: [], listeners: [],
     window: {
       focused: typeof document === 'undefined' || document.hasFocus(),
@@ -320,8 +320,8 @@ export function createRegistry(app: AppConfig, extensions: UiExtension[], core: 
         }
       },
       slot(slot: BehaviourSlot, component: ComponentType<any>, options?: { order?: number }) {
-        // A profile's UI draws in its threads' slots; the overlay and onboarding are the app's, with no thread.
-        if (profile && (slot === 'overlay' || slot === 'onboarding')) return console.warn(`Profile extension ${extension.name} can't fill the ${slot}`)
+        // A profile's UI draws in its threads' slots; the overlay and setup's are the app's, with no thread.
+        if (profile && (slot === 'overlay' || slot === 'onboarding' || slot === 'welcome')) return console.warn(`Profile extension ${extension.name} can't fill the ${slot}`)
         const list = registry.slots[slot as BehaviourSlot] as Owned<{ component: ComponentType<never>; order: number }>[]
         add(list, { component: component as never, order: options?.order ?? 100 })
         list.sort((a, b) => a.order - b.order)

@@ -65,11 +65,12 @@ import type { ExtensionAbout } from './app.ts'
  * machine's default (the model setting may name another kind's model; new threads given none start on it, refused
  * while its kind can't run). An agent kind's `menu` may answer `{ unavailable }`: why it isn't offered here. Changed
  * within 5.9, before any release had it: `use` no longer takes `{ label, detail, profile }`.
+ * 5.10: the `welcome` slot (`{ machine }`): on first-run setup, after the model, a word on what yours offers.
  * Minor: something added (an extension that uses it asks for `^3.<minor>`); major: something an extension could rely
  * on changed or went, from 2.5 on without exception. An extension whose `api` range this doesn't satisfy is refused
  * when it's set up.
  */
-export const EXTENSION_API = '5.9.0'
+export const EXTENSION_API = '5.10.0'
 
 /** What a machine says of an extension set up there: `hello.extensions` and `features.changed` carry one each. */
 export type ExtensionManifest = Pick<ExtensionAbout, 'name' | 'version' | 'api'>

@@ -429,7 +429,11 @@ export async function mountUi(options: MountOptions = {}): Promise<TestWindow> {
   if (options.layout) await appSide.settings.set(LAYOUT, options.layout as Json).catch((error: unknown) => { letGoOfDom(); throw error })
   const entries = () => machines.map((m) => ({ ...m.entry }))
   // What a machine says (a live value changing, a thread's status) re-renders what shows it: in `act`, as React asks of a test.
-  const offs = machines.map((m) => m.listen((method, params) => inActNow(() => emit({ machine: m.id, method, params }))))
+  // What it offers changing (an extension switched off) changes its entry, as the app's machine list then says.
+  const offs = machines.map((m) => m.listen((method, params) => inActNow(() => {
+    emit({ machine: m.id, method, params })
+    if (method === 'features.changed') emit({ machine: 'app', method: '$machines', params: entries() })
+  })))
   // A test daemon restarted: away while it's stopped, then back (the window watches again), as the app's connection says.
   for (const m of machines) {
     if (m.daemon) offs.push(onRestart(m.daemon, (phase) => ui.setMachine(m.id, { state: phase === 'stopping' ? 'disconnected' : 'connected' })))

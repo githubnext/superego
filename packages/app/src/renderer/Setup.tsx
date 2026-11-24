@@ -10,9 +10,14 @@
 // Copilot or OpenRouter's sign-in, an API key (whose it is told from the key, and tried before it's kept), a local
 // server's address, or any other provider, searched for. Then, for a provider: its default model (its recommended one
 // to start with), a few starred, and a test request showing it works. Then the first thread, in ⌘N.
+//
+// After the model, what extensions say of themselves (the `welcome` slot: Ego's word on asking it for things), and the
+// machine's bundled extensions, each with its switch (the very switches of Settings → Extensions, `extensions.<name>`):
+// in every state, so a first run that finds a model already still shows them. Not when it was opened from a thread that
+// couldn't send: that wants a model, nothing else.
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
-import { ONBOARDED, type ModelCatalog, type ModelTest, type ProviderAuthInfo, type SetupProbe } from '@superego/protocol'
-import { Button, CheckIcon, GlobeIcon, KeyIcon, LaptopIcon, MagnifyingGlassIcon, Select, StarIcon, TerminalIcon, TextField, WarningIcon } from '@superego/ui'
+import { ONBOARDED, type Json, type ModelCatalog, type ModelTest, type ProviderAuthInfo, type SettingInfo, type SettingsSnapshot, type SetupProbe } from '@superego/protocol'
+import { Button, CheckIcon, GlobeIcon, KeyIcon, LaptopIcon, MagnifyingGlassIcon, Select, StarIcon, Switch, TerminalIcon, TextField, WarningIcon } from '@superego/ui'
 import { has, machine as client, useSettings } from './client.ts'
 import { keyProblem, keyProvider, pastedKey } from './key-shapes.ts'
 import { useApp, useRegistry } from './registry.tsx'
@@ -27,8 +32,11 @@ import './setup.css'
 
 const LOCAL = 'local'
 
-/** Where setup was asked for: the machine, and the thread to go back to once it's done (a composer that couldn't send). */
-type Asked = { machine: string; back?: Selection }
+/**
+ * Where setup was asked for: the machine, and the thread to go back to once it's done (a composer that couldn't send);
+ * `first` when it opened by itself, on a fresh data folder.
+ */
+type Asked = { machine: string; back?: Selection; first?: boolean }
 let asked: Asked | undefined
 const listeners = new Set<() => void>()
 const ask = (value: Asked | undefined) => { if (asked === value) return; asked = value; for (const listener of listeners) listener() }
@@ -62,7 +70,7 @@ export function useSetup(): string | undefined {
   useEffect(() => {
     if (!fresh || shown.current || selection) return
     shown.current = true
-    openSetup()
+    ask({ machine: LOCAL, first: true })
   }, [fresh])
   // Picking a thread puts it away; asked for, it comes out from behind Settings.
   useEffect(() => { if (selection) ask(undefined) }, [selection])
@@ -229,6 +237,21 @@ export function SetupPage({ machine: machineId }: { machine: string }) {
       onChange={(id) => { if (id) ask({ ...asked, machine: id }) }} />
   )
   const back = asked?.back
+  const title = back ? 'Set up a model' : asked?.first ? `Welcome to ${app.name}` : `Set up ${app.name}`
+  const hello = (awake = false) => (
+    <header className="setup__hello">
+      <span className={`setup__mark ${awake ? 'is-awake' : ''}`} aria-hidden />
+      <h1>{title}</h1>
+      {where}
+    </header>
+  )
+  // What else there is to set up: not when it's a thread waiting on a model.
+  const rest = !back && (
+    <>
+      <Slot name="welcome" props={{ machine }} />
+      <Extensions machine={machineId} snapshot={snapshot} />
+    </>
+  )
   const foot = (
     <div className="setup__foot">
       {ready && (back ? <Button variant="primary" onClick={() => finish()}>Back to the thread</Button>
@@ -240,12 +263,9 @@ export function SetupPage({ machine: machineId }: { machine: string }) {
   if (!looked) {
     return (
       <div className="setup">
-        <header className="setup__hello">
-          <span className="setup__mark" aria-hidden />
-          <h1>Set up a model</h1>
-          {where}
-        </header>
+        {hello()}
         <p className="setup__note">Looking…</p>
+        {rest}
       </div>
     )
   }
@@ -254,15 +274,12 @@ export function SetupPage({ machine: machineId }: { machine: string }) {
     const kind = readyKind
     return (
       <div className="setup">
-        <header className="setup__hello">
-          <span className={`setup__mark ${works ? 'is-awake' : ''}`} aria-hidden />
-          <h1>Set up a model</h1>
-          {where}
-        </header>
+        {hello(works)}
         <Chosen machine={machineId} provider={ready.provider} name={ready.name ?? kind?.title ?? nameOf(ready.provider)}
           detail={kind ? kind.unavailable ?? ready.detail ?? kind.description ?? '' : howSignedIn(providers.find((p) => p.id === ready.provider))}
           catalog={catalog} onCatalog={models} onTalks={setTalks} />
         <button type="button" className="setup__link setup__another" onClick={() => setReady(undefined)}>Add another provider</button>
+        {rest}
         {foot}
       </div>
     )
@@ -277,11 +294,7 @@ export function SetupPage({ machine: machineId }: { machine: string }) {
   const isOpen = (way: Open) => JSON.stringify(open) === JSON.stringify(way)
   return (
     <div className="setup">
-      <header className="setup__hello">
-        <span className="setup__mark" aria-hidden />
-        <h1>Set up a model</h1>
-        {where}
-      </header>
+      {hello()}
       {probe && 'message' in probe && <p className="setup__error">Couldn't look at what {placeName(machine)} has: {probe.message}</p>}
       {problem && <p className="setup__error" role="alert">{problem}</p>}
 
@@ -336,8 +349,53 @@ export function SetupPage({ machine: machineId }: { machine: string }) {
           </Way>
         </ul>
       </section>
+      {rest}
       {foot}
     </div>
+  )
+}
+
+const EXTENSION = 'extensions.'
+
+/**
+ * The machine's bundled extensions, each with its switch as Settings → Extensions has it (`extensions.<name>`), and all
+ * of them at once.
+ */
+function Extensions({ machine, snapshot }: { machine: string; snapshot: SettingsSnapshot | undefined }) {
+  const dispatch = useRegistry().router.dispatch
+  const [error, setError] = useState<string>()
+  const switches = snapshot?.sections.find((s) => s.id === 'extensions')?.settings.filter((s) => !s.hidden && s.key.startsWith(EXTENSION)) ?? []
+  if (!switches.length) return null
+  const on = (setting: SettingInfo) => snapshot?.values[setting.key] === true
+  const set = (key: string, value: Json) => dispatch('settings.set', { key, value }, { machine, source: 'setup' })
+  const change = (settings: SettingInfo[], value: boolean) => {
+    setError(undefined)
+    Promise.all(settings.filter((s) => on(s) !== value).map((s) => set(s.key, value))).catch((failed: Error) => {
+      console.error('Switching extensions failed', failed)
+      setError(failed.message)
+    })
+  }
+  return (
+    <section className="setup__extensions" aria-label="Extensions">
+      <div className="setup__head">
+        <h2>Extensions</h2>
+        <Button variant="ghost" disabled={switches.every(on)} onClick={() => change(switches, true)}>Enable all</Button>
+        <Button variant="ghost" disabled={!switches.some(on)} onClick={() => change(switches, false)}>Disable all</Button>
+      </div>
+      <ul>
+        {switches.map((setting) => (
+          <li key={setting.key} className="setup__extension" data-extension={setting.key.slice(EXTENSION.length)}>
+            <div className="setup__what">
+              <div><span className="setup__title">{setting.title}</span> <code>{setting.key.slice(EXTENSION.length)}</code></div>
+              {setting.description && <div className="setup__detail" title={setting.description}>{setting.description}</div>}
+            </div>
+            <Switch label={setting.title} checked={on(setting)} onChange={(value) => change([setting], value)} />
+          </li>
+        ))}
+      </ul>
+      {error && <p className="setup__error" role="alert">{error}</p>}
+      <p className="setup__note">Change them any time in Settings.</p>
+    </section>
   )
 }
 

@@ -139,6 +139,7 @@ Each gets `{ machine, thread }`; the editor's also `path` and `open(path)`.
 | `editor.side`, `editor.bar` | beside a file in the editor, and in its bar |
 | `overlay` | over everything: a dialog of your own. Mark its surface `data-superego-overlay` (the kit's popovers and dialogs already are) so a web page in a pane steps aside |
 | `onboarding` | (API ^5.9) in first-run setup, among what was found: `{ machine, use }`. Draw a `SetupRow`; call `use({ label, detail, model })` when ready (`model`: `<kind>/<model>`, made the machine's default). Claude Agent's finds Claude Code |
+| `welcome` | (API ^5.10) in first-run setup, after the model: `{ machine }`, the machine it sets up. A line on what yours offers and a way to it. Ego's says what to ask it for |
 
 ### A mark in the sidebar
 

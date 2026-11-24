@@ -2,7 +2,8 @@
 // @vitest-environment-options {"settings":{"fetch":{"disableSameOriginPolicy":true}}}
 // First-run setup, against a real daemon: it shows at once on a fresh data folder (on the model that works, if one
 // does, done once it has answered), finds a local model server (a mock, as Ollama), uses it, has it say hi, stars a model, and goes for good once
-// done. Set up models… brings it back; from a composer that couldn't send, it goes back to that thread once done.
+// done. Set up models… brings it back; from a composer that couldn't send, it goes back to that thread once done. After
+// the model, the machine's extensions with their switches (Settings → Extensions' own), whichever state it's in.
 import { mkdtemp, rm } from 'node:fs/promises'
 import { createServer, type Server } from 'node:http'
 import { tmpdir } from 'node:os'
@@ -140,7 +141,7 @@ const value = async (key: string) => (await daemon.settings.snapshot()).values[k
 it('shows on first run with no model, uses the Ollama it finds, says hi, and goes for good once done', async () => {
   await start({ ollama: await mockOllama() })
   await mount()
-  await until(() => text().includes('Set up a model') && Boolean(rowOf('Ollama')), 'the page, with Ollama found')
+  await until(() => text().includes('Welcome to Superego') && Boolean(rowOf('Ollama')), 'the page, with Ollama found')
   expect(rowOf('Ollama')!.textContent).toContain('qwen3:32b, llama3.1:8b')
 
   await click(rowOf('Ollama')!.querySelector('button')!)
@@ -167,7 +168,7 @@ it('shows at once on first run, on the model that works, and counts as done once
   // Nothing is asked of the model before the page shows: it says hi there, however long that takes.
   await start({ faux: true })
   await mount()
-  await until(() => text().includes('Set up a model'), 'the page, at once')
+  await until(() => text().includes('Welcome to Superego'), 'the page, at once')
   await until(() => text().includes('echo: Say hi'), 'the model saying hi')
   await until(async () => (await value(ONBOARDED)) === true, 'setup done')
   // Done, but still there to start from.
@@ -184,6 +185,7 @@ it('comes back on Set up models…, opening on the model that works, and goes wh
   expect(page()).toBeNull()
   await act(async () => { await registry.router.dispatch('app.setup') })
   await until(() => text().includes('echo: Say hi'), 'the page again, the model saying hi')
+  expect(container.querySelector('h1')!.textContent).toBe('Set up Superego')
   const thread = await peer.call<{ id: string }>('thread.start', { title: 'picked' })
   await act(async () => { select({ machine: 'local', thread: thread.id }) })
   await until(() => !page(), 'the page gone for a thread')
@@ -201,6 +203,9 @@ it("opens from a composer that couldn't send, and goes back to its thread once d
   await until(() => text().includes('No model is set up on this computer.'), 'the card')
   await click(button('Set up models…'))
   await until(() => Boolean(rowOf('Ollama')), 'the page, for the thread')
+  // A thread waiting on a model: that, and nothing else.
+  expect(container.querySelector('h1')!.textContent).toBe('Set up a model')
+  expect(container.querySelector('.setup__extensions')).toBeNull()
   await click(rowOf('Ollama')!.querySelector('button')!)
   await until(() => Boolean(container.querySelector('.setup__bubble')), 'it answering')
   await click(button('Back to the thread'))
@@ -354,4 +359,41 @@ it("asks for a GitHub Enterprise's address on its own, not blank for github.com"
   await until(() => Boolean(container.querySelector('input[aria-label="Your GitHub Enterprise address"]')), 'its address asked')
   expect(text()).not.toContain('blank for github.com')
   expect(button('Continue').disabled).toBe(true)
+})
+
+const extensionRows = () => [...container.querySelectorAll<HTMLElement>('.setup__extension')]
+const switchOf = (name: string) => container.querySelector<HTMLElement>(`[data-extension="${name}"] [role="switch"]`)!
+const allAre = (checked: boolean) => extensionRows().every((row) => row.querySelector('[role="switch"]')!.getAttribute('aria-checked') === String(checked))
+
+it("has the machine's extensions after the model, Settings → Extensions' switches one by one and all at once", async () => {
+  await start()
+  await mount()
+  await until(() => Boolean(rowOf('Paste an API key')) && extensionRows().length > 0, 'the ways in, and the extensions')
+  // The machine's own optional extensions, as Settings lists them.
+  const listed = (await daemon.settings.snapshot()).sections.find((s) => s.id === 'extensions')!.settings.filter((s) => !s.hidden).map((s) => s.key.slice('extensions.'.length))
+  expect(extensionRows().map((row) => row.dataset.extension)).toEqual(listed)
+  const name = listed[0]!
+  expect(switchOf(name).getAttribute('aria-checked')).toBe('true')
+
+  await click(switchOf(name))
+  await until(() => switchOf(name).getAttribute('aria-checked') === 'false', 'the switch off')
+  expect(await value(`extensions.${name}`)).toBe(false)
+
+  await click(button('Disable all'))
+  await until(() => allAre(false), 'all off')
+  for (const n of listed) expect(await value(`extensions.${n}`)).toBe(false)
+  expect(button('Disable all').disabled).toBe(true)
+  await click(button('Enable all'))
+  await until(() => allAre(true), 'all on')
+  for (const n of listed) expect(await value(`extensions.${n}`)).toBe(true)
+  // Switching extensions isn't setup done: that's a model's answer, or Skip.
+  expect(await value(ONBOARDED)).toBe(false)
+})
+
+it('has the extensions on a first run that finds a model already', async () => {
+  await start({ faux: true })
+  await mount()
+  await until(() => text().includes('echo: Say hi') && extensionRows().length > 0, 'the model saying hi, and the extensions')
+  await click(button('Disable all'))
+  await until(() => allAre(false), 'all off')
 })

@@ -19,4 +19,4 @@ export const outsideBlocks = (blocks: readonly { type: string; text?: string }[]
  * Optional: switched off, a machine has no Ego (its thread stays, hidden and taking no messages, until it's back).
  * Its thread says so in its facts: `facts.ego` is true.
  */
-export const about = { name: 'ego', version: '2.0.0', api: '^5', title: 'Ego', description: "Superego's own agent: ask it about the app and how it's set up." } satisfies ExtensionAbout
+export const about = { name: 'ego', version: '2.1.0', api: '^5.10', title: 'Ego', description: "Superego's own agent: ask it about the app and how it's set up." } satisfies ExtensionAbout

@@ -1,9 +1,10 @@
 /* First-run setup (Setup.tsx): one calm column in the middle of the main area, scrolling when it's taller, its
-   buttons kept in view at its foot. Rows a line apart; a way in opens under its row, on a quiet fill. */
+   buttons kept in view at its foot. Rows a line apart; a way in opens under its row, on a quiet fill. After the model,
+   what extensions say of themselves (Ego's welcome) and the extensions' switches. */
 .setup {
   flex: 1; min-height: 0; overflow-y: auto;
   display: flex; flex-direction: column; gap: var(--superego-space-5);
-  padding: var(--superego-space-7) max(var(--superego-space-5), calc((100% - 460px) / 2)) 0;
+  padding: var(--superego-space-7) max(var(--superego-space-5), calc((100% - 520px) / 2)) 0;
   font-size: var(--superego-text-ui); line-height: var(--superego-leading-ui);
 }
 .setup h1 { margin: 0; font-size: var(--superego-text-title); font-weight: 600; letter-spacing: -.01em; }
@@ -82,6 +83,18 @@ button.setup__line:hover { background: var(--superego-hover); }
   background: linear-gradient(transparent, var(--superego-bg) var(--superego-space-5));
 }
 .setup__foot .superego-button[data-variant=primary], .setup__foot .superego-button:first-child { padding: 6px 22px; }
+
+/* The extensions, each a line: its name, its id and what it does (all of it on hover), and its switch. */
+.setup__extensions { margin-top: var(--superego-space-2); }
+.setup__head { display: flex; align-items: center; gap: var(--superego-space-1); margin-bottom: var(--superego-space-1); }
+.setup__head h2 { flex: 1; margin: 0; }
+.setup__head .superego-button { color: var(--superego-muted); }
+.setup__head .superego-button:hover:not(:disabled) { color: var(--superego-text); }
+.setup__extension { display: flex; align-items: center; gap: var(--superego-space-4); padding: 7px 0; border-top: 1px solid var(--superego-line); }
+.setup__extension:last-child { border-bottom: 1px solid var(--superego-line); }
+.setup__title { font-weight: 500; }
+.setup__extension code { font-family: var(--superego-mono); font-size: var(--superego-text-sm); color: var(--superego-faint); }
+.setup__extensions > .setup__note, .setup__extensions > .setup__error { margin-top: var(--superego-space-2); }
 
 /* Where sending failed for lack of a model: a line and a way to set one up. */
 .setup-card { display: inline-flex; align-items: center; gap: var(--superego-space-2); flex-wrap: wrap; }
