@@ -27,6 +27,8 @@ export type CommandLineInfo = {
   state: 'installed' | 'other' | 'missing'
   /** What a login shell runs for `<id>`, when it's installed but the shell finds something else, or nothing. */
   shadowed?: string | null
+  /** The app runs from a temporary copy (macOS App Translocation): it can't install until it's moved to Applications. */
+  translocated?: boolean
 }
 
 /** A notification from a machine's daemon, `$connection` when a link's state changes, or `$machines` with the whole list. */

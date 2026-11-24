@@ -18,6 +18,11 @@ describe('Updates', () => {
     expect(await updates.check(true)).toEqual({ phase: 'off', version: '0.0.0' })
   })
 
+  it('is translocated, not checking, in a released app run from a temporary folder', async () => {
+    const updates = new Updates('0.1.8', undefined, true)
+    expect(await updates.check(true)).toEqual({ phase: 'translocated', version: '0.1.8' })
+  })
+
   it('checks, finds nothing newer, and says when', async () => {
     const { updates, io } = updater()
     const done = updates.check()

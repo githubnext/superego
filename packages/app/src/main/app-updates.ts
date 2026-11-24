@@ -2,6 +2,7 @@
 // the newest release and where its zip is (written by `pnpm release`, see docs/releasing.md). It checks a little after
 // launch and every few hours, downloads in the background, and the windows offer a restart once one is ready
 // (updates.ts has the logic). Only a released app has a feed: run from source, or packaged here, it never updates itself.
+// Nor does one macOS runs translocated (translocation.ts): Squirrel can't replace that copy, so it waits to be moved.
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { app, autoUpdater, dialog, net } from 'electron'
@@ -36,15 +37,21 @@ export function updateFeed(appConfig: AppConfig, dir: string): string | undefine
 
 export type AppUpdates = ReturnType<typeof createAppUpdates>
 
-export function createAppUpdates({ app: appConfig, headless, service, quitting, changed }: {
+export function createAppUpdates({ app: appConfig, headless, translocated, move, service, quitting, changed }: {
   app: AppConfig
   headless: boolean
+  /** Run by macOS from a temporary copy: it can't update until it's moved to Applications. */
+  translocated: boolean
+  /** Move the app to Applications, as the menu's Check for Updates… offers when it's translocated. */
+  move(): Promise<void>
   service: Pick<Service, 'stopForUpdate' | 'relink'>
   /** The app is about to quit: every window open comes back after the update. */
   quitting(): void
   changed(state: UpdateState): void
 }) {
-  const feed = headless ? undefined : updateFeed(appConfig, import.meta.dirname)
+  const released = headless ? undefined : updateFeed(appConfig, import.meta.dirname)
+  const feed = translocated ? undefined : released
+  if (released && translocated) console.error(`Updates are off: ${appConfig.name} runs from a temporary folder (App Translocation), not Applications`)
   const updates = new Updates(app.getVersion(), feed ? {
     check: () => autoUpdater.checkForUpdates(),
     online: () => net.isOnline(),
@@ -56,7 +63,7 @@ export function createAppUpdates({ app: appConfig, headless, service, quitting, 
     },
     recover: () => service.relink(),
     changed,
-  } : undefined)
+  } : undefined, Boolean(released && translocated))
 
   function start() {
     if (!feed) return
@@ -79,7 +86,17 @@ export function createAppUpdates({ app: appConfig, headless, service, quitting, 
   /** The app menu's Check for Updates…: says how it went, unless the update is coming (the windows' notice shows it). */
   async function checkFromMenu() {
     const state = await updates.check(true)
-    if (state.phase === 'idle') {
+    if (state.phase === 'translocated') {
+      const { response } = await dialog.showMessageBox({
+        type: 'warning',
+        message: `Move ${appConfig.name} to Applications to receive updates`,
+        detail: `It's running from a temporary folder, like Downloads, where it can't update.`,
+        buttons: ['Move to Applications', 'Not Now'],
+        defaultId: 0,
+        cancelId: 1,
+      })
+      if (response === 0) await move()
+    } else if (state.phase === 'idle') {
       await dialog.showMessageBox({ message: `${appConfig.name} ${state.version} is up to date.` })
     } else if (state.phase === 'error') {
       await dialog.showMessageBox({ type: 'warning', message: 'Couldn\'t check for updates', detail: state.error ?? '' })
@@ -88,7 +105,8 @@ export function createAppUpdates({ app: appConfig, headless, service, quitting, 
 
   return {
     get state() { return updates.state },
-    on: Boolean(feed),
+    /** A released app: the menu has Check for Updates… (which, translocated, offers the move). */
+    on: Boolean(released),
     start,
     check: () => updates.check(true),
     checkFromMenu,

@@ -90,7 +90,7 @@ export function callApp(router: Router<AppActionContext>, window: AppWindow, met
 }
 
 /** The app's own actions, besides the machines' (machines.ts). */
-export function registerAppActions(router: Router<AppActionContext>, { app: appConfig, dataDir, packaged, windows, settings, cli, service, updates, layoutFile, sites, themes, quit, restart }: {
+export function registerAppActions(router: Router<AppActionContext>, { app: appConfig, dataDir, packaged, windows, settings, cli, service, updates, move, layoutFile, sites, themes, quit, restart }: {
   app: AppConfig
   dataDir: string
   /** A packaged app: the developers' actions (profiling) are only for the command line there, not ⌘K. */
@@ -103,6 +103,8 @@ export function registerAppActions(router: Router<AppActionContext>, { app: appC
   sites: Pick<SitePermissionsHandle<unknown>, 'forget'>
   service: Pick<Service, 'state' | 'act'>
   updates: Pick<AppUpdates, 'state' | 'check' | 'install'>
+  /** Move the app to Applications, when macOS runs it from a temporary copy (translocation.ts); unset otherwise. */
+  move?: () => Promise<void>
   layoutFile: LayoutFile
   /** Imported themes (<dataDir>/themes). */
   themes: ThemeStore
@@ -155,6 +157,11 @@ export function registerAppActions(router: Router<AppActionContext>, { app: appC
     id: 'app.update.install', title: `Restart to update ${appConfig.name}`, runs: 'app', expose: ['ui'],
     params: obj({}),
     async run() { await updates.install(); return updates.state },
+  }))
+  if (move) router.register(defineAction({
+    id: 'app.move', title: `Move ${appConfig.name} to Applications`, runs: 'app', expose: ['ui'],
+    params: obj({}),
+    async run() { await move(); return null },
   }))
   /** Where a view goes, as a window tells the layout file. */
   const placement = nullable(union([str(), arr(str()), lit(false)]))

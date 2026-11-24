@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Opened on a Mac straight from Downloads, Superego offers to move itself to Applications: run from there, macOS
+  uses a temporary copy that can't update and can freeze the app once the download is moved or deleted. Until it's
+  moved, Settings → About says why it doesn't update (with a button to move it), and the command line can't be installed.
 - Hovering a wide code block, tool output, or diff no longer shifts layout when its horizontal scrollbar appears.
 - `/clear` (or `/new`) in a thread's composer starts over in a new thread with the same folder, profile, model and
   thinking, and archives the old one. Anything typed after it becomes the new thread's first message.

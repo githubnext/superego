@@ -1,6 +1,7 @@
 // The app's command line on the PATH, from Settings → Command line: `~/.local/bin/<id>`. A packaged app writes a script
 // that runs the CLI built into it (out/main/cli.js) on its own Electron as Node; run from a checkout, it links the app's
-// bin, as `pnpm link:cli` does.
+// bin, as `pnpm link:cli` does. Not from an app macOS runs translocated (translocation.ts): the script would run it from
+// a temporary copy, gone after the next restart.
 import { execFile } from 'node:child_process'
 import { existsSync, lstatSync, mkdirSync, readFileSync, readlinkSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
@@ -15,12 +16,14 @@ export type CommandLineOptions = {
   packaged: boolean
   /** The executable a script runs the CLI on: the packaged app's own. */
   executable: string
+  /** Run by macOS from a temporary copy: nothing to install until it's moved to Applications. */
+  translocated?: boolean
   home?: string
   /** The user's login shell, asked what it would run; unset, nobody is asked. */
   shell?: string
 }
 
-export function commandLine({ app, appPath, packaged, executable, home = homedir(), shell }: CommandLineOptions) {
+export function commandLine({ app, appPath, packaged, executable, translocated = false, home = homedir(), shell }: CommandLineOptions) {
   const path = join(home, '.local', 'bin', app.id)
 
   /** What belongs at `path`: a script's text, or a link's target. */
@@ -52,13 +55,14 @@ export function commandLine({ app, appPath, packaged, executable, home = homedir
     path,
     async info(): Promise<CommandLineInfo> {
       const now = state()
-      const info: CommandLineInfo = { path, kind: wanted()?.kind ?? null, state: now }
+      const info: CommandLineInfo = { path, kind: wanted()?.kind ?? null, state: now, ...(translocated ? { translocated } : {}) }
       if (now !== 'installed') return info
       const resolved = await lookup()
       return resolved === undefined || resolved === path ? info : { ...info, shadowed: resolved }
     },
     /** Put this app's command at `path`, over whatever is there. */
     install() {
+      if (translocated) throw new Error(`Move ${app.name} to Applications first: from a temporary folder, the command would stop working`)
       const want = wanted()
       if (!want) throw new Error(packaged ? `This build of ${app.name} has no command line` : `${app.name}'s package.json names no bin for ${app.id}`)
       mkdirSync(join(home, '.local', 'bin'), { recursive: true })

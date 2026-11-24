@@ -28,8 +28,9 @@ export class Updates {
   #io: UpdaterIO
   #waiting: ((state: UpdateState) => void)[] = []
 
-  constructor(version: string, io: UpdaterIO | undefined) {
-    this.state = { phase: io ? 'idle' : 'off', version }
+  /** Without `io`, it's `off`, or `translocated`: a released app that can't update from where it runs. */
+  constructor(version: string, io: UpdaterIO | undefined, translocated = false) {
+    this.state = { phase: io ? 'idle' : translocated ? 'translocated' : 'off', version }
     // Without an updater the state never changes: nothing calls it.
     this.#io = io ?? { check() {}, online: () => true, prepare: async () => false, install() {}, recover() {}, changed() {} }
   }
@@ -48,7 +49,7 @@ export class Updates {
    */
   check(asked = false): Promise<UpdateState> {
     const { phase } = this.state
-    if (phase === 'off' || phase === 'downloading' || phase === 'ready' || phase === 'installing') return Promise.resolve(this.state)
+    if (phase === 'off' || phase === 'translocated' || phase === 'downloading' || phase === 'ready' || phase === 'installing') return Promise.resolve(this.state)
     const done = new Promise<UpdateState>((resolve) => this.#waiting.push(resolve))
     if (phase === 'checking') {
       if (asked && !this.state.asked) this.#publish({ asked })

@@ -78,6 +78,17 @@ describe('packaged', () => {
   })
 })
 
+describe('translocated', () => {
+  it('says so, and installs nothing that would point into the temporary copy', async () => {
+    writeFileSync(join(appPath, 'out/main/cli.js'), '')
+    const executable = '/private/var/folders/xy/T/AppTranslocation/1/d/Test App.app/Contents/MacOS/Test App'
+    const cli = commandLine({ app, appPath, packaged: true, executable, translocated: true, home })
+    expect(await cli.info()).toMatchObject({ kind: 'script', state: 'missing', translocated: true })
+    expect(() => cli.install()).toThrow(/Move Test App to Applications first/)
+    expect(() => lstatSync(cli.path)).toThrow()
+  })
+})
+
 describe('the shell', () => {
   it("says when a login shell doesn't find it, or finds another", async () => {
     // A stand-in shell that answers `command -v` with what PATH it's given.
