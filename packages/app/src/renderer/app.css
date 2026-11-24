@@ -345,10 +345,10 @@ details[open] > .row > .row__chevron { transform: rotate(90deg); }
    test in :where(), weighing nothing, so a card that joins the box (below) still takes the gap away. */
 .dock__above:where(:not(:empty, :has(> .profile-scope:empty):not(:has(> :not(.profile-scope:empty))))) { margin-bottom: 10px; }
 /* The box: the words, what goes with them, and one button at their end. Glass over the thread, lit along its top, a
-   soft shadow under it. */
+   soft shadow under it: a wide one in light; in dark, a shorter one (a wide dark shadow on a dark ground reads as a halo). */
 .dock__box, .dock__join {
   position: relative; background: var(--superego-glass); -webkit-backdrop-filter: var(--superego-glass-blur); backdrop-filter: var(--superego-glass-blur);
-  box-shadow: var(--superego-glass-edge), 0 8px 28px light-dark(rgb(0 0 0 / .1), rgb(0 0 0 / .35));
+  box-shadow: var(--superego-glass-edge), 0 8px 28px light-dark(rgb(0 0 0 / .1), transparent), 0 4px 14px light-dark(transparent, rgb(0 0 0 / .3));
 }
 .dock__box { border-radius: 20px; padding: 9px 9px 9px 16px; }
 /* Above the box, something can join it (`dock__join`: an agent's question with its options): one card of the same
