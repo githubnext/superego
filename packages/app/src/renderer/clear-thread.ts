@@ -39,7 +39,7 @@ export class ArchiveFailed extends Error {
 }
 
 /** Start `at` over: a new thread like it, sent `prompt` and `attachments` if given, in its place; it archived. */
-export async function clearThread(registry: Registry, c: WindowContext, at: { machine: string; thread: string }, first: { prompt?: string; attachments?: unknown[] } = {}): Promise<ThreadInfo> {
+export async function clearThread(registry: Registry, c: WindowContext, at: { machine: string; thread: string }, first: { prompt?: string | undefined; attachments?: unknown[] | undefined } = {}): Promise<ThreadInfo> {
   const thread = c.threadOf(at)
   if (!thread) throw new Error(`No thread ${at.thread} on ${at.machine} here`)
   if (!takes('clear', thread)) throw new Error(thread.archived ? `${thread.title} is archived` : `${thread.title} isn't one the sidebar lists: it can't be started over here`)
@@ -76,6 +76,6 @@ export const clearThreadAction = (registry: () => Registry) => defineWindowActio
   run: ({ machine, thread, prompt, attachments }, c) => {
     const at = machine && thread ? { machine, thread } : c.selection
     if (!at) throw new Error('No thread to clear')
-    return clearThread(registry(), c, at, { ...prompt ? { prompt } : {}, ...attachments ? { attachments } : {} })
+    return clearThread(registry(), c, at, { prompt, attachments })
   },
 })
