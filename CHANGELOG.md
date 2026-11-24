@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- In dark, the message box is flat, with a thin border instead of a shadow.
+
 ## 0.2.0
 
 - **Upgrade:** a machine still on an older Superego won't take anything only you may do (setting a secret, letting
