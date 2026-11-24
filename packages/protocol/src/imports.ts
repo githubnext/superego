@@ -21,16 +21,20 @@ export function importsOf(code: string, where: string): ModuleImport[] {
   }
   const found: ModuleImport[] = []
   for (const at of imports) {
-    if (at.d === -2) continue // import.meta
-    const dynamic = at.d > -1
-    if (at.n === undefined) {
-      const line = code.slice(0, at.s).split('\n').length
-      throw new RpcError('invalid', `${where}:${line} imports import(${code.slice(at.s, at.e)}), a path worked out as it runs: what it loads can't be versioned or vouched for`, {
-        hint: `Import a literal path: import('./module.ts')`,
-      })
+    if (at.type === 'import-meta') continue
+    if (at.type === 'dynamic') {
+      // A template literal with a `${…}` in it comes back as a glob: which file it loads is worked out as it runs too.
+      if (at.specifier === undefined || at.glob) {
+        const line = code.slice(0, at.start).split('\n').length
+        throw new RpcError('invalid', `${where}:${line} imports import(${code.slice(at.start, at.end)}), a path worked out as it runs: what it loads can't be versioned or vouched for`, {
+          hint: `Import a literal path: import('./module.ts')`,
+        })
+      }
+      // A dynamic import's range takes in its quotes; a static one's doesn't.
+      found.push({ specifier: at.specifier, start: at.start + 1, end: at.end - 1 })
+    } else {
+      found.push({ specifier: at.specifier, start: at.start, end: at.end })
     }
-    // A dynamic import's range takes in its quotes; a static one's doesn't.
-    found.push(dynamic ? { specifier: at.n, start: at.s + 1, end: at.e - 1 } : { specifier: at.n, start: at.s, end: at.e })
   }
   return found
 }

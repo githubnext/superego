@@ -34,7 +34,7 @@
     "@types/react-dom": "^19",
     "react": "^19",
     "react-dom": "^19",
-    "rollup": "^4.68.0",
+    "rollup": "^4.68.5",
     "rollup-plugin-dts": "^6.5.1"
   }
 }

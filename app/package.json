@@ -34,5 +34,5 @@
     "@superego/unread": "workspace:*",
     "@superego/worktrees": "workspace:*"
   },
-  "devDependencies": { "electron": "45.3.2", "electron-vite": "6.0.0", "@types/node": "^24" }
+  "devDependencies": { "electron": "45.3.3", "electron-vite": "6.0.0", "@types/node": "^24" }
 }
