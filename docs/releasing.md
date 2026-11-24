@@ -128,7 +128,8 @@ local `main` as it is when it starts, so merge first.
 1. Checks first, before minutes of building: the tag not taken (here or on GitHub; it fetches), `origin/main` not
    ahead of `main`, `gh` signed in, a Developer ID and notary credentials.
 2. Builds in a worktree of its own: `main`'s commit, detached, in a temporary folder, with a fresh `pnpm install`. The
-   main checkout, which every merge fast-forwards, is never touched, and what's built is exactly that commit.
+   main checkout, which every merge fast-forwards, is never touched, and what's built is exactly that commit. It runs
+   `pnpm typecheck` there and stops if that fails: a commit that doesn't type-check isn't released.
 3. `pnpm bundle`'s steps there, with the version given: it goes into the app (`CFBundleShortVersionString`) and the
    zip's name, not into `app/package.json`. Nothing is committed for a release; the tag says which commit it was.
    If anything fails, nothing has left this Mac, and the worktree is kept to look at.

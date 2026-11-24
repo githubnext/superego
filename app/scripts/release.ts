@@ -1,14 +1,15 @@
 // `pnpm release <version>`: build, sign and notarize Superego <version> from main, then publish it as a GitHub release.
 //
 // By hand, on a Mac that can sign and notarize (see notary.ts), from any checkout or worktree of the repository. What
-// it releases is the local main as it is now: built in a worktree of its own (a fresh `pnpm install`, then the bundle),
-// so the main checkout, which other work fast-forwards all the time, is never touched. The version isn't committed: it
-// goes into the bundle and onto the tag. Nothing leaves this Mac until the app is notarized; then main and an annotated
-// tag v<version> on the commit built are pushed, and a GitHub release (gh) gets the zip and, as its notes, the
-// version's section of CHANGELOG.md (Unreleased's notes, moved under the version and tightened first: the release stops
-// early without it). Beside the zip goes update.json, the feed the released app updates from (the app config's
-// `updateFeed` is the newest release's): it names this version and its zip, with the same notes. `--no-publish` stops
-// before the tag: the notarized zip, to try out; nothing is uploaded, the feed included.
+// it releases is the local main as it is now: built in a worktree of its own (a fresh `pnpm install`, `pnpm typecheck`,
+// which stops it on a commit that doesn't type-check, then the bundle), so the main checkout, which other work
+// fast-forwards all the time, is never touched. The version isn't committed: it goes into the bundle and onto the tag.
+// Nothing leaves this Mac until the app is notarized; then main and an annotated tag v<version> on the commit built are
+// pushed, and a GitHub release (gh) gets the zip and, as its notes, the version's section of CHANGELOG.md (Unreleased's
+// notes, moved under the version and tightened first: the release stops early without it). Beside the zip goes
+// update.json, the feed the released app updates from (the app config's `updateFeed` is the newest release's): it names
+// this version and its zip, with the same notes. `--no-publish` stops before the tag: the notarized zip, to try out;
+// nothing is uploaded, the feed included.
 import { execFileSync } from 'node:child_process'
 import { mkdtempSync, readdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -65,6 +66,12 @@ const appDir = join(tree, 'app')
 let zip = ''
 try {
   run('pnpm', ['install', '--frozen-lockfile'], tree)
+  // The commit released type-checks, as built here (electron-vite's build doesn't check types).
+  try {
+    run('pnpm', ['typecheck'], tree)
+  } catch {
+    throw new Error(`pnpm typecheck fails on ${commit.slice(0, 8)}: fix it on main, then release again.`)
+  }
   run('pnpm', ['exec', 'electron-vite', 'build'], appDir)
   // The environment carries what notary.ts read from this checkout's .env, which the worktree doesn't have.
   execFileSync('node', ['scripts/package.ts', '--notarize', '--version', version, '--update-feed', app.updateFeed!], {
@@ -75,7 +82,7 @@ try {
   if (!name) throw new Error(`No Superego-${version}-*.zip in ${dist}`)
   zip = join(dist, name)
 } catch (error) {
-  console.error(`\nThe build failed; nothing left this Mac. Its worktree is kept to look at: ${tree}`)
+  console.error(`\nThe release stopped before anything left this Mac: ${(error as Error).message}\nIts worktree is kept to look at: ${tree}`)
   console.error(`(remove it with: git worktree remove --force ${tree})`)
   throw error
 }
