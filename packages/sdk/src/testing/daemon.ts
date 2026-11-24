@@ -238,6 +238,8 @@ export async function testDaemon(options: TestDaemonOptions = {}): Promise<TestD
     await mkdir(work, { recursive: true })
     const daemon = await openDaemon({
       app, dataDir, defaultCwd: work, agentsDir: join(dataDir, 'agents'), extensions: options.extensions ?? [], secrets: 'file',
+      // Setup finds no model server of the machine's (an Ollama running there): what a test sees is its own.
+      localServers: [],
       ...(options.setupTimeout ? { setupTimeout: options.setupTimeout } : {}),
       ...(options.agentPartsLimit ? { agentPartsLimit: options.agentPartsLimit } : {}),
     })
