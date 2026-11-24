@@ -4,6 +4,7 @@ import { execFileSync } from 'node:child_process'
 import { chmodSync, lstatSync, mkdirSync, mkdtempSync, readFileSync, readlinkSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { defineApp } from '@superego/protocol'
 import { commandLine, script } from '../src/main/command-line.ts'
@@ -91,10 +92,10 @@ describe('translocated', () => {
 
 describe('the shell', () => {
   it("says when a login shell doesn't find it, or finds another", async () => {
-    // A stand-in shell that answers `command -v` with what PATH it's given.
-    const shell = join(root, 'sh')
-    writeFileSync(shell, `#!/bin/sh\nexec /bin/sh -c "$2"\n`)
-    chmodSync(shell, 0o755)
+    // A stand-in shell that answers `command -v` with what PATH it's given. The checkout's, not one written here: a
+    // program run first as it's written can take seconds to start on a busy machine (scanned as it's opened, or busy
+    // while a child forked meanwhile holds it open), past the 5s it's given.
+    const shell = fileURLToPath(new URL('fixtures/login-shell', import.meta.url))
     const cli = commandLine({ app, appPath, packaged: false, executable: '/unused', home, shell })
     cli.install()
     const path = process.env.PATH

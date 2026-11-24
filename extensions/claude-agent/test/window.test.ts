@@ -11,6 +11,7 @@ import { defineAction, defineDaemonExtension } from '@superego/daemon'
 import type { ActionLogEntry } from '@superego/protocol'
 import { mountUi, testDaemon, type TestDaemon, type TestWindow } from '@superego/sdk/testing'
 import { claudeAgent } from '../src/daemon.ts'
+import { CLAUDE } from '../src/shared.ts'
 import claudeAgentUi from '../src/ui.tsx'
 
 const $ = <T extends HTMLElement = HTMLElement>(selector: string) => document.querySelector<T>(selector)
@@ -48,6 +49,12 @@ const terminal = defineDaemonExtension({
 async function open(status: object | undefined) {
   const claude = fakeClaude(status)
   daemon = await testDaemon({ model: 'echo', extensions: [claudeAgent({ executable: async () => claude }), terminal] })
+  // Once it has looked at Claude Code, as it does as it starts: a model menu waits only 3s for that, which a busy
+  // machine's `claude` can take longer than.
+  await (await daemon.watch(CLAUDE)).until((check) => check !== null, 'Claude Code looked at')
+  // Once it has looked at Claude Code, as it does as it starts: a model menu waits only 3s for that, which a busy
+  // machine's `claude` can take longer than.
+  await (await daemon.watch(CLAUDE)).until((check) => check !== null, 'Claude Code looked at')
   ui = await mountUi({ window: true, machines: [daemon], extensions: [claudeAgentUi] })
   return claude
 }
@@ -115,8 +122,10 @@ it("makes Claude Code the machine's default when it's used in setup: ⌘N then s
 /** Settings, on this machine's tab, once Claude Agent's section says what's there. */
 async function settings(what: string) {
   $('.app__settings')!.click()
-  await ui!.until(() => Boolean($('.settings')), 'Settings')
-  $$('.settings__nav [role="tab"]').find((b) => b.textContent?.includes('local'))!.click()
+  // At this machine's tab, once it's there: the machines come after the window's own.
+  const tab = () => $$('.settings__nav [role="tab"]').find((b) => b.textContent?.includes('local'))
+  await ui!.until(() => Boolean(tab()), "Settings, with this machine's tab")
+  tab()!.click()
   await ui!.until(() => Boolean($('.claude-agent-settings')?.textContent?.includes(what)), what)
   return $('.claude-agent-settings')!.closest('.settings-section')!.textContent ?? ''
 }

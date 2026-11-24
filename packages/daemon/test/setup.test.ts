@@ -2,10 +2,11 @@
 // model server answering), a model saying hi (`model.test`), a key tried before a sign-in is done (`auth.signIn`'s
 // `check`), and a first message no model could answer refused before a thread is made.
 import { existsSync, readFileSync } from 'node:fs'
-import { chmod, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, rm } from 'node:fs/promises'
 import { createServer, type Server } from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { afterEach, beforeEach, expect, it } from 'vitest'
 import { defineApp, PROTOCOL_VERSION, type AuthEvent, type Notifications, type ModelCatalog, type RpcPeer, type SetupProbe } from '@superego/protocol'
 import { connectSocket, listen, openDaemon, type DaemonOptions } from '../src/index.ts'
@@ -103,10 +104,9 @@ it('starts a provider on its best model, not its first by name', async () => {
 })
 
 it("reads the login shell's environment, whatever its startup files print", async () => {
-  const shell = join(dir, 'shell')
-  await writeFile(shell, '#!/bin/sh\n# As zsh -ilc: its startup files print, and export a key.\necho "welcome back"\nshift\nOPENAI_API_KEY="sk-multi\nline" exec /bin/sh -c "$1"\n')
-  await chmod(shell, 0o755)
-  const env = await readLoginEnv({ shell })
+  // A file of the checkout's, not one written here: a program run first as it's written can take seconds to start on a
+  // busy machine (scanned as it's opened, or busy while a child forked meanwhile holds it open), past the 5s it's given.
+  const env = await readLoginEnv({ shell: fileURLToPath(new URL('fixtures/login-shell', import.meta.url)) })
   expect(env.OPENAI_API_KEY).toBe('sk-multi\nline')
   expect(await readLoginEnv({ shell: join(dir, 'no-such-shell') })).toEqual({})
 })
@@ -179,12 +179,13 @@ it("refuses a first message no model can answer, and makes no thread", async () 
 
 it('stops trying a key when its sign-in is cancelled, and keeps nothing of it', async () => {
   // A provider that lists its models, and holds every chat until the request goes away.
-  let gone = false
+  let [held, gone] = [false, false]
   const server = createServer((request, response) => {
     if (request.url === '/v1/models') {
       response.writeHead(200, { 'content-type': 'application/json' })
       return response.end(JSON.stringify({ object: 'list', data: [{ id: 'slow-1', object: 'model' }] }))
     }
+    held = true
     request.resume()
     response.on('close', () => { gone = true })
   })
@@ -196,6 +197,8 @@ it('stops trying a key when its sign-in is cancelled, and keeps nothing of it', 
   peer.on('auth.event', ({ event }: Notifications['auth.event']) => events.push(event))
   const { flow } = await peer.call<{ flow: string }>('auth.signIn', { provider: 'slow', type: 'api_key', key: 'a-good-key-it-would-be', check: true })
   await until(() => events.some((e) => e.type === 'progress' && e.message.startsWith('Trying it on')))
+  // Cancelled once the chat is held: said before its request goes out, a cancel then would leave none to see end.
+  await until(() => held)
   await peer.call('auth.cancel', { flow })
   await until(() => events.at(-1)?.type === 'failed')
   expect(events.at(-1)).toEqual({ type: 'failed', message: 'Cancelled' })

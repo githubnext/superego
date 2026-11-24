@@ -17,7 +17,7 @@ import { threadReports } from '@superego/thread-reports/daemon'
 import { claudeEnv } from '../src/claude.ts'
 import { claudeAgent } from '../src/daemon.ts'
 import { nestedSkills, projectConfig, ProjectAllowances } from '../src/project.ts'
-import { about, ALLOW, ANSWER, CHECK, KEPT, LIMIT, limitNote, SETTINGS, SIGN_IN, SIGNED_OUT, WAITING, type Approval, type Kept, type Limit, type ProjectFacts } from '../src/shared.ts'
+import { about, ALLOW, ANSWER, CHECK, CLAUDE, KEPT, LIMIT, limitNote, SETTINGS, SIGN_IN, SIGNED_OUT, WAITING, type Approval, type Kept, type Limit, type ProjectFacts } from '../src/shared.ts'
 import { CLASSIFIER, mockAnthropic, type MockAnthropic } from './mock-anthropic.ts'
 
 /** This checkout's `superego` command line. */
@@ -320,6 +320,8 @@ describe.skipIf(!claude)("a Claude Agent thread, on the user's claude against a 
 
   it('starts a thread on the model picked in the model menu, with the claude profile it makes', async () => {
     const d = await start({ profile: { 'profile.ts': 'export default {}\n' } })
+    // Once its first look at Claude Code is done: a menu waits 3s for one, and a busy machine's `claude` can take longer.
+    await (await d.watch(CLAUDE)).until((check) => check !== null, 'Claude Code looked at')
     const models = await d.call<ModelCatalog>('agent.models', {})
     expect(models.agents).toEqual([expect.objectContaining({
       kind: 'claude-agent', title: 'Claude Agent', profile: 'claude', models: expect.arrayContaining([expect.objectContaining({ value: 'claude-agent/sonnet', label: 'Sonnet' })]),

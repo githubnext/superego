@@ -22,8 +22,10 @@ beforeEach(async () => {
   daemon = await testDaemon({ model: 'echo', extensions: [vault] })
   ui = await mountUi({ window: true, machines: [daemon] })
   $('.app__settings')!.click()
-  await ui.until(() => Boolean($('.settings')?.textContent?.includes('Appearance')), 'Settings')
-  $$('.settings__nav button').find((b) => b.textContent?.includes('local'))!.click()
+  // At this machine's tab, once it's there: the machines come after the window's own.
+  const tab = () => $$('.settings__nav button').find((b) => b.textContent?.includes('local'))
+  await ui.until(() => Boolean(tab()), "Settings, with this machine's tab")
+  tab()!.click()
 })
 afterEach(async () => { await ui.unmount(); await daemon.close() })
 

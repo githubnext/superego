@@ -1,0 +1,6 @@
+#!/bin/sh
+# A login shell standing in for zsh -ilc <command>: its startup files print, and export a key that spans lines.
+echo "welcome back"
+shift
+OPENAI_API_KEY="sk-multi
+line" exec /bin/sh -c "$1"

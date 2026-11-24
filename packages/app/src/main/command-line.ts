@@ -94,9 +94,10 @@ function which(shell: string, name: string): Promise<string | null | undefined> 
   // Between markers: an interactive shell's startup files may print what they like.
   const mark = '__superego_which__'
   return new Promise((done) => {
-    execFile(shell, ['-ilc', `printf '${mark}%s${mark}' "$(command -v ${name})"`], { timeout: 5000, env: { ...process.env, ELECTRON_RUN_AS_NODE: undefined } }, (_error, stdout) => {
+    execFile(shell, ['-ilc', `printf '${mark}%s${mark}' "$(command -v ${name})"`], { timeout: 5000, env: { ...process.env, ELECTRON_RUN_AS_NODE: undefined } }, (error, stdout) => {
       const match = String(stdout ?? '').match(new RegExp(`${mark}(.*?)${mark}`))
       // No answer at all (it timed out, say): unknown, so taken as found.
+      if (!match) console.error(`Asking the login shell (${shell}) where ${name} is: ${error?.message ?? 'it printed nothing'}`)
       done(match ? match[1] || null : undefined)
     })
   })
