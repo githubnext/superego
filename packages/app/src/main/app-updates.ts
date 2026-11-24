@@ -50,8 +50,10 @@ export function createAppUpdates({ app: appConfig, headless, translocated, move,
   changed(state: UpdateState): void
 }) {
   const released = headless ? undefined : updateFeed(appConfig, import.meta.dirname)
-  const feed = translocated ? undefined : released
-  if (released && translocated) console.error(`Updates are off: ${appConfig.name} runs from a temporary folder (App Translocation), not Applications`)
+  // A released app run from a temporary copy: no feed until it's moved.
+  const stuck = Boolean(released && translocated)
+  if (stuck) console.error(`Updates are off: ${appConfig.name} runs from a temporary folder (App Translocation), not Applications`)
+  const feed = stuck ? undefined : released
   const updates = new Updates(app.getVersion(), feed ? {
     check: () => autoUpdater.checkForUpdates(),
     online: () => net.isOnline(),
@@ -63,7 +65,7 @@ export function createAppUpdates({ app: appConfig, headless, translocated, move,
     },
     recover: () => service.relink(),
     changed,
-  } : undefined, Boolean(released && translocated))
+  } : undefined, stuck)
 
   function start() {
     if (!feed) return
