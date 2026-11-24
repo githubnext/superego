@@ -8,11 +8,11 @@ An extension declares **views** and the places each fits. The window has **place
 **layout** decides what goes where: each view's `default`, then the user's changes, kept in the app setting
 `app.layout`.
 
-<!-- check: ui; import { ChatsIcon, LifebuoyIcon, type SidebarRailProps } from 'superego/ui'; declare const Threads: (props: ViewProps<'window'>) => null, DetailsPane: (props: ViewProps<'thread'>) => null, EgoButton: (props: ViewProps<'window'>) => null, ThreadsRail: (props: SidebarRailProps) => null -->
+<!-- check: ui; import { ChatsIcon, CircleIcon, type SidebarRailProps } from 'superego/ui'; declare const Threads: (props: ViewProps<'window'>) => null, DetailsPane: (props: ViewProps<'thread'>) => null, EgoButton: (props: ViewProps<'window'>) => null, ThreadsRail: (props: SidebarRailProps) => null -->
 ```ts
 superego.view('threads.list', { title: 'Threads', icon: ChatsIcon, context: 'window', fits: ['sidebar'], default: 'sidebar', component: Threads, railButton: ThreadsRail })
 superego.view('threads.details', { title: 'Thread details', context: 'thread', fits: ['beside', 'pane'], component: DetailsPane })
-superego.view('ego.button', { title: 'Ask Ego', icon: LifebuoyIcon, context: 'window', fits: ['rail', 'drawer'], default: 'rail', narrow: 'drawer', order: 10, component: EgoButton })
+superego.view('ego.button', { title: 'Ask Ego', icon: CircleIcon, context: 'window', fits: ['rail', 'drawer'], default: 'rail', narrow: 'drawer', order: 10, component: EgoButton })
 ```
 
 | Place | What it is | A view there gets |

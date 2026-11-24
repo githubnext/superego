@@ -57,7 +57,8 @@ See [How the window is put together](interface.md).
 
 ## Ego
 
-Ego is Superego's own agent: the lifebuoy in the rail, or Ask Ego in `⌘K`. It answers questions about Superego and how
+Ego is Superego's own agent: the circle at the top of the rail (`⌘1`), or Ask Ego in `⌘K`. It's an extension, so if you
+turned it off (Settings → Extensions on a machine), it isn't there. It answers questions about Superego and how
 this computer has it set up, changes settings and machines itself, and hands other work (a profile, a skill, code) to a
 thread it starts in the right project. One Ego thread per machine; Clear in its title bar empties it. From a shell:
 `superego do ego.ask --prompt "…"`.

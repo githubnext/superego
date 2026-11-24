@@ -6,7 +6,7 @@
 import { Chip, defineAction, defineUiExtension, factsOf, has, RailButton, useApp, useDispatch, useMachines, useRailShortcut, useSelection, type ViewProps } from '@superego/app/ui'
 import { obj, opt, str } from '@earendil-works/pi-schema'
 import { agentName, type ThreadInfo } from '@superego/protocol'
-import { BroomIcon, CircleIcon, IconButton, LifebuoyIcon, PlugsConnectedIcon, Select } from '@superego/ui'
+import { BroomIcon, CircleIcon, IconButton, PlugsConnectedIcon, Select } from '@superego/ui'
 import type { MachineEntry } from '@superego/app/ui'
 import './styles.css'
 import { about, ASK, CLEAR, outsideBlocks } from './shared.ts'
@@ -28,7 +28,7 @@ export default defineUiExtension({
     const chosen = superego.store<string>('machine', 'local', { persist: true })
     // A button, not a sidebar: it shows a thread, and the sidebar keeps what it shows. First in the rail, its tab ⌘1.
     superego.view('ego.button', {
-      title: `Ask ${agentName(superego.app)}`, icon: LifebuoyIcon, context: 'window', fits: ['rail', 'drawer'], default: 'rail', narrow: 'drawer', order: 10, action: OPEN,
+      title: `Ask ${agentName(superego.app)}`, icon: CircleIcon, context: 'window', fits: ['rail', 'drawer'], default: 'rail', narrow: 'drawer', order: 10, action: OPEN,
       component: (props) => <EgoButton {...props} chosen={chosen.use()} />,
     })
     superego.view('ego.machine', { title: 'Machine', context: 'thread', fits: ['header'], default: 'header', component: MachineSwitch })
