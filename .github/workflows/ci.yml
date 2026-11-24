@@ -1,0 +1,38 @@
+# Checks every push to main and every pull request to it, on Linux: types, the tests and the site's build. Not smoke,
+# which runs the app itself (Electron): that stays a check run by hand. Claude Agent's tests on a real `claude` skip
+# themselves where it isn't installed, as here.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 26
+          cache: pnpm
+      # No Electron binary: nothing here runs the app.
+      - run: pnpm install --frozen-lockfile
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm --filter @superego/site build
+        env:
+          SITE_BASE: /superego/

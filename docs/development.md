@@ -24,6 +24,9 @@ pnpm eval               # how well agents extend Superego (evals/README.md)
 Tests, typecheck, smoke and showcase take turns across the machine (two at a time; `SUPEREGO_CHECK_SLOTS`), and smoke
 and showcase build the app only when its sources changed.
 
+GitHub Actions runs `pnpm typecheck`, `pnpm test` and the site's build on every push to `main` and every pull request
+to it, on Linux ([.github/workflows/ci.yml](../.github/workflows/ci.yml)). Not smoke: that stays a check run by hand.
+
 After changing daemon code, `superego daemon restart` runs it (the dev app offers the same).
 
 ## Layout
