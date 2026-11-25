@@ -23,7 +23,7 @@
   /* What it casts on the ground round it: the focus's ring (see Focus), its edge, its shadow. */
   --side-shadow: var(--side-ring, 0 0 #0000), var(--superego-glass-edge), 0 6px 24px light-dark(rgb(0 0 0 / .07), rgb(0 0 0 / .35));
 }
-.app:not(.is-narrow):is(:has(.app__sidebar:has(> :not(template))), :has(.settings--pane)) { --side-width: calc(var(--superego-rail) + var(--superego-sidebar)); --side-top: var(--side-inset); }
+.app:not(.is-narrow):is(:has(.app__sidebar > :not(template)), :has(.settings--pane)) { --side-width: calc(var(--superego-rail) + var(--superego-sidebar)); --side-top: var(--side-inset); }
 .app:not(.is-narrow)::before {
   content: ''; position: absolute; z-index: 0; top: var(--side-top); left: var(--side-inset); bottom: var(--side-inset); width: calc(var(--side-width) - var(--side-inset)); pointer-events: none;
   border-radius: var(--side-radius); background: var(--superego-chrome);
@@ -81,7 +81,7 @@
 .app__titlebar { position: relative; height: var(--superego-titlebar); display: flex; align-items: center; gap: var(--superego-space-3); min-width: 0; padding: 0 12px 0 var(--lights); container-type: inline-size; overflow: hidden; }
 /* On a tablet's home screen the page runs up under the status bar: the bar starts below it, its ground running up. */
 .app.is-web .app__titlebar { height: calc(var(--superego-titlebar) + env(safe-area-inset-top)); padding-top: env(safe-area-inset-top); }
-.app.has-sidebar:has(.app__sidebar:has(> :not(template))) .app__titlebar { padding-left: calc(var(--side-width) + var(--superego-space-3)); }
+.app.has-sidebar:has(.app__sidebar > :not(template)) .app__titlebar { padding-left: calc(var(--side-width) + var(--superego-space-3)); }
 /* Short of room, the bar gives way in one order (overflow.tsx): its items keep their size and go, in turn, to the ···
    at its end; the title takes what's left, truncating. Nothing in it shrinks, wraps or overlaps another, nor makes the
    window wider; nor does anything come and go with the pointer: what fits shows. */
@@ -113,7 +113,7 @@
 /* Back and forward: past the window's buttons, quiet. */
 .app__history { flex: none; display: flex; align-items: center; gap: 2px; margin-right: -4px; }
 /* With the sidebar open, the title starts over the sheet; back and forward stay over the list, at its right edge. */
-.app.has-sidebar:has(.app__sidebar:has(> :not(template))) .app__history { position: absolute; top: 0; bottom: 0; margin: 0; right: calc(100% - var(--side-width) + 10px); }
+.app.has-sidebar:has(.app__sidebar > :not(template)) .app__history { position: absolute; top: 0; bottom: 0; margin: 0; right: calc(100% - var(--side-width) + 10px); }
 .app__history .superego-icon-button { width: 26px; height: 26px; min-height: 26px; border-radius: 6px; box-shadow: none; background: none; color: var(--superego-muted); }
 .app__history .superego-icon-button:hover:not(:disabled) { background: var(--superego-hover); color: var(--superego-text); }
 .app__titlebar-end { margin-left: auto; display: flex; align-items: center; gap: var(--superego-space-2); flex: none; white-space: nowrap; }
