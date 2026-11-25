@@ -598,6 +598,8 @@ code { font-family: var(--superego-mono); font-size: .92em; }
 .auth-notice__dismiss { flex: none; width: 20px; height: 20px; min-height: 20px; margin: -2px -4px 0 0; color: var(--superego-muted); box-shadow: none; background: none; }
 .auth-notice__detail { color: var(--superego-muted); margin-top: 2px; }
 .transcript__waiting { display: flex; align-items: center; flex-wrap: wrap; gap: var(--superego-space-2) var(--superego-space-3); color: var(--superego-muted); font-size: var(--superego-text-ui); border-left: 2px dashed currentColor; padding-left: var(--superego-space-3); }
+.transcript__stuck { border-left-color: var(--superego-status-error); }
+.transcript__stuck-actions { display: flex; flex-wrap: wrap; gap: var(--superego-space-2); }
 
 /* Hung from near the top where there's room; on a phone it fills the window as any dialog does (below). */
 @media (min-width: 761px) {

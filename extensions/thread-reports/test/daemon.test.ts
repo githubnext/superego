@@ -1,6 +1,6 @@
 // Report-back: a child's run ending (or its question) told to its parent, batched, and not when the parent read it.
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import type { ThreadInfo } from '@superego/protocol'
+import { stuck, type ThreadInfo } from '@superego/protocol'
 import { defineDaemonExtension, type DaemonApi } from '@superego/daemon'
 import { callTool, say, testDaemon, type TestDaemon } from '@superego/sdk/testing'
 import threadTools from '@superego/thread-tools/daemon'
@@ -29,7 +29,7 @@ function host() {
   const reads = readLog()
   const busy = new Set<string>()
   const h: ReportsHost = {
-    busy: (t) => busy.has(t.id) || t.status.state === 'working',
+    busy: (t) => busy.has(t.id) || t.status.state === 'working' || stuck(t),
     info: async (id) => threads.find((t) => t.id === id),
     answer: async (id) => answers[id],
     send: async (id, text) => { sent.push([id, text]) },
@@ -190,6 +190,22 @@ it('sends a busy parent one report after its run, however long, and none for a c
   reports.idle('1')
   await vi.advanceTimersByTimeAsync(0)
   expect(sent).toEqual([])
+})
+
+it('holds the reports of a parent stuck on a request too large, and sends them to the thread that continues it', async () => {
+  const { h, sent, find, threads } = host()
+  const reports = reporter(h, { quietMs: 10, maxMs: 10 })
+  Object.assign(find('1'), { status: { state: 'error', msg: '413 Request Entity Too Large' }, failure: { kind: 'too_large', detail: '413 Request Entity Too Large', times: 1 } })
+  await reports.report(find('2'))
+  await vi.advanceTimersByTimeAsync(60_000)
+  expect(sent).toEqual([])
+  // Continued in a fresh thread: once its first run ends, what waited is its.
+  threads.push(thread('5', 'Lead (continued)', { continues: '1' }))
+  Object.assign(find('1'), { continuedIn: '5' })
+  reports.moved('1', '5')
+  reports.idle('5')
+  await vi.advanceTimersByTimeAsync(0)
+  expect(sent).toEqual([['5', 'From [Dates](thread:2): finished.\n\nDates are UTC now.\nAll tests pass.']])
 })
 
 it("sends an idle parent's reports as soon as they're batched", async () => {

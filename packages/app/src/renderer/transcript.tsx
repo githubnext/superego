@@ -2,13 +2,13 @@
 // into runs and tasks, each tool call drawn as its tool's row describes it or as an extension draws it.
 import { createContext, memo, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { ConversationView, EntryRecord, LiveState } from '@earendil-works/pi-durable'
-import { NOTE_ENTRY, waitingForSignIn, type ThreadInfo } from '@superego/protocol'
+import { NOTE_ENTRY, stuck, waitingForSignIn, type ThreadInfo } from '@superego/protocol'
 import { ArrowCounterClockwiseIcon, Button, CheckIcon, CornersInIcon, FileIcon, type Icon as PhosphorIcon, MinusIcon, PauseIcon, StatusGlyph, XIcon } from '@superego/ui'
 import type { MachineEntry } from '../shared/bridge.ts'
 import type { ToolRowCall, WorkBlock as Block, WorkPart, WorkStatus } from './extension-api.ts'
 import { useRegistry } from './registry.tsx'
 import { divideWork, entryOwner, entryView, sentWithIn, toolOwner, toolRow, toolView, unfoldedTool } from './lookups.ts'
-import { useRejections, useShell } from './state.tsx'
+import { useRejections, useSelection, useShell } from './state.tsx'
 import { Markdown } from './Markdown.tsx'
 import { Chevron, DescribedCall, describeRun, mainKind, RowIcon, statOf } from './tool-rows.tsx'
 import { DiffStat } from './diff.tsx'
@@ -132,14 +132,54 @@ export function Transcript({ machine, thread, view, live }: { machine: MachineEn
         }
       })}
       {waitingForSignIn(here.thread.status) ? <WaitingForSignIn /> : live?.runFailure && !live.run && live.runFailure.reason !== 'aborted' && (
-        <div className="transcript__error">Run failed: {live.runFailure.reason}{live.runFailure.detail ? ` — ${live.runFailure.detail}` : ''}</div>
+        <div className="transcript__error">Run failed: {here.thread.failure?.kind === 'too_large' ? 'request too large' : live.runFailure.reason}{live.runFailure.detail ? ` — ${live.runFailure.detail}` : ''}</div>
       )}
+      {!live?.run && stuck(here.thread) && !here.thread.continuedIn && !here.thread.archived && <Stuck />}
       {/* Compacting (asked for, or as the context filled), else the last compacting that failed since one last worked. */}
       {live?.compactions?.length
         ? <Compacting retry={live.compactions.find((c) => c.retry)?.retry?.error} />
         : live?.compactionFailure && !live.run && <div className="transcript__error">Compacting failed: {live.compactionFailure.error}</div>}
     </div>
     </Here.Provider>
+  )
+}
+
+/**
+ * Under a failure more of the same won't fix (its request too large for its provider, or the same failure again): the
+ * ways on, each an action (`thread.retry`, `thread.handoff`).
+ */
+function Stuck() {
+  const { machine, thread } = useContext(Here)
+  const registry = useRegistry()
+  const { select } = useSelection()
+  const [doing, setDoing] = useState<string>()
+  const [error, setError] = useState<string>()
+  const failure = thread.failure!
+  const run = async (what: string, act: () => Promise<unknown>) => {
+    setDoing(what)
+    setError(undefined)
+    try { await act() } catch (e) {
+      console.error(`${what} failed`, e)
+      setError((e as Error).message)
+    } finally { setDoing(undefined) }
+  }
+  const dispatch = (id: string, params: Record<string, unknown> = {}) => registry.router.dispatch(id, { thread: thread.id, ...params }, { machine: machine.id, source: 'transcript' })
+  return (
+    <div className="transcript__waiting transcript__stuck">
+      <span>{failure.kind === 'too_large'
+        ? `This thread's request is too large for ${thread.provider ?? 'its provider'}: sending more fails the same way.`
+        : `Its last ${failure.times} runs failed the same way.`}</span>
+      <span className="transcript__stuck-actions">
+        <Button disabled={Boolean(doing)} onClick={() => void run('Retrying without old images', () => dispatch('thread.retry', { lean: true }))}>Retry without old images</Button>
+        <Button disabled={Boolean(doing)} onClick={() => void run('Compacting', () => dispatch('thread.retry', { compact: true }))}>Compact and retry</Button>
+        <Button disabled={Boolean(doing)} onClick={() => void run('Starting a fresh thread', async () => {
+          const { thread: fresh } = await dispatch('thread.handoff') as { thread: string }
+          select({ machine: machine.id, thread: fresh })
+        })}>Start fresh thread</Button>
+      </span>
+      {doing && <span>{doing}…</span>}
+      {error && <span className="transcript__error">{error}</span>}
+    </div>
   )
 }
 

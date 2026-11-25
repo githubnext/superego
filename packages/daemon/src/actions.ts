@@ -61,6 +61,18 @@ export function registerCoreActions(host: Host, { harness, machine, threads, fil
     run: ({ thread: id, instructions }) => threads.compact(id, instructions),
   }))
   router.register(defineAction({
+    id: 'thread.retry', title: 'Retry the failed turn', expose: ['ui', 'cli', 'outside'], ...thread,
+    description: 'Run a thread\'s failed turn again. For one stuck on a request too large for its provider (`failure.kind`: `too_large`), or failing the same way again: `lean` sends it without its older images and with its old tool output cut short, from now on; `compact` summarizes what came before its newest stretch first.',
+    params: obj({ thread: str(), lean: opt(bool()), compact: opt(bool()) }),
+    run: ({ thread: id, lean, compact }) => threads.retry(id, { ...(lean !== undefined ? { lean } : {}), ...(compact !== undefined ? { compact } : {}) }),
+  }))
+  router.register(defineAction({
+    id: 'thread.handoff', title: 'Start a fresh thread from this one', expose: ['ui', 'cli', 'outside'], ...thread,
+    description: 'Continue a thread that can\'t go on (its request too large for its provider, say) in a fresh one: same folder, profile, model and parent, starting from a handoff its model writes (goal, what\'s done, decisions, what\'s open). The old thread links to it; its children move to it. Answers with the new `thread`.',
+    params: obj({ thread: str() }),
+    run: ({ thread: id }) => threads.handoff(id),
+  }))
+  router.register(defineAction({
     id: 'thread.stop', title: 'Stop the agent', expose: ['ui', 'cli', 'outside'], ...thread,
     description: 'Stop a thread\'s agent mid-turn, and the messages waiting their turn. The thread stays, and takes messages again. `returned`: the user\'s own waiting messages (none of another thread\'s or an extension\'s, which are withdrawn), in order, to write again: each its `content` and `attachments`.',
     params: obj({ thread: str() }),

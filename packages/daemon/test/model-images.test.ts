@@ -4,9 +4,10 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
 import { fauxAssistantMessage, fauxProvider, normalizeContext, type Api, type AssistantMessage, type Context, type Message, type Model, type SimpleStreamOptions } from '@earendil-works/pi-ai'
 import { createNodePhotonImages } from '@earendil-works/pi-durable/images/node'
-import { omittedNote } from '../src/core-extensions.ts'
+import { omittedNote, shrunkNote } from '../src/core-extensions.ts'
 import { sniff } from '../src/image-kind.ts'
-import { createModelImages, IMAGE_OMITTED, refusalOf, type ModelImages, type OmittedImage } from '../src/model-images.ts'
+import { createModelImages, IMAGE_OMITTED, refusalOf, REQUEST_SHRUNK, type ModelImages, type OmittedImage, type ShrunkRequest } from '../src/model-images.ts'
+import { leaner } from '../src/request-budget.ts'
 import { png } from './image-fixtures.ts'
 
 let dir: string
@@ -165,4 +166,70 @@ it('sends the newest images when there are more than one request may carry', asy
   expect(contentOf(seen[0]![0]!)[0]!.text).toMatch(/^\[image omitted: more images than one request to the model may carry/)
   expect(contentOf(seen[0]![1]!)).toEqual([image(b)])
   expect(contentOf(seen[0]![2]!)).toEqual([image(c)])
+})
+
+/** A request to `model` with a budget of `bytes`, as its catalog would give it. */
+const within = (model: Model<Api>, bytes: number) => ({ ...model, input: ['text', 'image'], inputLimits: { maxRequestBytes: bytes } }) as Model<Api>
+/** A screenshot's weight: a small PNG, `kb` KB long (padded past its end), sent as it is. */
+const heavy = (kb: number) => b64(Buffer.concat([png(40, 30), Buffer.alloc(kb * 1024, kb % 251)]))
+
+it('replaces the oldest images with a line naming them when a request is over its byte budget, keeping the newest', async () => {
+  const images = await modelImages()
+  const { provider, model, seen } = anthropicLike()
+  const [first, second, third] = [heavy(300), heavy(301), heavy(302)]
+  const call = (id: string, path: string): Message => ({ role: 'assistant', content: [{ type: 'toolCall', id, name: 'read', arguments: { path } }], api: model.api, provider: model.provider, model: model.id, usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } }, stopReason: 'toolUse', timestamp: 0 })
+  const result = (id: string, data: string): Message => ({ role: 'toolResult', toolCallId: id, toolName: 'read', content: [image(data)], isError: false, timestamp: 0 })
+  const history = [user(text('look')), call('a', '/shots/first.png'), result('a', first), call('b', '/shots/second.png'), result('b', second), call('c', '/shots/third.png'), result('c', third)]
+  // Room for two of them.
+  await ask(images.wrap(provider), within(model, 1000 * 1024), history)
+  const sent = seen[0]!
+  expect(contentOf(sent[2]!)).toEqual([text(expect.stringMatching(/^\[image removed: first\.png \(\d+ KB, \d+×\d+\), to keep the request small enough for the model\]$/) as unknown as string)])
+  expect(contentOf(sent[4]!)).toEqual([image(second)])
+  expect(contentOf(sent[6]!)).toEqual([image(third)])
+  // The history keeps them all.
+  expect(contentOf(history[2]!)).toEqual([image(first)])
+})
+
+it('cuts old tool output short when the words alone are over the budget, the newest left whole', async () => {
+  const images = await modelImages()
+  const { provider, model, seen } = anthropicLike()
+  const long = 'x'.repeat(60_000)
+  const result = (id: string): Message => ({ role: 'toolResult', toolCallId: id, toolName: 'bash', content: [text(long)], isError: false, timestamp: 0 })
+  const history = [user(text('go')), result('a'), result('b'), user(text('1')), user(text('2')), user(text('3')), result('c')]
+  await ask(images.wrap(provider), within(model, 100 * 1024), history)
+  const sent = seen[0]!.map((m) => contentOf(m)[0]!.text!)
+  expect(sent[1]!.length).toBeLessThan(3000)
+  expect(sent[1]).toContain('characters of this tool output left out of the request')
+  expect(sent[6]).toBe(long)
+})
+
+it('asks again within a lower budget when the provider refuses a request as too large, and keeps to it after', async () => {
+  const images = await modelImages()
+  // Like GitHub Copilot: anything over 700 KB is refused, whatever the catalog says.
+  const { provider, model, seen } = anthropicLike((payload) => JSON.stringify(payload).length > 700 * 1024 ? '413 Request Entity Too Large\n' : undefined)
+  const shots = [heavy(300), heavy(301), heavy(302)]
+  const history = shots.map((shot, i) => user(text(`shot ${i}`), image(shot)))
+  const { events, answer } = await ask(images.wrap(provider), within(model, 32 * 1024 * 1024), history)
+  expect(answer.stopReason).toBe('stop')
+  expect(events).not.toContain('error')
+  expect(seen).toHaveLength(2)
+  expect(contentOf(seen[1]![0]!)[1]!.text).toMatch(/^\[image removed: an attached image/)
+  const shrunk = (answer.diagnostics ?? []).filter((d) => d.type === REQUEST_SHRUNK).map((d) => d.details as ShrunkRequest)
+  expect(shrunk).toEqual([{ provider: model.provider, bytes: expect.any(Number) as number, limit: expect.any(Number) as number }])
+  expect(shrunkNote(shrunk[0]!)).toMatch(/refused a request of .* as too large/)
+  // Learned, after a restart too: the next request is sent small at once.
+  await images.settled()
+  const again = await modelImages()
+  const next = anthropicLike((payload) => JSON.stringify(payload).length > 700 * 1024 ? '413 Request Entity Too Large\n' : undefined)
+  const { answer: second } = await ask(again.wrap(next.provider), within(next.model, 32 * 1024 * 1024), history)
+  expect(second.stopReason).toBe('stop')
+  expect(next.seen).toHaveLength(1)
+})
+
+it('sends a lean thread only its newest images, naming the others', () => {
+  const history = [user(image('a')), user(image('b')), user(text('and'), image('c'))]
+  const sent = leaner(history)
+  expect(contentOf(sent[0]!)).toEqual([text('[image removed: an attached image]')])
+  expect(contentOf(sent[1]!)).toEqual([image('b')])
+  expect(contentOf(sent[2]!)).toEqual([text('and'), image('c')])
 })

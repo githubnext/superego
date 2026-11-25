@@ -6,7 +6,7 @@ import { stat } from 'node:fs/promises'
 import { hostname } from 'node:os'
 import { basename, dirname } from 'node:path'
 import { InboxDoc, type ConversationId, type ConversationRecord, type ConversationView, type Cursor, type EntryId, type EntryRecord, type Harness, type InboxItem, type LiveState } from '@earendil-works/pi-durable'
-import { deriveStatus, MESSAGE_ENTRY, NOTE_ENTRY, RpcError, type Attachment, type Exposure, type Json, type MessageOrigin, type NewThread, type Pane, type ProviderRejection, type ReturnedMessage, type ThreadInfo } from '@superego/protocol'
+import { deriveStatus, linkTo, MESSAGE_ENTRY, NOTE_ENTRY, RpcError, type Attachment, type Exposure, type Json, type MessageOrigin, type NewThread, type Pane, type ProviderRejection, type ReturnedMessage, type ThreadFailure, type ThreadInfo } from '@superego/protocol'
 import { attachmentsDir, attachmentsIn, contentOf } from './attachments.ts'
 import type { ExtensionHost } from './extension-host.ts'
 import type { ArchiveNote, ArchiveNotes, DaemonApi, MessageBlock, OutgoingMessage, ThreadDraft, ThreadStarting, ThreadStop } from './extension.ts'
@@ -16,6 +16,8 @@ import { titleOf } from './names.ts'
 import type { ProfileHost } from './profile-host.ts'
 import { findProfile, profileThere, relocated, type ProfileRef } from './profiles.ts'
 import { lastRun, recapOf } from './recap.ts'
+import { failureKind } from './request-budget.ts'
+import { handoffMessage, HANDOFF_PROMPT, transcriptOf } from './handoff.ts'
 import { opsWithoutPixels, withoutPixels } from './window-images.ts'
 
 type Usage = { cost?: { total?: number } }
@@ -176,11 +178,21 @@ export function createThreads(host: Host, { harness, extensions, profiles }: { h
     ...(m.meta.archived ? { archived: true } : {}),
     ...(m.meta.hidden ? { hidden: true, ...(m.meta.owner ? { owner: m.meta.owner } : {}) } : {}),
     ...(m.meta.parent ? { parent: m.meta.parent } : {}),
+    ...failureOf(m),
+    ...(m.meta.lean ? { lean: true as const } : {}),
+    ...(m.meta.continues ? { continues: m.meta.continues } : {}), ...(m.meta.continuedIn ? { continuedIn: m.meta.continuedIn } : {}),
     ...(without.size ? { without: [...without].sort() } : {}),
     // A thread of another kind of agent: what it runs on, as its kind says.
     ...extensions.kindInfoOf(id, m.meta, without),
     status: deriveStatus({ live: m.live, lastEntryId: lastAnswer(m), seen: m.meta.seen, ...extensions.blockedOf(id, without, m.meta), ...signInOf(id, m), ...(m.recap ? { recap: m.recap } : {}) }),
   })
+  /** How a thread's last run failed, while it stands so (`ThreadInfo.failure`). */
+  const failureOf = (m: Mounted): { failure?: ThreadFailure } => {
+    const failure = m.live?.run ? undefined : m.live?.runFailure
+    if (!failure || failure.reason === 'aborted') return {}
+    const detail = failure.detail ?? failure.reason
+    return { failure: { kind: failureKind(detail), detail, times: m.failed?.taskId === failure.taskId ? m.failed.times : 1 } }
+  }
   /** What a thread's last run did, in a line: its extensions' recap of it (those it doesn't go without), else its answer's first sentence. */
   async function runRecap(id: string, m: Mounted) {
     try {
@@ -202,6 +214,11 @@ export function createThreads(host: Host, { harness, extensions, profiles }: { h
     const failure = m.live?.run ? undefined : m.live?.runFailure
     const fresh = failure && m.failure !== undefined && failure.taskId !== m.failure
     m.failure = failure?.taskId ?? null
+    // Counted: the same failure again and again is one more of the same won't fix.
+    if (failure && failure.reason !== 'aborted') {
+      const detail = failure.detail ?? failure.reason
+      if (failure.taskId !== m.failed?.taskId) m.failed = { taskId: failure.taskId, detail, times: m.failed?.detail === detail ? m.failed.times + 1 : 1 }
+    } else if (!m.live?.run) m.failed = undefined
     if (fresh && failure.reason === 'model_error' && m.provider && agent.rejected(m.provider, id, failure.taskId, failure.detail, m.ranWith)) return
     if (!agent.rejections.waiting(id, failure?.taskId)) agent.rejections.release(id)
   }
@@ -500,6 +517,76 @@ export function createThreads(host: Host, { harness, extensions, profiles }: { h
       throw new RpcError('invalid', 'Nothing to compact yet: the conversation is still short enough to keep whole')
     }
     return { compacted: true }
+  }
+
+  /**
+   * Run a thread's failed turn again (`thread.retry`), as one cut off by a restart goes on: `lean`, sent lean from now on
+   * (only its newest images, its old tool output cut short: `ThreadMeta.lean`); `compact`, what came before its newest
+   * stretch summarized first. For a thread stuck on a request too large for its provider, or failing the same way again.
+   */
+  async function retry(id: string, { lean = false, compact: compacting = false }: { lean?: boolean; compact?: boolean } = {}) {
+    const m = await get(id)
+    await ready(id, m, 'retry it')
+    if (m.live?.run) throw new RpcError('busy', 'It\'s working already')
+    if (m.meta.agent && lean) throw new RpcError('invalid', `${extensions.kindTitle(m.meta.agent)} threads send their own requests`)
+    if (lean && !m.meta.lean) await updateMeta(id, (meta) => { meta.lean = true })
+    if (compacting) await compact(id)
+    await m.conversation.submit({ type: 'continue' }, context)
+    return { retried: true }
+  }
+
+  /**
+   * Start a fresh thread from one that can't go on (`thread.handoff`): in the same folder, with its profile, model and
+   * parent, its first message a handoff its model writes from the old one's transcript (handoff.ts). The old one links
+   * to it, and it takes over: the old one's children (they report to it now) and its extensions' state (its worktree).
+   */
+  async function handoff(id: string) {
+    const m = await get(id)
+    if (m.meta.archived) throw new RpcError('archived', 'This thread is archived', { hint: 'Unarchive it to start a fresh thread from it.' })
+    if (m.meta.hidden) throw new RpcError('invalid', 'An extension\'s own thread can\'t be continued in another')
+    if (m.meta.agent) throw new RpcError('invalid', `${extensions.kindTitle(m.meta.agent)} threads can't be continued from here`)
+    if (m.live?.run) throw new RpcError('busy', 'It\'s working: stop it first')
+    if (m.meta.continuedIn) throw new RpcError('invalid', `It's continued in thread ${m.meta.continuedIn} already`)
+    const old = info(id, m)
+    const transcript = transcriptOf((await m.conversation.context(context)).messages)
+    const written = await writeHandoff(m, transcript)
+    const fresh = await startThread({
+      cwd: m.meta.cwd, title: `${old.title.replace(/ \(continued\)$/, '')} (continued)`, ...(m.meta.profile ? { profile: m.meta.profile.name } : {}),
+      ...(m.meta.model ? { model: m.meta.model } : {}), ...(m.meta.thinking ? { thinking: m.meta.thinking } : {}), ...(m.meta.parent ? { parent: m.meta.parent } : {}),
+      // Where the old one worked: not a worktree of its own.
+      options: { worktrees: false },
+    })
+    const ext = clone(m.meta.ext)
+    await updateMeta(fresh.id, (meta) => {
+      meta.continues = id
+      if (ext) meta.ext = { ...ext, ...meta.ext }
+    })
+    await updateMeta(id, (meta) => {
+      meta.continuedIn = fresh.id
+      delete meta.ext
+    })
+    for (const [child, c] of mounted) if (c.meta.parent === id) await updateMeta(child, (meta) => { meta.parent = fresh.id })
+    await note(id, `Continued in ${linkTo(fresh)}.`)
+    await submit(fresh.id, handoffMessage(linkTo(old), written), randomUUID(), undefined, [], { from: id })
+    return { thread: fresh.id }
+  }
+  /** The handoff a thread's model writes from its transcript; why it couldn't, when it couldn't. */
+  async function writeHandoff(m: Mounted, transcript: string): Promise<{ summary: string } | { failed: string; transcript: string }> {
+    const model = m.provider && m.model ? agent.models.getModel(m.provider, m.model) : undefined
+    if (!model) return { failed: 'it has no model here', transcript }
+    try {
+      const reply = await agent.models.completeSimple(model, {
+        systemPrompt: HANDOFF_PROMPT, messages: [{ role: 'user', content: `<transcript>\n${transcript}\n</transcript>`, timestamp: Date.now() }],
+      }, { maxTokens: 4000, signal: AbortSignal.timeout(180_000) })
+      if (reply.stopReason === 'error' || reply.stopReason === 'aborted') throw new Error(reply.errorMessage ?? reply.stopReason)
+      const summary = reply.content.map((block) => block.type === 'text' ? block.text : '').join('').trim()
+      if (!summary) throw new Error('its model wrote nothing')
+      return { summary }
+    } catch (error) {
+      const failed = error instanceof Error ? error.message : String(error)
+      console.error(`The handoff of thread ${m.conversation.id} couldn't be written:`, error)
+      return { failed, transcript }
+    }
   }
 
   /** The runner of a thread's kind of agent (`ThreadMeta.agent`): none for Superego's own; refused when its kind isn't here. */
@@ -973,7 +1060,7 @@ export function createThreads(host: Host, { harness, extensions, profiles }: { h
   }
 
   return {
-    list, get, updateMeta, editState, heedStatus, rebound, letGoOf, note, setProfile, tellPaneClosed, submit, compact, stop, startThread, archive, unarchive, openPane, history, lastAnswer: answerOf, read,
+    list, get, updateMeta, editState, heedStatus, rebound, letGoOf, note, setProfile, tellPaneClosed, submit, compact, retry, handoff, stop, startThread, archive, unarchive, openPane, history, lastAnswer: answerOf, read,
     watchTranscript, imageBlock, apiFor, retrySignIn, rejectedNow, learnConversations, threadOf,
   }
 }

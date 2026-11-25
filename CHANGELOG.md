@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- A thread no longer gets stuck on "413 Request Entity Too Large" (GitHub Copilot's limit is far below other
+  providers'): requests are kept small enough for the provider, leaving out older images (named in their place) and
+  then cutting old tool output short. A provider that refuses one anyway is asked again smaller, and its requests stay
+  that small from then on.
+- A thread whose request is too large for its provider, or that fails the same way again, offers ways on under the
+  failure: Retry without old images, Compact and retry, or Start fresh thread, which continues it in a new thread from
+  a handoff its model writes, its child threads moved there. Also `thread.retry` and `thread.handoff` from the command
+  line.
+- Reports from child threads wait while their parent is stuck that way, and reach it once it can take messages again,
+  or the thread that continues it.
 - New file and New folder in a folder pane: from its header, a folder's right-click menu or `⌘⌥N`. Name it in
   place (`docs/new.md` makes `docs` too); a new file opens in the editor, ready to type.
 - A file opened in an editor pane gets the focus in its text once it's read, not just the pane.

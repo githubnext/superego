@@ -20,10 +20,14 @@
 // (`threads.noteRead`), the reports waiting to go (however long the parent's run) and which runs answered the parent
 // are in memory, so after a restart a report that was waiting is lost, a run resumed then may report what the parent
 // had read already, and a reply reads as "finished".
+//
+// A parent that can't take messages (stuck: its request too large for its provider, or failing the same way again)
+// gets none: they'd only fail with it. Its reports wait, as for a run, until it runs again (retried), or go to the
+// thread that continues it (`thread.handoff`), which its children report to from then on.
 // A workflow that must know a child finished asks it (thread_read), not its report.
 import { defineExtension, section } from '@earendil-works/pi-durable'
 import { defineDaemonExtension } from '@superego/daemon'
-import { linkTo, waitingForSignIn, type ThreadInfo } from '@superego/protocol'
+import { linkTo, stuck, waitingForSignIn, type ThreadInfo } from '@superego/protocol'
 import { about as reportsAbout } from './shared.ts'
 
 /** What reporting needs of the daemon. */
@@ -32,7 +36,7 @@ export type ReportsHost = {
   answer(id: string): Promise<string | undefined>
   /** Send it a message (after its run, should one have started since `busy` said it hadn't). */
   send(id: string, text: string): Promise<void>
-  /** Whether it's in a run: its reports wait for `idle`. */
+  /** Whether it's in a run, or can't take messages (`stuck`): its reports wait for `idle`. */
   busy(thread: ThreadInfo): boolean
   /** Whether its parent read it as it stands (or later): `threads.parentRead`. */
   read(thread: ThreadInfo): boolean
@@ -96,6 +100,8 @@ export function reporter(host: ReportsHost, { quietMs, maxMs }: Batching = BATCH
     batch.flushing = true
     const to = await host.info(parent)
     batch.flushing = false
+    // Continued in another: they go to that one.
+    if (to?.continuedIn) { moved(parent, to.continuedIn); flushing(to.continuedIn); return }
     if (!hears(to)) { batches.delete(parent); return }
     // In a run: it's decided what goes when the run ends, not now.
     if (host.busy(to)) {
@@ -112,6 +118,17 @@ export function reporter(host: ReportsHost, { quietMs, maxMs }: Batching = BATCH
     if (texts.length) await host.send(parent, texts.join('\n\n---\n\n'))
   }
   const flushing = (parent: string) => { flush(parent).catch((error) => console.error(`thread-reports: to ${parent}:`, error)) }
+  /** What waits for `from` waits for `to` instead, with what waits for it already. */
+  function moved(from: string, to: string) {
+    const batch = batches.get(from)
+    if (!batch || from === to) return
+    batches.delete(from)
+    clearTimeout(batch.timer)
+    const into = batches.get(to)
+    if (!into) { batches.set(to, { reports: batch.reports, first: batch.first, due: true }); return }
+    for (const [id, report] of batch.reports) into.reports.set(id, report)
+    into.due = true
+  }
 
   return {
     async report(thread: ThreadInfo, how: How = {}) {
@@ -138,6 +155,8 @@ export function reporter(host: ReportsHost, { quietMs, maxMs }: Batching = BATCH
       if (batch?.flushing) batch.ended = true
       else if (batch?.due) flushing(parent)
     },
+    /** `from` is continued in `to`: what waited for it goes to `to` once its run ends. */
+    moved,
     stop() {
       for (const batch of batches.values()) clearTimeout(batch.timer)
       batches.clear()
@@ -154,7 +173,7 @@ export const threadReports = (batching: Batching = BATCHING) => defineDaemonExte
     const running = new Set<string>()
     const reports = reporter({
       info, answer: (id) => s.threads.lastAnswer(id), read: (thread) => s.threads.parentRead(thread),
-      busy: (thread) => running.has(thread.id) || thread.status.state === 'working',
+      busy: (thread) => running.has(thread.id) || thread.status.state === 'working' || stuck(thread),
       send: (id, text) => s.threads.send(id, text, { whenBusy: 'followUp' }),
     }, batching)
     // The children whose run answers their parent's thread_send, so their report says "replied".
@@ -180,7 +199,8 @@ export const threadReports = (batching: Batching = BATCHING) => defineDaemonExte
     const fresh = new Set<string>()
     s.beforeSend(async ({ thread, by, from }) => {
       const first = fresh.delete(thread.id)
-      if (!thread.parent) return
+      // Its handoff, from the thread it continues: it works for whom that one did.
+      if (!thread.parent || (thread.continues && from === thread.continues)) return
       if (by === undefined) await working.set(thread.id, false)
       // From its parent: the prompt it was started with, or the parent's thread_send; not another thread's.
       else if (from === thread.parent) {
@@ -193,7 +213,12 @@ export const threadReports = (batching: Batching = BATCHING) => defineDaemonExte
     }
     s.thread({
       started: (thread) => { if (thread.parent) fresh.add(thread.id) },
-      turnStart: async (thread) => { running.add(thread.id); await check(thread) },
+      turnStart: async (thread) => {
+        running.add(thread.id)
+        // What waited for the thread it continues is its now.
+        if (thread.continues) reports.moved(thread.continues, thread.id)
+        await check(thread)
+      },
       turnEnd: async (thread) => {
         running.delete(thread.id)
         // Its own children's reports waited for this.

@@ -5,7 +5,8 @@ import { createCodingTools, type ImageProcessor } from '@earendil-works/pi-durab
 import { obj, opt, str, type Json, type Pane } from '@superego/protocol'
 import { agentsInstructions } from './agents-md.ts'
 import type { DaemonExtension } from './extension.ts'
-import { describe, IMAGE_OMITTED, type OmittedImage } from './model-images.ts'
+import { describe, IMAGE_OMITTED, mb, REQUEST_SHRUNK, type OmittedImage, type ShrunkRequest } from './model-images.ts'
+import { leaner } from './request-budget.ts'
 
 /** How the window shows an agent's messages (Markdown.tsx), so it writes for that. */
 const MARKDOWN_PROMPT = [
@@ -20,7 +21,12 @@ export function omittedNote(omitted: readonly OmittedImage[]) {
   return [`Left ${omitted.length} images out of what the model is sent:`, ...omitted.map((image) => `- ${describe(image)}: ${image.reason}`), asked].filter(Boolean).join('\n')
 }
 
-export function coreExtensions({ agentsDir, where, panesOf, openPane, images, note }: {
+/** What a thread's transcript says when its provider refused a request as too large, and the budget it learned. */
+export function shrunkNote({ provider, bytes, limit }: ShrunkRequest) {
+  return `${provider} refused a request of ${mb(bytes)} as too large. Asked it again with older images and tool output left out: requests to it are kept within ${mb(limit)} from now on.`
+}
+
+export function coreExtensions({ agentsDir, where, panesOf, openPane, images, note, lean }: {
   /** The folder agents share: standing instructions in its AGENTS.md (see agents-md.ts). */
   agentsDir: string
   /** Where the agent runs, when the user's window is on another computer (see where.ts); nothing on one computer. */
@@ -32,6 +38,8 @@ export function coreExtensions({ agentsDir, where, panesOf, openPane, images, no
   images: ImageProcessor
   /** Say a line in a thread's transcript, for the user. */
   note(thread: string, text: string): Promise<void>
+  /** Whether a thread is sent lean (`ThreadMeta.lean`). */
+  lean(thread: string): boolean
 }): DaemonExtension[] {
   // Panes: the agent opens them beside its thread (a file, another thread, an extension's or a profile's own), from the
   // kinds its instructions list.
@@ -57,15 +65,22 @@ export function coreExtensions({ agentsDir, where, panesOf, openPane, images, no
   return [
     { name: 'coding-tools', version: '1.0.0', api: '^5', title: 'Coding tools', description: 'Read, write and edit files, and run commands.', setup: (s) => s.agent(createCodingTools({ images })) },
     {
-      // An image the model was refused is left out of what it's sent from then on: the user is told, in the thread.
+      // An image the model was refused is left out of what it's sent from then on, and a request its provider refused as
+      // too large is asked again smaller: the user is told, in the thread. A lean thread is sent only its newest images.
       name: 'model-images', version: '1.0.0', api: '^5', title: 'Images for the model', description: 'Say in the thread when an image is left out of what the model is sent.', required: true,
       setup: (s) => s.agent(defineExtension({
         name: 'model-images',
         hooks: [hook(GenerationTask, {
+          beforeRequest({ messages }, api) {
+            const thread = s.threads.of(Number(api.conversationId))
+            return thread && lean(thread) ? { messages: leaner(messages) } : undefined
+          },
           async afterResponse(message, api) {
             const omitted = (message.diagnostics ?? []).filter((d) => d.type === IMAGE_OMITTED).map((d) => d.details as OmittedImage)
-            const thread = omitted.length ? s.threads.of(Number(api.conversationId)) : undefined
-            if (thread) await note(thread, omittedNote(omitted))
+            const shrunk = (message.diagnostics ?? []).filter((d) => d.type === REQUEST_SHRUNK).map((d) => d.details as ShrunkRequest)
+            const thread = omitted.length || shrunk.length ? s.threads.of(Number(api.conversationId)) : undefined
+            if (thread && omitted.length) await note(thread, omittedNote(omitted))
+            if (thread) for (const one of shrunk) await note(thread, shrunkNote(one))
           },
         })],
       })),

@@ -5,7 +5,7 @@
  * a DOM of its own.
  */
 export { testDaemon, type TestDaemon, type TestDaemonOptions, type Watched } from './testing/daemon.ts'
-export { callTool, callTools, say, type Turn } from './testing/model.ts'
+export { callTool, callTools, fail, say, type Turn } from './testing/model.ts'
 export { isRunning } from './testing/process.ts'
 export {
   daemonMachine, fakeMachine, mountUi, testThread, type FakeMachineOptions, type MountOptions, type Rendered, type RenderWhat, type TestMachine, type TestWhere, type TestWindow,

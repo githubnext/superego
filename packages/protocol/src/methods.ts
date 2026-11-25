@@ -146,9 +146,27 @@ export type ThreadInfo = {
    * (`superego.quiet`).
    */
   quiet?: true
+  /**
+   * How its last run failed, while it stands so (looked at or not; not while it runs again): `too_large` when the request
+   * was too large for its provider, which more of the same can't fix, else `error`; `times`, how many runs in a row
+   * failed the same way (counted since the daemon started). Either, once stuck (`stuck`), is recovered from with
+   * `thread.retry` (lean, or compacted first) or `thread.handoff`. Absent: its last run didn't fail.
+   */
+  failure?: ThreadFailure
+  /** Sent lean (`thread.retry` with `lean`): only its newest images, and its old tool output cut short. */
+  lean?: true
+  /** The thread it continues (`thread.handoff`), and the one that continues it. */
+  continues?: ThreadId
+  continuedIn?: ThreadId
   /** What it's doing: `idle`, `working`, `done`, `blocked` (on the user) or `error`, with a line saying more. */
   status: Status
 }
+
+/** How a thread's last run failed (`ThreadInfo.failure`). */
+export type ThreadFailure = { kind: 'too_large' | 'error'; detail?: string; times: number }
+
+/** Whether a thread's failure is one more of the same won't fix: its request too large, or the same failure again. */
+export const stuck = (thread: Pick<ThreadInfo, 'failure'>) => Boolean(thread.failure && (thread.failure.kind === 'too_large' || thread.failure.times >= 2))
 
 /** The models a machine can run, and the default a new thread gets there. */
 /**

@@ -4,14 +4,21 @@
 //   model: [callTool('enqueue', { what: 'lint' }), say('Queued.')]
 
 /** One answer of the model's, as the replay provider reads it. */
-export type Turn = { at: number; provider: string; model: string; message: { role: 'assistant'; content: unknown[]; stopReason: 'stop' | 'toolUse' } }
+export type Turn = { at: number; provider: string; model: string; message: { role: 'assistant'; content: unknown[]; stopReason: 'stop' | 'toolUse' | 'error'; errorMessage?: string } }
 
-const turn = (content: unknown[], stopReason: 'stop' | 'toolUse'): Turn => ({ at: 0, provider: 'test', model: 'test', message: { role: 'assistant', content, stopReason } })
+const turn = (content: unknown[], stopReason: 'stop' | 'toolUse' | 'error'): Turn => ({ at: 0, provider: 'test', model: 'test', message: { role: 'assistant', content, stopReason } })
 
 let calls = 0
 
 /** A turn that answers with `text`, ending the run. */
 export const say = (text: string): Turn => turn([{ type: 'text', text }], 'stop')
+
+/** A turn the provider refuses, saying `errorMessage` ("413 Request Entity Too Large"): the run fails with it. */
+export const fail = (errorMessage: string): Turn => {
+  const failed = turn([], 'error')
+  failed.message.errorMessage = errorMessage
+  return failed
+}
 
 /** A turn that calls a tool with `args` (`id`: the call's, else one made up); several in one turn: `callTools`. */
 export const callTool = (name: string, args: Record<string, unknown> = {}, id = `call-${++calls}`): Turn =>

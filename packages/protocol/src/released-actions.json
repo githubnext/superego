@@ -723,5 +723,35 @@
       "thread"
     ],
     "additionalProperties": false
+  },
+  "thread.retry": {
+    "type": "object",
+    "properties": {
+      "thread": {
+        "type": "string"
+      },
+      "lean": {
+        "type": "boolean"
+      },
+      "compact": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "thread"
+    ],
+    "additionalProperties": false
+  },
+  "thread.handoff": {
+    "type": "object",
+    "properties": {
+      "thread": {
+        "type": "string"
+      }
+    },
+    "required": [
+      "thread"
+    ],
+    "additionalProperties": false
   }
 }

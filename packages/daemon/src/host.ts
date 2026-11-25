@@ -59,6 +59,10 @@ export type ThreadMeta = {
   cleared?: number
   /** The thread that started it (by thread_start, or thread.start's `parent`). */
   parent?: string
+  /** Sent lean (request-budget.ts's `leaner`): only its newest images, its old tool output cut short. Chosen once it got stuck. */
+  lean?: boolean
+  /** The thread it continues (`thread.handoff`), and the one that continues it. */
+  continues?: string; continuedIn?: string
 }
 export const ThreadDoc = defineDoc<ThreadMeta>({
   kind: 'superego.session', version: 1, scope: 'conversation', history: 'latest', fork: 'current',
@@ -76,6 +80,8 @@ export type Mounted = {
   model?: string; provider?: string; thinking?: string; cost?: number; activeAt?: number
   /** The task of the last failed run it heard of (null: none), so each failure is looked at once. */
   failure?: number | null
+  /** Its last failure, and how many runs in a row failed the same way (in memory: one after a restart). */
+  failed?: { taskId: number; detail: string; times: number }
   /** The credentials (a hash) its provider had as its run started: a rejection is for those, not any stored since. */
   ranWith?: string
   /** What its last run did, in a line (see recap.ts): its done status says it. */

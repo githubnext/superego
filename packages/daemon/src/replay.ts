@@ -60,7 +60,7 @@ export function replayProvider(path: string, tokensPerSecond = 120) {
     const turn = turns[next]?.message
     if (!turn) return fauxAssistantMessage(`Replay finished: all ${total} recorded turns${turns.some(Boolean) ? ' for this thread' : ''} were used.`)
     turns[next] = undefined
-    return fauxAssistantMessage(withIds(turn.content, context.messages) as Parameters<typeof fauxAssistantMessage>[0], { stopReason: turn.stopReason })
+    return fauxAssistantMessage(withIds(turn.content, context.messages) as Parameters<typeof fauxAssistantMessage>[0], { stopReason: turn.stopReason, ...(turn.errorMessage ? { errorMessage: turn.errorMessage } : {}) })
   }
   faux.setResponses([step])
   return faux

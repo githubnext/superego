@@ -218,7 +218,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   const tailnets = watchTailnets()
   const remote = () => { const { elsewhere, browser } = clients.windows(); return elsewhere.length > 0 || browser }
   daemonLife.add(clients.watch(() => { if (remote()) tailnets() }))
-  const core = coreExtensions({ agentsDir: host.agentsDir, where: () => whereYouRun(clients.windows(), remote() ? tailnets() : []), panesOf: extensions.panesOf, openPane: threads.openPane, images: agent.images.processor, note: threads.note })
+  const core = coreExtensions({ agentsDir: host.agentsDir, where: () => whereYouRun(clients.windows(), remote() ? tailnets() : []), panesOf: extensions.panesOf, openPane: threads.openPane, images: agent.images.processor, note: threads.note, lean: (thread) => Boolean(mounted.get(thread)?.meta.lean) })
   for (const extension of core) daemonLife.add(await extensions.setUpBuiltin(extension, 'core'))
   for (const extension of options.extensions ?? []) daemonLife.add(await extensions.setUpBuiltin(extension, 'bundled'))
   extensions.registerSwitches()
