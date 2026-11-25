@@ -128,6 +128,7 @@ only to its own threads.
 | `secrets.get(key)`, `secrets.onChange(key, fn)` | (API ^5.8) one of its own `secret` settings, or undefined while unset; hear it set, replaced or cleared. See [Secrets](#secrets) |
 | `dir` | (API ^5.8) its folder, `<dataDir>/extensions/<name>`, made 0700 when first read: JSON files, a `node:sqlite` database, a cache. Kept through teardown, being switched off and its profile going (`superego extensions` lists orphaned ones). Ego never reads its files, so the extension's own credentials (a refresh token) may go there |
 | `dataDir`, `agentsDir` | the data folder (`~/.superego`); the agents' folder (`~/.agents`, or `SUPEREGO_AGENTS`): `skills/`, `AGENTS.md` |
+| `loginEnv()` | (API ^5.11) the user's login shell's environment (`zsh -ilc`: their `~/.zshrc`'s keys, the PATH with mise's, Homebrew's and npm's programs), which a daemon started from the Dock lacks: `{ env }`, or `{ error }` when the shell didn't answer. Read once by the daemon; a failed read is tried again by the next to ask |
 
 ### Machines, sign-in and the rest
 

@@ -29,6 +29,7 @@ import { createWindowImages } from './window-images.ts'
 import { serveClient } from './handlers.ts'
 import { context, type DaemonContext, type Host } from './host.ts'
 import { createProfileHost } from './profile-host.ts'
+import { loginEnvReader, type LoginEnv } from './login-env.ts'
 import { appEnv } from './paths.ts'
 import { Allowances, provideSdk } from './profiles.ts'
 import { ProfileSources } from './profile-sources.ts'
@@ -82,8 +83,11 @@ export type DaemonOptions = {
    * builds it from @superego/client (the app's daemon: `machineHub`); without it, this daemon reaches only itself.
    */
   reach?: (self: MachineInfo) => MachineReach
-  /** The user's login shell's environment, for keys the daemon's own lacks (login-env.ts); unset, its own only. */
-  loginEnv?: () => Promise<Record<string, string>>
+  /**
+   * Read the user's login shell's environment (login-env.ts): for keys the daemon's own lacks, and extensions'
+   * `loginEnv()`. Read once, when first asked. Unset, there's none: the daemon's own environment only.
+   */
+  loginEnv?: () => Promise<LoginEnv>
   /** The local model servers first-run setup looks for (Ollama's and LM Studio's usual addresses unset). */
   localServers?: LocalServer[]
 }
@@ -124,8 +128,9 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
   const secrets = new FileSecretStore({ app: options.app, dataDir: options.dataDir, where: options.secrets ?? (appEnv(options.app)('SECRETS') === 'file' ? 'file' : 'system') })
   const settings = new SettingsRegistry(options.settingsStore ?? new FileSettingsStore(join(options.dataDir, 'settings.json')), secrets)
   const flows = createAuthFlows()
+  const loginEnv = loginEnvReader(options.loginEnv ?? (async () => ({ env: {} })))
   const agent = await createAgentSettings(settings, options.dataDir, options.app, flows, {
-    ...(options.loginEnv ? { loginEnv: options.loginEnv } : {}), ...(options.localServers ? { localServers: options.localServers } : {}),
+    loginEnv, ...(options.localServers ? { localServers: options.localServers } : {}),
   })
   // Profiles and their extensions import from 'superego'; this is what they get.
   provideSdk({ ...sdk })
@@ -153,6 +158,7 @@ export async function openDaemon(options: DaemonOptions): Promise<Daemon> {
     folderOf: (cwd) => cwd?.trim() ? resolvePath(cwd.trim().replace(/^~(?=\/|$)/, homedir())) : defaultCwd,
     // The folder agents share: standing instructions in AGENTS.md (see agents-md.ts), and the skills extension's skills.
     agentsDir: options.agentsDir ?? join(homedir(), '.agents'),
+    loginEnv,
     profileSources: new ProfileSources(options.dataDir),
     allowances: new Allowances(options.dataDir),
     profileKeys: new Map(),

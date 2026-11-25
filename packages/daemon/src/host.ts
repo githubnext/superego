@@ -9,6 +9,7 @@ import type { SettingsRegistry } from '@superego/settings'
 import type { AgentSettings } from './agent-settings.ts'
 import type { AuthFlows } from './auth-flows.ts'
 import type { DaemonOptions } from './daemon.ts'
+import type { LoginEnv } from './login-env.ts'
 import type { Allowances, ProfileKeys, ProfileRef } from './profiles.ts'
 import type { ProfileSources } from './profile-sources.ts'
 import type { Values } from './values.ts'
@@ -111,6 +112,8 @@ export type Host = {
   folderOf(cwd: string | undefined): string
   /** The folder agents share: skills, `AGENTS.md`. */
   agentsDir: string
+  /** The user's login shell's environment, read once (login-env.ts). */
+  loginEnv: () => Promise<LoginEnv>
   /** Where the user's own profiles are (`~/.superego/profiles`, then the profile sources'), and which projects' may run. */
   profileSources: ProfileSources
   allowances: Allowances

@@ -3,6 +3,10 @@
 ## Unreleased
 
 - Claude Agent: when your login shell doesn't answer in time, it says so instead of that Claude Code isn't installed.
+- Claude Agent finds Claude Code on the PATH Superego already read from your login shell, instead of starting the
+  shell again for every look.
+- Extensions can read your login shell's environment, its keys and PATH, with `superego.loginEnv()` (extension API
+  5.11).
 
 ## 0.4.0
 

@@ -11,6 +11,7 @@ export type {
   ThreadDraft, OutgoingMessage, MessageBlock, SendTransform, StatusContribution, ArchiveNote, ArchiveNotes, AuthFlow, AuthFlowEvent, RunRecord, ToolCallRecord, MachineDraft, MachinePatch,
 } from './extension.ts'
 export type { DaemonContext } from './host.ts'
+export type { LoginEnv } from './login-env.ts'
 export { defineProfile } from './profiles.ts'
 export type { LoadedSpec, ProfileSpec, ProfileRef, ProfileKey } from './profiles.ts'
 export { defineExtension, defineTool, hook, section, wrapSection, wrapTool } from '@earendil-works/pi-durable'

@@ -585,6 +585,7 @@ export function createExtensionHost(host: Host, later: { profiles(): ProfileHost
         },
       },
       agentsDir: host.agentsDir,
+      loginEnv: host.loginEnv,
       signal: life.signal,
       agent(agentPart, { always = true } = {}) {
         life.live(`the agent part ${agentPart.name}`)

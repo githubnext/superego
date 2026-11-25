@@ -162,7 +162,7 @@ export function turnTask(name: string, host: TurnHost) {
         const release = await host.place(thread, runtime.signal)
         try {
           await runtime.memo('ran', true, context)
-          // Not found, or not looked for: the login shell couldn't be asked (findClaude says why).
+          // Not found, or not looked for: the login shell couldn't be read (findClaude says why).
           const executable = await host.executable().catch((error: Error) => error)
           if (executable instanceof Error) return fail(runtime, executable.message, context)
           if (!executable) return fail(runtime, NOT_INSTALLED, context)

@@ -13,6 +13,7 @@ import type { ModelRef } from '@earendil-works/pi-durable'
 import { createNodePhotonImages } from '@earendil-works/pi-durable/images/node'
 import { RpcError, type AgentKindMenu, type AppConfig, type AuthEvent, type CustomProviderInput, type ModelCatalog, type ModelTest, type AuthPrompt, type ProviderAuthInfo, type SettingOption, type SetupProbe } from '@superego/protocol'
 import type { SettingsRegistry } from '@superego/settings'
+import type { LoginEnv } from './login-env.ts'
 import { appEnv } from './paths.ts'
 import { sniff } from './image-kind.ts'
 import { createModelImages, type ModelImages } from './model-images.ts'
@@ -41,10 +42,10 @@ const TEST_TIMEOUT = 60_000
 
 export type AgentSettingsOptions = {
   /**
-   * The user's login shell's environment (login-env.ts), read once: keys the daemon's own environment lacks are taken
-   * from it. Unset, only the daemon's own.
+   * The user's login shell's environment (login-env.ts): keys the daemon's own environment lacks are taken from it.
+   * Unset, only the daemon's own.
    */
-  loginEnv?: () => Promise<Record<string, string>>
+  loginEnv?: () => Promise<LoginEnv>
   /** The local model servers setup looks for (`LOCAL_SERVERS` unset). */
   localServers?: LocalServer[]
 }
@@ -485,9 +486,17 @@ export async function createAgentSettings(settings: SettingsRegistry, dataDir: s
   })
 
   await refreshAuth()
-  // Read once, after the daemon is up: a slow shell doesn't hold it back. Signed in from it once it's read.
-  const loginEnvRead = options.loginEnv?.().then((read) => { shellEnv = read; return refreshAuth() })
-    .catch((error: Error) => console.error(`Reading the login shell's environment: ${error.message}`)) ?? Promise.resolve()
+  // Signed in from what the login shell's environment has, once it's read: after the daemon is up, so a slow shell
+  // doesn't hold it back. Not read (the shell didn't answer: the reader said why), it's asked again as setup looks.
+  let signedInFromShell: Promise<void> = Promise.resolve()
+  const signInFromLoginEnv = () => options.loginEnv?.().then((read) => {
+    if ('env' in read && read.env !== shellEnv) {
+      shellEnv = read.env
+      signedInFromShell = refreshAuth()
+    }
+    return signedInFromShell
+  }).catch((error: Error) => console.error(`Signing in from the login shell's environment: ${error.message}`)) ?? Promise.resolve()
+  const loginEnvRead = signInFromLoginEnv()
 
   /**
    * Ask a model to say hi: what it said and how long it took, else what its provider said, as an RpcError. `signal`
@@ -671,7 +680,7 @@ export async function createAgentSettings(settings: SettingsRegistry, dataDir: s
       return tryModel(ref)
     },
     async probe() {
-      await loginEnvRead
+      await signInFromLoginEnv()
       const fromEnv: SetupProbe['fromEnv'] = []
       for (const provider of models.getProviders()) {
         const source = authed.get(provider.id)?.source

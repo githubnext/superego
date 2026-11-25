@@ -3,7 +3,7 @@
 import { execFile } from 'node:child_process'
 import { access, constants } from 'node:fs/promises'
 import { delimiter, join } from 'node:path'
-import { userInfo } from 'node:os'
+import type { LoginEnv } from '@superego/daemon'
 import type { ClaudeInstalled } from './shared.ts'
 
 /**
@@ -27,28 +27,6 @@ export function claudeEnv(env: NodeJS.ProcessEnv = process.env): Record<string, 
   return out
 }
 
-/**
- * The PATH of the user's login, interactive shell (where mise, Homebrew and npm put `claude`): `undefined` when there's
- * no shell to ask, why not when it doesn't answer within 5s. Its PATH, not its `command -v claude`: that answers with an
- * alias (`claude --dangerously-skip-permissions`, say) when the user has one, which isn't a file to run, and would carry
- * flags Superego must not pass.
- */
-function shellPath(): Promise<{ path: string } | { error: string } | undefined> {
-  let shell = process.env.SHELL
-  if (!shell) try { shell = userInfo().shell ?? undefined } catch { /* no passwd entry: no shell to ask */ }
-  if (!shell) return Promise.resolve(undefined)
-  // Between markers: an interactive shell's startup files may print what they like.
-  const mark = '__superego_path__'
-  return new Promise((done) => {
-    execFile(shell, ['-ilc', `printf '${mark}%s${mark}' "$PATH"`], { timeout: 5000, env: claudeEnv() }, (error, stdout) => {
-      const path = String(stdout ?? '').match(new RegExp(`${mark}(.*?)${mark}`, 's'))?.[1]
-      if (path !== undefined) return done({ path })
-      const why = error ? (error.killed ? 'it didn\'t answer within 5s' : error.message) : 'it printed no PATH'
-      done({ error: `Couldn't read the PATH of your login shell (${shell}): ${why}` })
-    })
-  })
-}
-
 /** The first executable `claude` on `path`, if any. */
 export async function onPath(path: string | undefined): Promise<string | undefined> {
   for (const dir of (path ?? '').split(delimiter).filter(Boolean)) {
@@ -59,18 +37,18 @@ export async function onPath(path: string | undefined): Promise<string | undefin
 }
 
 /**
- * Where the user's `claude` is: `given` (`<APPID>_CLAUDE`, a `claude` of their choosing), else their login shell's,
- * else the daemon's PATH's. Undefined when it isn't installed. When the login shell can't be asked, that's said on the
- * console, and the daemon's PATH is looked on alone: found nowhere, why the shell couldn't be asked is the error, not
- * that `claude` isn't installed.
+ * Where the user's `claude` is: `given` (`<APPID>_CLAUDE`, a `claude` of their choosing), else on their login shell's
+ * PATH (`loginEnv`, the daemon's read of it: where mise, Homebrew and npm put it), else on the daemon's. Its PATH, not
+ * its `command -v claude`: that answers with an alias (`claude --dangerously-skip-permissions`, say) when the user has
+ * one, which isn't a file to run, and would carry flags Superego must not pass. Undefined when it isn't installed. When
+ * the login shell couldn't be read, the daemon's PATH is looked on alone: found nowhere, why the shell couldn't be read
+ * is the error, not that `claude` isn't installed.
  */
-export async function findClaude(given?: string): Promise<string | undefined> {
+export async function findClaude(given: string | undefined, loginEnv: () => Promise<LoginEnv>): Promise<string | undefined> {
   if (given) return given
-  const shell = await shellPath()
-  if (shell && 'path' in shell) return await onPath(shell.path) ?? await onPath(process.env.PATH)
-  if (shell) console.error(`Claude Agent: ${shell.error}`)
-  const found = await onPath(process.env.PATH)
-  if (!found && shell) throw new Error(shell.error)
+  const shell = await loginEnv()
+  const found = ('env' in shell ? await onPath(shell.env.PATH) : undefined) ?? await onPath(process.env.PATH)
+  if (!found && 'error' in shell) throw new Error(shell.error)
   return found
 }
 

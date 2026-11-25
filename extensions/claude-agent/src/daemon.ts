@@ -177,7 +177,7 @@ export function claudeAgent({ skills = [], executable, env = () => claudeEnv(), 
       }
       const lookNow = () => checking = (async (): Promise<ClaudeCheck> => {
         try {
-          const path = await (executable ?? (() => findClaude(given)))()
+          const path = await (executable ?? (() => findClaude(given, superego.loginEnv)))()
           const now: ClaudeCheck = path ? { installed: true, path, ...await checkClaude(path, env()) } : { installed: false }
           checked = Date.now()
           // Gone meanwhile (the daemon stopping): nobody to tell.
@@ -375,7 +375,7 @@ export function claudeAgent({ skills = [], executable, env = () => claudeEnv(), 
           }
         },
         runner: turnTask('claude-agent.turn', {
-          executable: executable ?? (() => findClaude(given)),
+          executable: executable ?? (() => findClaude(given, superego.loginEnv)),
           // Marked with its thread, as a Superego thread's shell is: `superego` run there knows who's calling (see threadEnv).
           env: (thread) => ({ ...env(), [threadEnv(superego.app)]: thread }),
           ...(plugin ? { plugin } : {}),

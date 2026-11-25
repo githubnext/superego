@@ -14,6 +14,7 @@ import type { ActionDef, ActionInfo, AgentKindMenu, AppConfig, Attachment, Chann
 import type { SectionSpec } from '@superego/settings'
 import type { AuthFlow } from './auth-flows.ts'
 import type { DaemonContext } from './host.ts'
+import type { LoginEnv } from './login-env.ts'
 import type { LoadedSpec, ProfileKey, ProfileRef } from './profiles.ts'
 import type { RunRecord } from './recap.ts'
 import type { MachineDraft, MachinePatch } from './relay.ts'
@@ -370,6 +371,14 @@ export type DaemonApi = {
   }
   /** The folder agents share on this machine (`~/.agents`, or `<APPID>_AGENTS`): skills, `AGENTS.md`. */
   agentsDir: string
+  /**
+   * (API ^5.11) The environment of the user's login, interactive shell (`zsh -ilc`): the keys their `~/.zshrc` exports,
+   * the PATH where mise, Homebrew and npm put their programs, which a daemon started from the Dock doesn't have.
+   * `{ env }` (empty where there's no shell to ask), or `{ error }`: why it couldn't be read (the shell didn't answer
+   * within 5s). Read once by the daemon, for everyone: what it found is kept; a read that failed is tried again by the
+   * next to ask.
+   */
+  loginEnv(): Promise<LoginEnv>
   /**
    * Aborted when this extension is torn down, before its registrations go: for its own timers, watchers and fetches
    * (`fetch(url, { signal })`, `watch(path, { signal })`, `signal.addEventListener('abort', …)`; one that throws is logged, not fatal).

@@ -9,7 +9,7 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, beforeEach, expect, it } from 'vitest'
 import { defineApp, PROTOCOL_VERSION, type AuthEvent, type Notifications, type ModelCatalog, type RpcPeer, type SetupProbe } from '@superego/protocol'
-import { connectSocket, listen, openDaemon, type DaemonOptions } from '../src/index.ts'
+import { connectSocket, defineDaemonExtension, listen, openDaemon, type DaemonApi, type DaemonOptions } from '../src/index.ts'
 import { readLoginEnv } from '../src/login-env.ts'
 import { until } from './until.ts'
 
@@ -88,7 +88,7 @@ it('finds nothing on a machine with nothing, and no model works', async () => {
 })
 
 it('finds a key in the login shell, and signs in with it', async () => {
-  const peer = await open({ loginEnv: async () => ({ GROQ_API_KEY: 'gsk-from-zshrc', PATH: '/usr/bin' }) })
+  const peer = await open({ loginEnv: async () => ({ env: { GROQ_API_KEY: 'gsk-from-zshrc', PATH: '/usr/bin' } }) })
   const probe = await peer.call<SetupProbe>('setup.probe', {})
   expect(probe.fromEnv).toEqual([{ provider: 'groq', name: 'Groq', variable: 'GROQ_API_KEY', shell: true }])
   expect(probe.usable).toBe(true)
@@ -96,7 +96,7 @@ it('finds a key in the login shell, and signs in with it', async () => {
 
 it('starts a provider on its best model, not its first by name', async () => {
   // Google's first by name is a deep-research preview, Groq's an 8B model.
-  const peer = await open({ loginEnv: async () => ({ GEMINI_API_KEY: 'gemini-from-zshrc' }) })
+  const peer = await open({ loginEnv: async () => ({ env: { GEMINI_API_KEY: 'gemini-from-zshrc' } }) })
   expect((await peer.call<SetupProbe>('setup.probe', {})).fromEnv.map((f) => f.provider)).toEqual(['google'])
   const catalog = await peer.call<ModelCatalog>('agent.models', {})
   expect(catalog.default.model).toBe('google/gemini-pro-latest')
@@ -106,9 +106,26 @@ it('starts a provider on its best model, not its first by name', async () => {
 it("reads the login shell's environment, whatever its startup files print", async () => {
   // A file of the checkout's, not one written here, run by bash (fixtures/login-shell says why): on a busy machine a
   // program can take seconds to start, past the 5s it's given.
-  const env = await readLoginEnv({ shell: fileURLToPath(new URL('fixtures/login-shell', import.meta.url)) })
-  expect(env.OPENAI_API_KEY).toBe('sk-multi\nline')
-  expect(await readLoginEnv({ shell: join(dir, 'no-such-shell') })).toEqual({})
+  const read = await readLoginEnv({ shell: fileURLToPath(new URL('fixtures/login-shell', import.meta.url)) })
+  expect('env' in read && read.env.OPENAI_API_KEY).toBe('sk-multi\nline')
+  expect(await readLoginEnv({ shell: join(dir, 'no-such-shell') })).toEqual({ error: expect.stringMatching(/^Couldn't read your login shell's environment \(.*no-such-shell\): /) })
+})
+
+it("reads the login shell once, for setup and extensions alike, and again only after a read that failed", async () => {
+  const reads: string[] = []
+  const answers = [{ error: "Couldn't read your login shell's environment (zsh): it didn't answer within 5s" }, { env: { GROQ_API_KEY: 'gsk-from-zshrc', PATH: '/opt/bin' } }]
+  let api: DaemonApi | undefined
+  const peer = await open({
+    loginEnv: async () => { reads.push('read'); return answers[reads.length - 1]! },
+    extensions: [defineDaemonExtension({ name: 'reader', setup(superego) { api = superego } })],
+  })
+  // The daemon's read, at start, failed: the extension's asks again, and what that finds is kept, for setup too.
+  await until(() => reads.length === 1)
+  expect(await api!.loginEnv()).toEqual(answers[1])
+  expect(await api!.loginEnv()).toEqual(answers[1])
+  expect(reads).toHaveLength(2)
+  expect((await peer.call<SetupProbe>('setup.probe', {})).fromEnv).toEqual([{ provider: 'groq', name: 'Groq', variable: 'GROQ_API_KEY', shell: true }])
+  expect(reads).toHaveLength(2)
 })
 
 it('finds a local model server, its chat models in its own order, which works once added', async () => {
