@@ -85,19 +85,21 @@
 /* Short of room, the bar gives way in one order (overflow.tsx): its items keep their size and go, in turn, to the ···
    at its end; the title takes what's left, truncating. Nothing in it shrinks, wraps or overlaps another, nor makes the
    window wider; nor does anything come and go with the pointer: what fits shows. */
-.titlebar__crumb { display: flex; align-items: center; gap: 12px; min-width: 0; flex: 0 1 auto; font-weight: 500; }
+.titlebar__crumb { display: flex; align-items: center; gap: 2px; min-width: 0; flex: 0 1 auto; font-weight: 500; }
 .titlebar__seg { display: flex; align-items: center; gap: 6px; height: 26px; padding: 0 8px; border-radius: 6px; white-space: nowrap; min-width: 0; }
 .titlebar__seg > * { flex: none; }
 /* Where you are on one line, centred on the bar's middle, where the window's buttons are (windowButtons in
    app-windows.ts): its words (the project, the title, its status) on one baseline, each in a line as tall as the
    crumb; its marks, badge and buttons centred on it. Each word centred instead, a smaller one would sit higher. */
-.titlebar__crumb > :is(.titlebar__project, .titlebar__title), .titlebar__title > :is(.thread__title, .titlebar__word) { align-self: baseline; }
-.titlebar__crumb > .titlebar__project, .titlebar__title > :is(.thread__title, .titlebar__word) { line-height: 26px; }
+.titlebar__crumb > .titlebar__title, .titlebar__title > :is(.titlebar__project, .titlebar__name, .titlebar__word), .titlebar__name > .thread__title { align-self: baseline; }
+.titlebar__title > :is(.titlebar__project, .titlebar__word), .titlebar__name > .thread__title { line-height: 26px; }
 .titlebar__project { color: var(--superego-muted); flex: none; max-width: 180px; overflow: hidden; text-overflow: ellipsis; display: block; }
 .titlebar__dot { margin: 0 5px; color: var(--superego-faint); }
-.titlebar__title { color: var(--superego-text); }
-.titlebar__title > .thread__title { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.titlebar__title > .superego-status { font-size: 14px; }
+.titlebar__title { color: var(--superego-text); gap: 12px; }
+/* The thread's status and its name: one item of the crumb, closer together than the rest. */
+.titlebar__name { display: flex; align-items: center; gap: 6px; min-width: 0; flex: 0 1 auto; }
+.titlebar__name > .thread__title { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.titlebar__name > .superego-status { font-size: 14px; }
 .titlebar__word { font-size: var(--superego-text-sm); }
 /* Rename, pin and archive: quiet buttons beside the title. */
 .titlebar__actions { display: flex; align-items: center; margin-left: -2px; }

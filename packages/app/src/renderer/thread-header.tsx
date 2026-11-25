@@ -33,15 +33,19 @@ export function ThreadTitle({ machine, thread }: { machine: MachineEntry; thread
   useLayoutEffect(() => overflow?.dirty(), [overflow, thread.id, thread.title, editing])
   return (
     <span className="titlebar__crumb">
-      <span className="titlebar__seg titlebar__project" title={`${thread.project.name}\n${thread.cwd}`}>
-        {machine.id !== 'local' && <><MachineName machine={machine} /><span className="titlebar__dot">·</span></>}
-        {thread.project.name}
-      </span>
       <span className="titlebar__seg titlebar__title">
-        <StatusGlyph status={thread.status} quiet={thread.quiet} />
-        {editing ? <TitleField machine={machine} thread={thread} /> : (
+        <span className="titlebar__project" title={`${thread.project.name}\n${thread.cwd}`}>
+          {machine.id !== 'local' && <><MachineName machine={machine} /><span className="titlebar__dot">·</span></>}
+          {thread.project.name}
+        </span>
+        {/* The thread itself: its status and its name, closer to each other than to the rest. */}
+        <span className="titlebar__name">
+          <StatusGlyph status={thread.status} quiet={thread.quiet} />
+          {editing ? <TitleField machine={machine} thread={thread} />
+            : <span className="thread__title" title={thread.title} onDoubleClick={() => startRename(machine.id, thread.id)}>{thread.title.replace(/\.$/, '')}</span>}
+        </span>
+        {!editing && (
           <>
-            <span className="thread__title" title={thread.title} onDoubleClick={() => startRename(machine.id, thread.id)}>{thread.title.replace(/\.$/, '')}</span>
             {thread.status.state !== 'done' && <StatusWord status={thread.status} quiet={thread.quiet} className="titlebar__word" />}
             {thread.profile && (
               <OverflowBox id="profile" priority={PRIORITY.profile} row={<OverflowRow icon={IdentificationBadgeIcon}>Profile: {thread.profile.name}</OverflowRow>}>

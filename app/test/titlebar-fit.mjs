@@ -41,7 +41,7 @@ const INSPECT = `(() => {
   const pad = parseFloat(getComputedStyle(bar).paddingRight)
   const shown = (el) => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== 'hidden' && !el.closest('[data-out]') }
   const name = (el) => (el.getAttribute('aria-label') || el.title || el.textContent || el.className).trim().replace(/\\s+/g, ' ').slice(0, 40)
-  const items = [...bar.querySelectorAll('.app__history .superego-icon-button, .titlebar__project, .titlebar__title > .superego-status, .titlebar__title > .thread__title, .titlebar__word, .titlebar__item, .strip__tab, .strip__map, .titlebar__more:not([hidden])')].filter(shown)
+  const items = [...bar.querySelectorAll('.app__history .superego-icon-button, .titlebar__project, .titlebar__name > .superego-status, .titlebar__name > .thread__title, .titlebar__word, .titlebar__item, .strip__tab, .strip__map, .titlebar__more:not([hidden])')].filter(shown)
   const problems = []
   const boxes = items.map((el) => ({ el, r: el.getBoundingClientRect() }))
   for (let i = 0; i < boxes.length; i++) {
@@ -64,7 +64,7 @@ const INSPECT = `(() => {
     const tops = new Set([...range.getClientRects()].filter((r) => r.width > 0).map((r) => Math.round(r.top)))
     if (tops.size > 1) problems.push('wraps: ' + node.textContent.trim().slice(0, 40))
   }
-  const title = bar.querySelector('.titlebar__title > .thread__title')
+  const title = bar.querySelector('.titlebar__name > .thread__title')
   if (title && title.getBoundingClientRect().width < 40) problems.push('the title squeezed to ' + Math.round(title.getBoundingClientRect().width) + 'px')
   const focused = bar.querySelector('.strip__tab.is-focused')
   if (focused && !shown(focused)) problems.push('the focused tab hidden')
