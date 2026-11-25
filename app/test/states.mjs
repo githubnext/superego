@@ -127,6 +127,7 @@ await openApp({ name: 'states', timeout: 240_000 }, async (t) => {
   await both('states-sidebar', `document.querySelector('.app__sidebar')`)
   for (const [file, title] of [['working', 'Fix flaky sync test'], ['question', 'Design: the staff board as an overview'], ['failed', 'Smoke split by area']]) {
     await select(title)
+    await t.titleRowAligned(`the title bar, ${file}`)
     await both(`states-titlebar-${file}`, titlebar)
   }
   // ⌘U: what's unread, most pressing first.

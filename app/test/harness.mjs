@@ -239,16 +239,50 @@ export async function openApp(options, body) {
     },
     /**
      * The window's buttons, which aren't in a screenshot of the page: stand-ins (#lights) drawn where the system puts
-     * them (trafficLightPosition, 12pt each, 20pt apart).
+     * them (trafficLightPosition, see windowButtons in app-windows.ts) at the system's size: 14pt each, 23pt apart since
+     * macOS 26, 12pt and 20pt before.
      */
-    lights: () => t.run(`(() => {
-      if (document.getElementById('lights')) return
-      const lights = document.createElement('div')
-      lights.id = 'lights'
-      lights.style.cssText = 'position: fixed; z-index: 99; top: 18px; left: 18px; display: flex; gap: 8px; pointer-events: none'
-      for (const colour of ['#ff5f57', '#febc2e', '#28c840']) lights.append(Object.assign(document.createElement('span'), { style: \`width: 12px; height: 12px; border-radius: 50%; background: \${colour}\` }))
-      document.body.append(lights)
-    })()`),
+    lights: () => {
+      const big = process.platform !== 'darwin' || Number(process.getSystemVersion().split('.')[0]) >= 26
+      const size = big ? 14 : 12
+      const { x, y } = (process.platform === 'darwin' && win().getWindowButtonPosition()) || { x: 18, y: (48 - size) / 2 }
+      return t.run(`(() => {
+        if (document.getElementById('lights')) return
+        const lights = document.createElement('div')
+        lights.id = 'lights'
+        lights.style.cssText = 'position: fixed; z-index: 99; top: ${y}px; left: ${x}px; display: flex; gap: ${big ? 9 : 8}px; pointer-events: none'
+        for (const colour of ['#ff5f57', '#febc2e', '#28c840']) lights.append(Object.assign(document.createElement('span'), { style: \`width: ${size}px; height: ${size}px; border-radius: 50%; background: \${colour}\` }))
+        document.body.append(lights)
+      })()`)
+    },
+    /**
+     * The title bar's row on one line: its words (the crumb's project, ›, title and status) on one baseline, and they
+     * and its marks, badge and buttons centred on the bar's middle, the window's buttons' too (#lights, from `lights`,
+     * where shown). Fails `what` otherwise.
+     */
+    async titleRowAligned(what) {
+      const row = await t.run(`(() => {
+        const bar = document.querySelector('.app__titlebar').getBoundingClientRect()
+        const middle = bar.top + bar.height / 2
+        const centre = (el) => { const r = el.getBoundingClientRect(); return r.top + r.height / 2 }
+        const shown = (selector) => [...document.querySelectorAll(selector)].filter((el) => el.getBoundingClientRect().height && !el.closest('[data-out]'))
+        // A word's baseline: where a box of no height, at its end, sits.
+        const baseline = (el) => { const probe = document.createElement('span'); probe.style.cssText = 'display: inline-block; width: 0; height: 0'; el.append(probe); const y = probe.getBoundingClientRect().bottom; probe.remove(); return y }
+        const words = shown('.titlebar__crumb > .titlebar__project, .titlebar__crumb > .titlebar__sep, .titlebar__title > .thread__title, .titlebar__title > .titlebar__word')
+        const marks = shown('.titlebar__title > .superego-status, .titlebar__title > .titlebar__item, .titlebar__action, .titlebar__crumb, .app__history .superego-icon-button')
+        const lights = document.querySelector('#lights')
+        return {
+          middle,
+          baselines: words.map((el) => [el.className, baseline(el)]),
+          centres: [...marks.map((el) => [el.className, centre(el)]), ...(lights && getComputedStyle(lights).visibility !== 'hidden' ? [['lights', centre(lights)]] : [])],
+        }
+      })()`)
+      const [first] = row.baselines
+      if (!first) t.fail(`${what}: no words in the title bar`)
+      for (const [name, y] of row.baselines) if (Math.abs(y - first[1]) > 0.5) t.fail(`${what}: "${name}" on a baseline at ${y}, not ${first[1]}`)
+      for (const [name, y] of row.centres) if (Math.abs(y - row.middle) > 0.5) t.fail(`${what}: "${name}" centred at ${y}, not on the bar's middle (${row.middle})`)
+      return row
+    },
     /** Screenshots in light, then dark, as `<file>-light` and `<file>-dark`; `before` runs in the page first each time. */
     async both(file, before) {
       if (!shots) return

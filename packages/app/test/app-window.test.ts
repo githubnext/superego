@@ -5,7 +5,7 @@ import { createRouter, defineAction, obj, RpcError, str } from '@superego/protoc
 import { MemorySettingsStore, SettingsRegistry } from '@superego/settings'
 
 vi.mock('electron', () => ({}))
-const { AppWindow } = await import('../src/main/app-windows.ts')
+const { AppWindow, windowButtons } = await import('../src/main/app-windows.ts')
 const { appMethods, callApp } = await import('../src/main/app-endpoint.ts')
 type AppWindow = InstanceType<typeof AppWindow>
 type AppActionContext = import('../src/main/app-endpoint.ts').AppActionContext
@@ -94,5 +94,12 @@ describe('a call on the app\'s endpoint', () => {
     expect(router.log().at(-1)).toMatchObject({ id: 'test.echo', source: 'window', ok: true })
     expect(() => callApp(router, window, 'nothing.here', {})).toThrow(RpcError)
     expect(() => callApp(router, window, 'toString', {})).toThrow(/Unknown method toString/)
+  })
+})
+
+describe("the window's buttons", () => {
+  it('are centred on the title bar, at the size macOS draws them', () => {
+    expect(windowButtons('15.5')).toEqual({ position: { x: 18, y: 18 }, size: 12 })
+    expect(windowButtons('26.1')).toEqual({ position: { x: 18, y: 17 }, size: 14 })
   })
 })

@@ -31,11 +31,24 @@ await openApp({ name: 'titlebar', timeout: 180_000 }, async (t) => {
     await t.settled()
     writeFileSync(`${process.env.SUPEREGO_SHOWCASE_OUT}/${name}.png`, (await win().webContents.capturePage(rect)).toPNG())
   }
+  await t.lights()
+  await t.titleRowAligned('the title bar')
   for (const theme of ['light', 'dark']) {
     await t.theme(theme)
     await shot(`titlebar-${theme}`, bar)
     await shot(`window-${theme}`)
   }
+  // A title too long for the bar, truncated, still on the line.
+  await run(`window.superego.call('local', 'thread.rename', { thread: '${id}', title: 'Review the ledger import, its retries, the bank sync and every category rule it reads before the monthly report goes out' })`)
+  await until(`document.querySelector('.titlebar__title .thread__title')?.textContent.startsWith('Review the ledger import, its')`, 'the long title')
+  await until(`(() => { const t = document.querySelector('.titlebar__title .thread__title'); return t.scrollWidth > t.clientWidth })()`, 'the long title truncated')
+  await t.titleRowAligned('a long title')
+  for (const theme of ['light', 'dark']) {
+    await t.theme(theme)
+    await shot(`titlebar-long-${theme}`, bar)
+  }
+  await run(`window.superego.call('local', 'thread.rename', { thread: '${id}', title: 'Review the ledger import' })`)
+  await until(`document.querySelector('.titlebar__title .thread__title')?.textContent === 'Review the ledger import'`, 'the title back')
   // Pointed at, the profile's badge and the model's mark say what they are.
   const center = (selector) => run(`(() => { const r = document.querySelector('${selector}').getBoundingClientRect(); return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) } })()`)
   for (const [name, trigger, card, ready] of [

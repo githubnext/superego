@@ -14,10 +14,12 @@
 /* The panel: drawn once behind the rail and the sidebar (and the title bar over them, the window's buttons in its
    corner), as wide as they are. Folded to the rail it's too narrow for the buttons: it starts under the title bar,
    which runs on over the sheet, the buttons in clear space at its start, as they are with no sidebar on macOS. */
-/* Its corners against the window's are concentric with them: the window's radius less the inset, the curves parallel. */
+/* Its corners against the window's are concentric with them: the window's radius less the inset, the curves parallel.
+   The sheets (a thread's columns, a space) start --sheet-top under the title bar, room for the focus's ring; folded,
+   the panel starts there too, its top in line with theirs. */
 .app:not(.is-narrow) {
-  --side-inset: 8px; --side-radius: calc(var(--superego-window-radius) - var(--side-inset));
-  --side-width: var(--superego-rail); --side-top: calc(var(--superego-titlebar) + env(safe-area-inset-top, 0px));
+  --side-inset: 8px; --side-radius: calc(var(--superego-window-radius) - var(--side-inset)); --sheet-top: 4px;
+  --side-width: var(--superego-rail); --side-top: calc(var(--superego-titlebar) + env(safe-area-inset-top, 0px) + var(--sheet-top));
   /* What it casts on the ground round it: the focus's ring (see Focus), its edge, its shadow. */
   --side-shadow: var(--side-ring, 0 0 #0000), var(--superego-glass-edge), 0 6px 24px light-dark(rgb(0 0 0 / .07), rgb(0 0 0 / .35));
 }
@@ -86,7 +88,12 @@
 .titlebar__crumb { display: flex; align-items: center; gap: 2px; min-width: 0; flex: 0 1 auto; font-weight: 500; }
 .titlebar__seg { display: flex; align-items: center; gap: 6px; height: 26px; padding: 0 8px; border-radius: 6px; white-space: nowrap; min-width: 0; }
 .titlebar__seg > * { flex: none; }
-.titlebar__project { color: var(--superego-muted); flex: none; max-width: 180px; overflow: hidden; text-overflow: ellipsis; display: block; line-height: 26px; }
+/* Where you are on one line, centred on the bar's middle, where the window's buttons are (windowButtons in
+   app-windows.ts): its words (the project, ›, the title, its status) on one baseline, each in a line as tall as the
+   crumb; its marks, badge and buttons centred on it. Each word centred instead, a smaller one would sit higher. */
+.titlebar__crumb > :is(.titlebar__project, .titlebar__sep, .titlebar__title), .titlebar__title > :is(.thread__title, .titlebar__word) { align-self: baseline; }
+.titlebar__crumb > :is(.titlebar__project, .titlebar__sep), .titlebar__title > :is(.thread__title, .titlebar__word) { line-height: 26px; }
+.titlebar__project { color: var(--superego-muted); flex: none; max-width: 180px; overflow: hidden; text-overflow: ellipsis; display: block; }
 .titlebar__dot { margin: 0 5px; color: var(--superego-faint); }
 .titlebar__sep { color: var(--superego-faint); font-size: var(--superego-text-sm); }
 .titlebar__title { color: var(--superego-text); }
@@ -1050,11 +1057,11 @@ button.app__mobiletitle > .superego-status { font-size: 12px; }
 .panes > * { -webkit-app-region: no-drag; }
 
 /* Wide, the columns are sheets inset on the window's ground, as the side's panel is: room around the row (its foot
-   and start the side's inset; its top just the focus ring's, under the title bar), and after each column (GAP in
+   and start the side's inset; its top just the focus ring's, --sheet-top, under the title bar), and after each column (GAP in
    pane-layout.ts) the same room, its handle, with a grip that's quiet until it's pointed at or dragged. Each column's
    corners are the panel's, concentric with the window's (--side-radius). Past the last column, the row's ground. */
 .app:not(.is-narrow):has(.sheet) { background: var(--superego-ground); }
-.panes:not(.panes--narrow) { --row-top: 4px; padding: var(--row-top) 0 var(--side-inset) var(--side-inset); scroll-padding-inline: var(--side-inset); }
+.panes:not(.panes--narrow) { padding: var(--sheet-top) 0 var(--side-inset) var(--side-inset); scroll-padding-inline: var(--side-inset); }
 .panes:not(.panes--narrow) > .panes__column { border-radius: var(--side-radius); }
 .panes__gap { flex: none; width: 8px; cursor: col-resize; position: relative; display: grid; place-items: center; }
 .panes__gap::after { content: ''; width: 3px; height: 28px; border-radius: 2px; background: var(--superego-faint); opacity: .45; transition: opacity .12s, height .12s, background-color .12s; }
@@ -1104,7 +1111,7 @@ button.app__mobiletitle > .superego-status { font-size: 12px; }
    row's scroll) under it, out of sight. */
 .panes.has-maximized > :not(.is-maximized) { visibility: hidden; }
 .panes > .panes__column.is-maximized { position: absolute; inset: 0; z-index: 1; }
-.panes:not(.panes--narrow) > .panes__column.is-maximized { inset: var(--row-top) var(--side-inset) var(--side-inset); }
+.panes:not(.panes--narrow) > .panes__column.is-maximized { inset: var(--sheet-top) var(--side-inset) var(--side-inset); }
 .panes__kept { flex: none; }
 /* The thread kept in view (scrolled): it and its handle stand still at the start, and so does the room before it,
    between it and the side's panel. The panes pass under the thread's card itself: its handle has no ground of its
@@ -1473,7 +1480,7 @@ a.pane-header__url:hover { color: var(--superego-link); }
    A space fills the main area (spaces.tsx): wide, a sheet on the window's ground as a thread's columns are, its
    thread docked beside it as another (or, floating, a card over its right side). */
 .space { flex: 1; display: flex; min-height: 0; min-width: 0; gap: 8px; position: relative; }
-.app:not(.is-narrow) .space { padding: 4px var(--side-inset) var(--side-inset) var(--side-inset); }
+.app:not(.is-narrow) .space { padding: var(--sheet-top) var(--side-inset) var(--side-inset) var(--side-inset); }
 .app:not(.is-narrow):has(.space) { background: var(--superego-ground); }
 .space__body { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; position: relative; overflow: hidden; background: var(--superego-bg); }
 .space__body > * { flex: 1; min-height: 0; }

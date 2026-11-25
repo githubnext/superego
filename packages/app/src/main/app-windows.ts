@@ -102,6 +102,17 @@ export function windowState(state: unknown): Record<string, string> | undefined 
   return entries.reduce((size, [key, value]) => size + key.length + (value as string).length, 0) > 200_000 ? undefined : Object.fromEntries(entries) as Record<string, string>
 }
 
+/**
+ * Where macOS draws the window's buttons (the traffic lights): their centre on the middle of the title bar (48pt,
+ * --superego-titlebar), the line everything in the bar is centred on (app.css). They're 14pt across since macOS 26, 12pt
+ * before.
+ */
+export function windowButtons(macOS = process.platform === 'darwin' ? process.getSystemVersion() : '') {
+  const titlebar = 48
+  const size = Number(macOS.split('.')[0]) >= 26 ? 14 : 12
+  return { position: { x: 18, y: (titlebar - size) / 2 }, size }
+}
+
 /** Its callbacks are never called while it's being made: what they reach may be made after it. */
 export type WindowsOptions = {
   app: AppConfig
@@ -162,8 +173,7 @@ export function createWindows({ app: appConfig, dataDir, headless, methods, chan
       ...(at.x !== undefined && at.y !== undefined ? { x: at.x, y: at.y } : {}),
       title: appConfig.name,
       titleBarStyle: 'hiddenInset',
-      // Centred in the 48pt title bar (see --superego-titlebar).
-      trafficLightPosition: { x: 18, y: 18 },
+      trafficLightPosition: windowButtons().position,
       backgroundColor: '#09090b',
       show: !headless,
       webPreferences: { preload: join(import.meta.dirname, '../preload/preload.cjs'), sandbox: true, contextIsolation: true },

@@ -7,6 +7,8 @@
   shell again for every look.
 - Extensions can read your login shell's environment, its keys and PATH, with `superego.loginEnv()` (extension API
   5.11).
+- With the sidebar folded, its panel's top lines up with the thread's beside it.
+- The title bar's words, status, profile badge and buttons sit on one line, centred on the window's buttons.
 
 ## 0.4.0
 

@@ -1,7 +1,8 @@
 // The window's look, for tuning it (run by `test/look.sh <dir> mac-look`): threads in the sidebar, one shown with
 // markdown, a code block and tool calls, the Diff pane beside it and words in the composer; a thread's menu open; and
 // the sidebar hidden (in a narrow window too), full screen; Settings, in a narrow window too. In light and dark, into $SUPEREGO_SHOWCASE_OUT as
-// main-, hidden-, hidden-narrow-, fullscreen-hidden-, fullscreen-main-, menu-, settings- and settings-narrow-<light|dark>.png.
+// main-, hidden-, hidden-narrow-, fullscreen-hidden-, fullscreen-main-, menu-, settings- and settings-narrow-<light|dark>.png;
+// close-ups of the top left corner and the title bar's row as main-, hidden- and fullscreen-…-corner- and -row-<light|dark>.png.
 import { openApp } from './harness.mjs'
 import { threads } from './showcase/threads.mjs'
 
@@ -48,37 +49,55 @@ await openApp({ name: 'mac-look', timeout: 300_000 }, async (t) => {
     }
     document.activeElement?.blur()
   })()`
-  const both = async (name) => {
+  // Close-ups (`close`): the top left corner, the panel's top beside the sheet's; the title bar's row, the window's
+  // buttons to the crumb's end.
+  const corner = `({ getBoundingClientRect: () => new DOMRect(0, 0, 360, 140) })`
+  const row = `({ getBoundingClientRect: () => new DOMRect(0, 0, Math.min(innerWidth, document.querySelector('.titlebar__crumb').getBoundingClientRect().right + 16), document.querySelector('.app__titlebar').getBoundingClientRect().bottom) })`
+  const both = async (name, close = false) => {
     for (const appearance of ['light', 'dark']) {
       await t.theme(appearance)
       await run(view)
       await t.settled()
       await t.shot(`${name}-${appearance}`)
+      if (close) {
+        await t.shot(`${name}-corner-${appearance}`, corner)
+        await t.shot(`${name}-row-${appearance}`, row)
+      }
     }
   }
-  // The window's buttons, drawn in, and checked to sit clear of the panel's corner.
+  // The window's buttons, drawn in, and checked to sit clear of the panel's corner; the title bar's row on their line.
   await t.lights()
   const panel = `(() => { const s = getComputedStyle(document.querySelector('.app'), '::before'); return { top: parseFloat(s.top), right: parseFloat(s.left) + parseFloat(s.width) } })()`
+  const lights = await run(`(() => { const r = document.getElementById('lights').getBoundingClientRect(); return { right: r.right, bottom: r.bottom } })()`)
   const clear = async (what) => {
     const { top, right } = await run(panel)
     const history = await run(`document.querySelector('.app__history').getBoundingClientRect().left`)
     // Inside the panel (with room around them), or above it; and back and forward past them.
-    if (!(right >= 70 + 12 || top >= 30 + 8)) t.fail(`${what}: the window's buttons run over the panel's corner (its top ${top}, right ${right})`)
-    if (history < 70) t.fail(`${what}: back and forward under the window's buttons (at ${history})`)
+    if (!(right >= lights.right + 12 || top >= lights.bottom + 8)) t.fail(`${what}: the window's buttons run over the panel's corner (its top ${top}, right ${right})`)
+    if (history < lights.right) t.fail(`${what}: back and forward under the window's buttons (at ${history})`)
+    await t.titleRowAligned(what)
+  }
+  // Folded, the panel's top in line with the sheet's beside it.
+  const level = async (what) => {
+    const { top } = await run(panel)
+    const sheet = await run(`document.querySelector('.panes__column').getBoundingClientRect().top`)
+    if (Math.abs(top - sheet) > 0.5) t.fail(`${what}: the panel's top at ${top}, the sheet's at ${sheet}`)
   }
   const fold = async (folded) => {
     t.key('/', [process.platform === 'darwin' ? 'meta' : 'control'])
     await until(`${folded ? '!' : '!!'}document.querySelector('.app__sidebar')`, folded ? 'the sidebar hidden' : 'the sidebar back')
   }
   await clear('the sidebar open')
-  await both('main')
+  await both('main', true)
   // The sidebar hidden: the rail alone in the panel, under the title bar.
   await fold(true)
   await clear('the sidebar folded')
-  await both('hidden')
+  await level('the sidebar folded')
+  await both('hidden', true)
   // A narrow window, folded.
   await t.resize(780, 700)
   await clear('narrow, folded')
+  await level('narrow, folded')
   await both('hidden-narrow')
   await t.resize(1440, 960)
   // Full screen (said as the system does; a headless window doesn't go): no buttons, so no room kept for them.
@@ -87,9 +106,11 @@ await openApp({ name: 'mac-look', timeout: 300_000 }, async (t) => {
   await until(`document.querySelector('.app').classList.contains('is-full-screen')`, 'full screen')
   const start = await run(`parseFloat(getComputedStyle(document.querySelector('.app__titlebar')).paddingLeft)`)
   if (start > 20) t.fail(`full screen, the title bar still keeps ${start}px for the window's buttons`)
-  await both('fullscreen-hidden')
+  await level('full screen, folded')
+  await t.titleRowAligned('full screen')
+  await both('fullscreen-hidden', true)
   await fold(false)
-  await both('fullscreen-main')
+  await both('fullscreen-main', true)
   t.win().emit('leave-full-screen')
   await until(`!document.querySelector('.app').classList.contains('is-full-screen')`, 'out of full screen')
   await run(`document.getElementById('lights').style.visibility = ''`)
