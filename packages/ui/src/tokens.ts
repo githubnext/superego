@@ -88,6 +88,16 @@ export const colourTokens = {
     '--superego-diff-fence-added-bg': "An added line's tint, in a message's diff block.",
     '--superego-diff-fence-removed-bg': "A removed line's tint, in a message's diff block.",
   },
+  machine: {
+    '--superego-machine-1': "A machine's colour: its name, its dot (the palette's first).",
+    '--superego-machine-2': "A machine's colour (the second).",
+    '--superego-machine-3': "A machine's colour (the third).",
+    '--superego-machine-4': "A machine's colour (the fourth).",
+    '--superego-machine-5': "A machine's colour (the fifth).",
+    '--superego-machine-6': "A machine's colour (the sixth).",
+    '--superego-machine-7': "A machine's colour (the seventh).",
+    '--superego-machine-8': "A machine's colour (the eighth).",
+  },
   status: {
     '--superego-status-working': 'Working.',
     '--superego-status-done': 'Done.',

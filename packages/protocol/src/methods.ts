@@ -354,7 +354,12 @@ export type MachineEntry = {
   version?: MachineVersion
   /** Absent for this computer, which can't be removed. */
   remote?: { route: string; enabled: boolean; /** Reached with ssh, so it can log in. */ ssh: boolean }
+  /** Its colour, as the client's list of machines keeps it: a slot of the palette, 1 to MACHINE_COLOURS (`--superego-machine-<n>`). */
+  colour?: number
 }
+
+/** How many colours the machines' palette has (`--superego-machine-1` to `-8`). */
+export const MACHINE_COLOURS = 8
 
 /**
  * What a "thread" pane on machine `host` takes to show thread `id` on machine `on` (both as a client calls them): a

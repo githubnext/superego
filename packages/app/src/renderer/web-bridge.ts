@@ -25,6 +25,9 @@ const ROOM = 256 * 1024
  * A pairing ticket, from the link Settings showed (`#pair=…`): taken out of the address (and so out of history) before
  * anything else, and spent once.
  */
+/** A machine's colour, as the serving daemon's list has it. */
+const colourOf = (entry: MachineEntry) => entry.colour ? { colour: entry.colour } : {}
+
 function takeTicket(): string | undefined {
   const ticket = new URLSearchParams(location.hash.slice(1)).get('pair') ?? undefined
   if (ticket) history.replaceState(null, '', location.pathname + location.search)
@@ -123,8 +126,8 @@ export function webBridge(): SuperegoBridge {
         }
         if (method === 'machines.changed') {
           const { sub, value } = params as Notifications['machines.changed']
-          // Its own entry is kept as this page knows it: the extensions it offers, how this connection stands.
-          if (sub === machinesSub) setEntries(value.map((m) => m.id === 'local' ? { ...m, ...entries.find((e) => e.id === 'local') } : m))
+          // Its own entry is kept as this page knows it: the extensions it offers, how this connection stands; its colour, as the list says.
+          if (sub === machinesSub) setEntries(value.map((m) => m.id === 'local' ? { ...m, ...entries.find((e) => e.id === 'local'), ...colourOf(m) } : m))
           return
         }
         // What it offers changed since hello: `has` follows.
@@ -151,7 +154,7 @@ export function webBridge(): SuperegoBridge {
           }
           const { sub, value } = await next.call<{ sub: string; value: MachineEntry[] }>('machines.watch', {})
           machinesSub = sub
-          setEntries(value.map((m) => m.id === 'local' ? { ...self, ...offered } : m))
+          setEntries(value.map((m) => m.id === 'local' ? { ...self, ...offered, ...colourOf(m) } : m))
           peer = next
           retry = 500
           resolve(next)

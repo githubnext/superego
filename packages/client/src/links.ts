@@ -48,7 +48,8 @@ export class MachineLinks {
     return this.#options.store.list().map((config): MachineEntry => {
       const remote = { route: routeOf(config, this.#options.app), enabled: config.enabled, ssh: !config.via }
       const link = this.#links.get(config.id)
-      return link ? { ...link.entry(), label: config.label, remote } : { id: config.id, label: config.label, state: 'disabled', remote }
+      const colour = config.colour ? { colour: config.colour } : {}
+      return link ? { ...link.entry(), label: config.label, remote, ...colour } : { id: config.id, label: config.label, state: 'disabled', remote, ...colour }
     })
   }
 

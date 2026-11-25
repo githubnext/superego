@@ -21,8 +21,8 @@
 # - `states`: every thread state in the sidebar, the rail, the title bar and ⌘U.
 # - `cards`: a thread's card, pointed at in the sidebar (in a worktree, waiting on you, folded) and in the rail.
 # - `dialogs`: the palette, ⌘L (archived threads too), the pane picker and ⌘N's fields.
-# - `machines`: Settings → Machines with two other machines, one behind and needing a service, wide and narrow, and a
-#   row's menu.
+# - `machines`: the sidebar with three machines' projects, each named in its colour; Settings → Machines with two other
+#   machines, one behind and needing a service, wide and narrow, a row's menu and its colour's swatches.
 # - `staff`: a lead on the chief-of-staff profile at work, its children, its board and its question (the public site's
 #   hero).
 # - `picker`: Select element in the Browser pane: the page in pick mode, the element picked in its card, its chip in the composer.

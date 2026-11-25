@@ -65,7 +65,7 @@ export function createMachines({ app: appConfig, dataDir, headless, broadcast, o
 
   /** This computer, then every configured machine; disabled ones have no link. */
   function entries(): MachineEntry[] {
-    const here = local?.entry()
+    const here = local && { ...local.entry(), colour: store.hereColour() }
     return [
       ...(here ? [here] : []),
       ...remotes.entries().map((entry): MachineEntry => {
@@ -202,9 +202,18 @@ export function createMachines({ app: appConfig, dataDir, headless, broadcast, o
     }))
     router.register(defineAction({
       id: 'machine.edit', title: 'Change a machine', runs: 'app', expose: ['ui', 'cli'],
-      params: obj({ id: str(), label: opt(str()), target: opt(str()), command: opt(str()), via: opt(str()), enabled: opt(bool()) }),
+      params: obj({ id: str(), label: opt(str()), target: opt(str()), command: opt(str()), via: opt(str()), enabled: opt(bool()), colour: opt(int()) }),
       consentIn: machineConsent,
-      async run({ id, ...patch }) { await store.update(id, patch as Partial<MachineConfig>); return null },
+      async run({ id, ...patch }) {
+        // This computer: only its colour is the list's.
+        if (id === 'local') {
+          if (Object.entries(patch).some(([key, value]) => key !== 'colour' && value !== undefined)) throw new RpcError('invalid', 'Only the colour of this computer can be changed here')
+          if (patch.colour !== undefined) await store.setHereColour(patch.colour)
+          return null
+        }
+        await store.update(id, patch as Partial<MachineConfig>)
+        return null
+      },
     }))
     router.register(defineAction({
       id: 'machine.remove', title: 'Remove a machine', runs: 'app', expose: ['ui', 'cli'],

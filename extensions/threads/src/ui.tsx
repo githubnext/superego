@@ -15,13 +15,13 @@
 // - the model (`threads.model`), in the title bar: its provider's mark, a button that shows or hides the details, and
 //   pointed at, a card of the model (whose it is, its thinking, whose choice, what the thread has spent)
 // It also draws the thread tools' rows and `thread:` links (rows.tsx); the tools themselves are thread-tools'.
-import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type KeyboardEvent } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type KeyboardEvent, type ReactNode } from 'react'
 import {
   call, defineAction, defineUiExtension, fold, isPinned, listArchived, MachineDrift, useProjectSpaces, useSpace, search, shownRows, threadPath, useFold, useNarrow, RailButton, SHOW_PINNED, showProject, Slot, SORT, SpelledBadges, unreadList, useAppSetting, useDispatch, useLocalState, useMachines, usePlacement, useSelection, useProjects, useThreadView, useShell, useShortcut, useRailShortcut,
   type ArchivedThreads, type MachineEntry, type Pin, type Project, type ShownRow, type ShownSection, type Sort, type SidebarRailProps, type WindowContext,
 } from '@superego/app/ui'
 import { rollup, statusLabel, statusShape, unread, type ThreadInfo } from '@superego/protocol'
-import { ArchiveIcon, CaretRightIcon, ChatsIcon, ContextMenu, DotsThreeIcon, Glyph, HOVER_DELAY, HoverCard, IconButton, List, ListItem, MagnifyingGlassIcon, Menu, PlusIcon, ProviderMark, providerOf, PushPinIcon, PushPinSlashIcon, SparkleIcon, StatusGlyph, StatusWord, Tooltip, TooltipProvider, XCircleIcon } from '@superego/ui'
+import { ArchiveIcon, CaretRightIcon, ChatsIcon, ContextMenu, DotsThreeIcon, Glyph, HOVER_DELAY, HoverCard, IconButton, List, ListItem, MachineName, MagnifyingGlassIcon, Menu, PlusIcon, ProviderMark, providerOf, PushPinIcon, PushPinSlashIcon, SparkleIcon, StatusGlyph, StatusWord, Tooltip, TooltipProvider, XCircleIcon } from '@superego/ui'
 import './styles.css'
 import { ago } from './ago.ts'
 import { ThreadCard } from './card.tsx'
@@ -82,11 +82,13 @@ function Threads() {
   // order is held for the whole window, so ⌘⇧[ and ⌘⇧] go down the rows as they stand.
   useEffect(() => () => hold(false), [])
 
-  // The machine is a fact about a project, said where it isn't this computer (or there are several to tell apart).
+  // The machine is a fact about a project, said where it isn't this computer (or there are several to tell apart), in
+  // its colour.
   const several = machines.length > 1
-  const where = (project: Project) => project.machine.state !== 'connected'
-    ? `${project.machine.label} · ${STATE_WORDS[project.machine.state] ?? 'offline'}`
-    : several || project.machine.id !== 'local' ? project.machine.label : undefined
+  const where = (project: Project): ReactNode => project.machine.state !== 'connected'
+    ? <><MachineName machine={project.machine} /> · {STATE_WORDS[project.machine.state] ?? 'offline'}</>
+    : several || project.machine.id !== 'local' ? <MachineName machine={project.machine} /> : undefined
+  const whereThread = (project: Project) => { const machine = where(project); return <>{project.name}{machine && <> · {machine}</>}</> }
   const local = machines.find((m) => m.id === 'local')
   const ready = local?.state === 'connected'
   // On a phone, a search field under the title, as iOS lists have one: typed in, the list is the threads that match,
@@ -124,10 +126,10 @@ function Threads() {
           onGo={() => { const first = found[0]; if (first) select({ machine: first.machine.id, thread: first.thread.id }) }} />
       )}
       {searching
-        ? <Found query={query} found={found} archived={archived} where={(project) => [project.name, where(project)].filter(Boolean).join(' · ')} />
+        ? <Found query={query} found={found} archived={archived} where={whereThread} />
         : <>
       {projects.length === 0 && <div className="threads__empty">{ready ? 'Start a thread in a folder to see its project here.' : local?.state === 'connecting' || !local?.error ? 'Connecting…' : local.error}</div>}
-      {sidebar.pinned.length > 0 && <Pinned section={shown.pinned} where={(project) => [project.name, where(project)].filter(Boolean).join(' · ')} />}
+      {sidebar.pinned.length > 0 && <Pinned section={shown.pinned} where={whereThread} />}
       {shown.projects.map(({ project, ...section }) => (
         <section key={project.key} className={`threads-project ${project.machine.state !== 'connected' ? 'is-stale' : ''} ${section.folded ? 'is-folded' : ''}`}>
           <div className="threads-project__head" onKeyDown={foldKeys(section, setFold)}>
@@ -222,7 +224,7 @@ type Match = { machine: MachineEntry; thread: ThreadInfo; project?: Project; arc
  * What a search found, best first: the threads in use as the list has them, saying where each is; then the archived,
  * under their heading, to open read only. Nothing found, iOS's empty search: no results, and what was searched for.
  */
-function Found({ query, found, archived, where }: { query: string; found: Match[]; archived: ArchivedThreads | undefined; where(project: Project): string }) {
+function Found({ query, found, archived, where }: { query: string; found: Match[]; archived: ArchivedThreads | undefined; where(project: Project): ReactNode }) {
   const lit = useLit()
   const live = found.filter((match) => !match.archived)
   const put = found.filter((match) => match.archived)
@@ -259,7 +261,7 @@ const DRAGGED = 'application/x-superego-thread'
  * The pinned threads, from every project and machine, in the order they were pinned, each saying where it is. Dragged,
  * a row moves; a project's row dropped here is pinned where it's dropped.
  */
-function Pinned({ section, where }: { section: ShownSection; where(project: Project): string }) {
+function Pinned({ section, where }: { section: ShownSection; where(project: Project): ReactNode }) {
   const { sidebar } = useProjects()
   const lit = useLit()
   const dispatch = useDispatch()
@@ -323,7 +325,7 @@ function Pinned({ section, where }: { section: ShownSection; where(project: Proj
  * the phone the row's second line, each mark spelled out (the branch's name, not only its icon). A right-click pins or unpins it, or archives it; it can be dragged into the pinned.
  */
 function ThreadRow({ machine, thread, selected, row, where, className = '', ...data }: {
-  machine: MachineEntry; thread: ThreadInfo; selected: boolean; row?: ShownRow; where?: string; className?: string; 'data-pin'?: number
+  machine: MachineEntry; thread: ThreadInfo; selected: boolean; row?: ShownRow; where?: ReactNode; className?: string; 'data-pin'?: number
 }) {
   const level = row?.depth ?? 0
   const setFold = useFold()
@@ -516,7 +518,7 @@ function ArchivedRow({ machine, thread }: { machine: MachineEntry; thread: Threa
     <ListItem trailing={ago(thread.activeAt)} selected={lit(machine.id, thread.id)}
       onClick={() => select({ machine: machine.id, thread: thread.id })}>
       <span className="threads-archived__title">{thread.title}</span>
-      <em className="threads-archived__where">{thread.project.name}{machine.id !== 'local' ? ` · ${machine.label}` : ''}</em>
+      <em className="threads-archived__where">{thread.project.name}{machine.id !== 'local' && <> · <MachineName machine={machine} /></>}</em>
     </ListItem>
   )
 }

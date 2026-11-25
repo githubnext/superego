@@ -25,6 +25,7 @@ export function machineHub({ app, dataDir, self, store = new MachineStore(dataDi
   }
   return {
     list: () => links.entries(),
+    hereColour: () => store.hereColour(),
     async call(machine, method, params) {
       const link = links.get(machine)
       if (!link) throw new RpcError('disconnected', `${store.get(machine)?.label ?? machine} is turned off`)

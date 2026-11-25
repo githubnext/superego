@@ -2,7 +2,7 @@
 // rail dot's. Each line only when it has something to say.
 import { SpelledBadges, Slot, useMachines, useProjects, type MachineEntry } from '@superego/app/ui'
 import { rollup, statusShape, statusWord, type ThreadInfo } from '@superego/protocol'
-import { IdentificationBadgeIcon, modelName, ProviderMark, StatusGlyph } from '@superego/ui'
+import { IdentificationBadgeIcon, MachineName, modelName, ProviderMark, StatusGlyph } from '@superego/ui'
 import { ago } from './ago.ts'
 
 /**
@@ -21,7 +21,7 @@ export function ThreadCard({ machine, thread, tucked = [] }: { machine: MachineE
   const why = word && statusShape(thread.status, thread.quiet) !== 'working' ? thread.status.msg : undefined
   // A quiet one that finished counts for nothing here, as on its row.
   const top = rollup(tucked.map((t) => statusShape(t.status, t.quiet) === 'idle' ? { state: 'idle' as const } : t.status))
-  const where = [thread.project.name, several || machine.id !== 'local' ? machine.label : undefined].filter(Boolean).join(' · ')
+  const named = several || machine.id !== 'local'
   const spent = thread.cost ? `$${thread.cost.toFixed(2)}` : undefined
   return (
     <div className="thread-card">
@@ -34,7 +34,7 @@ export function ThreadCard({ machine, thread, tucked = [] }: { machine: MachineE
         </div>
       )}
       <div className="thread-card__line">
-        {where}
+        {thread.project.name}{named && <> · <MachineName machine={machine} /></>}
         <SpelledBadges><Slot name="thread.badge" props={{ machine, thread }} /></SpelledBadges>
       </div>
       {(thread.model || thread.profile) && (

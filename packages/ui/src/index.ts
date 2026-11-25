@@ -1,5 +1,6 @@
 export { Button, IconButton } from './button.tsx'
 export { TextArea } from './textarea.tsx'
+export { ColourSwatches, MachineName, machineColour, machineStyle } from './machine.tsx'
 export { Glyph, StatusGlyph, StatusWord, type GlyphShape } from './status.tsx'
 export { List, ListItem } from './list.tsx'
 export { Panel } from './panel.tsx'

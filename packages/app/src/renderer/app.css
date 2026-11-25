@@ -541,7 +541,14 @@ details[open] > .row > .row__chevron { transform: rotate(90deg); }
 .machine-row { padding: 8px 0; border-bottom: 1px solid var(--superego-border); }
 /* Wrapped on a narrow window, its state and ··· stay with the first line. */
 .machine-row__head { display: flex; align-items: flex-start; gap: 8px; }
-.machine-row__head > .superego-status { flex: none; height: 26px; display: inline-flex; align-items: center; }
+.machine-row__colour { flex: none; height: 26px; display: inline-flex; align-items: center; padding: 0 3px; margin: 0 -3px; border: 0; border-radius: 4px; background: none; color: inherit; font: inherit; }
+button.machine-row__colour { cursor: pointer; }
+button.machine-row__colour:hover { background: var(--superego-hover); }
+/* Its state's shape (a dot, a ring, a spinner) in the machine's colour, where it has one. */
+.machine-row__colour[style] > .superego-status { color: inherit; }
+.machine-row__dot { width: 9px; height: 9px; margin: 0 2px; border-radius: 50%; background: currentColor; }
+.machine-row__dot.is-off { opacity: .4; }
+.machine-row__swatches { padding: 8px; min-width: 0; }
 .machine-row__head > .machine-row__menu { flex: none; margin-top: 1px; }
 .machine-row__title { flex: 1; min-width: 0; min-height: 26px; display: flex; align-items: center; flex-wrap: wrap; gap: 4px 8px; }
 .machine-row__label, .machine-row__name { font: inherit; color: inherit; min-width: 0; }

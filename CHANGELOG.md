@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Each machine has a colour of its own: its name is drawn in it in the Threads sidebar, a thread's card, the title
+  bar and ⌘L. Pick another from its dot in Settings → Machines.
 - Claude Agent: when your login shell doesn't answer in time, it says so instead of that Claude Code isn't installed.
 - Claude Agent finds Claude Code on the PATH Superego already read from your login shell, instead of starting the
   shell again for every look.

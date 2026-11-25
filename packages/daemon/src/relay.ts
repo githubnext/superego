@@ -19,6 +19,8 @@ export type MachinePatch = { label?: string; enabled?: boolean; target?: string;
 export type MachineReach = {
   /** The configured machines, as entries (not this one). */
   list(): MachineEntry[]
+  /** This one's colour, as the list keeps it. */
+  hereColour?(): number
   /** Call one through its link. */
   call(machine: string, method: string, params: unknown): Promise<unknown>
   /** Whether one offers `feature`, as its daemon last said (see `offers`): nothing while it never has. */
@@ -60,7 +62,8 @@ export function createRelay(reach: MachineReach | undefined, self: () => Machine
   const peers = new Set<Peer>()
   const owners = new Map<string, Peer>()
   const watchers = new Set<(entries: MachineEntry[]) => void>()
-  const entries = (): MachineEntry[] => [self(), ...(reach?.list() ?? [])]
+  const here = (): MachineEntry => { const colour = reach?.hereColour?.(); return { ...self(), ...(colour ? { colour } : {}) } }
+  const entries = (): MachineEntry[] => [here(), ...(reach?.list() ?? [])]
   let queued = false
   const changed = () => {
     if (queued) return

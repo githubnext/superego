@@ -67,6 +67,8 @@ export type FakeMachineOptions = {
   id?: string
   /** Its name in the window: its id unless given. */
   label?: string
+  /** Its colour, a slot of the palette (1 to 8): none unless given. */
+  colour?: number
   /** Its protocol features (`FEATURES`): those its generation released unless given. */
   features?: string[]
   /** The extensions set up there, each at its version (a name alone: at the version of the window's UI half of it, else 1.0.0). */
@@ -154,7 +156,7 @@ export function fakeMachine(options: FakeMachineOptions = {}): TestMachine & { c
     id, calls,
     entry: {
       id, label: options.label ?? id, state: options.state ?? 'connected', machine: { id: `${id}-daemon`, hostname: id },
-      features, extensions,
+      features, extensions, ...(options.colour ? { colour: options.colour } : {}),
     } satisfies MachineEntry,
     async call(method: string, params: any = {}) {
       if (!['value.watch', 'unwatch', 'threads.watch', 'settings.watch', 'extension.declare', 'action.list'].includes(method)) calls.push({ method, params })

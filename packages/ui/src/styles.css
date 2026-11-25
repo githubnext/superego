@@ -55,6 +55,17 @@
   --superego-status-error-text: light-dark(#d70015, #ff6961);
   --superego-status-success: light-dark(#248a3d, #30d158);
 
+  /* Machines: the palette each machine's colour is a slot of (Settings → Machines), for its name and its dot. Calm, and
+     dark (light) enough to read as small text on the sidebar's glass. */
+  --superego-machine-1: light-dark(#0e7a84, #5ccbd2);   /* teal */
+  --superego-machine-2: light-dark(#7a4cc2, #b89cf6);   /* violet */
+  --superego-machine-3: light-dark(#b05200, #f2a35c);   /* orange */
+  --superego-machine-4: light-dark(#2e7b39, #7dd088);   /* green */
+  --superego-machine-5: light-dark(#b5366d, #f08db8);   /* rose */
+  --superego-machine-6: light-dark(#2c62c4, #85acf6);   /* blue */
+  --superego-machine-7: light-dark(#7d6800, #dcc35c);   /* ochre */
+  --superego-machine-8: light-dark(#8a5636, #d8a988);   /* brown */
+
   /* Code (code-highlight.ts): the editor, a message's and a rendered file's fenced blocks. */
   --superego-syntax-keyword: light-dark(#a626a4, #c792ea);
   --superego-syntax-string: light-dark(#50a14f, #a5d68a);
@@ -189,6 +200,14 @@ button, summary { -webkit-user-select: none; user-select: none; }
   font: inherit; color: inherit; width: 100%; resize: none; field-sizing: content; min-height: 1.5em;
   background: transparent; border: 0; outline: none;
 }
+
+/* A machine's colour (machine.tsx): its name in it; the swatches to pick one, the chosen ringed. */
+.superego-swatches { display: flex; gap: 6px; padding: 2px; }
+.superego-swatch {
+  width: 16px; height: 16px; padding: 0; border: 0; border-radius: 50%; cursor: pointer; outline-offset: 2px;
+  box-shadow: inset 0 0 0 .5px light-dark(rgb(0 0 0 / .15), rgb(255 255 255 / .15));
+}
+.superego-swatch[aria-checked="true"] { box-shadow: 0 0 0 2px var(--superego-raised), 0 0 0 3.5px currentColor; color: var(--superego-text); }
 
 /* A status's mark (status.tsx), 1em square in its state's colour: words carry the meaning, marks are the short form. */
 .superego-status { display: inline-flex; flex: none; width: 1em; height: 1em; vertical-align: -0.12em; color: var(--superego-status-idle); }

@@ -4,7 +4,7 @@
 // ⌥A adds the archived threads, after the rest (asked of each machine the first time, for as long as it's open); each
 // opening starts without them, as getting about is the live work.
 import { Fragment, useEffect, useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
-import { ArchiveIcon, autoFocusOnOpen, Dialog, PushPinIcon, StatusGlyph } from '@superego/ui'
+import { ArchiveIcon, autoFocusOnOpen, Dialog, MachineName, PushPinIcon, StatusGlyph } from '@superego/ui'
 import { unread, type Status, type ThreadInfo } from '@superego/protocol'
 import { listArchived, search, threadPath, type ArchivedThreads } from './thread-search.ts'
 import { useRegistry } from './registry.tsx'
@@ -21,8 +21,8 @@ type Row = {
   kind: Kind
   depth: number
   title: string
-  /** What else to show: the machine, a branch, a pane's thread. */
-  detail?: string
+  /** What else to show: the machine (in its colour), a branch, a pane's thread. */
+  detail?: ReactNode
   status?: Status
   /** A thread that reports to another: its work grey, its finished runs nothing new. */
   quiet?: boolean
@@ -79,7 +79,9 @@ export function Navigator({ onClose }: { onClose(): void }) {
 
   const rows = useMemo<Row[]>(() => {
     const several = machines.filter((m) => m.state !== 'disabled').length > 1
-    const where = (project: Project) => several || project.machine.id !== 'local' ? project.machine.label : undefined
+    const where = (project: Project) => several || project.machine.id !== 'local' ? <MachineName machine={project.machine} /> : undefined
+    /** A project, and its machine where it's named. */
+    const within = (name: string, machine: ReactNode) => machine ? <>{name} · {machine}</> : name
     const go = (fn: () => void) => () => { onClose(); fn() }
     const pins = new Set(pinList.map(({ machine, thread }) => `${machine}/${thread}`))
     const listedPinned = new Set(sidebar.pinned.map(({ project, thread }) => `${project.machine.id}/${thread.id}`))
@@ -94,7 +96,7 @@ export function Navigator({ onClose }: { onClose(): void }) {
       const show = () => void dispatch('thread.select', { machine: project.machine.id, thread: thread.id }, { source: 'navigator' })
       const at = { machine: project.machine.id, thread }
       // Pinned: where it is. Else its branch, when the worktrees extension gave it one of its own.
-      const detail = top ? [project.name, where(project)].filter(Boolean).join(' · ') : branchOf(thread)
+      const detail = top ? within(project.name, where(project)) : branchOf(thread)
       return [
         {
           key, kind: 'thread', depth, title: thread.title, status: thread.status, quiet: Boolean(thread.quiet), unread: unread(thread), pinned, again,
@@ -119,7 +121,7 @@ export function Navigator({ onClose }: { onClose(): void }) {
     // As the sidebar lists them: the pinned threads first, then every project with its threads, its pinned at its top.
     const archivedRows = (withArchived ? archived?.threads ?? [] : []).map(({ machine, thread }): Row => ({
       key: `archived:${machine.id}/${thread.id}`, kind: 'thread', depth: 0, title: thread.title, archived: true, group: 'Archived',
-      detail: [thread.project.name, several || machine.id !== 'local' ? machine.label : undefined].filter(Boolean).join(' · '),
+      detail: within(thread.project.name, several || machine.id !== 'local' ? <MachineName machine={machine} /> : undefined),
       path: threadPath(thread.project.name, thread.title), current: machine.id === selection?.machine && thread.id === selection.thread,
       // As the sidebar's Archived does: shown, read only, to unarchive from its title bar.
       go: go(() => void dispatch('thread.select', { machine: machine.id, thread: thread.id }, { source: 'navigator' })),

@@ -94,9 +94,10 @@ it('lists the machines it reaches, passes calls on, and brings their news back t
   const hub = await hubReaching(box)
   const a = await client(hub.socket)
   const b = await client(hub.socket)
-  expect(a.machines()[0]).toMatchObject({ id: 'local', state: 'connected', machine: { id: hub.daemon.machine.id } })
+  // Each with its colour, as the list on the hub's computer keeps it: for a browser's window.
+  expect(a.machines()[0]).toMatchObject({ id: 'local', state: 'connected', machine: { id: hub.daemon.machine.id }, colour: 1 })
   await until(() => a.machines().find((m) => m.id === hub.box)?.state === 'connected')
-  expect(a.machines().find((m) => m.id === hub.box)).toMatchObject({ label: 'Box', machine: { id: box.daemon.machine.id }, remote: { ssh: false } })
+  expect(a.machines().find((m) => m.id === hub.box)).toMatchObject({ label: 'Box', machine: { id: box.daemon.machine.id }, remote: { ssh: false }, colour: 2 })
   // The machine id it remembered for next time, written once it connected.
   await until(() => new MachineStore(join(dir, 'hub')).get(hub.box)?.daemonId === box.daemon.machine.id)
 

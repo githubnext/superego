@@ -3,7 +3,7 @@
 // pane menu).
 import { useLayoutEffect, useRef, type ComponentType } from 'react'
 import type { ThreadInfo } from '@superego/protocol'
-import { ArchiveIcon, ArrowElbowDownRightIcon, IconButton, IdentificationBadgeIcon, Menu, PencilSimpleIcon, PanePlusIcon, PushPinIcon, StatusGlyph, StatusWord } from '@superego/ui'
+import { ArchiveIcon, ArrowElbowDownRightIcon, IconButton, IdentificationBadgeIcon, MachineName, Menu, PencilSimpleIcon, PanePlusIcon, PushPinIcon, StatusGlyph, StatusWord } from '@superego/ui'
 import type { MachineEntry } from '../shared/bridge.ts'
 import { useRegistry } from './registry.tsx'
 import { paneMenu, PlacedViews, Slot, useLayout, ViewScopeProvider } from './placement.tsx'
@@ -34,7 +34,7 @@ export function ThreadTitle({ machine, thread }: { machine: MachineEntry; thread
   return (
     <span className="titlebar__crumb">
       <span className="titlebar__seg titlebar__project" title={`${thread.project.name}\n${thread.cwd}`}>
-        {machine.id !== 'local' && <>{machine.label}<span className="titlebar__dot">·</span></>}
+        {machine.id !== 'local' && <><MachineName machine={machine} /><span className="titlebar__dot">·</span></>}
         {thread.project.name}
       </span>
       <span className="titlebar__sep" aria-hidden>›</span>

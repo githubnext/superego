@@ -2,7 +2,7 @@
 // machines (every connected machine's settings at once).
 import { useEffect, useState } from 'react'
 import { remoteCommand, type Json, type SettingsSnapshot } from '@superego/protocol'
-import { Button, CaretRightIcon, DotsThreeIcon, Glyph, IconButton, Menu, Select, TextField, Tooltip, type GlyphShape } from '@superego/ui'
+import { Button, CaretRightIcon, ColourSwatches, DotsThreeIcon, Glyph, IconButton, machineStyle, Menu, Popover, Select, TextField, Tooltip, type GlyphShape } from '@superego/ui'
 import type { AllowedUi } from '@superego/client'
 import type { MachineEntry } from '../../shared/bridge.ts'
 import { useSettings } from '../client.ts'
@@ -76,6 +76,30 @@ function ProfileUis({ allowed, declined, act }: { allowed: AllowedUi[]; declined
 
 type Act = (id: string, params: Record<string, unknown>) => Promise<unknown>
 
+/**
+ * A machine's state as its glyph, in its colour: pressed, the palette's swatches to pick another. In a browser, only the
+ * glyph: the list is kept on the serving computer.
+ */
+function MachineColour({ m, web, act }: { m: MachineEntry; web: boolean; act: Act }) {
+  const [open, setOpen] = useState(false)
+  const shape = machineGlyph(m.state)
+  const label = stateWord(m) ?? 'connected'
+  // At rest (connected, or switched off), a dot of its colour big enough to see it by; else its state's ring or spinner.
+  const glyph = shape === 'idle' && m.colour
+    ? <span className={`machine-row__dot ${m.state === 'disabled' ? 'is-off' : ''}`} role="img" aria-label={label} title={label} />
+    : <Glyph shape={shape} label={label} />
+  if (web) return <span className="machine-row__colour" style={machineStyle(m.colour)}>{glyph}</span>
+  return (
+    <Popover open={open} onOpenChange={setOpen} side="bottom" align="start" className="machine-row__swatches"
+      trigger={<button type="button" className="machine-row__colour" style={machineStyle(m.colour)} aria-label={`${m.label}: colour`} title="Colour">{glyph}</button>}>
+      <ColourSwatches value={m.colour} label={`${m.label}’s colour`} onPick={(colour) => {
+        setOpen(false)
+        if (colour !== m.colour) void act('machine.edit', { id: m.id, colour }).catch(() => {})
+      }} />
+    </Popover>
+  )
+}
+
 /** One machine: its state, name and host on a line, the one thing it needs done beside them, the rest in its ··· menu. */
 function MachineRow({ m, web, onOpen }: { m: MachineEntry; web: boolean; onOpen(id: string): void }) {
   const appConfig = useApp()
@@ -123,7 +147,7 @@ function MachineRow({ m, web, onOpen }: { m: MachineEntry; web: boolean; onOpen(
   return (
     <div className="machine-row" data-machine={m.id} data-state={m.state}>
       <div className="machine-row__head">
-        <Glyph shape={machineGlyph(m.state)} label={word ?? 'connected'} />
+        <MachineColour m={m} web={web} act={act} />
         <div className="machine-row__title">
           {m.remote && !web ? <input className="machine-row__label" defaultValue={m.label} aria-label="Name"
             onBlur={(e) => { if (e.target.value.trim() && e.target.value !== m.label) void act('machine.edit', { id: m.id, label: e.target.value.trim() }).catch(() => {}) }} />
