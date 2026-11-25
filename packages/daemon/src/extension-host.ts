@@ -4,6 +4,7 @@
 import { chmodSync, existsSync, mkdirSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { defineExtension, type Extension, hook, ToolTask } from '@earendil-works/pi-durable'
+import { DEFAULT_IMAGE_LIMITS } from '@earendil-works/pi-durable/tools'
 import {
   type ChannelAcceptor, Channels, compareVersion, consentRefused, contractProblem, dataViewProblem, machineConsent, EXTENSION_API, FEATURES, Lifetime, manifestOf, paramsParser,
   parseVersion, RpcError, UNVERSIONED, DATA_VIEWS, type DataViewInfo, type ExtensionAbout, type ExtensionReport, type ExtensionsReport, type Json,
@@ -586,6 +587,14 @@ export function createExtensionHost(host: Host, later: { profiles(): ProfileHost
       },
       agentsDir: host.agentsDir,
       loginEnv: host.loginEnv,
+      images: {
+        async fit({ data, mimeType }, limits) {
+          // A Uint8Array of its own: a Buffer's slice shares Node's pool, which a worker can't be handed.
+          const bytes = Buffer.from(data, 'base64')
+          const fitted = await host.agent.images.processor.prepare(new Uint8Array(bytes.buffer, bytes.byteOffset, bytes.length).slice(), mimeType, { ...DEFAULT_IMAGE_LIMITS, ...limits })
+          return fitted && { data: fitted.data, mimeType: fitted.mimeType, ...(fitted.resized ? { resized: fitted.resized } : {}) }
+        },
+      },
       signal: life.signal,
       agent(agentPart, { always = true } = {}) {
         life.live(`the agent part ${agentPart.name}`)

@@ -86,6 +86,10 @@ profile's `without` (`coding-tools`, `agent-ui`, `panes`, `thread-tools`, …).
 `wrapTool`, `wrapSection` and `hook` are pi-durable's lower-level decorators, by name; prefer tools and sections. To
 hear every tool call, see [Watching tool calls](daemon.md#watching-tool-calls).
 
+To change what each request to the model carries without changing the transcript, hook it (API ^5.12):
+`hook(GenerationTask, { beforeRequest({ messages }, api) { return { messages: changed } } })` in an agent part's
+`hooks`. Return nothing to leave them as they are. `api.conversationId` says whose (`superego.threads.of(id)`).
+
 ## Testing a tool
 
 ```sh

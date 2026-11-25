@@ -12,6 +12,9 @@
   line.
 - Reports from child threads wait while their parent is stuck that way, and reach it once it can take messages again,
   or the thread that continues it.
+- Extensions can change what each request to the model carries, its transcript left as it is, with
+  `hook(GenerationTask, { beforeRequest })`, and fit images as Superego does with `superego.images.fit` (extension
+  API 5.12).
 - New file and New folder in a folder pane: from its header, a folder's right-click menu or `⌘⌥N`. Name it in
   place (`docs/new.md` makes `docs` too); a new file opens in the editor, ready to type.
 - A file opened in an editor pane gets the focus in its text once it's read, not just the pane.

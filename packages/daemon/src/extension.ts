@@ -380,6 +380,12 @@ export type DaemonApi = {
    */
   loginEnv(): Promise<LoginEnv>
   /**
+   * (API ^5.12) Fit an image (base64) within `limits`, as the core fits every image it sends a model: as it is when it
+   * fits, else scaled down and encoded again (PNG, then JPEG at falling qualities, whichever fits `maxBytes` first).
+   * Undefined when it can't be made to fit, or isn't an image it can read. On a worker: call it freely from a hook.
+   */
+  images: { fit(image: { data: string; mimeType: string }, limits?: Partial<ImageFit>): Promise<FittedImage | undefined> }
+  /**
    * Aborted when this extension is torn down, before its registrations go: for its own timers, watchers and fetches
    * (`fetch(url, { signal })`, `watch(path, { signal })`, `signal.addEventListener('abort', …)`; one that throws is logged, not fatal).
    */
@@ -646,3 +652,8 @@ export type DaemonApi = {
     remove(id: string): Promise<void>
   }
 }
+
+/** How an image is fitted (`images.fit`): at most this wide and tall, its base64 at most `maxBytes`, JPEG at `jpegQuality`. Unset: 2000×2000, 4.5 MB, 80. */
+export type ImageFit = { maxWidth: number; maxHeight: number; maxBytes: number; jpegQuality: number }
+/** An image fitted (`images.fit`): its base64 and type, and the size it was scaled from and to, when it was. */
+export type FittedImage = { data: string; mimeType: string; resized?: { from: { width: number; height: number }; to: { width: number; height: number } } }

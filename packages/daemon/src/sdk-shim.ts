@@ -6,7 +6,7 @@ const get = (key: string) => (...args: unknown[]) => (sdk[key] as unknown as (..
 export const defineProfile = get('defineProfile'), defineExtension = get('defineExtension'), defineTool = get('defineTool')
 export const section = get('section'), hook = get('hook'), wrapTool = get('wrapTool'), wrapSection = get('wrapSection')
 export const defineDaemonExtension = get('defineDaemonExtension'), defineAction = get('defineAction'), spawnGroup = get('spawnGroup')
-export const RpcError = (sdk as Record<string, unknown>).RpcError
+export const RpcError = (sdk as Record<string, unknown>).RpcError, GenerationTask = (sdk as Record<string, unknown>).GenerationTask
 export const arr = get('arr'), blockErrors = get('blockErrors'), bool = get('bool'), int = get('int'), lit = get('lit'), nullable = get('nullable'), num = get('num')
 export const obj = get('obj'), opt = get('opt'), str = get('str'), union = get('union'), unknown = get('unknown')
 export default sdk

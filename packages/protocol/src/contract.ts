@@ -68,11 +68,14 @@ import type { ExtensionAbout } from './app.ts'
  * 5.10: the `welcome` slot (`{ machine }`): on first-run setup, after the model, a word on what yours offers.
  * 5.11: the daemon half's `loginEnv()`: the environment of the user's login shell (its keys, its PATH), as the daemon
  * read it once, or why it couldn't.
+ * 5.12: `GenerationTask` from 'superego', for an agent part's hooks on each request (`hook(GenerationTask, {
+ * beforeRequest })`, which may replace the messages sent); the daemon half's `images.fit(image, limits)`, the core's own
+ * image fitting.
  * Minor: something added (an extension that uses it asks for `^3.<minor>`); major: something an extension could rely
  * on changed or went, from 2.5 on without exception. An extension whose `api` range this doesn't satisfy is refused
  * when it's set up.
  */
-export const EXTENSION_API = '5.11.0'
+export const EXTENSION_API = '5.12.0'
 
 /** What a machine says of an extension set up there: `hello.extensions` and `features.changed` carry one each. */
 export type ExtensionManifest = Pick<ExtensionAbout, 'name' | 'version' | 'api'>
