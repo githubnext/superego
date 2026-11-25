@@ -1,0 +1,14 @@
+/* The ◎ in the sidebar's heading: lit while focus mode is on, as a lit rail button is; on a phone, a filled disc. */
+.focus-button.is-on, .threads__actions .focus-button.is-on { background: var(--superego-selected); color: var(--superego-accent); }
+.app__drawer > .app__sidebar .threads__actions .focus-button.is-on { background: var(--superego-accent); color: var(--superego-accent-text); }
+.focus-glyph { display: block; flex: none; }
+.app__drawer > .app__sidebar .focus-button .focus-glyph { width: 18px; height: 18px; }
+/* A timed mode's minutes left, beside the ◎: quiet, at the heading's small size on a phone too. */
+.focus-left { margin-right: 2px; font-size: var(--superego-text-sm); font-weight: 400; letter-spacing: 0; color: var(--superego-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+/* A focused thread's mark, fainter than other marks: it's yours, not something about the thread. */
+.thread-badge:has(> .focus-glyph) { color: var(--superego-faint); }
+
+/* The end of the list in focus mode: what it hides, quiet, a click from everything. */
+.focus-more { display: flex; align-items: center; width: 100%; margin-top: 14px; min-height: 24px; padding: 0 8px; border: 0; border-radius: var(--superego-radius); background: none; font: inherit; font-size: var(--superego-text-sm); color: var(--superego-faint); text-align: left; cursor: pointer; }
+.focus-more:hover, .focus-more:focus-visible { color: var(--superego-text); }
+.focus-empty { padding: 8px; font-size: var(--superego-text-sm); color: var(--superego-muted); }

@@ -26,6 +26,7 @@
     { "path": "extensions/skills" },
     { "path": "extensions/browser" },
     { "path": "extensions/unread" },
+    { "path": "extensions/focus" },
     { "path": "extensions/worktrees" },
     { "path": "extensions/ego" },
     { "path": "extensions/terminal" },

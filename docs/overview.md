@@ -59,6 +59,15 @@ does; Settings → Site permissions forgets your answers.
 `~/.superego/layout.json`: Edit layout… in `⌘K` opens it, and it applies as you save. Or right-click a view to move it.
 See [How the window is put together](interface.md).
 
+## Focus mode
+
+Focus a few threads, and the sidebar can show only those: Focus in a thread's right-click menu (on a phone, its menu),
+or `⌘⌥F` for the one shown. Threads it starts join on their own. The ◎ in the sidebar's heading, or `⌘⇧F`, turns focus
+mode on: the threads in focus under their projects, and every thread that needs you (a question, a permission, a
+failure), which is never hidden. "Show N more" at the end, the ◎ or `⌘⇧F` again shows everything. The ◎'s menu has
+Focus for 1 hour, which turns itself off. What's in focus is the same in every window; it's the `focus` extension, so
+Settings → Extensions can turn it off.
+
 ## Ego
 
 Ego is Superego's own agent: the circle at the top of the rail (`⌘1`), or Ask Ego in `⌘K`. It's an extension, so if you
@@ -89,6 +98,8 @@ Turn either off for a profile (`without: ['skills', 'agents-md']`) or a machine 
 | `⌘⇧P` | Open a pane |
 | `⌘U` | Unread threads: what needs you, then what failed, then what finished |
 | `⌘.` | Next unread thread |
+| `⌘⌥F` | Focus or unfocus the thread shown |
+| `⌘⇧F` | Focus mode: the sidebar shows only the threads in focus, and what needs you |
 | `⌘⇧[` `⌘⇧]` | Previous / next thread in the sidebar |
 | `⌘[` `⌘]` | Back / forward through the threads this window has shown |
 | `⌃Tab` `⌃⇧Tab` | The thread and its panes, in turn |

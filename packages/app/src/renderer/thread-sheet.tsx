@@ -1,6 +1,6 @@
 // A phone's thread sheet: what the title bar holds wide, as a menu up from the foot, its rows in iOS's inset groups. One
 // row each, an icon and what it says (and a detail after, where there's one): the thread's own (its profile, where it came from, extensions' chips and
-// header views), renaming (the title at its top becomes a field), pinning and archiving, the panes to open beside it; under them, the views the layout puts beside the
+// header views), renaming (the title at its top becomes a field), pinning, extensions' actions (`thread.menu`) and archiving, the panes to open beside it; under them, the views the layout puts beside the
 // thread, which are panels, not rows.
 import { useLayoutEffect, useRef, useState, type ComponentType, type ReactNode } from 'react'
 import type { ThreadInfo } from '@superego/protocol'
@@ -18,6 +18,7 @@ import { isPinned } from './pins.ts'
 import { useProjects, useSelection } from './state.tsx'
 import { startRename, useRenaming } from './rename.ts'
 import { TitleField } from './thread-header.tsx'
+import { SheetItem, SheetMenu } from './thread-menu.tsx'
 
 type Icon = ComponentType<{ size?: number; 'aria-hidden'?: boolean }>
 
@@ -98,6 +99,7 @@ export function ThreadSheet({ machine, thread, open, onOpenChange, handle, conta
                       {pinned ? 'Unpin' : 'Pin'}
                     </SheetItem>
                   )}
+                  {!thread.archived && <SheetMenu close={close}><Slot name="thread.menu" props={{ machine, thread }} /></SheetMenu>}
                   {thread.archived
                     ? <SheetItem id="unarchive" icon={ArrowCounterClockwiseIcon} onClick={() => run('thread.unarchive', { thread: thread.id })}>Unarchive</SheetItem>
                     : <SheetItem id="archive" icon={ArchiveIcon} onClick={() => run('thread.archive', { thread: thread.id })}>Archive</SheetItem>}
@@ -117,22 +119,6 @@ export function ThreadSheet({ machine, thread, open, onOpenChange, handle, conta
         </BaseUI.Drawer.Viewport>
       </BaseUI.Drawer.Portal>
     </BaseUI.Drawer.Root>
-  )
-}
-
-/** A row: its icon (a blank as wide, without), what it says, and a detail at its end. */
-function SheetItem({ id, icon: Icon, hint, checked, disabled, onClick, children }: {
-  id: string; icon?: Icon | undefined; hint?: ReactNode; checked?: boolean; disabled?: boolean; onClick(): void; children: ReactNode
-}) {
-  return (
-    <button type="button" className="superego-menu__item thread-sheet__item" data-item={id} disabled={disabled}
-      aria-pressed={checked} onClick={onClick}>
-      <span className="superego-menu__text thread-sheet__label">
-        {Icon ? <Icon size={18} aria-hidden /> : <span className="thread-sheet__blank" />}
-        <span className="thread-sheet__words">{children}</span>
-      </span>
-      {(hint || checked) && <span className="superego-menu__hint thread-sheet__hint">{hint && <span className="thread-sheet__detail">{hint}</span>}{checked && <span className="superego-menu__check">✓</span>}</span>}
-    </button>
   )
 }
 

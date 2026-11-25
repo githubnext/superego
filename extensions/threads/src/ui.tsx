@@ -6,7 +6,10 @@
 // - the list (`threads.list`), a sidebar: sorted recently active, newest first, needs you first or alphabetically (an app
 //   setting); with the sidebar hidden, a rail of status glyphs; the key to go anywhere (⌘L) beside its heading, while
 //   pointed at; ⌃T puts the keyboard in it, on the selected thread's row (and again, back in the prompt). A row's title is followed by other extensions' marks (the `thread.badge` slot: a worktree's branch,
-//   say); a right-click on it pins or unpins it, or archives it; on a phone, so does a swipe (swipe.tsx). Pinned rows are dragged to reorder them, and a
+//   say); a right-click on it pins or unpins it, does what extensions add (`thread.menu`), or archives it; on a phone, a swipe pins or archives (swipe.tsx).
+//   Extensions' buttons sit in its heading (`sidebar.heading`). Narrowed by an extension (`superego.sidebarFilter`), it
+//   shows what that lets through, its heading what the narrowing calls itself, and at its end what it hides instead of
+//   the archived. Pinned rows are dragged to reorder them, and a
 //   project's row dragged among them is pinned there. Pointed at or focused for a moment, a row (or a rail's dot) shows
 //   a card of its thread (card.tsx). On a phone, a search field under its title narrows it to the threads that match,
 //   archived ones too, as ⌘L finds them
@@ -17,7 +20,7 @@
 // It also draws the thread tools' rows and `thread:` links (rows.tsx); the tools themselves are thread-tools'.
 import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties, type DragEvent, type KeyboardEvent, type ReactNode } from 'react'
 import {
-  call, defineAction, defineUiExtension, fold, isPinned, listArchived, MachineDrift, useProjectSpaces, useSpace, search, shownRows, threadPath, useFold, useNarrow, RailButton, SHOW_PINNED, showProject, Slot, SORT, SpelledBadges, unreadList, useAppSetting, useDispatch, useLocalState, useMachines, usePlacement, useSelection, useProjects, useThreadView, useShell, useShortcut, useRailShortcut,
+  call, defineAction, defineUiExtension, fold, isPinned, listArchived, MachineDrift, NarrowedFooter, useProjectSpaces, useSpace, search, shownRows, threadPath, useFold, useNarrow, RailButton, SHOW_PINNED, showProject, Slot, SORT, SpelledBadges, unreadList, useAppSetting, useDispatch, useLocalState, useMachines, usePlacement, useSelection, useProjects, useThreadView, useShell, useShortcut, useRailShortcut,
   type ArchivedThreads, type MachineEntry, type Pin, type Project, type ShownRow, type ShownSection, type Sort, type SidebarRailProps, type WindowContext,
 } from '@superego/app/ui'
 import { rollup, statusLabel, statusShape, unread, type ThreadInfo } from '@superego/protocol'
@@ -114,9 +117,10 @@ function Threads() {
   return (
     <div className={`threads ${ready ? 'is-ready' : ''}`} data-focus-scope onPointerEnter={() => hold(true)} onPointerLeave={() => hold(false)}>
       <div className="threads__head">
-        <span>Threads</span>
+        <span>{sidebar.narrowed?.by.find((n) => n.title)?.title ?? 'Threads'}</span>
         <GoKeys />
         <span className="threads__actions">
+          <Slot name="sidebar.heading" props={{}} />
           <Options />
           <NewThreadButton label="New thread…" />
         </span>
@@ -152,7 +156,7 @@ function Threads() {
           )}
         </section>
       ))}
-      <Archived machines={machines} live={projects} />
+      {sidebar.narrowed ? <NarrowedFooter narrowed={sidebar.narrowed} /> : <Archived machines={machines} live={projects} />}
       </>}
     </div>
   )
@@ -376,6 +380,8 @@ function ThreadRow({ machine, thread, selected, row, where, className = '', ...d
       </ContextMenu.Trigger>
       <ContextMenu.Popup className="threads-row-menu">
         <Menu.Item onClick={pin}>{on ? 'Unpin' : 'Pin'}</Menu.Item>
+        <Slot name="thread.menu" props={{ machine, thread }} />
+        <Menu.Separator />
         <Menu.Item onClick={archive} hint={archiveKeys}>Archive</Menu.Item>
       </ContextMenu.Popup>
     </ContextMenu.Root>

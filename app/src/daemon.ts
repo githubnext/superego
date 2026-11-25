@@ -27,6 +27,7 @@ import terminal from '@superego/terminal/daemon'
 import threadReports from '@superego/thread-reports/daemon'
 import threadTools from '@superego/thread-tools/daemon'
 import { about as unread } from '@superego/unread/shared'
+import { about as focus } from '@superego/focus/shared'
 import { about as browser } from '@superego/browser/shared'
 import worktrees from '@superego/worktrees/daemon'
 import app from '../superego.config.ts'
@@ -43,7 +44,7 @@ const claude = claudeAgent({ skills: [SKILL_DIR] })
 // them to browsers and agents (see the daemon's relay.ts).
 serveDaemon({
   app, defaultCwd: homedir(), extensions: [
-    worktrees, agentUi, claude, ego, files, git, images, links, mcpServers, mentions, skills, suggestions, tasks, terminal, threadTools, threadReports, unread, browser,
+    worktrees, agentUi, claude, ego, files, git, images, links, mcpServers, mentions, skills, suggestions, tasks, terminal, threadTools, threadReports, unread, focus, browser,
   ], ...(webRoot ? { webRoot } : {}),
   reach: (dataDir, self) => machineHub({ app, dataDir, self }),
 }).catch((error) => {

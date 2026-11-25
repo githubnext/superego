@@ -1,9 +1,11 @@
 #!/bin/bash
 # The window's layout in the states the design covers, screenshotted:
-# `test/look.sh <dir> [look|focus|panes|panehead|composer|images|mcp|web|terminal|toolbar|titlebar|titlebar-fit|pins|folds|states|cards|dialogs|machines|staff|picker|providers|keptpage|themes|theme-ui|mac-look|claude-agent|setup|phone-look|header|files]` (look, unless given), each a script of
+# `test/look.sh <dir> [look|focus|focus-mode|panes|panehead|composer|images|mcp|web|terminal|toolbar|titlebar|titlebar-fit|pins|folds|states|cards|dialogs|machines|staff|picker|providers|keptpage|themes|theme-ui|mac-look|claude-agent|setup|phone-look|header|files]` (look, unless given), each a script of
 # that name here:
 # - `look`: the sidebar shown, dragged and hidden, the thread alone and with panes, details, a phone; ⌘N's dialog, Settings' General, Appearance and Hotkeys (a clash too);
 # - `focus`: each region holding the focus;
+# - `focus-mode`: focus mode: threads in focus marked, a row's menu, the sidebar heading's ◎ and its menu, the list
+#   narrowed, for an hour, and a phone's drawer; light and dark;
 # - `panes`: a thread's panes scrolled and stacked;
 # - `panehead`: panes' heads (a tab, an editor's bar, the Browser pane's toolbar) at rest and with what's under them scrolled;
 # - `composer`: the composer and what's around it;
@@ -53,7 +55,7 @@ cd "$(dirname "$0")/.."
 # seconds), and builds the app first if its sources changed.
 [ "$SUPEREGO_CHECK_COMMAND" = test/look.sh ] || exec node ../scripts/check.ts --timeout SUPEREGO_SHOWCASE_TIMEOUT=480 test/look.sh "$@"
 node scripts/build.ts
-OUT="$(cd "$(dirname "${1:?usage: look.sh <dir> [look|focus|panes|panehead|composer|images|mcp|web|terminal|toolbar|titlebar|titlebar-fit|pins|folds|states|cards|dialogs|machines|staff|picker|keptpage|themes|theme-ui|mac-look|claude-agent|setup|phone-look|header|files]}")" && pwd)/$(basename "$1")"
+OUT="$(cd "$(dirname "${1:?usage: look.sh <dir> [look|focus|focus-mode|panes|panehead|composer|images|mcp|web|terminal|toolbar|titlebar|titlebar-fit|pins|folds|states|cards|dialogs|machines|staff|picker|keptpage|themes|theme-ui|mac-look|claude-agent|setup|phone-look|header|files]}")" && pwd)/$(basename "$1")"
 mkdir -p "$OUT"
 unset ANTHROPIC_API_KEY ANTHROPIC_OAUTH_TOKEN OPENAI_API_KEY
 export SUPEREGO_HOME="$(mktemp -d)" SUPEREGO_HEADLESS=1 SUPEREGO_SHOWCASE_OUT="$OUT" SUPEREGO_REPLAY_SPEED=0 TZ=Europe/Copenhagen

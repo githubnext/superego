@@ -61,6 +61,7 @@ Extensions) or per profile (`without`).
 | `files` | the file tree beside the editor and quick open (`⌘P`) |
 | `images` | `show_images`, and the images in the thread |
 | `unread` | `⌘U` and `⌘.`: what agents have for you that you haven't seen (UI) |
+| `focus` | focus mode (`⌘⇧F`): the sidebar narrowed to the threads you focus (`⌘⌥F`) and what needs you (UI) |
 | `links` | `⌃O`: the links in the thread (UI) |
 | `mentions` | `@` in the composer names another thread or a file |
 | `skills` | skills from `~/.agents/skills`: in the prompt, `$name` in the composer, a view listing them |

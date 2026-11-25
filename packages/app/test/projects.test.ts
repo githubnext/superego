@@ -2,7 +2,7 @@
 import { expect, it } from 'vitest'
 import type { ThreadInfo, Status } from '@superego/protocol'
 import type { MachineEntry } from '../src/shared/bridge.ts'
-import { freeze, groupProjects, nest } from '../src/renderer/projects.ts'
+import { freeze, groupProjects, narrowProjects, nest, pinnedFirst, threadBeside } from '../src/renderer/projects.ts'
 
 const machine = (id: string, state: MachineEntry['state'] = 'connected'): MachineEntry => ({ id, label: id === 'local' ? 'This computer' : 'Build box', state })
 const thread = (id: string, root: string, state: Status['state'], createdAt: number, activeAt: number): ThreadInfo =>
@@ -42,4 +42,18 @@ it('puts the threads a thread started under it, a level in; one whose parent is 
   expect(nested.threads.map((thread) => [thread.id, nested.depth[thread.id]])).toEqual([
     ['parent', 0], ['child-b', 1], ['child-a', 1], ['grandchild', 2], ['orphan', 0], ['other', 0],
   ])
+})
+
+it('narrows to the threads a filter lets through, the one shown kept, one under a hidden thread on its own', () => {
+  const child: ThreadInfo = { ...thread('child', '/code/superego', 'idle', 2, 45), parent: 'old-busy' }
+  const all = groupProjects(machines, { ...threads, local: [...threads.local, child] }, 'recent')
+  const kept = new Set(['child', 'far'])
+  const narrowed = narrowProjects(all, (_machine, t) => kept.has(t.id), { machine: 'local', thread: 'new-done' })
+  expect(shape(narrowed.projects)).toEqual([['superego', 'local', ['child']], ['site', 'local', ['new-done']], ['superego', 'box', ['far']]])
+  expect(narrowed.projects[0]!.depth).toEqual({ child: 0 })
+  expect([narrowed.hidden, narrowed.shown]).toEqual([2, 3])
+  // Next and previous go through what's shown.
+  const sidebar = pinnedFirst(narrowed.projects, [])
+  expect(threadBeside(sidebar, { machine: 'local', thread: 'child' }, 1)).toEqual({ machine: 'local', thread: 'new-done' })
+  expect(threadBeside(sidebar, { machine: 'local', thread: 'child' }, -1)).toEqual({ machine: 'box', thread: 'far' })
 })

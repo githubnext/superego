@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- **Focus mode.** Focus a few threads from a row's right-click menu (or a phone's thread menu), or `⌘⌥F` for the one
+  shown; threads they start join them. The ◎ in the Threads sidebar's heading, or `⌘⇧F`, narrows the list to those
+  threads, under their projects, and to every thread waiting on you, which is never hidden; "Show N more" at its end
+  shows everything again. Focus for 1 hour, in the ◎'s menu, turns itself off. ⌘⇧[ and ⌘⇧] step through what's shown.
+  It's the new Focus extension: Settings → Extensions turns it off.
+- Extensions can add items to a thread's row menu and phone menu (the `thread.menu` slot, `ThreadMenuItem`), buttons to
+  the Threads sidebar's heading (`sidebar.heading`), and narrow the sidebar's list with `superego.sidebarFilter`
+  (extension API 5.13).
 - A thread no longer gets stuck on "413 Request Entity Too Large" (GitHub Copilot's limit is far below other
   providers'): requests are kept small enough for the provider, leaving out older images (named in their place) and
   then cutting old tool output short. A provider that refuses one anyway is asked again smaller, and its requests stay

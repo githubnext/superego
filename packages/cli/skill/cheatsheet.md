@@ -36,7 +36,8 @@ What each half of an extension registers, a line each. The [guide](guide.md) bui
 | UI half (`superego.` in `setup`) | For |
 |---|---|
 | `view('x.y', { title, icon, context, fits, default, narrow, withoutSidebar, order, component, railButton, width })` | UI the layout places ([Views and the layout](window.md#views-and-the-layout)) |
-| `slot(name, Component, { order })` | `header.chips`, `thread.badge`, `composer.above`, `details.section`, `editor.side`, `editor.bar`, `overlay`, `onboarding`, `welcome` ([slots](ui.md#slots)) |
+| `slot(name, Component, { order })` | `header.chips`, `thread.badge`, `thread.menu`, `sidebar.heading`, `composer.above`, `details.section`, `editor.side`, `editor.bar`, `overlay`, `onboarding`, `welcome` ([slots](ui.md#slots)) |
+| `sidebarFilter(useFilter)` | narrow the sidebar's list: a hook returning `{ shows, title?, footer? }` or undefined ([narrowing](ui.md#narrowing-the-sidebar)) |
 | `newThreadField({ component, from })` | a New thread field, sent as `options.<name>` for `starting`; `from(thread)` its value for one started like `thread`. Bundled only |
 | `signal` | aborted at teardown (UI reloaded or revoked) |
 | `on(event, listener)` → off; `window` | `thread.status`, `select`, `focus`, `visibility`; `window` is `{ focused, visible, selection, thread, machines, threads }` now |

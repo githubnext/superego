@@ -147,6 +147,8 @@
 .thread-badge.is-spelled { flex: 0 1 auto; gap: 4px; min-width: 0; max-width: 100%; }
 .thread-badge.is-spelled > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .thread__parent { display: flex; align-items: baseline; gap: 4px; }
+/* The end of a narrowed sidebar (a sidebar filter): how many threads it hides, quiet, unless the filter draws its own. */
+.sidebar-hidden { margin-top: 14px; padding: 0 8px; min-height: 24px; display: flex; align-items: center; font-size: var(--superego-text-sm); color: var(--superego-faint); }
 /* The profile's badge, by the title: its name, quiet and cut short when long; pointed at, a card of what it is. */
 .thread__profile { display: inline-flex; align-items: center; gap: 3px; max-width: 160px; height: 20px; padding: 0 6px; border: 0; border-radius: 5px; background: var(--superego-hover); font: inherit; font-size: var(--superego-text-xs); font-weight: 400; color: var(--superego-muted); cursor: default; }
 .thread__profile > svg { flex: none; }

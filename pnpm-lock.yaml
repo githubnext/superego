@@ -234,6 +234,9 @@ importers:
       '@superego/files':
         specifier: workspace:*
         version: link:../extensions/files
+      '@superego/focus':
+        specifier: workspace:*
+        version: link:../extensions/focus
       '@superego/git':
         specifier: workspace:*
         version: link:../extensions/git
@@ -459,6 +462,31 @@ importers:
       '@superego/sdk':
         specifier: workspace:*
         version: link:../../packages/sdk
+      '@types/react':
+        specifier: ^19
+        version: 19.3.0
+      react:
+        specifier: ^19
+        version: 19.3.1
+
+  extensions/focus:
+    dependencies:
+      '@superego/app':
+        specifier: workspace:*
+        version: link:../../packages/app
+      '@superego/protocol':
+        specifier: workspace:*
+        version: link:../../packages/protocol
+      '@superego/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
+    devDependencies:
+      '@superego/sdk':
+        specifier: workspace:*
+        version: link:../../packages/sdk
+      '@superego/threads':
+        specifier: workspace:*
+        version: link:../threads
       '@types/react':
         specifier: ^19
         version: 19.3.0

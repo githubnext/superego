@@ -30,6 +30,13 @@ export type BehaviourSlot =
    * `thread-badge`, an icon (about 12px) with a `title` for its tooltip; or nothing, as for most threads.
    */
   | 'thread.badge'
+  /**
+   * In a thread's row menu (a right-click on its row in the sidebar) and, on a phone, its sheet's actions: draw
+   * `ThreadMenuItem`s, which take the shape of either.
+   */
+  | 'thread.menu'
+  /** In the Threads sidebar's heading, before its ··· and +: small buttons (an `IconButton`). The phone's drawer has it too. */
+  | 'sidebar.heading'
   /** Above the composer: things waiting on the user, suggestions. */
   | 'composer.above'
   /** In a thread's details (⌘I), after what the core says of it: what an extension knows of the thread. Draw a `<h5>` and a `<dl>`, or nothing. */
@@ -58,6 +65,8 @@ export type EditorSlotProps = { machine: MachineEntry; thread: ThreadInfo; path:
 export type SlotProps = {
   'header.chips': { machine: MachineEntry; thread: ThreadInfo }
   'thread.badge': { machine: MachineEntry; thread: ThreadInfo }
+  'thread.menu': { machine: MachineEntry; thread: ThreadInfo }
+  'sidebar.heading': Record<string, never>
   'composer.above': { machine: MachineEntry; thread: ThreadInfo }
   'details.section': { machine: MachineEntry; thread: ThreadInfo }
   'editor.side': EditorSlotProps
@@ -339,6 +348,24 @@ export type WorkStatus = 'running' | 'success' | 'failure' | 'inconclusive' | 'i
  */
 export type WorkPart = { blocks: WorkBlock[]; title?: string; status?: WorkStatus; outcome?: string }
 
+/**
+ * A narrowing of the sidebar's list (`superego.sidebarFilter`): the rows it lets through, of the threads it applies to
+ * (its extension's, as with everything it draws: not those that go without it). Every walk of the list follows it: ⌘⇧[
+ * and ⌘⇧], the rail's dots, ⌃T. The selected thread always shows; a thread shown under one it hides stands on its
+ * own. While one narrows the list, the Pinned section is left out (pinned threads still top their projects).
+ */
+export type SidebarFilter = {
+  /** Whether `thread`'s row shows. */
+  shows(thread: ThreadInfo, machine: string): boolean
+  /** What the sidebar's heading says meanwhile (`Focus`); unset, its own. */
+  title?: string
+  /**
+   * Drawn at the list's end: what it hides (`hidden`, how many threads) and how many show (`shown`). Unset, the core's
+   * quiet line, "N hidden", while it hides any.
+   */
+  footer?: ComponentType<{ hidden: number; shown: number }>
+}
+
 /** What the window tells extensions as it happens (`superego.on`). */
 export type WindowEvents = {
   /**
@@ -390,6 +417,12 @@ export type UiApi = {
    * (`global: true`): then they go in any place, as an app extension's do.
    */
   view<C extends ViewContext>(id: string, view: View<C>): void
+  /**
+   * Narrow the sidebar's list: `useFilter`, a hook drawn for as long as the extension is set up (it may use any other),
+   * returns the narrowing in force now (`SidebarFilter`), or undefined while there's none. With several, a row shows
+   * only if each lets it through.
+   */
+  sidebarFilter(useFilter: () => SidebarFilter | undefined): void
   /** A component in a slot whose place behaviour decides (`header.chips`, `composer.above`, the editor's, `overlay`), in `order`. */
   slot<S extends BehaviourSlot>(slot: S, component: ComponentType<SlotProps[S]>, options?: { order?: number }): void
   /**

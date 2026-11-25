@@ -29,12 +29,12 @@ describe('versions and ranges', () => {
 
 describe("an extension's declaration", () => {
   it('needs a host in its api range, and says which side to update', () => {
-    expect(EXTENSION_API).toBe('5.12.0')
+    expect(EXTENSION_API).toBe('5.13.0')
     expect(contractProblem({ name: 'x', version: '1.0.0', api: '^5' })).toBeUndefined()
     expect(contractProblem({ name: 'x' })).toBeUndefined()
-    expect(contractProblem({ name: 'x', api: '^6' })).toBe('Extension x needs extension API ^6, and this Superego has 5.12.0: update Superego')
-    expect(contractProblem({ name: 'x', api: '^5.13' })).toMatch(/update Superego$/)
-    expect(contractProblem({ name: 'x', api: '^2' })).toBe('Extension x needs extension API ^2, and this Superego has 5.12.0: update the extension')
+    expect(contractProblem({ name: 'x', api: '^6' })).toBe('Extension x needs extension API ^6, and this Superego has 5.13.0: update Superego')
+    expect(contractProblem({ name: 'x', api: '^5.14' })).toMatch(/update Superego$/)
+    expect(contractProblem({ name: 'x', api: '^2' })).toBe('Extension x needs extension API ^2, and this Superego has 5.13.0: update the extension')
     expect(contractProblem({ name: 'x', version: '1.0' })).toMatch(/version "1.0" isn't major.minor.patch/)
     expect(contractProblem({ name: 'x', api: 'latest' })).toMatch(/isn't a version range/)
   })

@@ -1,13 +1,14 @@
 // What the shell knows and shares: the machines, every connected machine's threads (one subscription each, whatever
 // number of components show them), which thread is selected, and the Settings dialog; those two kept in the window
 // across reloads; and where the window has been, to go back and forward.
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { AUTH_REJECTED, DATA_VIEWS, GLOBAL_PROFILES, PROFILES_ALLOWED, type Json, type ProfileRef, type ProviderRejection, type ThreadInfo } from '@superego/protocol'
 import type { MachineEntry } from '../shared/bridge.ts'
 import { has, machine as client, useAppSetting, useHiddenThreads, useMachineList, useThreads as useThreadsWatch, useValue } from './client.ts'
 import { checkDataViews, warnDropped } from './data-view-check.ts'
 import { clearProblem, reportProblem } from './machine-problems.ts'
-import { useRegistry } from './registry.tsx'
+import { drawsFor, useRegistry, type Owned } from './registry.tsx'
+import type { SidebarFilter } from './extension-api.ts'
 import { spaceFor } from './lookups.ts'
 import { useImageRechecks } from './images.tsx'
 import { useGlobalProfileUis, useListedProfileUis } from './profile-ui.ts'
@@ -16,7 +17,7 @@ import { useLocalState } from './local-state.ts'
 import { focusProvider } from './provider-focus.ts'
 import { useWindowEvents } from './window-events.ts'
 import { Notifications } from './notifications.tsx'
-import { freeze, pinnedFirst, projectKey, stillFolded, useProjectList, wayTo, type Project, type Sidebar } from './projects.ts'
+import { freeze, narrowProjects, pinnedFirst, projectKey, stillFolded, useProjectList, wayTo, type Project, type Sidebar } from './projects.ts'
 import { PINS, pinsOf, SHOW_PINNED, stillListed, type Pin } from './pins.ts'
 import { sidebarIsHidden, showSidebar, type SidebarMode } from './sidebar-mode.ts'
 import { TIGHT, useMedia } from './media.ts'
@@ -247,10 +248,34 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
   const [folded, setFolded] = useLocalState<string[]>('sidebar.folded', [])
   // The Pinned section may be hidden: they still top their projects.
   const [showPinned] = useAppSetting<boolean>(SHOW_PINNED)
-  const sidebar = useMemo(() => {
+  // Extensions' narrowings of the list (`superego.sidebarFilter`), as their hooks say now (`FilterHost`): each
+  // applies to the threads that have its extension. Narrowed, the Pinned section is left out.
+  const registry = useRegistry()
+  useSyncExternalStore(registry.subscribe, () => registry.version)
+  const [filters, setFilters] = useState<ReadonlyMap<FilterEntry, SidebarFilter>>(new Map())
+  const onFilter = useCallback((entry: FilterEntry, filter: SidebarFilter | undefined) => setFilters((all) => {
+    if (all.get(entry) === filter) return all
+    const next = new Map(all)
+    if (filter) next.set(entry, filter)
+    else next.delete(entry)
+    return next
+  }), [])
+  const sidebar = useMemo((): Sidebar => {
+    const active = [...filters].filter(([entry]) => registry.sidebarFilters.includes(entry))
+    if (active.length) {
+      const narrowed = narrowProjects(projects, (machine, thread) =>
+        active.every(([{ owner }, filter]) => !drawsFor(owner, { machine, thread }) || filter.shows(thread, machine)), selection)
+      return {
+        ...pinnedFirst(narrowed.projects, pins, folded), pinned: [],
+        narrowed: {
+          hidden: narrowed.hidden, shown: narrowed.shown,
+          by: active.map(([{ owner }, { title, footer }]) => ({ extension: owner.extension, ...(title ? { title } : {}), ...(footer ? { footer } : {}) })),
+        },
+      }
+    }
     const all = pinnedFirst(projects, pins, folded)
     return showPinned === false ? { ...all, pinned: [] } : all
-  }, [projects, pins, folded, showPinned])
+  }, [projects, pins, folded, showPinned, filters, selection?.machine, selection?.thread, registry.version])
   const fold = useCallback((keys: readonly string[], on: boolean) => setFolded((all) =>
     on ? [...all, ...keys.filter((key) => !all.includes(key))] : all.filter((key) => !keys.includes(key))), [])
   useEffect(() => {
@@ -309,7 +334,6 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
   // they went to is where history already is. Threads no longer listed (archived, deleted) are stepped over; hidden
   // ones are listed, on every machine.
   // What extensions hear of it (`superego.on`): statuses changing, the thread shown, the window's focus.
-  const registry = useRegistry()
   useWindowEvents(registry, {
     machines, threads, rejections, selection,
     hidden: hiddenAll,
@@ -374,10 +398,25 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
   return (
     <Context.Provider value={value}>
       {machines.filter((m) => m.state !== 'disabled').map((m) => <MachineThreads key={m.id} machine={m} onThreads={onThreads} onHidden={onHidden} onRejections={onRejections} />)}
+      {registry.sidebarFilters.map((entry) => <FilterHost key={filterKey(entry)} entry={entry} onFilter={onFilter} />)}
       <Notifications />
       {children}
     </Context.Provider>
   )
+}
+
+type FilterEntry = Owned<{ use: () => SidebarFilter | undefined }>
+/** Each narrowing's own key: one set up again (its extension reloaded) is another, its hook drawn afresh. */
+const filterKeys = new WeakMap<FilterEntry, number>()
+let filterCount = 0
+const filterKey = (entry: FilterEntry) => { if (!filterKeys.has(entry)) filterKeys.set(entry, ++filterCount); return filterKeys.get(entry)! }
+
+/** An extension's narrowing of the sidebar: its hook, drawn here, says what's in force; gone with the extension. */
+function FilterHost({ entry, onFilter }: { entry: FilterEntry; onFilter(entry: FilterEntry, filter: SidebarFilter | undefined): void }) {
+  const filter = entry.use()
+  useEffect(() => { onFilter(entry, filter) }, [entry, filter])
+  useEffect(() => () => onFilter(entry, undefined), [entry])
+  return null
 }
 
 /** One threads subscription per machine, kept while it is connected; the last list stays while it isn't. */

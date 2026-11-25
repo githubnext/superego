@@ -600,7 +600,7 @@ export async function mountUi(options: MountOptions = {}): Promise<TestWindow> {
         const thread = given ?? defaultThread(at)
         node = <InThread machine={at} thread={thread} draw={(machine, info) =>
           <DescribedCall row={toolRow(registry, name, { machine: at, thread: info })} call={{ machine, thread: info, call: { id, name, arguments: args }, state, ...rest }} />} />
-      } else if ('pane' in what || ('slot' in what && what.slot !== 'overlay' && what.slot !== 'onboarding')) {
+      } else if ('pane' in what || ('slot' in what && what.slot !== 'overlay' && what.slot !== 'sidebar.heading' && what.slot !== 'onboarding')) {
         // A pane or a thread's slot is always some thread's.
         const thread = given ?? defaultThread(at)
         const info = typeof thread === 'string' ? threadOf(at, thread)! : thread

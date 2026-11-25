@@ -5,8 +5,9 @@
 // at its top, again). The sidebar's sections (Pinned, each project) and the threads with others under them fold, as
 // the window was left (`folded`); ⌘⇧[ and ⌘⇧] go down the rows still shown, the selected one always among them. The
 // sort (an app setting, `app.sort`, which the sidebar's menu changes) sets it; a thread another started sits right
-// under it.
-import { useMemo } from 'react'
+// under it. An extension's narrowing (`superego.sidebarFilter`) takes out the threads it hides (`narrowProjects`) before
+// any of it, so every walk follows it too.
+import { useMemo, type ComponentType } from 'react'
 import { rollup, statusRank, unreadThreads, type Status, type ThreadInfo } from '@superego/protocol'
 import type { MachineEntry } from '../shared/bridge.ts'
 import { useAppSetting } from './client.ts'
@@ -42,7 +43,29 @@ export type PinnedThread = { project: Project; thread: ThreadInfo }
  * pinned threads at its top (in that order too) and the rest as they sort. A pinned thread is listed twice. `folded`:
  * the sections and threads folded (see `fold`), what's in them out of sight.
  */
-export type Sidebar = { pinned: PinnedThread[]; projects: Project[]; folded: readonly string[] }
+export type Sidebar = { pinned: PinnedThread[]; projects: Project[]; folded: readonly string[]; narrowed?: Narrowed }
+
+/** A narrowing in force (an extension's `SidebarFilter`): whose, what the heading says meanwhile, and its footer. */
+export type Narrowing = { extension: string; title?: string; footer?: ComponentType<{ hidden: number; shown: number }> }
+/** The list narrowed: by what, and how many threads it hides and shows. */
+export type Narrowed = { by: Narrowing[]; hidden: number; shown: number }
+
+/**
+ * `projects` with only the threads `shows` lets through (and the selected one, `keep`, whatever it says), each nested
+ * again: one whose parent is hidden stands on its own. A project left with none goes. `hidden` and `shown` count threads.
+ */
+export function narrowProjects(projects: Project[], shows: (machine: string, thread: ThreadInfo) => boolean, keep?: At): { projects: Project[]; hidden: number; shown: number } {
+  let hidden = 0
+  let shown = 0
+  const narrowed = projects.flatMap((project) => {
+    const threads = project.threads.filter((thread) => isAt(keep, project.machine.id, thread.id) || shows(project.machine.id, thread))
+    hidden += project.threads.length - threads.length
+    shown += threads.length
+    if (!threads.length) return []
+    return [threads.length === project.threads.length ? project : { ...project, ...nest(threads) }]
+  })
+  return { projects: narrowed, hidden, shown }
+}
 
 /** The sidebar of `projects`, with `pins` taken to the top. Pins of threads not among them (archived, on a machine off) aren't listed. */
 export function pinnedFirst(projects: Project[], pins: readonly Pin[], folded: readonly string[] = []): Sidebar {

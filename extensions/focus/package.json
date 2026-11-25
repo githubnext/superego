@@ -1,0 +1,25 @@
+{
+  "name": "@superego/focus",
+  "version": "0.0.0",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./shared": "./src/shared.ts",
+    "./ui": "./src/ui.tsx"
+  },
+  "dependencies": {
+    "@superego/app": "workspace:*",
+    "@superego/protocol": "workspace:*",
+    "@superego/ui": "workspace:*"
+  },
+  "peerDependencies": {
+    "react": "^19"
+  },
+  "devDependencies": {
+    "@superego/sdk": "workspace:*",
+    "@superego/threads": "workspace:*",
+    "@types/react": "^19",
+    "react": "^19"
+  }
+}

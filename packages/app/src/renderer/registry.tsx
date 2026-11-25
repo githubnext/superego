@@ -20,7 +20,7 @@ import { addStyle } from './profile-style.ts'
 import { onMachine } from './machine-view.tsx'
 import { checkTheme, type Theme } from '@superego/ui/themes'
 import type {
-  BehaviourSlot, EntryProps, LinkHandler, NewThreadField, PaneKind, PaneProps, SettingsComponentProps, SlotProps, SpaceKind, ToolCallProps, ToolRow, UiApi,
+  BehaviourSlot, EntryProps, LinkHandler, NewThreadField, PaneKind, PaneProps, SettingsComponentProps, SidebarFilter, SlotProps, SpaceKind, ToolCallProps, ToolRow, UiApi,
   UiExtension, View, ViewProps, WindowEvent, WindowEvents, WindowState, WorkPart, WorkRun,
 } from './extension-api.ts'
 
@@ -117,6 +117,8 @@ export type Registry = {
   themes: Owned<Theme>[]
   completions: Owned<CompletionProvider<any>>[]
   sentWith: Owned<SentWith>[]
+  /** Narrowings of the sidebar's list (`superego.sidebarFilter`): each a hook, drawn by the shell's state. */
+  sidebarFilters: Owned<{ use: () => SidebarFilter | undefined }>[]
   listeners: Owned<{ event: WindowEvent; listener: (event: never) => void }>[]
   /** The window as it is now: the shell keeps it, through `emit`. */
   window: WindowState
@@ -149,8 +151,8 @@ export function createRegistry(app: AppConfig, extensions: UiExtension[], core: 
       name, ...(title ? { title } : {}), ...(description ? { description } : {}), ...(required ? { required } : {}),
       ...(version ? { version } : {}), ...(api ? { api } : {}), ...(panes ? { panes } : {}),
     })),
-    slots: { 'header.chips': [], 'thread.badge': [], 'composer.above': [], 'details.section': [], 'editor.side': [], 'editor.bar': [], 'overlay': [], 'onboarding': [], 'welcome': [] },
-    views: [], dataViews: {}, machineExtensions: {}, tools: [], entries: [], links: [], panes: [], spaces: [], work: [], settings: [], newThreadFields: [], router: createWindowRouter(), appSettings: [], themes: [], completions: [], sentWith: [], listeners: [],
+    slots: { 'header.chips': [], 'thread.badge': [], 'thread.menu': [], 'sidebar.heading': [], 'composer.above': [], 'details.section': [], 'editor.side': [], 'editor.bar': [], 'overlay': [], 'onboarding': [], 'welcome': [] },
+    views: [], dataViews: {}, machineExtensions: {}, tools: [], entries: [], links: [], panes: [], spaces: [], work: [], settings: [], newThreadFields: [], router: createWindowRouter(), appSettings: [], themes: [], completions: [], sentWith: [], sidebarFilters: [], listeners: [],
     window: {
       focused: typeof document === 'undefined' || document.hasFocus(),
       visible: typeof document === 'undefined' || document.visibilityState !== 'hidden',
@@ -320,11 +322,15 @@ export function createRegistry(app: AppConfig, extensions: UiExtension[], core: 
         }
       },
       slot(slot: BehaviourSlot, component: ComponentType<any>, options?: { order?: number }) {
-        // A profile's UI draws in its threads' slots; the overlay and setup's are the app's, with no thread.
-        if (profile && (slot === 'overlay' || slot === 'onboarding' || slot === 'welcome')) return console.warn(`Profile extension ${extension.name} can't fill the ${slot}`)
+        // A profile's UI draws in its threads' slots; the overlay, the sidebar's heading and setup's are the app's, with no thread.
+        if (profile && (slot === 'overlay' || slot === 'sidebar.heading' || slot === 'onboarding' || slot === 'welcome')) return console.warn(`Profile extension ${extension.name} can't fill the ${slot}`)
         const list = registry.slots[slot as BehaviourSlot] as Owned<{ component: ComponentType<never>; order: number }>[]
         add(list, { component: component as never, order: options?.order ?? 100 })
         list.sort((a, b) => a.order - b.order)
+      },
+      sidebarFilter(use) {
+        if (profile) return console.warn(`Profile extension ${extension.name}: narrowing the sidebar from a profile's UI isn't supported`)
+        add(registry.sidebarFilters, { use })
       },
       on(event, listener) {
         const entry = add(registry.listeners, { event, listener: listener as (event: never) => void })

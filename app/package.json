@@ -18,6 +18,7 @@
     "@superego/browser": "workspace:*",
     "@superego/ego": "workspace:*",
     "@superego/files": "workspace:*",
+    "@superego/focus": "workspace:*",
     "@superego/git": "workspace:*",
     "@superego/images": "workspace:*",
     "@superego/links": "workspace:*",

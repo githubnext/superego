@@ -12,7 +12,7 @@ export { defineUiExtension, type UiExtension, type UiApi } from './extension-api
 export { defineWindowAction as defineAction, type WindowAction, type WindowContext } from './actions.tsx'
 export type { Dispatch } from './actions.tsx'
 export type {
-  View, ViewContext, ViewProps, PaneKind, PaneProps, SpaceKind, SpaceProps, SlotProps, BehaviourSlot, EditorSlotProps, SidebarRailProps, ToolCallProps, ToolNote, ToolRow,
+  View, ViewContext, ViewProps, PaneKind, PaneProps, SpaceKind, SpaceProps, SlotProps, BehaviourSlot, EditorSlotProps, SidebarFilter, SidebarRailProps, ToolCallProps, ToolNote, ToolRow,
   ToolRowCall, ToolState, EntryProps, LinkHandler, LinkProps, LinkWhere, LinkAttributes, NewThreadField, NewThreadFieldProps, SettingsComponentProps,
   WindowEvent, WindowEvents, WindowState, WorkRun, WorkPart, WorkBlock, WorkStatus,
 } from './extension-api.ts'
@@ -51,6 +51,7 @@ export { PaneHeader, PaneNote, PaneButton, PaneMessage, useTabGlyph, useTabNote 
 export { WebView, hasWebViews, OVERLAYS, type WebViewHandle, type WebViewProps } from './web-view.tsx'
 export type { PermissionAsk, SitePermission, WebViewEvent, WebViewState, WebViewPartition } from '../shared/bridge.ts'
 export { HeaderChip, ThreadBadge, Chip, RailButton, factsOf } from './marks.tsx'
+export { ThreadMenuItem } from './thread-menu.tsx'
 export { Diff, DiffStat, parseDiff, type DiffFile } from './diff.tsx'
 export { FileEditor, type FileEditorProps } from './file-editor.tsx'
 export { SignInFlow, type SignInFlowProps } from './sign-in-flow.tsx'

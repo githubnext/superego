@@ -134,12 +134,33 @@ Each gets `{ machine, thread }`; the editor's also `path` and `open(path)`.
 |---|---|
 | `header.chips` | among the chips saying where a thread works (a branch): a `<HeaderChip title>` |
 | `thread.badge` | after a thread's title in the sidebar: a `<ThreadBadge label>` around a 12px icon, or nothing ([below](#a-mark-in-the-sidebar)) |
+| `thread.menu` | (API ^5.13) a thread's row menu in the sidebar (right-click), and on a phone its sheet: `<ThreadMenuItem icon keys onClick>` items, which take either shape (`keys`: an action's id, for its shortcut) |
+| `sidebar.heading` | (API ^5.13; the app's, no thread: `{}`) in the Threads sidebar's heading, before ··· and +: a small `<IconButton>`. The phone's drawer has it too |
 | `composer.above` | above the message box: something waiting on the user |
 | `details.section` | in thread details (⌘I), after the core's: an `<h5>` and what you know of the thread |
 | `editor.side`, `editor.bar` | beside a file in the editor, and in its bar |
 | `overlay` | over everything: a dialog of your own. Mark its surface `data-superego-overlay` (the kit's popovers and dialogs already are) so a web page in a pane steps aside |
 | `onboarding` | (API ^5.9) in first-run setup, among what was found: `{ machine, use }`. Draw a `SetupRow`; call `use({ label, detail, model })` when ready (`model`: `<kind>/<model>`, made the machine's default). Claude Agent's finds Claude Code |
 | `welcome` | (API ^5.10) in first-run setup, after the model: `{ machine }`, the machine it sets up. A line on what yours offers and a way to it. Ego's says what to ask it for |
+
+### Narrowing the sidebar
+
+(API ^5.13) `superego.sidebarFilter(useFilter)`: `useFilter` is a hook, drawn for as long as the extension is set up,
+that returns the narrowing in force now, or `undefined` for none: `{ shows(thread, machine), title?, footer? }`. The
+list shows only the threads each narrowing lets through (of those that have your extension), under their projects;
+the thread shown always stays. ⌘⇧[ and ⌘⇧], ⌃T and the rail's dots follow it. Meanwhile the heading says `title`, the
+Pinned section and Archived are left out, and the list ends with your `footer` (`{ hidden, shown }`, counts of
+threads), or a quiet "N hidden". The bundled `focus` extension is one: [extensions/focus](../../../extensions/focus).
+
+```tsx
+import { defineUiExtension, useAppSetting, type SidebarFilter } from 'superego/ui'
+
+// The same narrowing while nothing changes: a new one each draw would narrow the list again each time.
+const BUSY: SidebarFilter = { title: 'Busy', shows: (thread) => thread.status.state === 'working' }
+const useBusy = () => useAppSetting<boolean>('busy.on')[0] ? BUSY : undefined
+
+export default defineUiExtension({ name: 'busy', setup: (superego) => superego.sidebarFilter(useBusy) })
+```
 
 ### A mark in the sidebar
 
