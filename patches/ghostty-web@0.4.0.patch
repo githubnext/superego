@@ -1,5 +1,5 @@
 diff --git a/dist/ghostty-web.js b/dist/ghostty-web.js
-index a4ca427b95288e70c782ce303013cd644893dcec..619efc99ac0cba683ec927bb9f458b6835048921 100644
+index a4ca427b95288e70c782ce303013cd644893dcec..7f62ca2990263c4328bae8435d2771d18f46fe3d 100644
 --- a/dist/ghostty-web.js
 +++ b/dist/ghostty-web.js
 @@ -1400,6 +1400,16 @@ class $ {
@@ -40,7 +40,7 @@ index a4ca427b95288e70c782ce303013cd644893dcec..619efc99ac0cba683ec927bb9f458b68
        if (this.isSelecting) {
          this.isSelecting = !1, this.stopAutoScroll();
          const g = this.getSelection();
-@@ -2370,7 +2380,9 @@ class IA {
+@@ -2370,7 +2380,16 @@ class IA {
          E.preventDefault(), E.stopPropagation();
          const C = (I = E.clipboardData) == null ? void 0 : I.getData("text");
          C && this.paste(C);
@@ -48,10 +48,17 @@ index a4ca427b95288e70c782ce303013cd644893dcec..619efc99ac0cba683ec927bb9f458b68
 +      }), this.linkDetector = new v(this), this.linkDetector.registerProvider(new X(this)), this.linkDetector.registerProvider(new _(this)), A.addEventListener("mousedown", this.handleMouseDown, { capture: !0 }), A.addEventListener("mousemove", this.handleMouseMove), A.addEventListener("mouseleave", this.handleMouseLeave), A.addEventListener("click", this.handleClick), document.addEventListener("mouseup", this.handleMouseUp), A.addEventListener("wheel", this.handleWheel, { passive: !1, capture: !0 }), this.renderer.render(this.wasmTerm, !0, this.viewportY, this, this.scrollbarOpacity), this.startRenderLoop();
 +      // Not focused as it opens: whoever opens it gives it the keyboard if it should have it. Taking it here took it
 +      // from wherever it was, and scrolled the page to the terminal, each time one was drawn again.
++      // The keyboard is the textarea's, whoever focuses the terminal (its element, a click on the canvas, focus()):
++      // the element is contenteditable but holds no text, so the browser has no caret in it and sends a paste (⌘V,
++      // the Edit menu's, a right-click's) to the body instead, where nothing hears it. Keys and composition bubble from
++      // the textarea to the element's listeners as before.
++      A.addEventListener("focus", () => g.focus({ preventScroll: !0 })), g.addEventListener("compositionend", () => setTimeout(() => {
++        g.value = "";
++      }, 0));
      } catch (B) {
        throw this.isOpen = !1, this.cleanupComponents(), new Error(`Failed to open terminal: ${B}`);
      }
-@@ -2444,9 +2456,10 @@ class IA {
+@@ -2444,9 +2463,10 @@ class IA {
     * Focus terminal input
     */
    focus() {
@@ -64,7 +71,7 @@ index a4ca427b95288e70c782ce303013cd644893dcec..619efc99ac0cba683ec927bb9f458b68
      }, 0));
    }
    /**
-@@ -2664,7 +2677,7 @@ class IA {
+@@ -2664,7 +2684,7 @@ class IA {
     * Clean up components (called on dispose or error)
     */
    cleanupComponents() {
