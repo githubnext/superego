@@ -14,6 +14,9 @@
   5.11).
 - With the sidebar folded, its panel's top lines up with the thread's beside it.
 - The title bar's words, status, profile badge and buttons sit on one line, centred on the window's buttons.
+- A pane opens 760px wide beside the thread (less when the window hasn't the room), the last one too, instead of a
+  share of the window or the whole of what's left. Drag its edge and it keeps the width you gave it. A pane kind's
+  `width` option is gone: every kind opens the same.
 
 ## 0.4.0
 

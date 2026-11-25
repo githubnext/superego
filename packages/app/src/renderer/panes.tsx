@@ -35,7 +35,7 @@ import { ThreadBody } from './thread-body.tsx'
 import { PaneMoveTo } from './view-menu.tsx'
 import { FileEditor } from './file-editor.tsx'
 import { BRING_FORWARD, focusRegion } from './focus.ts'
-import { arranged, columnShares, DEFAULT_SHARE, dropIndex, END, endShare, frontOf, GAP, keptWidths, moved, placeAmong, roomFor, scrollWidths, slideOf, stackWidths, windowFactor, keepInWindow, type SavedWidth, type WindowWidths } from './pane-layout.ts'
+import { arranged, columnShares, dropIndex, END, endShare, frontOf, GAP, keptWidths, moved, placeAmong, roomFor, scrollWidths, slideOf, stackWidths, windowFactor, keepInWindow, type SavedWidth, type WindowWidths } from './pane-layout.ts'
 import { maximizedColumn, maximizedStore, restoresOn, THREAD_COLUMN } from './maximized.ts'
 import { useShortcut } from './keys.ts'
 import { OverflowBox, OverflowRow, PRIORITY, useOverflowItem } from './overflow.tsx'
@@ -124,7 +124,6 @@ export function ThreadPanes({ machine, thread, main }: { machine: PaneProps['mac
     saved: withThread
       ? [{ width: thread.width, lastWidth: thread.lastWidth }, ...panes.map((pane) => ({ width: pane.width, lastWidth: pane.lastWidth }))]
       : keys.map((key) => keptHere[key] ?? {}),
-    kindShares: panes.map((pane) => paneKind(registry, pane.kind, where)?.width),
     save: withThread ? resize : keepHere,
   })
   const widthOf = (pane: Pane) => widths[panes.indexOf(pane) + 1]!
@@ -355,8 +354,8 @@ export function ThreadPanes({ machine, thread, main }: { machine: PaneProps['mac
  * A drag is shown as it goes and handed to `save` as it ends (a factor of the window's width; none: the default
  * again), shown so until `saved` has it (or saving fails). `scope` names the thread: a drag shows only on its own.
  */
-function useColumnWidths(row: RefObject<HTMLDivElement | null>, { scope, keys, saved, kindShares, stacked, narrow, kept, save }: {
-  scope: string; keys: string[]; saved: SavedWidth[]; kindShares: (number | undefined)[]; stacked: boolean; narrow: boolean; kept: boolean
+function useColumnWidths(row: RefObject<HTMLDivElement | null>, { scope, keys, saved, stacked, narrow, kept, save }: {
+  scope: string; keys: string[]; saved: SavedWidth[]; stacked: boolean; narrow: boolean; kept: boolean
   save: (index: number, last: boolean, width: number | undefined) => Promise<unknown>
 }) {
   const [rowWidth, setRowWidth] = useState(0)
@@ -397,7 +396,7 @@ function useColumnWidths(row: RefObject<HTMLDivElement | null>, { scope, keys, s
   const last = stacked ? 1 : keys.length - 1
   // The room the columns share: the row less the gap after each (stacked, the thread's and the stack's).
   const room = narrow ? rowWidth : roomFor(rowWidth, stacked ? 2 : keys.length)
-  const shares = columnShares(keys.map((_, i) => savedOf(i)), [DEFAULT_SHARE, ...kindShares], last, windowWidth, room)
+  const shares = columnShares(keys.map((_, i) => savedOf(i)), last, windowWidth, room)
   const [threadWidth, stackWidth] = stackWidths(room, shares[0])
   const widths = narrow ? keys.map(() => rowWidth)
     : stacked ? [threadWidth, ...keys.slice(1).map(() => stackWidth)]
@@ -411,7 +410,7 @@ function useColumnWidths(row: RefObject<HTMLDivElement | null>, { scope, keys, s
     save(index, next.last, width).catch(() => setDraft((now) => now === next ? undefined : now))
   }
   // The gap after a column resizes it (`index`), kept for next time as a factor of the window's width. The last one's,
-  // dragged to about what the others leave, takes that again; past it, it's wider and the row scrolls. Shown as it's
+  // dragged to about its default (lastDefault), takes that again; past it, it's wider and the row scrolls. Shown as it's
   // dragged, kept once it's let go. A double click puts any back as it was.
   const drag = (index: number) => (event: React.PointerEvent) => {
     if (event.button !== 0) return
@@ -425,7 +424,7 @@ function useColumnWidths(row: RefObject<HTMLDivElement | null>, { scope, keys, s
     dragging.current = true
     const move = (e: PointerEvent) => {
       const px = start + e.clientX - startX
-      const share = isLast ? endShare(px, room, used) : Math.min(0.85, Math.max(0.15, px / Math.max(1, room)))
+      const share = isLast ? endShare(px, room, used, last > 0) : Math.min(0.85, Math.max(0.15, px / Math.max(1, room)))
       width = share === undefined ? undefined : windowFactor(share * room, windowWidth)
       moved = true
       setDraft({ scope, column, last: isLast, width })

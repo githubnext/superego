@@ -315,7 +315,7 @@ export function createRegistry(app: AppConfig, extensions: UiExtension[], core: 
           const Component = view.component as ComponentType<ViewProps<'thread'>>
           unique(registry.panes, 'kind', {
             kind: id, title: view.title, component: ({ machine, thread }: PaneProps) => <Component place="pane" machine={machine} thread={thread} />,
-            ...(view.icon ? { icon: view.icon } : {}), ...(view.width ? { width: view.width } : {}),
+            ...(view.icon ? { icon: view.icon } : {}),
           }, 'pane kind')
         }
       },

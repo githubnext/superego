@@ -1,6 +1,6 @@
 // The pane row's arithmetic: column widths kept, scrolled and stacked, and which pane a stack shows.
 import { describe, expect, it } from 'vitest'
-import { arranged, columnShares, DEFAULT_SHARE, dropIndex, endShare, frontOf, GAP, keepInWindow, keptWidths, MIN_COLUMN, moved, placeAmong, roomFor, scrollWidths, slideOf, SNAP, stackWidths, windowFactor } from '../src/renderer/pane-layout.ts'
+import { arranged, columnShares, DEFAULT_SHARE, dropIndex, endShare, frontOf, GAP, keepInWindow, keptWidths, MIN_COLUMN, moved, PANE_WIDTH, placeAmong, roomFor, scrollWidths, slideOf, SNAP, stackWidths, windowFactor } from '../src/renderer/pane-layout.ts'
 
 describe('widths kept with the thread', () => {
   // A window 1400 wide, its row (the sidebar beside) leaving the columns 1000 between them.
@@ -8,24 +8,56 @@ describe('widths kept with the thread', () => {
   const room = 1000
 
   it('takes each kept width as a factor of the window, the rest their defaults and the last what the others leave', () => {
-    const shares = columnShares([{ width: 0.3 }, {}, {}], [DEFAULT_SHARE, 0.4, 0.4], 2, windowWidth, room)
-    expect(shares).toEqual([0.42, 0.4, undefined])
-    expect(scrollWidths(room, shares)).toEqual([420, 400, MIN_COLUMN])
+    const shares = columnShares([{ width: 0.3 }, {}, {}], 2, windowWidth, room)
+    expect(shares).toEqual([0.42, PANE_WIDTH / room, undefined])
+    expect(scrollWidths(room, shares)).toEqual([420, PANE_WIDTH, MIN_COLUMN])
+  })
+
+  it('opens a pane PANE_WIDTH wide, the last one too, the row\'s ground past it', () => {
+    // A wide window: the thread half of a room of 2000, a pane beside it 760, not the 1000 left.
+    expect(PANE_WIDTH).toBe(760)
+    const shares = columnShares([{}, {}], 1, 2400, 2000)
+    expect(shares).toEqual([DEFAULT_SHARE, undefined])
+    expect(scrollWidths(2000, shares)).toEqual([1000, PANE_WIDTH])
+    expect(keptWidths(2000, shares)).toEqual([1000, PANE_WIDTH])
+    // One beside others the same; the last what they leave, no less than the least (the row scrolls).
+    expect(scrollWidths(2000, columnShares([{}, {}, {}], 2, 2400, 2000))).toEqual([1000, PANE_WIDTH, MIN_COLUMN])
+    // The thread alone still takes the row.
+    expect(scrollWidths(2000, columnShares([{}], 0, 2400, 2000))).toEqual([2000])
+  })
+
+  it('opens a pane no wider than fits beside the thread, nor narrower than the least', () => {
+    const shares = columnShares([{}, {}], 1, 1400, 1000)
+    expect(scrollWidths(1000, shares)).toEqual([500, 500])
+    expect(keptWidths(1000, shares)).toEqual([500, 500])
+    // Beside another pane, kept in view: what's in view beside the thread (its room and a gap).
+    expect(keptWidths(1000, columnShares([{}, {}, {}], 2, 1400, 1000))).toEqual([500, 500 + GAP, MIN_COLUMN])
+    // A room too small for the least beside the thread: kept in view, they halve it; scrolled, each the least.
+    expect(keptWidths(600, columnShares([{}, {}], 1, 800, 600))).toEqual([300, 300])
+    expect(scrollWidths(600, columnShares([{}, {}], 1, 800, 600))).toEqual([MIN_COLUMN, MIN_COLUMN])
+  })
+
+  it('keeps a dragged pane its width over PANE_WIDTH, wider or narrower', () => {
+    // Dragged at the end to 0.5 of the window (1200 of 2400): that, not 760, nor what the others leave.
+    expect(scrollWidths(2000, columnShares([{}, { lastWidth: 0.5 }], 1, 2400, 2000))).toEqual([1000, 1200])
+    // Dragged beside others to 0.2 (480): that beside others, and while it's last with no width of its own there.
+    expect(scrollWidths(2000, columnShares([{}, { width: 0.2 }, {}], 2, 2400, 2000))).toEqual([1000, 480, 520])
+    expect(scrollWidths(2000, columnShares([{}, { width: 0.2 }], 1, 2400, 2000))).toEqual([1000, 480])
   })
 
   it('keeps a pane its width while it is last apart from the one beside others', () => {
     const saved = [{}, { width: 0.2, lastWidth: 0.3 }]
-    expect(columnShares(saved, [DEFAULT_SHARE, DEFAULT_SHARE], 1, windowWidth, room)).toEqual([DEFAULT_SHARE, 0.42])
-    expect(columnShares([...saved, {}], [DEFAULT_SHARE, DEFAULT_SHARE, DEFAULT_SHARE], 2, windowWidth, room)).toEqual([DEFAULT_SHARE, 0.28, undefined])
+    expect(columnShares(saved, 1, windowWidth, room)).toEqual([DEFAULT_SHARE, 0.42])
+    expect(columnShares([...saved, {}], 2, windowWidth, room)).toEqual([DEFAULT_SHARE, 0.28, undefined])
     // With no panes the thread is the last: it takes the row unless its own was kept.
-    expect(columnShares([{ width: 0.25 }], [DEFAULT_SHARE], 0, windowWidth, room)).toEqual([undefined])
+    expect(columnShares([{ width: 0.25 }], 0, windowWidth, room)).toEqual([undefined])
   })
 
   it('holds its proportions as the window resizes, and in another window', () => {
     // Dragged to 420 in the 1400 window: 0.3 of it, kept.
     const kept = windowFactor(420, windowWidth)
     expect(kept).toBe(0.3)
-    const at = (width: number, columns: number) => scrollWidths(columns, columnShares([{ width: kept }, {}], [DEFAULT_SHARE, DEFAULT_SHARE], 1, width, columns))[0]!
+    const at = (width: number, columns: number) => scrollWidths(columns, columnShares([{ width: kept }, {}], 1, width, columns))[0]!
     expect(at(1400, 1000)).toBe(420)
     expect(at(2000, 1600)).toBe(600)
     expect(at(2000, 1600) / 2000).toBe(420 / 1400)
@@ -34,7 +66,7 @@ describe('widths kept with the thread', () => {
   it('clamps what does not fit a smaller window for show, the kept factor as it was', () => {
     const saved = [{ width: 0.9 }, {}]
     // 0.9 of a 900 window is 810, more than a room of 600: shown no wider than the room allows beside a pane.
-    const shares = columnShares(saved, [DEFAULT_SHARE, DEFAULT_SHARE], 1, 900, 600)
+    const shares = columnShares(saved, 1, 900, 600)
     expect(keptWidths(600, shares)[0]).toBe(600 - Math.min(MIN_COLUMN, 300))
     expect(saved[0]!.width).toBe(0.9)
   })
@@ -81,15 +113,20 @@ describe('scrolled', () => {
     expect(widths.reduce((sum, w) => sum + w, 0)).toBeGreaterThan(1000)
   })
 
-  it('lets the last column be dragged wider than what the others leave, and takes that again near it', () => {
+  it('lets the last column be dragged wider than what the others leave, and takes its default again near it', () => {
     // The others leave 600: dragged out to 900, it's its own width and the row scrolls; back near 600, it fills.
-    expect(endShare(900, 1200, 600)).toBe(0.75)
-    expect(endShare(600 + SNAP, 1200, 600)).toBeUndefined()
-    expect(endShare(500, 1200, 600)).toBeCloseTo(500 / 1200)
+    expect(endShare(900, 1200, 600, true)).toBe(0.75)
+    expect(endShare(600 + SNAP, 1200, 600, true)).toBeUndefined()
+    expect(endShare(500, 1200, 600, true)).toBeCloseTo(500 / 1200)
     // The row scrolls already (the others leave less than the least): it still grows, from the least.
-    expect(endShare(MIN_COLUMN + 100, 1200, 1100)).toBeCloseTo((MIN_COLUMN + 100) / 1200)
-    expect(endShare(MIN_COLUMN, 1200, 1100)).toBeUndefined()
-    expect(endShare(5000, 1200, 0)).toBe(1)
+    expect(endShare(MIN_COLUMN + 100, 1200, 1100, true)).toBeCloseTo((MIN_COLUMN + 100) / 1200)
+    expect(endShare(MIN_COLUMN, 1200, 1100, true)).toBeUndefined()
+    expect(endShare(5000, 1200, 0, false)).toBe(1)
+    // The others leave 1000: a pane's default is PANE_WIDTH, near it; dragged to fill the row, that's its own.
+    expect(endShare(PANE_WIDTH + SNAP, 2000, 1000, true)).toBeUndefined()
+    expect(endShare(1000, 2000, 1000, true)).toBe(0.5)
+    // The thread alone fills the row by default.
+    expect(endShare(1200 - SNAP, 1200, 0, false)).toBeUndefined()
   })
 
   it('never makes a column wider than the room', () => {

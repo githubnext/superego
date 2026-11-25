@@ -41,7 +41,7 @@ export default defineUiExtension({
   setup(superego) {
     superego.pane(BROWSER, {
       title: (pane) => fileName(pane) ?? 'Browser', icon: GlobeIcon, file: (pane) => Boolean(params(pane).path),
-      component: BrowserPane, urls: true, menu: true, width: 0.6,
+      component: BrowserPane, urls: true, menu: true,
     })
     superego.appSettings({
       id: 'browser', title: 'Browser', order: 62,

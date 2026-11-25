@@ -117,8 +117,6 @@ export type View<C extends ViewContext = ViewContext> = {
    * tabs, which ⌘1–⌘9 go to in order, before the sidebars; its tooltip says its number (`useRailShortcut`).
    */
   action?: string
-  /** As a pane: its width to start with, as a share of the row. */
-  width?: number
 }
 
 /** What a pane is drawn with: where it is, and its own params. */
@@ -142,8 +140,6 @@ export type PaneKind = {
   folders?: boolean
   /** It shows web pages, given `{ url }`: a web link a thread names opens in it, when asked to open beside. */
   urls?: boolean
-  /** Its width to start with, as a share of the row (0.5 when unset); dragging its edge changes it for that pane. */
-  width?: number
 }
 
 /** What a space gets: where and what it was opened with, the thread docked to it, and a way to show another of its kind. */

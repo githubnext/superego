@@ -19,7 +19,7 @@ export default defineUiExtension({
   setup(superego) {
     superego.pane(TERMINAL, {
       title: (pane) => numberOf(pane) > 1 ? `Terminal ${numberOf(pane)}` : 'Terminal',
-      icon: TerminalIcon, component: TerminalPane, menu: true, width: 0.5,
+      icon: TerminalIcon, component: TerminalPane, menu: true,
     })
     superego.action(defineAction({
       id: 'terminal.open', title: 'Open a terminal', keys: KEYS,

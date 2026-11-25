@@ -10,7 +10,7 @@ import { about, baseLabel, CHANGES, DIFF, type Base, type BaseChoice, type Chang
 export default defineUiExtension({
   ...about,
   setup(superego) {
-    superego.pane(CHANGES, { title: 'Changes', icon: ArrowsLeftRightIcon, component: ChangesPane, menu: true, width: 0.45 })
+    superego.pane(CHANGES, { title: 'Changes', icon: ArrowsLeftRightIcon, component: ChangesPane, menu: true })
     superego.action(defineAction({
       id: 'git.changes', title: 'Show changes', keys: 'mod+shift+d',
       when: (c) => Boolean(c.selection),

@@ -38,8 +38,27 @@ await openApp({ name: 'panes', timeout: 240_000 }, async (t) => {
   const key = (init) => run(`window.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, ...${JSON.stringify(init)} }))`)
   const shownPanes = () => run(`[...document.querySelectorAll('.panes > [data-column]:not([data-column="thread"])')].filter((c) => getComputedStyle(c).visibility !== 'hidden').map((c) => c.dataset.column)`)
 
+  // A pane opens PANE_WIDTH (760) wide, the last one too, clamped to what's beside the thread: shown in this window and
+  // a wide one, with one pane and with two. Light only.
+  const opened = async (name) => {
+    for (const [width, height] of [[1300, 820], [2100, 1000]]) {
+      await t.resize(width, height)
+      await t.settled()
+      await t.theme('light')
+      await t.shot(`panes-${name}-${width}-light`)
+    }
+    await t.resize(1300, 820)
+  }
+  const columnWidths = () => run(`[...document.querySelectorAll('.panes > [data-column]')].map((c) => c.offsetWidth)`)
   await open('diff', {}, `!!document.querySelector('.diff-file, .pane-empty')`)
+  await t.resize(2100, 1000)
+  await until(`document.querySelector('.panes > [data-column]:not([data-column="thread"])')?.offsetWidth === 760`, 'a wide window: the pane 760 wide')
+  await opened('one')
   await open('editor', { path: 'README.md' }, `!!document.querySelector('.file-editor .cm-content')`)
+  await t.resize(2100, 1000)
+  await until(`[...document.querySelectorAll('.panes > [data-column]:not([data-column="thread"])')].every((c) => c.offsetWidth <= 760)`, 'a wide window: each pane no wider than 760')
+  console.log('panes: two panes at 2100 wide:', JSON.stringify(await columnWidths()))
+  await opened('two')
   await open('folder', { path: '' }, `!!document.querySelector('.files-tree__row')`)
   const [diff, editor, folder] = await paneIds()
   if (!folder) t.fail('three panes')
