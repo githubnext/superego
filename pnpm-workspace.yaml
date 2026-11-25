@@ -25,10 +25,6 @@ overrides:
   '@earendil-works/pi-durable': file:vendor/earendil-works-pi-durable-1.6.0.tgz
   '@earendil-works/pi-schema': file:vendor/earendil-works-pi-schema-1.6.0.tgz
   '@earendil-works/pi-telemetry': file:vendor/earendil-works-pi-telemetry-1.6.0.tgz
-  # pi-ai 1.6.0 asks for openai 7.59.0, which the feed doesn't carry yet and which is under minimumReleaseAge until
-  # 2026-11-24 22:54 UTC; it took it for the types of a response field it reads defensively. The newest the feed has.
-  # Drop this once both allow 7.59.0.
-  'openai': 7.57.0
   # The Claude Agent SDK's per-platform packages each hold a `claude` of their own: removed, so Superego never ships
   # Claude Code. A Claude Agent thread runs the user's own install (extensions/claude-agent).
   '@anthropic-ai/claude-agent-sdk-darwin-arm64': '-'
