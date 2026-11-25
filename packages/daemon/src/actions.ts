@@ -215,6 +215,12 @@ export function registerCoreActions(host: Host, { harness, machine, threads, fil
     async run({ thread: id, path, content }) { return { path: await files.write(id, path, content) } },
   }))
   router.register(defineAction({
+    id: 'file.create', title: 'New file', expose: ['ui', 'cli'], ...thread,
+    description: "Create an empty file (a folder, with `folder`) at `path`, as file.write takes it, and the folders on the way. Refused when something's already there: it never overwrites.",
+    params: obj({ thread: str(), path: str({ minLength: 1 }), folder: opt(bool()) }),
+    async run({ thread: id, path, folder }) { return { path: await files.create(id, path, folder) } },
+  }))
+  router.register(defineAction({
     id: 'thread.rename', title: 'Rename the thread', expose: ['ui', 'cli', 'outside'], ...thread,
     params: obj({ thread: str(), title: str({ minLength: 1 }) }),
     async run({ thread: id, title }) { await threads.updateMeta(id, (meta) => { meta.title = title }); return null },

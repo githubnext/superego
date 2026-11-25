@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process'
 import { existsSync, readFileSync } from 'node:fs'
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { createServer } from 'node:net'
 import { homedir, tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
@@ -451,6 +451,32 @@ describe('record and replay', () => {
     expect((await peer.call<{ content: string }>('file.read', { thread: thread.id, path: '../blob.bin', base64: true })).content).toBe('AQAC')
     await expect(peer.call('file.write', { thread: thread.id, path: join(dir, 'no/such/x.md'), content: '' }))
       .rejects.toMatchObject({ kind: 'not_found', message: `${join(dir, 'no/such')} isn't there` })
+    await close()
+  })
+
+  it('creates a new file or folder, and the folders on the way, never over anything there', async () => {
+    const { peer, close } = await open()
+    await mkdir(join(dir, 'repo'))
+    const thread = await peer.call<ThreadInfo>('thread.start', { cwd: join(dir, 'repo') })
+    const create = (path: string, folder?: boolean) => peer.call<{ path: string }>('file.create', { thread: thread.id, path, ...(folder ? { folder } : {}) })
+    expect(await create('a.md')).toEqual({ path: join(dir, 'repo/a.md') })
+    expect(await readFile(join(dir, 'repo/a.md'), 'utf8')).toBe('')
+    expect(await create('docs/deep/new.md')).toEqual({ path: join(dir, 'repo/docs/deep/new.md') })
+    expect(await create('docs/more', true)).toEqual({ path: join(dir, 'repo/docs/more') })
+    expect((await stat(join(dir, 'repo/docs/more'))).isDirectory()).toBe(true)
+    // Never over what's there: a file kept as it was, a folder too.
+    await writeFile(join(dir, 'repo/a.md'), 'kept\n')
+    await expect(create('a.md')).rejects.toMatchObject({ kind: 'exists', message: 'a.md is already there' })
+    expect(await readFile(join(dir, 'repo/a.md'), 'utf8')).toBe('kept\n')
+    await expect(create('docs', true)).rejects.toMatchObject({ kind: 'exists', message: 'docs is already there' })
+    await expect(create('docs')).rejects.toMatchObject({ kind: 'exists' })
+    await expect(create('a.md/b.md')).rejects.toMatchObject({ kind: 'invalid', message: 'A file is in the way of a.md/b.md' })
+    if (process.getuid?.() !== 0) {
+      await mkdir(join(dir, 'repo/locked'))
+      await chmod(join(dir, 'repo/locked'), 0o555)
+      await expect(create('locked/x.md')).rejects.toMatchObject({ kind: 'forbidden', message: 'No permission to create locked/x.md' })
+      await chmod(join(dir, 'repo/locked'), 0o755)
+    }
     await close()
   })
 

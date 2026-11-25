@@ -2,7 +2,7 @@
 // absolute or from home (`~/…`). No fence: the thread's agent reads and writes whatever the daemon's user can, and so
 // does anyone who can drive it (a window, a paired browser, the command line), so one here would keep out only them.
 // What an artifact's page asks for is another matter (artifacts.ts).
-import { readdir, readFile, stat, writeFile } from 'node:fs/promises'
+import { mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { basename, dirname, isAbsolute, join, relative, resolve as resolvePath } from 'node:path'
 import { RpcError } from '@superego/protocol'
@@ -129,6 +129,24 @@ export function threadFiles({ cwdOf }: { cwdOf(thread: string): Promise<string> 
         throw error.code === 'ENOENT' ? new RpcError('not_found', `${dirname(path)} isn't there`)
           : error.code === 'EACCES' || error.code === 'EPERM' ? new RpcError('forbidden', `No permission to write ${path}`)
             : error.code === 'EISDIR' ? new RpcError('invalid', `${path} is a folder, not a file`) : error
+      })
+      return file
+    },
+    /**
+     * A new, empty file (or a `folder`) at `path`, with the folders on the way made as needed. Never over anything:
+     * something already there is refused, and so is a file in the way of the folders.
+     */
+    async create(thread: string, path: string, folder = false) {
+      const file = await fileOf(thread, path)
+      const forbidden = (error: NodeJS.ErrnoException) => error.code === 'EACCES' || error.code === 'EPERM' || error.code === 'EROFS'
+      // A file where a folder on the way should be: mkdir says EEXIST (or ENOTDIR, past it).
+      await mkdir(dirname(file), { recursive: true }).catch((error: NodeJS.ErrnoException) => {
+        throw error.code === 'EEXIST' || error.code === 'ENOTDIR' ? new RpcError('invalid', `A file is in the way of ${path}`)
+          : forbidden(error) ? new RpcError('forbidden', `No permission to create ${path}`) : error
+      })
+      await (folder ? mkdir(file) : writeFile(file, '', { flag: 'wx' })).catch((error: NodeJS.ErrnoException) => {
+        throw error.code === 'EEXIST' ? new RpcError('exists', `${path} is already there`)
+          : forbidden(error) ? new RpcError('forbidden', `No permission to create ${path}`) : error
       })
       return file
     },

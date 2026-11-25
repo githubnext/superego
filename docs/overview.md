@@ -104,6 +104,7 @@ Turn either off for a profile (`without: ['skills', 'agents-md']`) or a machine 
 | `⌘⇧E` | Archive the thread |
 | `⌘⇧D` | Changes |
 | `⌘⇧T` | The file tree |
+| `⌘⌥N` | A new file, in the folder pane with the focus |
 | `⌘T` | A new Browser pane |
 | `` ⌃` `` | A terminal beside the thread |
 | `⌘W` | Close the focused pane |

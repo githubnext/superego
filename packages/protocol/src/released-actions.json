@@ -115,6 +115,26 @@
     ],
     "additionalProperties": false
   },
+  "file.create": {
+    "type": "object",
+    "properties": {
+      "thread": {
+        "type": "string"
+      },
+      "path": {
+        "type": "string",
+        "minLength": 1
+      },
+      "folder": {
+        "type": "boolean"
+      }
+    },
+    "required": [
+      "thread",
+      "path"
+    ],
+    "additionalProperties": false
+  },
   "machine.reconnect": {
     "type": "object",
     "properties": {

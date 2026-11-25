@@ -52,9 +52,10 @@ export const linkTo = (thread: Pick<ThreadInfo, 'id' | 'title'>) => `[${thread.t
  * `artifact-read`: the `artifact.read` method. `model-setup`: the `setup.probe` and `model.test` methods, and
  * `auth.signIn`'s `check`. `secrets`: the `secrets.set` action, and settings of type `secret`. `pane-resize`: the
  * `pane.resize` action, and the column widths kept with a thread (`ThreadInfo.width`, `Pane.width`). `relay-as`: the
- * `relay.as` method, so a call passed on from another machine is refused the user's consent as its caller is there.
+ * `relay.as` method, so a call passed on from another machine is refused the user's consent as its caller is there. `file-create`: the
+ * `file.create` action.
  */
-export const FEATURES = ['thread-read', 'forward', 'image-read', 'file-locate', 'pane-move', 'artifact-read', 'model-setup', 'secrets', 'pane-resize', 'relay-as'] as const
+export const FEATURES = ['thread-read', 'forward', 'image-read', 'file-locate', 'pane-move', 'artifact-read', 'model-setup', 'secrets', 'pane-resize', 'relay-as', 'file-create'] as const
 export type Feature = (typeof FEATURES)[number]
 
 export type ThreadId = string

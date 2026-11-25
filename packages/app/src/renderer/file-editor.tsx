@@ -18,6 +18,7 @@ import { useLinkPlace } from './links.tsx'
 import { useLocalState } from './local-state.ts'
 import { folderOf } from './markdown-html.ts'
 import { filePath } from './short-path.ts'
+import { focusRegion } from './focus.ts'
 import { ImageFile, isImageFile } from './image-file.tsx'
 import { isMarkdownPath, TEXT_MODES, TextEditor, type TextMode } from './text-editor.tsx'
 
@@ -154,6 +155,15 @@ function FileText({ machine, thread, path, line, actions, children, onOpenFile }
   }
   const keepMine = () => { disk.current = conflict; setConflict(undefined); void save() }
 
+  // Its pane given the focus before the file came (just opened, it went to the pane itself): on to the text now, as
+  // going to a pane with its text there does.
+  const root = useRef<HTMLDivElement>(null)
+  const loaded = shown !== undefined
+  useEffect(() => {
+    const column = loaded ? root.current?.closest<HTMLElement>('[data-column]') : undefined
+    if (column && document.activeElement === column) focusRegion(column)
+  }, [loaded, path])
+
   const openIn = (kind: string | undefined, file: string) => kind && dispatch('pane.open', { thread: thread.id, kind, params: { path: file } }, { machine: machine.id, source: 'editor' })
   // Its images, read from beside it on the thread's machine.
   const images = useMemo(() => imagesIn(machine, thread.id, folderOf(path)), [machine, thread.id, path])
@@ -164,7 +174,7 @@ function FileText({ machine, thread, path, line, actions, children, onOpenFile }
       : void openIn(fileKind(registry, { machine: machine.id, thread }, file), file),
   }
   return (
-    <div className="file-editor">
+    <div className="file-editor" ref={root}>
       <div className="pane-bar">
         <code title={path}>{filePath(thread.cwd, path)}</code>
         <span className={`pane-bar__note ${note?.error ? 'is-error' : ''}`}>{note?.text}</span>

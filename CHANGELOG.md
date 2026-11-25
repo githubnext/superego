@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- New file and New folder in a folder pane: from its header, a folder's right-click menu or `⌘⌥N`. Name it in
+  place (`docs/new.md` makes `docs` too); a new file opens in the editor, ready to type.
+- A file opened in an editor pane gets the focus in its text once it's read, not just the pane.
 - Each machine has a colour of its own: its name is drawn in it in the Threads sidebar, a thread's card, the title
   bar and ⌘L. Pick another from its dot in Settings → Machines.
 - Claude Agent: when your login shell doesn't answer in time, it says so instead of that Claude Code isn't installed.

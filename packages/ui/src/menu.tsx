@@ -86,13 +86,18 @@ export const Menu = {
   SubmenuRoot: Base.SubmenuRoot, SubmenuTrigger, SubmenuPopup,
 }
 
-/** A context menu's surface: where the pointer was (or the long press). */
-function ContextPopup({ children, className = '' }: { children: ReactNode; className?: string }) {
+/**
+ * A context menu's surface: where the pointer was (or the long press). `finalFocus`, where the focus goes as it closes
+ * (Base UI's: back to what was right-clicked, unless it says otherwise).
+ */
+function ContextPopup({ children, className = '', finalFocus }: {
+  children: ReactNode; className?: string; finalFocus?: ComponentProps<typeof BaseContext.Popup>['finalFocus']
+}) {
   const marked = usePortalAttributes()
   return (
     <BaseContext.Portal>
       <BaseContext.Positioner {...marked} className="superego-layer">
-        <BaseContext.Popup className={`superego-menu ${className}`}>{children}</BaseContext.Popup>
+        <BaseContext.Popup className={`superego-menu ${className}`} {...(finalFocus !== undefined ? { finalFocus } : {})}>{children}</BaseContext.Popup>
       </BaseContext.Positioner>
     </BaseContext.Portal>
   )

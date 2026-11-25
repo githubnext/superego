@@ -9,3 +9,10 @@
 .files-toggle.is-on { color: var(--superego-accent); }
 .files-folder { flex: 1; min-height: 0; overflow: auto; padding: 6px 0 24px; font-size: var(--superego-text-ui); }
 .files-tree__note--error { color: var(--superego-status-error-text); }
+.files-folder__actions { display: flex; gap: 2px; margin-left: auto; justify-content: flex-end; }
+.files-folder__new { width: 22px; height: 22px; min-height: 22px; background: none; box-shadow: none; color: var(--superego-faint); }
+.files-folder__new:hover { background: var(--superego-hover); color: var(--superego-text); }
+.placed-view .files-folder .pane-bar { padding-right: 36px; }
+.files-name { padding: 1px 8px 1px 0; }
+.files-name__field { display: block; width: 100%; min-height: 22px; padding: 1px 6px; border-radius: 5px; font: inherit; }
+.files-name__problem { padding: 3px 0 2px 7px; color: var(--superego-status-error-text); font-size: var(--superego-text-sm); }
