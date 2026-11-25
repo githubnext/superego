@@ -268,7 +268,7 @@ export async function openApp(options, body) {
         const shown = (selector) => [...document.querySelectorAll(selector)].filter((el) => el.getBoundingClientRect().height && !el.closest('[data-out]'))
         // A word's baseline: where a box of no height, at its end, sits.
         const baseline = (el) => { const probe = document.createElement('span'); probe.style.cssText = 'display: inline-block; width: 0; height: 0'; el.append(probe); const y = probe.getBoundingClientRect().bottom; probe.remove(); return y }
-        const words = shown('.titlebar__crumb > .titlebar__project, .titlebar__crumb > .titlebar__sep, .titlebar__title > .thread__title, .titlebar__title > .titlebar__word')
+        const words = shown('.titlebar__crumb > .titlebar__project, .titlebar__title > .thread__title, .titlebar__title > .titlebar__word')
         const marks = shown('.titlebar__title > .superego-status, .titlebar__title > .titlebar__item, .titlebar__action, .titlebar__crumb, .app__history .superego-icon-button')
         const lights = document.querySelector('#lights')
         return {

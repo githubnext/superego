@@ -37,7 +37,6 @@ export function ThreadTitle({ machine, thread }: { machine: MachineEntry; thread
         {machine.id !== 'local' && <><MachineName machine={machine} /><span className="titlebar__dot">·</span></>}
         {thread.project.name}
       </span>
-      <span className="titlebar__sep" aria-hidden>›</span>
       <span className="titlebar__seg titlebar__title">
         <StatusGlyph status={thread.status} quiet={thread.quiet} />
         {editing ? <TitleField machine={machine} thread={thread} /> : (
