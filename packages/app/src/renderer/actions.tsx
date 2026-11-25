@@ -44,6 +44,7 @@ export type WindowContext = {
   newThread(start?: NewThreadStart): void
   togglePalette(): void
   showLog(): void
+  toggleInspect(): void
   /** The thread a selection points at, as the window has it. */
   threadOf(selection: Selection): ThreadInfo | undefined
   /** Every project, in the sidebar's order, and the thread last shown in each (by project key). */
@@ -294,6 +295,7 @@ export const coreActions = (app: AppConfig): WindowAction[] => [
       await window.superego.call(APP, 'app.updateMachine', { machine: id })
     },
   }),
+  defineWindowAction({ id: 'app.inspect', title: 'Inspect views', keys: 'mod+shift+i', run: (_p, c) => c.toggleInspect() }),
   defineWindowAction({ id: 'app.log', title: 'Show action log', run: (_p, c) => c.showLog() }),
   // First-run setup again, where it shows: with nothing selected.
   defineWindowAction({ id: 'app.setup', title: 'Set up models…', run: (_p, c) => { c.select(undefined); openSetup() } }),

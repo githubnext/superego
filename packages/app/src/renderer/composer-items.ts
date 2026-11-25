@@ -44,6 +44,27 @@ export function addToComposer(where: Where, item: ComposerItem) {
   changed()
 }
 
+const inserted = new Map<string, string[]>()
+
+/**
+ * Put `text` in the draft of `thread` on `machine`, after what's typed, and give its composer the keyboard (once it
+ * shows, if it doesn't yet): an identifier picked in Inspect mode, say.
+ */
+export function insertInComposer(where: Where, text: string) {
+  const key = keyOf(where)
+  inserted.set(key, [...inserted.get(key) ?? [], text])
+  focusAsked = { key, at: Date.now() }
+  changed()
+}
+
+/** What `insertInComposer` put in the thread's draft since it was last asked: the composer takes it into the draft. */
+export function takeInserted(where: Where): string[] {
+  const key = keyOf(where)
+  const texts = inserted.get(key) ?? []
+  inserted.delete(key)
+  return texts
+}
+
 /** Set what a thread's composer holds: taken off as it's sent or removed, put back when sending failed. */
 export function setComposerItems(where: Where, items: HeldItem[]) {
   const key = keyOf(where)

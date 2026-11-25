@@ -29,6 +29,7 @@ import { fileKind, paneKind, paneTitle, shownPanes } from './lookups.ts'
 import { ViewScopeProvider } from './placement.tsx'
 import { useNarrow } from './media.ts'
 import { Contained } from './contained.tsx'
+import { Inspected, paneInfo } from './inspect.tsx'
 import { useLocalState } from './local-state.ts'
 import { useAllThreads, useMachines } from './state.tsx'
 import { ThreadBody } from './thread-body.tsx'
@@ -324,12 +325,14 @@ export function ThreadPanes({ machine, thread, main }: { machine: PaneProps['mac
           const pane = panes[index]!
           return (
           <Fragment key={pane.id}>
+          <Inspected info={() => paneInfo(registry, pane, title(pane), where)}>
           <PaneColumn pane={pane} title={title(pane)} focused={pane.id === focused} width={widthOf(pane)} order={orderOf(index + 1)} last={!stacked && index === panes.length - 1}
             behind={stacked && pane.id !== front && pane.id !== maximized} maximized={maximized === undefined ? undefined : pane.id === maximized}
             onFocus={() => focus(pane.id)} onClick={takeFocus} onClose={() => close(pane)} {...(narrow ? {} : { onMaximize: () => maximize(pane) })}
             view={isView(pane) ? { view: pane.kind, machine: machine.id, thread } : undefined}>
             <TabMark.Provider value={setMarkFor(pane.id)}><PaneBody machine={machine} thread={thread} pane={pane} /></TabMark.Provider>
           </PaneColumn>
+          </Inspected>
           {/* Scrolled, its place in the row is kept while it's over the rest, so they stay where they were. */}
           {!stacked && pane.id === maximized && <div className="panes__kept" style={{ width: widthOf(pane), order: orderOf(index + 1, 1) }} aria-hidden />}
           {!stacked && gap(index + 1)}

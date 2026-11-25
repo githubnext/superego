@@ -15,7 +15,7 @@ import { useLocalState } from './local-state.ts'
 import { splitMessage } from './attachments.ts'
 import { readSent } from './composer.ts'
 import { ComposerBox } from './composer-box.tsx'
-import { composerItems, focusTaken, setComposerItems, useComposerItems, useFocusAsked } from './composer-items.ts'
+import { composerItems, focusTaken, takeInserted, setComposerItems, useComposerItems, useFocusAsked } from './composer-items.ts'
 import { commandIn } from './slash-commands.ts'
 import { ArchiveFailed } from './clear-thread.ts'
 import { onGivenBack, takeBack } from './returned.ts'
@@ -136,6 +136,13 @@ export function ComposerView({ machine, thread, busy, inbox, onJump }: { machine
   const focusAsked = useFocusAsked(where)
   useEffect(() => {
     if (!focusAsked) return
+    // Words put in from elsewhere (Inspect mode's identifiers) join the draft, one space from what's typed.
+    const inserted = takeInserted(where)
+    if (inserted.length) {
+      const joined = (typed: string) => `${typed && !/\s$/.test(typed) ? `${typed} ` : typed}${inserted.join(' ')} `
+      setText(joined)
+      requestAnimationFrame(() => { const box = input.current; if (box) { box.focus(); box.setSelectionRange(box.value.length, box.value.length) } })
+    }
     input.current?.focus()
     focusTaken(where)
   }, [focusAsked, where])

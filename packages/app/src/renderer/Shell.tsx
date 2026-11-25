@@ -12,7 +12,7 @@ import { APP, INTERFACE_FONT, KEYMAP, MONO_FONT, TEXT_SIZE, textScale } from '..
 import { useThemeStyle } from './themes.tsx'
 import { useSettings, watched } from './client.ts'
 import type { SidebarRailProps, View, ViewProps } from './extension-api.ts'
-import { scopeOfEntry, useRegistry, whose } from './registry.tsx'
+import { scopeOfEntry, useRegistry, whose, type Registry } from './registry.tsx'
 import { shownPanes } from './lookups.ts'
 import { focusSidebar } from './focus.ts'
 import { paneMenu, PlacedViews, Slot, useLayout, viewsIn } from './placement.tsx'
@@ -37,6 +37,7 @@ import { SettingsView } from './SettingsView.tsx'
 import { Palette } from './Palette.tsx'
 import { Navigator } from './Navigator.tsx'
 import { PanePicker } from './pane-picker.tsx'
+import { InspectLayer, Inspected, toggleInspect, useInspecting, viewInfo } from './inspect.tsx'
 import { ActionLog, runsBare } from './actions.tsx'
 import { performed } from './perform.ts'
 import { NewThreadDialog } from './NewThread.tsx'
@@ -67,7 +68,8 @@ export function Shell() {
   const machines = useMachines()
   const { selection, select, machine, thread, hidden: alone, listed } = useSelection()
   // A space open fills the main area instead of the thread.
-  const { space } = useSpace()
+  const { space, docked } = useSpace()
+  const inspecting = useInspecting()
   const settings = useSettingsDialog()
   const newThread = useNewThreadDialog()
   const { openSettings, newThread: openNewThread } = useShell()
@@ -135,6 +137,7 @@ export function Shell() {
     toggleNavigator: () => { setPalette(false); setPanePicker(false); setNavigator((open) => !open) },
     togglePanePicker: () => { setPalette(false); setNavigator(false); setPanePicker((open) => !open) },
     showLog: () => setLog(true),
+    toggleInspect,
     // With the panes it shows (not those of an extension it goes without), as the window has it.
     // The selected one too while it's not among them (Ego's, hidden; an archived one).
     threadOf: (s) => {
@@ -295,6 +298,7 @@ export function Shell() {
       <Slot name="overlay" props={{}} />
       <LayoutViews />
       <LayoutEditor />
+      {inspecting && <InspectLayer where={tab === 'settings' ? undefined : space ? docked : selection ? { machine: selection.machine, thread: selection.thread } : undefined} />}
       {log && <ActionLog router={registry.router.router} onClose={() => setLog(false)} />}
       {newThread.start && <NewThreadDialog start={newThread.start} onClose={newThread.close} />}
     </div>
@@ -325,23 +329,26 @@ function BackForward() {
  * A sidebar's button in the rail: its own (`railButton`), else its icon, lit while the sidebar shows it, and hiding it from
  * there; its tooltip says its number (⌘2). In a phone's drawer, always its icon.
  */
-function SidebarButton({ view, open, sidebarHidden, show, narrow = false }: { view: View; narrow?: boolean } & SidebarRailProps) {
+function SidebarButton({ view, open, sidebarHidden, show, narrow = false }: { view: Registry['views'][number]; narrow?: boolean } & SidebarRailProps) {
   const keys = useRailShortcut()
-  if (view.railButton && !narrow) return <Contained name={whose(view)} scope={scopeOfEntry(view)} inline><view.railButton open={open} sidebarHidden={sidebarHidden} show={show} /></Contained>
+  const info = () => viewInfo(view, narrow ? 'drawer' : 'rail')
+  if (view.railButton && !narrow) return <Inspected info={info}><Contained name={whose(view)} scope={scopeOfEntry(view)} inline><view.railButton open={open} sidebarHidden={sidebarHidden} show={show} /></Contained></Inspected>
   const Icon = view.icon
   const shown = open && !sidebarHidden
   return (
-    <RailButton label={view.title} title={keys ? `${view.title} (${keys})` : view.title} on={shown} onClick={() => show(!shown)}>
-      {Icon ? <Icon size={18} aria-hidden /> : view.title.slice(0, 1)}
-    </RailButton>
+    <Inspected info={info}>
+      <RailButton label={view.title} title={keys ? `${view.title} (${keys})` : view.title} on={shown} onClick={() => show(!shown)}>
+        {Icon ? <Icon size={18} aria-hidden /> : view.title.slice(0, 1)}
+      </RailButton>
+    </Inspected>
   )
 }
 
 /** The open sidebar's view: a view that needs a thread shows the selected one, and nothing without. */
-function SidebarContent({ view, machine, thread }: { view: View; machine?: MachineEntry; thread?: ThreadInfo }) {
+function SidebarContent({ view, machine, thread }: { view: Registry['views'][number]; machine?: MachineEntry; thread?: ThreadInfo }) {
   const Component = view.component as ComponentType<ViewProps>
   if (view.context === 'thread' && !(machine && thread)) return null
-  return <Contained name={whose(view)} scope={scopeOfEntry(view)}><Component place="sidebar" {...(machine && thread ? { machine, thread } : {})} /></Contained>
+  return <Inspected info={() => viewInfo(view, 'sidebar')}><Contained name={whose(view)} scope={scopeOfEntry(view)}><Component place="sidebar" {...(machine && thread ? { machine, thread } : {})} /></Contained></Inspected>
 }
 
 /** Without a sidebar (the core's `core.picker`, at the title bar's start): every thread in a menu, and a new one. */

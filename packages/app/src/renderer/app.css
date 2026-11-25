@@ -23,7 +23,7 @@
   /* What it casts on the ground round it: the focus's ring (see Focus), its edge, its shadow. */
   --side-shadow: var(--side-ring, 0 0 #0000), var(--superego-glass-edge), 0 6px 24px light-dark(rgb(0 0 0 / .07), rgb(0 0 0 / .35));
 }
-.app:not(.is-narrow):is(:has(.app__sidebar:not(:empty)), :has(.settings--pane)) { --side-width: calc(var(--superego-rail) + var(--superego-sidebar)); --side-top: var(--side-inset); }
+.app:not(.is-narrow):is(:has(.app__sidebar:has(> :not(template))), :has(.settings--pane)) { --side-width: calc(var(--superego-rail) + var(--superego-sidebar)); --side-top: var(--side-inset); }
 .app:not(.is-narrow)::before {
   content: ''; position: absolute; z-index: 0; top: var(--side-top); left: var(--side-inset); bottom: var(--side-inset); width: calc(var(--side-width) - var(--side-inset)); pointer-events: none;
   border-radius: var(--side-radius); background: var(--superego-chrome);
@@ -58,7 +58,7 @@
 /* The sidebar: in the side's panel beside the rail. Hidden while what's in it shows nothing. A region (its ring: see
    the end). */
 .app__sidebar { position: relative; width: var(--superego-sidebar); flex: none; min-height: 0; overflow: auto; padding: 7px 10px 18px 6px; display: flex; flex-direction: column; }
-.app__sidebar:empty { display: none; }
+.app__sidebar:not(:has(> :not(template))) { display: none; }
 /* Its edge (sidebar-edge.tsx), at the panel's (with it hidden, the rail's): a strip to drag, quiet until it's pointed
    at or dragged, when a line and a grip show on it, as on the panes' handles.
    Dragged short enough to hide it, the sidebar dims. */
@@ -81,7 +81,7 @@
 .app__titlebar { position: relative; height: var(--superego-titlebar); display: flex; align-items: center; gap: var(--superego-space-3); min-width: 0; padding: 0 12px 0 var(--lights); container-type: inline-size; overflow: hidden; }
 /* On a tablet's home screen the page runs up under the status bar: the bar starts below it, its ground running up. */
 .app.is-web .app__titlebar { height: calc(var(--superego-titlebar) + env(safe-area-inset-top)); padding-top: env(safe-area-inset-top); }
-.app.has-sidebar:has(.app__sidebar:not(:empty)) .app__titlebar { padding-left: calc(var(--side-width) + var(--superego-space-3)); }
+.app.has-sidebar:has(.app__sidebar:has(> :not(template))) .app__titlebar { padding-left: calc(var(--side-width) + var(--superego-space-3)); }
 /* Short of room, the bar gives way in one order (overflow.tsx): its items keep their size and go, in turn, to the ···
    at its end; the title takes what's left, truncating. Nothing in it shrinks, wraps or overlaps another, nor makes the
    window wider; nor does anything come and go with the pointer: what fits shows. */
@@ -113,7 +113,7 @@
 /* Back and forward: past the window's buttons, quiet. */
 .app__history { flex: none; display: flex; align-items: center; gap: 2px; margin-right: -4px; }
 /* With the sidebar open, the title starts over the sheet; back and forward stay over the list, at its right edge. */
-.app.has-sidebar:has(.app__sidebar:not(:empty)) .app__history { position: absolute; top: 0; bottom: 0; margin: 0; right: calc(100% - var(--side-width) + 10px); }
+.app.has-sidebar:has(.app__sidebar:has(> :not(template))) .app__history { position: absolute; top: 0; bottom: 0; margin: 0; right: calc(100% - var(--side-width) + 10px); }
 .app__history .superego-icon-button { width: 26px; height: 26px; min-height: 26px; border-radius: 6px; box-shadow: none; background: none; color: var(--superego-muted); }
 .app__history .superego-icon-button:hover:not(:disabled) { background: var(--superego-hover); color: var(--superego-text); }
 .app__titlebar-end { margin-left: auto; display: flex; align-items: center; gap: var(--superego-space-2); flex: none; white-space: nowrap; }
@@ -123,8 +123,8 @@
 .titlebar__item { display: inline-flex; align-items: center; flex: none; white-space: nowrap; }
 /* One that draws nothing (a view with nothing to say for this thread) takes no room, nor a gap: empty, or holding only
    box-less marks (a context menu's trigger, a profile's scope) with nothing in them. */
-.titlebar__item:empty, .titlebar__item:has(> .superego-context:empty):not(:has(> :not(.superego-context))),
-.titlebar__item:has(.profile-scope:empty):not(:has(:not(.superego-context, .profile-scope))) { display: none; }
+.titlebar__item:not(:has(> :not(template))), .titlebar__item:has(> .superego-context:empty):not(:has(> :not(.superego-context, template))),
+.titlebar__item:has(.profile-scope:empty):not(:has(:not(.superego-context, .profile-scope, template))) { display: none; }
 .app__titlebar [data-out] { position: absolute; top: 50%; right: 12px; translate: 0 -50%; visibility: hidden; pointer-events: none; }
 /* A tab shrunk: its glyph alone (its parts out of the flow, still measured). */
 .app__titlebar [data-compact]:not([data-out]) .overflow-part { position: absolute; visibility: hidden; }
@@ -360,7 +360,7 @@ details[open] > .row > .row__chevron { transform: rotate(90deg); }
 .dock { position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%); width: calc(var(--superego-column) + 2 * var(--superego-space-4)); max-width: calc(100% - 2 * var(--superego-space-4)); display: flex; flex-direction: column; }
 /* Apart from the box when something's above it: not a profile's slot that drew nothing (its scope's mark, empty). The
    test in :where(), weighing nothing, so a card that joins the box (below) still takes the gap away. */
-.dock__above:where(:not(:empty, :has(> .profile-scope:empty):not(:has(> :not(.profile-scope:empty))))) { margin-bottom: 10px; }
+.dock__above:where(:has(> :not(template, .profile-scope:empty))) { margin-bottom: 10px; }
 /* The box: the words, what goes with them, and one button at their end. Glass over the thread, lit along its top, a
    soft shadow under it in light. In dark it's flat: no shine and no shadow, only a subtle border (a dark shadow on a dark
    ground reads as a halo). */
@@ -775,7 +775,7 @@ button.app__mobiletitle > .superego-status { font-size: 12px; }
 .thread-sheet__header { margin: 4px 16px 6px; font-size: calc(13px * var(--superego-text-size)); color: var(--superego-muted); }
 .thread-sheet__group { flex: none; margin-bottom: 20px; border-radius: var(--phone-card-radius); background: var(--phone-cell); overflow: hidden; }
 .thread-sheet__group:last-child { margin-bottom: 0; }
-.thread-sheet__group:not(:has(> :not([hidden]))) { display: none; }
+.thread-sheet__group:not(:has(> :not([hidden], template))) { display: none; }
 .thread-sheet__item { position: relative; width: 100%; min-height: 48px; padding: 0 16px; border: 0; border-radius: 0; background: none; color: inherit; font: inherit; text-align: left; -webkit-tap-highlight-color: transparent; }
 .thread-sheet__item:active:not(:disabled), .thread-sheet__item:focus-visible { background: var(--phone-pressed); }
 .thread-sheet__group > :not([hidden]) ~ :is(.thread-sheet__item, .thread-sheet__hosted:not([hidden])) .thread-sheet__item::before,
@@ -844,7 +844,7 @@ button.app__mobiletitle > .superego-status { font-size: 12px; }
 .app__drawer > .app__sidebar .superego-list-item__body > .threads-caret { grid-area: 1 / 5; display: grid; width: 32px; height: 32px; margin: -6px -10px -6px 2px; border-radius: 50%; color: var(--superego-faint); }
 .app__drawer > .app__sidebar .superego-list-item__body > .threads-caret svg { width: 12px; height: 12px; }
 .app__drawer > .app__sidebar .superego-list-item__body > .threads__pin { grid-area: 1 / 3; margin-left: 8px; color: var(--superego-faint); }
-.app__drawer > .app__sidebar .superego-list-item__body > .threads__more:not(:has(:not(.profile-scope))) { display: none; }
+.app__drawer > .app__sidebar .superego-list-item__body > .threads__more:not(:has(:not(.profile-scope, template))) { display: none; }
 .app__drawer > .app__sidebar .threads__more > .threads-pinned__where { order: -1; flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: inherit; color: inherit; }
 .app__drawer > .app__sidebar .superego-list-item__body > .threads-archived__where { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* Swipe actions (the threads extension's swipe.tsx), as Mail's under a finger: the row slides by `--swipe`, its actions
@@ -1513,3 +1513,41 @@ a.pane-header__url:hover { color: var(--superego-link); }
 .space__ask-body .superego-textarea { width: 100%; border: 1px solid var(--superego-line); border-radius: 14px; padding: 10px 12px; background: var(--superego-raised); }
 .space__error { margin: 0; color: var(--superego-danger, #d70015); font-size: var(--superego-text-sm); align-self: stretch; }
 .titlebar__action.is-on { color: var(--superego-accent); }
+
+/* Inspect mode (inspect.tsx): an outline per view, slot, pane and space in its extension's colour (--ins-hue), the one
+   under the pointer lit and the rest stepped back; its sheet beside it, the pill that says so at the corner. */
+.inspect-layer { position: fixed; inset: 0; z-index: 2000; -webkit-app-region: no-drag; cursor: default; }
+.inspect-box {
+  --ins: light-dark(oklch(.56 .19 var(--ins-hue)), oklch(.77 .15 var(--ins-hue)));
+  position: fixed; box-sizing: border-box; border-radius: 6px; cursor: pointer;
+  outline: 1.5px solid color-mix(in oklab, var(--ins) 80%, transparent); outline-offset: -1.5px;
+  background: color-mix(in oklab, var(--ins) 7%, transparent);
+  transition: opacity .12s, background-color .12s, outline-color .12s;
+}
+.inspect-layer.has-hover .inspect-box:not(.is-hovered) { opacity: .4; }
+.inspect-box.is-hovered { outline: 2px solid var(--ins); outline-offset: -2px; background: color-mix(in oklab, var(--ins) 16%, transparent); }
+.inspect-sheet {
+  --ins: light-dark(oklch(.56 .19 var(--ins-hue)), oklch(.77 .15 var(--ins-hue)));
+  position: fixed; z-index: 1; width: max-content; max-width: 320px; padding: 10px 12px; border-radius: var(--superego-radius);
+  background: var(--superego-raised); box-shadow: var(--superego-card-edge), 0 6px 20px light-dark(rgb(0 0 0 / .08), rgb(0 0 0 / .35));
+  font-size: var(--superego-text-sm); color: var(--superego-text); pointer-events: none; animation: inspect-in .12s ease-out;
+}
+@keyframes inspect-in { from { opacity: 0 } }
+.inspect-sheet__head { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.inspect-sheet__dot { flex: none; align-self: center; width: 8px; height: 8px; border-radius: 50%; background: var(--ins); }
+.inspect-sheet__title { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.inspect-sheet__id { font: var(--superego-text-xs) var(--superego-mono); color: var(--superego-muted); white-space: nowrap; }
+.inspect-sheet__rows { display: grid; grid-template-columns: auto 1fr; gap: 3px 12px; margin: 8px 0 0; }
+.inspect-sheet__rows > div { display: contents; }
+.inspect-sheet__rows dt { color: var(--superego-muted); }
+.inspect-sheet__rows dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.inspect-sheet__hint { margin: 8px 0 0; font-size: var(--superego-text-xs); color: var(--superego-faint); }
+.inspect-pill {
+  position: fixed; right: 16px; bottom: 16px; z-index: 2; display: flex; align-items: center; gap: 10px; padding: 4px 4px 4px 12px; border-radius: 999px;
+  background: var(--superego-raised); box-shadow: var(--superego-card-edge); font-size: var(--superego-text-sm); color: var(--superego-muted);
+}
+.inspect-pill .is-failed { color: var(--superego-status-error-text); }
+.inspect-pill__done { all: unset; box-sizing: border-box; display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; cursor: pointer; color: var(--superego-text); background: var(--superego-fill); }
+.inspect-pill__done:hover { background: var(--superego-selected); }
+.inspect-pill__done:focus-visible { box-shadow: var(--superego-focus); }
+.inspect-pill__done kbd { font: var(--superego-text-xs) var(--superego-mono); color: var(--superego-faint); }

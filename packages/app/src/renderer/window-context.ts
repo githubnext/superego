@@ -31,7 +31,7 @@ function useStateContext() {
 
 /** A window without the shell (a test's): no dialogs, sidebar, history or rail, and no thread or app setting known. */
 export const NO_SHELL: ShellContext = {
-  openSettings() {}, newThread() {}, togglePalette() {}, toggleNavigator() {}, togglePanePicker() {}, showLog() {},
+  openSettings() {}, newThread() {}, togglePalette() {}, toggleNavigator() {}, togglePanePicker() {}, showLog() {}, toggleInspect() {},
   threadOf: () => undefined, projects: [], sidebar: { pinned: [], projects: [], folded: [] }, lastThread: {}, fold() {},
   appSetting: () => undefined, toggleSidebar() {}, focusSidebar(id) { throw new Error(`${id} isn't a sidebar in this window`) }, back() {}, forward() {}, railTabs: () => [],
 }

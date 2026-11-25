@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **Inspect views.** `⌘⇧I` (or "Inspect views" in `⌘K`) outlines every view, slot, pane and space in its extension's
+  colour. Hover one to see what it is; click it to paste its identifier into the thread's message, or `⌥`-click to copy
+  it. `Esc` leaves.
+
 ## 0.5.0
 
 - **Upgrade (extension authors):** a pane kind's `width` option is gone: every pane opens the same width. New for

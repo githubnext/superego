@@ -11,6 +11,7 @@ import type { SpaceKind } from './extension-api.ts'
 import { sameSpace, type SpaceAt } from './history.ts'
 import { machine as client } from './client.ts'
 import { Contained } from './contained.tsx'
+import { Inspected, spaceInfo } from './inspect.tsx'
 import { useProfileUi } from './profile-ui.ts'
 import { scopeOfEntry, useRegistry, whose, type InProject, type Owned } from './registry.tsx'
 import { projectSpaces, spaceFor } from './lookups.ts'
@@ -74,11 +75,13 @@ export function SpaceMain({ at, narrow }: { at: SpaceAt; narrow: boolean }) {
   return (
     <div className={`space ${floating ? 'is-floating' : 'is-docked'}`} data-space={at.kind}>
       <div className="space__body" style={{ '--space-inset-right': `${right}px` } as CSSProperties}>
-        <Contained name={whose(kind)} scope={scopeOfEntry(kind)}>
-          <LinkPlace.Provider value={links}>
-            <Drawing.Provider value={at}><Component machine={machine} kind={at.kind} params={at.params} thread={thread} open={(params) => open({ ...at, params })} inset={{ right }} /></Drawing.Provider>
-          </LinkPlace.Provider>
-        </Contained>
+        <Inspected info={() => spaceInfo(kind, spaceTitle(kind, at), at.params, 'main')}>
+          <Contained name={whose(kind)} scope={scopeOfEntry(kind)}>
+            <LinkPlace.Provider value={links}>
+              <Drawing.Provider value={at}><Component machine={machine} kind={at.kind} params={at.params} thread={thread} open={(params) => open({ ...at, params })} inset={{ right }} /></Drawing.Provider>
+            </LinkPlace.Provider>
+          </Contained>
+        </Inspected>
       </div>
       {agentShown && !narrow && (
         <aside className="space__agent" aria-label="The space's thread">
@@ -180,6 +183,8 @@ function AskAbout({ machine, at, kind, started }: { machine: MachineEntry; at: S
 /** A project's space kind, as the rail and the Threads sidebar offer it: opened with its `entry` params. */
 export type ProjectSpace = {
   kind: string; title: string; icon?: SpaceKind['icon']
+  /** Its kind as the registry has it, with its owner. */
+  of: Space
   /** Whether a space of this kind in this project is the one open now. */
   open: boolean
   /** Open it (as `space.open` does). */
@@ -199,7 +204,7 @@ export function useProjectSpaces(project: InProject | undefined): ProjectSpace[]
   return projectSpaces(registry, project).map((kind) => {
     const at: SpaceAt = { machine, kind: kind.kind, params: kind.entry ?? {}, project: root }
     return {
-      kind: kind.kind, title: spaceTitle(kind, at), ...(kind.icon ? { icon: kind.icon } : {}),
+      kind: kind.kind, of: kind, title: spaceTitle(kind, at), ...(kind.icon ? { icon: kind.icon } : {}),
       open: Boolean(space && space.kind === at.kind && space.machine === machine && space.project === root),
       show: () => {
         if (sameSpace(space, at)) return
@@ -225,9 +230,11 @@ export function ProjectSpaceButtons({ project, narrow = false }: { project: InPr
         {spaces.map((space) => {
           const Icon = space.icon
           return (
-            <RailButton key={space.kind} label={space.title} on={space.open} onClick={space.show}>
-              {Icon ? <Icon size={18} aria-hidden /> : space.title.slice(0, 1)}
-            </RailButton>
+            <Inspected key={space.kind} info={() => spaceInfo(space.of, space.title, space.of.entry ?? {}, narrow ? 'drawer' : 'rail')}>
+              <RailButton label={space.title} on={space.open} onClick={space.show}>
+                {Icon ? <Icon size={18} aria-hidden /> : space.title.slice(0, 1)}
+              </RailButton>
+            </Inspected>
           )
         })}
       </span>

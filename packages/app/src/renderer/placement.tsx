@@ -8,6 +8,7 @@ import { useSettings } from './client.ts'
 import { useNarrow } from './media.ts'
 import { APP, LAYOUT } from '../shared/app-settings.ts'
 import { isLayout, PLACES, resolveLayout, THREAD_PLACES, type Layout, type Place, type Placed } from '../shared/layout.ts'
+import { Inspected, viewInfo } from './inspect.tsx'
 import { Contained } from './contained.tsx'
 import type { BehaviourSlot, SlotProps, View, ViewProps } from './extension-api.ts'
 import { paneKind } from './lookups.ts'
@@ -22,7 +23,7 @@ export function Slot<S extends BehaviourSlot>({ name, props, frame }: { name: S;
   return <>{entries.map(({ component: Component, owner }, index) => {
     const key = `${owner.profile ?? ''}/${owner.extension}-${index}`
     const drawn = <Contained key={key} name={owner.extension} scope={owner.profile} inline={name === 'header.chips' || name === 'thread.badge' || name === 'editor.bar'}><Component {...props} /></Contained>
-    return frame ? <Fragment key={key}>{frame(key, drawn)}</Fragment> : drawn
+    return <Inspected key={key} info={() => ({ kind: 'slot', id: name, title: name, owner })}>{frame ? <Fragment key={key}>{frame(key, drawn)}</Fragment> : drawn}</Inspected>
   })}</>
 }
 
@@ -85,7 +86,7 @@ export function PlacedViews({ place, machine, thread, frame }: {
   return <>{viewsIn(registry, placed, place, where).filter((view) => view.context === 'window' || where).map((view) => {
     const Component = view.component as ComponentType<ViewProps>
     const drawn = <ViewScope.Provider value={where}><Contained name={view.owner.extension} scope={view.owner.profile} inline={place === 'header' || place === 'titlebar' || place === 'rail'}><Component place={place} {...(machine && thread ? { machine, thread } : {})} /></Contained></ViewScope.Provider>
-    return <Fragment key={`${view.owner.profile ?? ''}/${view.id}`}>{frame ? frame(view, drawn) : drawn}</Fragment>
+    return <Fragment key={`${view.owner.profile ?? ''}/${view.id}`}><Inspected info={() => viewInfo(view, place)}>{frame ? frame(view, drawn) : drawn}</Inspected></Fragment>
   })}</>
 }
 

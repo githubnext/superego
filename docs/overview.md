@@ -96,6 +96,7 @@ Turn either off for a profile (`without: ['skills', 'agents-md']`) or a machine 
 | `⌘⇧N` | New window |
 | `⌘P` | Open a file in the thread's folder |
 | `⌘⇧P` | Open a pane |
+| `⌘⇧I` | Inspect views: outline every view, slot, pane and space; click one to paste its identifier into the message |
 | `⌘U` | Unread threads: what needs you, then what failed, then what finished |
 | `⌘.` | Next unread thread |
 | `⌘⌥F` | Focus or unfocus the thread shown |
