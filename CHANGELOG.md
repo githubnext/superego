@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Claude Agent: when your login shell doesn't answer in time, it says so instead of that Claude Code isn't installed.
+
 ## 0.4.0
 
 - **Upgrade (extension authors):** extensions can greet new users on first-run setup with the `welcome` slot

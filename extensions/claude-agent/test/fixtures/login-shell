@@ -1,0 +1,8 @@
+#!/bin/bash
+# A login shell standing in for zsh -ilc <command>: its startup prints, its `claude` is an alias with flags, and its
+# PATH has the folder of a stand-in claude (bin/, beside it). bash, not /bin/sh: macOS's /bin/sh starts bash in turn,
+# and on a busy machine that second start can take seconds.
+echo "welcome back"
+alias claude='claude --dangerously-skip-permissions'
+PATH="/nowhere:${0%/*}/bin:$PATH"
+eval "$2"

@@ -92,9 +92,9 @@ describe('translocated', () => {
 
 describe('the shell', () => {
   it("says when a login shell doesn't find it, or finds another", async () => {
-    // A stand-in shell that answers `command -v` with what PATH it's given. The checkout's, not one written here: a
-    // program run first as it's written can take seconds to start on a busy machine (scanned as it's opened, or busy
-    // while a child forked meanwhile holds it open), past the 5s it's given.
+    // A stand-in shell that answers `command -v` with what PATH it's given. The checkout's, not one written here, run
+    // by bash (fixtures/login-shell says why): on a busy machine a program can take seconds to start, past the 5s it's
+    // given.
     const shell = fileURLToPath(new URL('fixtures/login-shell', import.meta.url))
     const cli = commandLine({ app, appPath, packaged: false, executable: '/unused', home, shell })
     cli.install()

@@ -1,6 +1,7 @@
-#!/bin/sh
+#!/bin/bash
 # A login shell standing in for zsh -ilc <command>: its startup files print, and export a key that spans lines.
+# bash, not /bin/sh: macOS's /bin/sh starts bash in turn, and on a busy machine that second start can take seconds.
 echo "welcome back"
-shift
-OPENAI_API_KEY="sk-multi
-line" exec /bin/sh -c "$1"
+export OPENAI_API_KEY="sk-multi
+line"
+eval "$2"

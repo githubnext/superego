@@ -346,10 +346,12 @@ export function claudeAgent({ skills = [], executable, env = () => claudeEnv(), 
           // Looked at once before it's offered; after that, again when it's old: what it finds, if that's quick (a
           // thread about to start on it by default is refused once it's signed out), else what it knew, while it looks.
           const known = claude.get()
-          const found = !known ? await check() : Date.now() - checked <= CHECK_STALE_MS ? known : await Promise.race([
+          // Never looked at, and it can't be (the login shell didn't answer): why is what it says.
+          const found = !known ? await check().catch((error: Error) => error) : Date.now() - checked <= CHECK_STALE_MS ? known : await Promise.race([
             check().catch((error: unknown) => { console.error('Claude Agent: looking at Claude Code here failed:', error); return known }),
             new Promise<ClaudeCheck>((resolve) => setTimeout(() => resolve(known), FRESH_WAIT_MS).unref()),
           ])
+          if (found instanceof Error) return { unavailable: found.message }
           if (!found?.installed) return { unavailable: "Claude Code isn't installed here" }
           const unavailable = found.loggedIn ? undefined : found.error ? "Couldn't tell whether Claude Code is signed in here" : "Claude Code isn't signed in here: run claude, then /login"
           return { title: about.title, description: 'Runs your Claude Code', models: MODELS.map((m) => ({ ...m, thinking: [...m.thinking] })), ...(unavailable ? { unavailable } : {}) }

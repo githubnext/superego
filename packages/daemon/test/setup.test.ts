@@ -104,8 +104,8 @@ it('starts a provider on its best model, not its first by name', async () => {
 })
 
 it("reads the login shell's environment, whatever its startup files print", async () => {
-  // A file of the checkout's, not one written here: a program run first as it's written can take seconds to start on a
-  // busy machine (scanned as it's opened, or busy while a child forked meanwhile holds it open), past the 5s it's given.
+  // A file of the checkout's, not one written here, run by bash (fixtures/login-shell says why): on a busy machine a
+  // program can take seconds to start, past the 5s it's given.
   const env = await readLoginEnv({ shell: fileURLToPath(new URL('fixtures/login-shell', import.meta.url)) })
   expect(env.OPENAI_API_KEY).toBe('sk-multi\nline')
   expect(await readLoginEnv({ shell: join(dir, 'no-such-shell') })).toEqual({})

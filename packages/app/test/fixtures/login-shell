@@ -1,3 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # A login shell standing in for zsh -ilc <command>: it runs the command on the PATH it was given, reading no startup files.
-exec /bin/sh -c "$2"
+# bash, not /bin/sh: macOS's /bin/sh starts bash in turn, and on a busy machine that second start can take seconds.
+eval "$2"
