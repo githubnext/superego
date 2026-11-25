@@ -350,6 +350,10 @@ describe('record and replay', () => {
     expect((await threads(peer)).find((s) => s.id === created.id)?.title).toBe('renamed')
     await expect(peer.call('action.run', { id: 'thread.rename', params: { thread: created.id }, exposure: 'cli' })).rejects.toMatchObject({ kind: 'invalid_params' })
     await expect(peer.call('action.run', { id: 'nope.nope', exposure: 'cli' })).rejects.toMatchObject({ kind: 'unknown_action' })
+    // A setting's value comes as text (`do settings.set --key agent.fast --value true`): read as the setting's type.
+    await peer.call('action.run', { id: 'settings.set', params: { key: 'agent.fast', value: 'true' }, exposure: 'cli' })
+    expect((await peer.call<{ value: SettingsSnapshot }>('settings.watch', {})).value.values['agent.fast']).toBe(true)
+    await expect(peer.call('action.run', { id: 'settings.set', params: { key: 'agent.fast', value: 'yes' }, exposure: 'cli' })).rejects.toMatchObject({ kind: 'invalid_setting' })
     // Served under its own id, too: the app calls actions directly.
     await peer.call('thread.seen', { thread: created.id })
     const log = await peer.call<ActionLogEntry[]>('action.log', {})
