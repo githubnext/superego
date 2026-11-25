@@ -281,7 +281,7 @@ export function InspectLayer({ where }: { where: { machine: string; thread: stri
   }
 
   return createPortal(
-    <div className={`inspect-layer ${hovered ? 'has-hover' : ''}`} onMouseOver={over} onMouseMove={over} onMouseLeave={() => setHover(undefined)}>
+    <div data-superego-overlay className={`inspect-layer ${hovered ? 'has-hover' : ''}`} onMouseOver={over} onMouseMove={over} onMouseLeave={() => setHover(undefined)}>
       {boxes.map(({ key, info, rect, hue }) => (
         <div key={key} data-inspect-box={key} data-inspect-id={info.id} data-inspect-kind={info.kind}
           className={`inspect-box ${key === hover?.key ? 'is-hovered' : ''}`}
