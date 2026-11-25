@@ -5,6 +5,7 @@
 - **Inspect views.** `⌘⇧I` (or "Inspect views" in `⌘K`) outlines every view, slot, pane and space in its extension's
   colour. Hover one to see what it is; click it to paste its identifier into the thread's message, or `⌥`-click to copy
   it. `Esc` leaves.
+- Menus, popovers and dialogs over a browser pane show on top of the page at once, instead of behind it for a moment.
 - Pasting into a terminal works, with ⌘V, the Edit menu or the right-click menu, in the app and in a browser.
 - `superego do settings.set --key <key> --value true` sets a switch or a number setting, instead of refusing the
   value as text.

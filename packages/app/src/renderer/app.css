@@ -1162,8 +1162,8 @@ a.pane-header__url { color: var(--superego-muted); text-decoration: none; }
 a.pane-header__url:hover { color: var(--superego-link); }
 .pane-header__button { flex: none; height: 22px; padding: 0 8px; border: 0; border-radius: 5px; background: var(--superego-fill); color: var(--superego-text); font: inherit; font-size: calc(11.5px * var(--superego-text-scale)); cursor: default; }
 .pane-header__button:hover { background: var(--superego-selected); }
-/* A web page in a pane (web-view.tsx): on the desktop, a view laid over this box, and a still of it while it can't be
-   shown; in a browser, framed, with a line on what that can't do. */
+/* A web page in a pane (web-view.tsx): on the desktop, a view laid over this box, and a still of it under the view,
+   seen while the view can't be shown; in a browser, framed, with a line on what that can't do. */
 .web-view { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; outline: none; }
 .web-view__still { position: absolute; top: 0; left: 0; max-width: none; pointer-events: none; user-select: none; }
 .web-view__error { overflow-wrap: anywhere; }
