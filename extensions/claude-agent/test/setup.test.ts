@@ -27,7 +27,7 @@ function fakeClaude(json: object) {
   dirs.push(dir)
   const file = join(dir, 'claude')
   answer(file, json)
-  writeFileSync(file, `#!/bin/sh\nenv > "${dir}/env"\necho "$*" >> "${dir}/log"\n[ "$1" = "--version" ] && echo '2.1.325 (Claude Code)'\n[ "$1 $2" = "auth status" ] && cat "${dir}/status"\nexit 0\n`)
+  writeFileSync(file, `#!/bin/bash\nenv > "${dir}/env"\necho "$*" >> "${dir}/log"\n[ "$1" = "--version" ] && echo '2.1.325 (Claude Code)'\n[ "$1 $2" = "auth status" ] && cat "${dir}/status"\nexit 0\n`)
   chmodSync(file, 0o755)
   return file
 }

@@ -21,7 +21,7 @@ import { mockAnthropic, type MockAnthropic } from './mock-anthropic.ts'
 
 const SKILL_DIR = fileURLToPath(new URL('../../../packages/cli/skill/', import.meta.url))
 const claude = (() => {
-  try { return execFileSync('sh', ['-c', 'command -v claude'], { encoding: 'utf8' }).trim() || undefined } catch { return undefined }
+  try { return execFileSync('bash', ['-c', 'command -v claude'], { encoding: 'utf8' }).trim() || undefined } catch { return undefined }
 })()
 const hubApp = defineApp({ name: 'hub', id: 'claudehub' })
 const boxApp = defineApp({ name: 'box', id: 'claudebox' })
@@ -54,7 +54,7 @@ afterAll(async () => {
 function wrapper(name: string, signedIn: boolean) {
   const file = join(dir, `${name}-claude`)
   const key = signedIn ? `ANTHROPIC_BASE_URL=${api.url} ANTHROPIC_API_KEY=sk-ant-api03-mock ` : ''
-  writeFileSync(file, `#!/bin/sh\necho "$*" >> "${dir}/${name}.calls"\nexec env ${key}CLAUDE_CONFIG_DIR="${dir}/${name}-config" CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1 "${claude}" "$@"\n`)
+  writeFileSync(file, `#!/bin/bash\necho "$*" >> "${dir}/${name}.calls"\nexec env ${key}CLAUDE_CONFIG_DIR="${dir}/${name}-config" CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1 "${claude}" "$@"\n`)
   chmodSync(file, 0o755)
   return file
 }

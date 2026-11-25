@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # Scripted threads on a small project, screenshotted for looking at the transcript: `pnpm showcase <dir>`.
 # Each thread at its top, middle and end, in light and dark. Cleans up its daemon afterwards.
 set -e

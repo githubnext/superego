@@ -39,7 +39,7 @@ describe('from a checkout', () => {
   it('tells something else at the path apart, leaves it on remove, and replaces it on install', async () => {
     const cli = commandLine({ app, appPath, packaged: false, executable: '/unused', home })
     mkdirSync(join(home, '.local/bin'), { recursive: true })
-    writeFileSync(cli.path, '#!/bin/sh\necho mine\n')
+    writeFileSync(cli.path, '#!/bin/bash\necho mine\n')
     expect((await cli.info()).state).toBe('other')
     cli.uninstall()
     expect(readFileSync(cli.path, 'utf8')).toContain('mine')
@@ -60,7 +60,7 @@ describe('packaged', () => {
     writeFileSync(join(appPath, 'out/main/cli.js'), '')
     // The app's executable, standing in: prints what it was run with.
     const executable = join(root, 'Test App')
-    writeFileSync(executable, '#!/bin/sh\necho "$ELECTRON_RUN_AS_NODE" "$@"\n')
+    writeFileSync(executable, '#!/bin/bash\necho "$ELECTRON_RUN_AS_NODE" "$@"\n')
     chmodSync(executable, 0o755)
     const cli = commandLine({ app, appPath, packaged: true, executable, home })
     expect((await cli.info()).kind).toBe('script')

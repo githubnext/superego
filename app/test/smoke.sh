@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # Two app processes against one daemon, which must outlive the first; then a third against a daemon of another protocol
 # generation, which it restarts. Cleans up the daemon afterwards.
 set -e
@@ -8,9 +8,9 @@ cd "$(dirname "$0")/.."
 [ "$SUPEREGO_CHECK_COMMAND" = test/smoke.sh ] || exec node ../scripts/check.ts --timeout SUPEREGO_SMOKE_TIMEOUT=480 test/smoke.sh "$@"
 node scripts/build.ts
 # `superego extension new` and `test` with only what the build carries, out of the repo's reach.
-sh test/author-test.sh
+bash test/author-test.sh
 # The providers' OAuth flows, which pi loads by a path the bundle can't follow, load in the build.
-sh test/oauth.sh
+bash test/oauth.sh
 unset ANTHROPIC_API_KEY ANTHROPIC_OAUTH_TOKEN OPENAI_API_KEY
 export SUPEREGO_HOME="$(mktemp -d)" SUPEREGO_MODEL=faux SUPEREGO_HEADLESS=1
 # A recorded agent that asks the user something, then uses the answer: offered as the model "replay/replay".

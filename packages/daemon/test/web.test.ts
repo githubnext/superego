@@ -608,7 +608,7 @@ describe('the daemon’s web access', () => {
       await writeFile(join(dir, 'whois.json'), JSON.stringify({ Node: { StableID: 'nPHONE', Name: 'phone.tail1234.ts.net.', Hostinfo: { OS: 'iOS' } }, UserProfile: { LoginName: 'me@example.com' } }))
       // `status --json`, `serve status --json`, `whois --json <address>`, `serve --bg … <target>` (kept in serve.json), `serve --https=443 off`;
       // any of them for another tailscaled, after --socket=<its socket>.
-      await writeFile(join(bin, 'tailscale'), `#!/bin/sh
+      await writeFile(join(bin, 'tailscale'), `#!/bin/bash
 echo "$@" >> ${JSON.stringify(log)}
 case "$1" in --socket=*) shift ;; esac
 case "$1 $2" in

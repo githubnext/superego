@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # The window's layout in the states the design covers, screenshotted:
 # `test/look.sh <dir> [look|focus|panes|panehead|composer|images|mcp|web|terminal|toolbar|titlebar|titlebar-fit|pins|folds|states|cards|dialogs|machines|staff|picker|providers|keptpage|themes|theme-ui|mac-look|claude-agent|setup|phone-look|header]` (look, unless given), each a script of
 # that name here:
@@ -79,7 +79,7 @@ if [ "$2" = claude-agent ]; then
   # $SUPEREGO_HOME/claude-signed-out is there. What $SUPEREGO_HOME/claude-inject holds goes out after Claude Code's next
   # `system:init` (the plan's limits, which Claude Code reports only on a plan's sign-in).
   cat > "$SUPEREGO_HOME/bin/claude" <<EOF
-#!/bin/sh
+#!/bin/bash
 if [ -f "$SUPEREGO_HOME/claude-signed-out" ]; then
   [ "\$1 \$2" = "auth status" ] && { echo '{"loggedIn":false,"authMethod":"none"}'; exit 0; }
   exec env ANTHROPIC_BASE_URL="\$(cat "$SUPEREGO_HOME/claude-mock-url")" CLAUDE_CONFIG_DIR="$SUPEREGO_HOME/claude-config" CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1 "$CLAUDE" "\$@"

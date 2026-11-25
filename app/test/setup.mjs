@@ -29,7 +29,7 @@ process.env.SUPEREGO_OLLAMA = `http://127.0.0.1:${ollama.address().port}/v1`
 process.env.SUPEREGO_LMSTUDIO = 'http://127.0.0.1:9/v1'
 // Claude Code, installed and signed in with a Max plan: what `claude auth status` says, and nothing else.
 const claude = join(process.env.SUPEREGO_HOME, 'claude')
-writeFileSync(claude, `#!/bin/sh\n[ "$1" = "--version" ] && echo '2.1.325 (Claude Code)'\n[ "$1 $2" = "auth status" ] && echo '{"loggedIn":true,"authMethod":"claude.ai","subscriptionType":"max"}'\n`)
+writeFileSync(claude, `#!/bin/bash\n[ "$1" = "--version" ] && echo '2.1.325 (Claude Code)'\n[ "$1 $2" = "auth status" ] && echo '{"loggedIn":true,"authMethod":"claude.ai","subscriptionType":"max"}'\n`)
 chmodSync(claude, 0o755)
 process.env.SUPEREGO_CLAUDE = claude
 // No model: none scripted, and no key from this machine's environment.

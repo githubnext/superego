@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # A provider's OAuth flow, as the built daemon loads it: refreshing an expired sign-in. pi loads each flow with an
 # import() the bundler can't follow, so a build that leaves one out fails only here, when it's first needed (a ChatGPT
 # sign-in renewed, an hour in). An expired ChatGPT sign-in without the client id it was issued is refused by the flow

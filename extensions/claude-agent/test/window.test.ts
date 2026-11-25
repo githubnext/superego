@@ -33,7 +33,7 @@ function fakeClaude(status: object | undefined) {
   dir = mkdtempSync(join(tmpdir(), 'superego-claude-window-'))
   if (!status) return undefined
   const file = join(dir, 'claude')
-  writeFileSync(file, `#!/bin/sh\n[ "$1" = "--version" ] && echo '2.1.325 (Claude Code)'\n[ "$1 $2" = "auth status" ] && echo '${JSON.stringify(status)}'\nexit 0\n`)
+  writeFileSync(file, `#!/bin/bash\n[ "$1" = "--version" ] && echo '2.1.325 (Claude Code)'\n[ "$1 $2" = "auth status" ] && echo '${JSON.stringify(status)}'\nexit 0\n`)
   chmodSync(file, 0o755)
   return file
 }

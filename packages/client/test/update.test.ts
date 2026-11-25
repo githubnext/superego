@@ -28,7 +28,7 @@ describe('updating a machine', () => {
   beforeAll(() => {
     origin = mkdtempSync(join(tmpdir(), 'superego-update-origin-'))
     mkdirSync(join(origin, 'scripts'), { recursive: true })
-    writeFileSync(join(origin, 'scripts/install-machine.sh'), '#!/bin/sh\necho "installed $(git rev-parse --short HEAD) now=${SUPEREGO_RESTART_NOW:-} args=$*"\n')
+    writeFileSync(join(origin, 'scripts/install-machine.sh'), '#!/bin/bash\necho "installed $(git rev-parse --short HEAD) now=${SUPEREGO_RESTART_NOW:-} args=$*"\n')
     chmodSync(join(origin, 'scripts/install-machine.sh'), 0o755)
     writeFileSync(join(origin, 'scripts/machine-path.sh'), 'PATH="$HOME/bin:$PATH"; export PATH\n')
     git(origin, 'init', '-q', '-b', 'main')
@@ -53,12 +53,14 @@ describe('updating a machine', () => {
     const checkout = join(home, 'dev/superego')
     cpSync(join(clone, 'superego'), checkout, { recursive: true })
     mkdirSync(join(home, '.local/bin'), { recursive: true })
-    writeFileSync(join(home, '.local/bin/superego'), `#!/bin/sh\n# Written by ${checkout}/scripts/install-machine.sh\nexec node "${checkout}/app/bin/superego.ts" "$@"\n`)
+    writeFileSync(join(home, '.local/bin/superego'), `#!/bin/bash\n# Written by ${checkout}/scripts/install-machine.sh\nexec node "${checkout}/app/bin/superego.ts" "$@"\n`)
     return checkout
   }
 
+  // The script as a machine runs it, POSIX sh: bash in POSIX mode, which is what macOS's /bin/sh is, without /bin/sh
+  // starting bash in turn (a second start that can stall for seconds on a busy machine).
   const run = (script: string) => {
-    try { return { ok: true, out: execFileSync('/bin/sh', ['-c', script], { env: { HOME: home, PATH: '/usr/bin:/bin' }, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }) } }
+    try { return { ok: true, out: execFileSync('/bin/bash', ['--posix', '-c', script], { env: { HOME: home, PATH: '/usr/bin:/bin' }, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }) } }
     catch (error) { return { ok: false, out: String((error as { stderr: string }).stderr) } }
   }
 
@@ -82,8 +84,8 @@ describe('updating a machine', () => {
 
   it('updates a release app by the install script from GitHub', () => {
     mkdirSync(join(home, '.local/bin'), { recursive: true })
-    writeFileSync(join(home, '.local/bin/superego'), "#!/bin/sh\n# Written by scripts/install-machine.sh --release\nELECTRON_RUN_AS_NODE=1 exec '/x/Superego.app/Contents/MacOS/Superego' x \"$@\"\n")
-    writeFileSync(join(home, '.local/bin/gh'), '#!/bin/sh\necho "echo fetched $1 $4; echo now=\\$SUPEREGO_RESTART_NOW args=\\$*"\n')
+    writeFileSync(join(home, '.local/bin/superego'), "#!/bin/bash\n# Written by scripts/install-machine.sh --release\nELECTRON_RUN_AS_NODE=1 exec '/x/Superego.app/Contents/MacOS/Superego' x \"$@\"\n")
+    writeFileSync(join(home, '.local/bin/gh'), '#!/bin/bash\necho "echo fetched $1 $4; echo now=\\$SUPEREGO_RESTART_NOW args=\\$*"\n')
     chmodSync(join(home, '.local/bin/gh'), 0o755)
     const { ok, out } = run(updateScript({ wrapper: wrapperOf('~/.local/bin/superego connect --start') }, true))
     expect(ok).toBe(true)
@@ -92,12 +94,12 @@ describe('updating a machine', () => {
 
   it('refuses a checkout with changes, a pull that fails, and a wrapper it did not write', () => {
     const checkout = cloned()
-    writeFileSync(join(checkout, 'scripts/install-machine.sh'), '#!/bin/sh\necho changed\n')
+    writeFileSync(join(checkout, 'scripts/install-machine.sh'), '#!/bin/bash\necho changed\n')
     expect(run(updateScript({ dir: checkout }))).toMatchObject({ ok: false, out: expect.stringContaining('has uncommitted changes') })
     git(checkout, 'checkout', '--', '.')
     git(checkout, 'remote', 'set-url', 'origin', join(home, 'gone'))
     expect(run(updateScript({ dir: checkout }))).toMatchObject({ ok: false, out: expect.stringContaining('git pull failed') })
-    writeFileSync(join(home, '.local/bin/superego'), '#!/bin/sh\nexec superego "$@"\n')
+    writeFileSync(join(home, '.local/bin/superego'), '#!/bin/bash\nexec superego "$@"\n')
     expect(run(updateScript({ wrapper: wrapperOf('~/.local/bin/superego') }))).toMatchObject({ ok: false, out: expect.stringContaining('was not written by scripts/install-machine.sh') })
   }, SCRIPTED)
 

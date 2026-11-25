@@ -159,7 +159,7 @@ describe('ssh failures reach the caller as kinds', () => {
     const dir = mkdtempSync(join(tmpdir(), 'superego-fakessh-'))
     dirs.push(dir)
     mkdirSync(join(dir, 'bin'))
-    writeFileSync(join(dir, 'bin/ssh'), `#!/bin/sh\nprintf '%s\\n' "$@" > ${shellQuote(join(dir, 'args'))}\n${behaviour.stderr ? `echo ${shellQuote(behaviour.stderr)} >&2\n` : ''}exit ${behaviour.code ?? 0}\n`)
+    writeFileSync(join(dir, 'bin/ssh'), `#!/bin/bash\nprintf '%s\\n' "$@" > ${shellQuote(join(dir, 'args'))}\n${behaviour.stderr ? `echo ${shellQuote(behaviour.stderr)} >&2\n` : ''}exit ${behaviour.code ?? 0}\n`)
     chmodSync(join(dir, 'bin/ssh'), 0o755)
     process.env.PATH = `${join(dir, 'bin')}:${savedPath}`
     return dir

@@ -28,7 +28,7 @@ const INJECT = fileURLToPath(new URL('./inject.mjs', import.meta.url))
 const SKILL_DIR = fileURLToPath(new URL('../../../packages/cli/skill/', import.meta.url))
 
 const claude = (() => {
-  try { return execFileSync('sh', ['-c', 'command -v claude'], { encoding: 'utf8' }).trim() || undefined } catch { return undefined }
+  try { return execFileSync('bash', ['-c', 'command -v claude'], { encoding: 'utf8' }).trim() || undefined } catch { return undefined }
 })()
 
 /** A profile that picks Claude Agent, with `claudeAgent` choices and instructions of its own when given. */
@@ -59,7 +59,7 @@ describe.skipIf(!claude)("a Claude Agent thread, on the user's claude against a 
     const toggle = signedIn === 'file' ? `[ -f "${dir}/signed-in" ] && export ANTHROPIC_API_KEY=sk-ant-api03-mock\n` : ''
     const config = home ? `HOME="${home}" ` : `CLAUDE_CONFIG_DIR="${dir}/config" `
     const run = `env ANTHROPIC_BASE_URL=${api.url} ${key}${config}CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1${inject ? ' CLAUDE_CODE_MAX_RETRIES=0' : ''} "${claude}" "$@"`
-    writeFileSync(file, `#!/bin/sh\nenv > "${dir}/env.$$"\necho "$*" >> "${dir}/runs"\n${toggle}${inject ? `${run} | "${process.execPath}" "${INJECT}" "${dir}/inject"` : `exec ${run}`}\n`)
+    writeFileSync(file, `#!/bin/bash\nenv > "${dir}/env.$$"\necho "$*" >> "${dir}/runs"\n${toggle}${inject ? `${run} | "${process.execPath}" "${INJECT}" "${dir}/inject"` : `exec ${run}`}\n`)
     chmodSync(file, 0o755)
     return file
   }
@@ -78,7 +78,7 @@ describe.skipIf(!claude)("a Claude Agent thread, on the user's claude against a 
     const bin = join(dir, 'bin')
     if (cli) {
       mkdirSync(bin, { recursive: true })
-      writeFileSync(join(bin, 'superego'), `#!/bin/sh\nexec "${process.execPath}" "${CLI}" "$@"\n`)
+      writeFileSync(join(bin, 'superego'), `#!/bin/bash\nexec "${process.execPath}" "${CLI}" "$@"\n`)
       chmodSync(join(bin, 'superego'), 0o755)
     }
     let made: TestDaemon | undefined
@@ -195,7 +195,7 @@ describe.skipIf(!claude)("a Claude Agent thread, on the user's claude against a 
     }))
     mkdirSync(join(repo, '.claude'), { recursive: true })
     settings('hook')
-    writeFileSync(join(repo, '.mcp.json'), JSON.stringify({ mcpServers: { repo: { command: 'sh', args: ['-c', `touch ${dir}/mcp-ran; sleep 2`] } } }))
+    writeFileSync(join(repo, '.mcp.json'), JSON.stringify({ mcpServers: { repo: { command: 'bash', args: ['-c', `touch ${dir}/mcp-ran; sleep 2`] } } }))
     const facts = async (thread: { id: string }) => (await d.info(thread)).facts?.[about.name] as ProjectFacts | undefined
 
     // Not allowed: the thread says so before its first turn, and the turn runs without them.

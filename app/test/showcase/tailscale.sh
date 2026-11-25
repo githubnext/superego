@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # A stand-in for `tailscale` (test/look.sh web): status from $SUPEREGO_HOME/tailscale-status.json, and serve's config
 # kept in $SUPEREGO_HOME/tailscale-serve.json.
 status="$SUPEREGO_HOME/tailscale-status.json"

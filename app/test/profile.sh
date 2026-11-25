@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # Profiles the window's renderer, CPU and memory, with a scripted model in an isolated app (a temp SUPEREGO_HOME):
 # `test/profile.sh <dir> [idle|streaming|transcript|memory …]` (all four, unless given), writing <dir>/report.md and
 # <dir>/report.json, the CPU profiles and the heap snapshots' summaries. See test/profile.mjs for what each measures.

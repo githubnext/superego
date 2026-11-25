@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # `superego extension new` and `superego extension test`, as an author has them in the packaged app: the build (out/)
 # copied out of the repo and run on Electron as Node from a folder of its own, with a fresh data folder and an
 # environment that names nothing of this checkout, for each shape `new` makes: a tool, a pane, a sidebar mark, and a tool

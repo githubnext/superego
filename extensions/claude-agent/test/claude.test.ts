@@ -21,7 +21,7 @@ afterEach(() => {
 /** A folder with an executable `claude` in it. */
 function withClaude() {
   const bin = scratch()
-  writeFileSync(join(bin, 'claude'), '#!/bin/sh\n'); chmodSync(join(bin, 'claude'), 0o755)
+  writeFileSync(join(bin, 'claude'), '#!/bin/bash\n'); chmodSync(join(bin, 'claude'), 0o755)
   return bin
 }
 

@@ -24,7 +24,7 @@ async function pidIn(name: string) {
 
 describe.skipIf(process.platform === 'win32')('spawnGroup', () => {
   it('stops the command and what it started, and resolves once all of it is gone', async () => {
-    const run = spawnGroup('sh', ['-c', "sh -c 'sleep 30 & echo $! > sleeper.pid; wait'"], { cwd: dir, stdio: 'ignore' })
+    const run = spawnGroup('bash', ['-c', "bash -c 'sleep 30 & echo $! > sleeper.pid; wait'"], { cwd: dir, stdio: 'ignore' })
     const sleeper = await pidIn('sleeper.pid')
     expect((await run.stop()).stopped).toBe(true)
     expect(isRunning(sleeper)).toBe(false)
@@ -32,7 +32,7 @@ describe.skipIf(process.platform === 'win32')('spawnGroup', () => {
 
   it('stops it when its signal aborts', async () => {
     const abort = new AbortController()
-    const run = spawnGroup('sh', ['-c', 'sleep 30 & echo $! > sleeper.pid; wait'], { cwd: dir, stdio: 'ignore', signal: abort.signal })
+    const run = spawnGroup('bash', ['-c', 'sleep 30 & echo $! > sleeper.pid; wait'], { cwd: dir, stdio: 'ignore', signal: abort.signal })
     const sleeper = await pidIn('sleeper.pid')
     abort.abort()
     expect((await run.exited).stopped).toBe(true)
@@ -41,7 +41,7 @@ describe.skipIf(process.platform === 'win32')('spawnGroup', () => {
 
   it('kills what ignores SIGTERM, after the grace', async () => {
     const script = "trap '' TERM; sh -c \"trap '' TERM; sleep 30\" & echo $! > stubborn.pid; echo $$ > shell.pid; wait"
-    const run = spawnGroup('sh', ['-c', script], { cwd: dir, stdio: 'ignore', grace: 200 })
+    const run = spawnGroup('bash', ['-c', script], { cwd: dir, stdio: 'ignore', grace: 200 })
     const stubborn = await pidIn('stubborn.pid')
     await pidIn('shell.pid')
     const started = Date.now()
@@ -51,19 +51,19 @@ describe.skipIf(process.platform === 'win32')('spawnGroup', () => {
   })
 
   it('takes what a finished command left running with it', async () => {
-    const run = spawnGroup('sh', ['-c', 'sleep 30 & echo $! > sleeper.pid'], { cwd: dir, stdio: 'ignore' })
+    const run = spawnGroup('bash', ['-c', 'sleep 30 & echo $! > sleeper.pid'], { cwd: dir, stdio: 'ignore' })
     expect(await run.exited).toEqual({ code: 0, signal: null, stopped: false })
     expect(isRunning(await pidIn('sleeper.pid'))).toBe(false)
   })
 
   it("says how a command ended, and why one couldn't start", async () => {
-    expect(await spawnGroup('sh', ['-c', 'exit 3'], { stdio: 'ignore' }).exited).toEqual({ code: 3, signal: null, stopped: false })
+    expect(await spawnGroup('bash', ['-c', 'exit 3'], { stdio: 'ignore' }).exited).toEqual({ code: 3, signal: null, stopped: false })
     const missing = await spawnGroup(join(dir, 'nothing-here'), [], { stdio: 'ignore' }).exited
     expect(missing).toMatchObject({ code: null, stopped: false, error: expect.objectContaining({ code: 'ENOENT' }) })
   })
 
   it("doesn't let a signal aborted already run anything for long", async () => {
-    const run = spawnGroup('sh', ['-c', 'sleep 30'], { stdio: 'ignore', signal: AbortSignal.abort() })
+    const run = spawnGroup('bash', ['-c', 'sleep 30'], { stdio: 'ignore', signal: AbortSignal.abort() })
     expect((await run.exited).stopped).toBe(true)
   })
 })

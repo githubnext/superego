@@ -9,9 +9,9 @@ import { Framing, IO, RESIZE, RUN } from '../src/shared.ts'
 
 const alive = (pid: number) => { try { process.kill(pid, 0); return true } catch { return false } }
 
-/** A daemon with terminals of a plain `sh`; its `until` waits up to 10s for what a shell does. */
+/** A daemon with terminals of a plain `bash` (none of the machine's startup files); its `until` waits up to 10s for what a shell does. */
 async function open() {
-  const daemon = await testDaemon({ extensions: [terminalExtension({ shell: () => ({ file: '/bin/sh', args: [] }) })] })
+  const daemon = await testDaemon({ extensions: [terminalExtension({ shell: () => ({ file: '/bin/bash', args: ['--norc', '--noprofile'] }) })] })
   until = (check, what) => daemon.until(check, what, 10_000)
   return daemon
 }
