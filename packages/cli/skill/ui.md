@@ -150,7 +150,7 @@ that returns the narrowing in force now, or `undefined` for none: `{ shows(threa
 list shows only the threads each narrowing lets through (of those that have your extension), under their projects;
 the thread shown always stays. ⌘⇧[ and ⌘⇧], ⌃T and the rail's dots follow it. Meanwhile the heading says `title`, the
 Pinned section and Archived are left out, and the list ends with your `footer` (`{ hidden, shown }`, counts of
-threads), or a quiet "N hidden". The bundled `focus` extension is one: [extensions/focus](../../../extensions/focus).
+threads), or a quiet "N hidden". The bundled `focus` extension is one.
 
 ```tsx
 import { defineUiExtension, useAppSetting, type SidebarFilter } from 'superego/ui'
