@@ -2,42 +2,27 @@
 
 ## Unreleased
 
-- **Focus mode.** Focus a few threads from a row's right-click menu (or a phone's thread menu), or `⌘⌥F` for the one
-  shown; threads they start join them. The ◎ in the Threads sidebar's heading, or `⌘⇧F`, narrows the list to those
-  threads, under their projects, and to every thread waiting on you, which is never hidden; "Show N more" at its end
-  shows everything again. Focus for 1 hour, in the ◎'s menu, turns itself off. ⌘⇧[ and ⌘⇧] step through what's shown.
-  It's the new Focus extension: Settings → Extensions turns it off.
-- Extensions can add items to a thread's row menu and phone menu (the `thread.menu` slot, `ThreadMenuItem`), buttons to
-  the Threads sidebar's heading (`sidebar.heading`), and narrow the sidebar's list with `superego.sidebarFilter`
-  (extension API 5.13).
-- A thread no longer gets stuck on "413 Request Entity Too Large" (GitHub Copilot's limit is far below other
-  providers'): requests are kept small enough for the provider, leaving out older images (named in their place) and
-  then cutting old tool output short. A provider that refuses one anyway is asked again smaller, and its requests stay
-  that small from then on.
-- A thread whose request is too large for its provider, or that fails the same way again, offers ways on under the
-  failure: Retry without old images, Compact and retry, or Start fresh thread, which continues it in a new thread from
-  a handoff its model writes, its child threads moved there. Also `thread.retry` and `thread.handoff` from the command
-  line.
-- Reports from child threads wait while their parent is stuck that way, and reach it once it can take messages again,
-  or the thread that continues it.
-- Extensions can change what each request to the model carries, its transcript left as it is, with
-  `hook(GenerationTask, { beforeRequest })`, and fit images as Superego does with `superego.images.fit` (extension
-  API 5.12).
-- New file and New folder in a folder pane: from its header, a folder's right-click menu or `⌘⌥N`. Name it in
-  place (`docs/new.md` makes `docs` too); a new file opens in the editor, ready to type.
-- A file opened in an editor pane gets the focus in its text once it's read, not just the pane.
-- Each machine has a colour of its own: its name is drawn in it in the Threads sidebar, a thread's card, the title
-  bar and ⌘L. Pick another from its dot in Settings → Machines.
-- Claude Agent: when your login shell doesn't answer in time, it says so instead of that Claude Code isn't installed.
-- Claude Agent finds Claude Code on the PATH Superego already read from your login shell, instead of starting the
-  shell again for every look.
-- Extensions can read your login shell's environment, its keys and PATH, with `superego.loginEnv()` (extension API
-  5.11).
-- With the sidebar folded, its panel's top lines up with the thread's beside it.
-- The title bar's words, status, profile badge and buttons sit on one line, centred on the window's buttons.
-- A pane opens 760px wide beside the thread (less when the window hasn't the room), the last one too, instead of a
-  share of the window or the whole of what's left. Drag its edge and it keeps the width you gave it. A pane kind's
-  `width` option is gone: every kind opens the same.
+## 0.5.0
+
+- **Upgrade (extension authors):** a pane kind's `width` option is gone: every pane opens the same width. New for
+  extensions (extension API 5.13): items in a thread's row menu (`thread.menu`), buttons in the Threads sidebar's
+  heading (`sidebar.heading`), a filter on the sidebar's list (`superego.sidebarFilter`), a hook on each request to the
+  model (`hook(GenerationTask, { beforeRequest })`), `superego.images.fit`, and `superego.loginEnv()`.
+
+- **Focus mode.** Focus threads from their right-click menu or with `⌘⌥F`; threads they start join them. The ◎ in the
+  sidebar's heading, or `⌘⇧F`, shows only those, plus any thread waiting on you. Focus for 1 hour turns itself off.
+  It's the new Focus extension, which Settings → Extensions can turn off.
+- New file and New folder in a folder pane: from its header, a folder's right-click menu or `⌘⌥N`. A new file opens in
+  the editor, ready to type.
+- Each machine has a colour, shown wherever its name is. Pick another in Settings → Machines.
+- A thread no longer gets stuck on "Request Entity Too Large" (as with GitHub Copilot): requests are kept small enough
+  for the provider. If one still fails, the thread offers Retry without old images, Compact and retry, or Start fresh
+  thread, which continues in a new thread from a handoff.
+- A new pane opens 760px wide beside the thread, and keeps the width you drag it to.
+- The title bar is one line, centred on the window's buttons, with the project and the thread read as one.
+- Claude Agent says when your login shell is too slow to answer, instead of that Claude Code isn't installed.
+- Fixes: a file opened in an editor gets the cursor in its text, and with the sidebar folded its top lines up with the
+  thread's.
 
 ## 0.4.0
 
