@@ -9,6 +9,9 @@
   Protocol, OSC 7577: Neovim with a session, an agent, anything run through a small wrapper) is started again, where
   it was, as you next open the pane after Superego restarts or the machine reboots. A dim line says what was resumed.
   Closing the pane, archiving its thread or exiting its shell forgets it.
+- On a phone, Commands (`⌘K`) is a tap away: beside Settings at the drawer's foot, and in a thread's menu. It fills the
+  screen, with rows a finger tall.
+- On a phone, the composer's text and placeholder sit level with + and send, and a suggestion there no longer shows ⏎.
 
 ## 0.5.0
 

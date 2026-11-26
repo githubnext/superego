@@ -4,7 +4,7 @@
 // thread, which are panels, not rows.
 import { useLayoutEffect, useRef, useState, type ComponentType, type ReactNode } from 'react'
 import type { ThreadInfo } from '@superego/protocol'
-import { ArchiveIcon, ArrowCounterClockwiseIcon, ArrowElbowDownRightIcon, BaseUI, IdentificationBadgeIcon, PencilSimpleIcon, popupFocus, PushPinIcon } from '@superego/ui'
+import { ArchiveIcon, ArrowCounterClockwiseIcon, ArrowElbowDownRightIcon, BaseUI, CommandIcon, IdentificationBadgeIcon, PencilSimpleIcon, popupFocus, PushPinIcon } from '@superego/ui'
 import type { MachineEntry } from '../shared/bridge.ts'
 import type { ViewProps } from './extension-api.ts'
 import { useRegistry, type Registry } from './registry.tsx'
@@ -39,7 +39,7 @@ export function ThreadSheet({ machine, thread, open, onOpenChange, handle, conta
   const pinned = isPinned(useProjects().pins, { machine: machine.id, thread: thread.id })
   const renaming = useRenaming() === `${machine.id}/${thread.id}`
   const popup = useRef<HTMLDivElement>(null)
-  // Closed by a pane opened from it, the focus is the pane's to take, not the title's again.
+  // Closed by a pane or the palette opened from it, the focus is theirs to take, not the title's again.
   const opened = useRef(false)
   const run = (id: string, params: Record<string, unknown>, options: { machine?: string } = { machine: machine.id }) => {
     onOpenChange(false)
@@ -91,8 +91,8 @@ export function ThreadSheet({ machine, thread, open, onOpenChange, handle, conta
                   </HostedItem>
                 )} />
               </div>
-              {!thread.hidden && (
-                <div className="thread-sheet__group" role="group" aria-label="Actions">
+              <div className="thread-sheet__group" role="group" aria-label="Actions">
+                {!thread.hidden && <>
                   {!renaming && <SheetItem id="rename" icon={PencilSimpleIcon} onClick={() => startRename(machine.id, thread.id)}>Rename</SheetItem>}
                   {!thread.archived && (
                     <SheetItem id="pin" icon={PushPinIcon} onClick={() => run(pinned ? 'thread.unpin' : 'thread.pin', { machine: machine.id, thread: thread.id }, {})}>
@@ -103,8 +103,10 @@ export function ThreadSheet({ machine, thread, open, onOpenChange, handle, conta
                   {thread.archived
                     ? <SheetItem id="unarchive" icon={ArrowCounterClockwiseIcon} onClick={() => run('thread.unarchive', { thread: thread.id })}>Unarchive</SheetItem>
                     : <SheetItem id="archive" icon={ArchiveIcon} onClick={() => run('thread.archive', { thread: thread.id })}>Archive</SheetItem>}
-                </div>
-              )}
+                </>}
+                {/* ⌘K's, where there's no ⌘ to press. */}
+                <SheetItem id="commands" icon={CommandIcon} onClick={() => { opened.current = true; run('app.palette', {}, {}) }}>Commands</SheetItem>
+              </div>
               {kinds.length > 0 && (
                 <>
                   <div className="thread-sheet__header" id="thread-sheet-panes">Open beside</div>

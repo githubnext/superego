@@ -49,3 +49,16 @@ it('opens from ☰ over the thread, lists the threads, and closes on a pick, Esc
   for (const type of ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click']) beside.dispatchEvent(new (type.startsWith('pointer') ? PointerEvent : MouseEvent)(type, { bubbles: true, cancelable: true, button: 0, pointerType: 'mouse' } as PointerEventInit))
   await ui.until(() => !drawer(), 'shut by a tap beside it')
 })
+
+it('opens Commands from beside Settings at its foot, closing the drawer', async () => {
+  const first = await daemon.thread('hello', { title: 'first' })
+  ui = await mountUi({ window: true, extensions: [threads], machines: [daemon], select: { thread: first.id }, narrow: true })
+  await ui.until(() => Boolean($('.app.is-narrow .app__mobilebar')), 'the narrow layout')
+  menu().click()
+  await ui.until(() => Boolean(drawer()?.querySelector('.app__drawer-end .app__commands')), 'Commands at the foot')
+  const end = drawer()!.querySelector('.app__drawer-end')!
+  expect([...end.children].map((b) => b.getAttribute('aria-label'))).toEqual(['Commands', 'Settings'])
+  end.querySelector<HTMLElement>('.app__commands')!.click()
+  await ui.until(() => !drawer() && Boolean($('.palette__input')), 'the drawer shut, the palette open')
+  expect($$('.palette__list li').length).toBeGreaterThan(0)
+})

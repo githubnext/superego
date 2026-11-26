@@ -6,7 +6,7 @@
 import { useEffect, useRef, useState, type ComponentType } from 'react'
 import { createPortal } from 'react-dom'
 import type { SettingsSnapshot, ThreadInfo } from '@superego/protocol'
-import { ArrowLeftIcon, ArrowRightIcon, BaseUI, Button, CaretDownIcon, GearSixIcon, IconButton, ListIcon, NotePencilIcon, popupFocus, Select, StatusGlyph } from '@superego/ui'
+import { ArrowLeftIcon, ArrowRightIcon, BaseUI, Button, CaretDownIcon, CommandIcon, GearSixIcon, IconButton, ListIcon, NotePencilIcon, popupFocus, Select, StatusGlyph } from '@superego/ui'
 import type { MachineEntry } from '../shared/bridge.ts'
 import { APP, INTERFACE_FONT, KEYMAP, MONO_FONT, TEXT_SIZE, textScale } from '../shared/app-settings.ts'
 import { useThemeStyle } from './themes.tsx'
@@ -166,6 +166,12 @@ export function Shell() {
       <GearSixIcon size={18} aria-hidden />
     </RailButton>
   )
+  // On a phone, where there's no ⌘K to press: Commands beside Settings at the drawer's foot (and in the thread's sheet).
+  const commandsButton = (
+    <RailButton label="Commands" className="app__commands" onClick={() => { picked.current = true; setDrawer(false); setNavigator(false); setPanePicker(false); setPalette(true) }}>
+      <CommandIcon size={18} aria-hidden />
+    </RailButton>
+  )
   const sideOpen = sidebarViews.length > 0 && (narrow ? drawer : !sidebar.hidden && tab === 'sidebar')
   // The notices: wide, in the rail above Settings, each a mark that opens to all it says; on a phone, at the drawer's foot.
   const notices = <><AuthNotice rail={!narrow} /><ServiceNotice rail={!narrow} /><BuildNotice rail={!narrow} /><UpdateNotice rail={!narrow} /><LayoutNotice rail={!narrow} /><RevokedUiNotice rail={!narrow} /></>
@@ -174,7 +180,7 @@ export function Shell() {
     {narrow && <div className="app__drag" />}
     {sidebarView && <SidebarContent key={sidebarView.id} view={sidebarView} {...(where ? { machine, thread } : {})} />}
     {narrow && <div className="app__footer">{notices}
-      {/* A phone's drawer: the other sidebars to switch to, what the layout puts in the drawer, and Settings at the end. */}
+      {/* A phone's drawer: the other sidebars to switch to, what the layout puts in the drawer, and Commands and Settings at the end. */}
       <div className="app__drawer-bar">
         {sidebarViews.length > 1 && <>
           {sidebarViews.map((view) => (
@@ -184,7 +190,7 @@ export function Shell() {
         </>}
         <PlacedViews place="drawer" frame={withContextMenu('drawer')} />
         <ProjectSpaceButtons project={inProject} narrow />
-        <span className="app__drawer-end">{settingsButton}</span>
+        <span className="app__drawer-end">{commandsButton}{settingsButton}</span>
       </div>
     </div>}
   </>

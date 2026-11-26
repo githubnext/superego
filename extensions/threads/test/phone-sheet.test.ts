@@ -62,3 +62,14 @@ it('is a menu: a row for the model, pinning and archiving', async () => {
   title().click()
   await ui.until(() => row('unarchive')?.textContent === 'Unarchive' && !row('pin'), 'Unarchive in its place, and no pinning')
 })
+
+it('opens Commands from its Actions, closing it', async () => {
+  const first = await daemon.thread('hello', { title: 'first' })
+  ui = await mountUi({ window: true, extensions: [threads], machines: [daemon], select: { thread: first.id }, narrow: true })
+  await ui.until(() => $('.app.is-narrow .app__mobiletitle-text')?.textContent === 'first', 'the narrow layout')
+  title().click()
+  const commands = () => sheet()?.querySelector<HTMLButtonElement>('[role="group"][aria-label="Actions"] [data-item="commands"]')
+  await ui.until(() => commands()?.textContent === 'Commands', 'Commands among the actions')
+  commands()!.click()
+  await ui.until(() => !sheet() && Boolean($('.palette__input')), 'the sheet shut, the palette open')
+})
