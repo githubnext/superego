@@ -13,11 +13,23 @@ import { paneParams, type Threads, type ThreadStart } from './threads.ts'
 
 /** The setting that lets outside agents (`superego mcp`) start threads here. Off unless turned on. */
 export const OUTSIDE_THREADS = 'outside.startThreads'
+/** The kinds of setting whose value is text. */
+const TEXT_SETTINGS = new Set(['string', 'secret', 'choice', 'font', 'color', 'theme'])
 
 export function registerCoreActions(host: Host, { harness, machine, threads, files, relay }: {
   harness: Harness; machine: MachineInfo; threads: Threads; files: ReturnType<typeof threadFiles>; relay: Relay
 }) {
   const { options, settings, router, agent, mounted } = host
+  /**
+   * A setting's value as the command line gives it (`do settings.set --key k --value true`): text, which for a setting
+   * that isn't text (a switch, a number, shortcuts) is read as JSON, as `settings set` reads it.
+   */
+  const fromText = (key: string, value: unknown): Json => {
+    const spec = settings.spec(key)
+    const type = typeof spec?.type === 'function' ? spec.type() : spec?.type
+    if (typeof value !== 'string' || !type || TEXT_SETTINGS.has(type.type)) return value as Json
+    try { return JSON.parse(value) as Json } catch { return value }
+  }
   /** What a thread action takes: the thread it's for, which the window passes as the one it shows. */
   const thread = { thread: true as const }
   // Outside agents (`superego mcp`) start threads only once this machine lets them: the tool isn't listed until then,
@@ -261,8 +273,8 @@ export function registerCoreActions(host: Host, { harness, machine, threads, fil
     // A secret given here by mistake is refused (secrets.set sets one), and never logged.
     secretIn: (params) => settings.isSecret(String((params as { key?: unknown } | null)?.key)) ? ['value'] : [],
     consentIn: ({ key }) => { const spec = settings.spec(key); return spec?.consent ? spec.title : undefined },
-    async run({ key, value }) {
-      await settings.set(key, value as Json)
+    async run({ key, value }, { exposure }) {
+      await settings.set(key, exposure === 'cli' ? fromText(key, value) : value as Json)
       return null
     },
   }))

@@ -40,9 +40,9 @@ await openApp({ name: 'keptpage', timeout: 180_000 }, async (t) => {
 
   const placed = () => t.win().contentView.children.find((v) => v.webContents === view)
   const live = () => { const v = placed(); return v?.getVisible() && v.getBounds().x >= 0 && v.getBounds().y >= 0 }
-  // Shown, where its box now is (after a maximize, a stack): the page itself, not a still.
+  // Shown, where its box now is (after a maximize, a stack): the page itself (a still of it is kept under it).
   const settledAt = async () => {
-    if (!live() || await run(`!!document.querySelector('.web-view__still')`)) return false
+    if (!live()) return false
     const zoom = t.contents().getZoomFactor(), b = placed().getBounds()
     const box = await run(`(() => { const r = document.querySelector('.browser-frame .web-view').getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: r.height } })()`)
     return ['x', 'y', 'width', 'height'].every((k) => Math.abs(b[k] / zoom - box[k]) < 1.5)
@@ -92,7 +92,6 @@ await openApp({ name: 'keptpage', timeout: 180_000 }, async (t) => {
   // Beside it: the page itself.
   await run(`window.superego.call('local', 'pane.focus', { thread: '${id}', pane: '${browser}' })`)
   await until(live, 'the page shown beside the thread')
-  await until(`!document.querySelector('.web-view__still')`, 'no still')
   // With the focus: the ring round its column.
   await run(`document.querySelector('.browser-frame .web-view').focus()`)
   await until(`!!document.querySelector('[data-column="${browser}"]:focus-within')`, 'the focus in the page')

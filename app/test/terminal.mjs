@@ -32,6 +32,25 @@ await openApp({ name: 'terminal', timeout: 180_000 }, async (t) => {
   await typeIn(win().webContents, `printf '\\033]7501;state=working:app=demo\\007'; git log --oneline --color=always | head -3; ls -G; echo "ok-$((6*7))"\n`)
   await until(`${text}.includes('ok-42')`, 'the command\'s output')
   await until(`Boolean(document.querySelector('.strip__note .superego-status--working'))`, 'its status on its tab')
+  // Pasting, as the Edit menu's Paste (⌘V) and the right-click menu's do: the terminal holding the focus, the shell gets
+  // what's pasted (not the page's body, as when the screen held the focus with no caret in it to paste at).
+  const { clipboard } = await import('electron')
+  await t.emulateFocus()
+  const paste = async (what, label) => {
+    clipboard.writeText(`echo "${what}-$((3*3))"`)
+    win().webContents.paste()
+    await until(`${text}.includes('${what}-$((3*3))')`, label)
+    await typeIn(win().webContents, '\n')
+    await until(`${text}.includes('${what}-9')`, `${label}: run`)
+  }
+  await paste('pasted', 'pasted with ⌘V')
+  const menu = new Promise((resolve) => win().webContents.once('context-menu', (_e, params) => resolve(params)))
+  const at = await run(`(() => { const r = document.querySelector('.terminal-pane__screen canvas').getBoundingClientRect(); return { x: Math.round(r.x + 40), y: Math.round(r.y + 40) } })()`)
+  win().webContents.sendInputEvent({ type: 'mouseDown', button: 'right', clickCount: 1, ...at })
+  win().webContents.sendInputEvent({ type: 'mouseUp', button: 'right', clickCount: 1, ...at })
+  const params = await menu
+  if (!params.isEditable || !params.editFlags.canPaste) t.fail(`right-click on the terminal: no Paste offered (${JSON.stringify(params.editFlags)})`)
+  await paste('right-clicked', 'pasted from the right-click menu')
   for (const theme of ['light', 'dark']) {
     await t.theme(theme)
     await until(`${text}.includes('ok-42')`, `the output again, ${theme}`)

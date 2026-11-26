@@ -3,7 +3,7 @@
 // site, holds), and a page that refuses to be framed loads. Each is a WebContentsView in the window, held for its page
 // (AppWindow.views) and closed as that page loads again or the window closes. The page places it (renderer/web-view.tsx):
 // it draws above the window's page, so the page hides it, and shows a still of it instead, while something of its own is
-// over it.
+// over it. The page is told when a view has come to rest after changing (`settled`), to keep a still of it on hand.
 //
 // What a page in one may do: what a browser tab may, short of the app's powers (no Node, no preload, sandboxed,
 // isolated). A web page asks the user, in its pane, for the local network, the camera, the microphone and to
@@ -26,6 +26,12 @@ export const PARTITIONS: Record<WebViewPartition, string> = { browser: 'persist:
 
 /** The world the window's scripts run in, in a page (`BridgeWebView.run`): its own, apart from the page's (0) and Electron's (999). */
 const APP_WORLD = 1001
+
+/**
+ * How long a page is left alone (loaded, scrolled, typed in) before it's said to have settled: a still taken then is of
+ * what it shows, and the user has moved on.
+ */
+export const SETTLE_MS = 500
 
 /** What a page may have without asking anyone: putting text on the clipboard (a page's Copy button). */
 const GRANTED = new Set(['clipboard-sanitized-write'])
@@ -63,6 +69,8 @@ type Held = AskingView & {
   progress?: number
   /** The device emulation it's under (a page at a set size, `WebViewRect.layout`); none when it isn't. */
   emulated?: Electron.Parameters
+  /** Until it's said to have settled, after it last changed. */
+  settling?: ReturnType<typeof setTimeout>
 }
 
 /** A load's milestones, as its progress: started, its response in (the page committed), its document parsed. */
@@ -195,6 +203,7 @@ export function serveWebViews({ windowOf, linkOf, sites }: WebViewsOptions) {
     held.set(contents.id, entry)
     window.views.set(id, {
       close() {
+        clearTimeout(entry.settling)
         window.views.delete(id)
         held.delete(contents.id)
         sites.drop(entry, true)
@@ -227,6 +236,15 @@ export function serveWebViews({ windowOf, linkOf, sites }: WebViewsOptions) {
       else go(entry, key === 'back' ? -1 : 1)
     })
     function changed() { tell(entry, { type: 'state', state: stateOf(entry) }) }
+    /** It may look different: once it's been left alone a moment, its page is told (for a still of it). */
+    const touched = () => {
+      clearTimeout(entry.settling)
+      entry.settling = setTimeout(() => tell(entry, { type: 'settled' }), SETTLE_MS)
+    }
+    // What changes it: loading, going elsewhere in it, the user's input (not the pointer passing over it: hovering
+    // alone would take a still each time it stops).
+    for (const name of ['did-stop-loading', 'did-navigate-in-page'] as const) contents.on(name as 'did-stop-loading', touched)
+    contents.on('input-event', (_event, input) => { if (input.type !== 'mouseMove' && input.type !== 'mouseEnter' && input.type !== 'mouseLeave') touched() })
     /** The load under way reached `progress` (a milestone of it: PROGRESS). */
     const reached = (progress: number) => {
       if (contents.isLoading()) entry.progress = Math.max(entry.progress ?? 0, progress)
@@ -380,12 +398,14 @@ export function serveWebViews({ windowOf, linkOf, sites }: WebViewsOptions) {
       return null
     } finally { if (!attached && debug.isAttached()) debug.detach() }
   })
+  // A still of the whole page, to show in its place: a JPEG, as a PNG of a large pane with pictures in it takes a fifth
+  // of a second to make.
   ipcMain.handle(CHANNEL.viewSnapshot, async (event, id: string) => {
     const view = viewOf(event, id)
     if (!view || view.view.webContents.isDestroyed()) return null
     try {
       const image = await view.view.webContents.capturePage()
-      return image.isEmpty() ? null : new Uint8Array(image.toPNG())
+      return image.isEmpty() ? null : new Uint8Array(image.toJPEG(90))
     } catch (error) {
       // A window that's never been on the screen (headless) has nothing to capture: the pane goes without a still.
       // Said once for each view, not with each try.

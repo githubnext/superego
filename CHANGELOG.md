@@ -12,6 +12,10 @@
 - On a phone, Commands (`⌘K`) is a tap away: beside Settings at the drawer's foot, and in a thread's menu. It fills the
   screen, with rows a finger tall.
 - On a phone, the composer's text and placeholder sit level with + and send, and a suggestion there no longer shows ⏎.
+- Menus, popovers and dialogs over a browser pane show on top of the page at once, instead of behind it for a moment.
+- Pasting into a terminal works, with ⌘V, the Edit menu or the right-click menu, in the app and in a browser.
+- `superego do settings.set --key <key> --value true` sets a switch or a number setting, instead of refusing the
+  value as text.
 
 ## 0.5.0
 

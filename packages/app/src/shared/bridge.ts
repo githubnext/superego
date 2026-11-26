@@ -129,6 +129,8 @@ export type WebViewEvent =
   | { type: 'denied'; permission: string }
   /** The user allowed the site the camera or microphone, but the system doesn't let the app use it. */
   | { type: 'blocked'; permission: 'camera' | 'microphone' }
+  /** It changed (loaded, was scrolled or typed in) and has been left alone a moment since: a still of it now is up to date. */
+  | { type: 'settled' }
 
 /**
  * A web page over a pane, held by the main process (main/web-views.ts). It draws above the window's page, wherever it's
@@ -144,7 +146,7 @@ export type BridgeWebView = {
   stop(): void
   /** Give it the keyboard (`true`), or, if it has it, give it back to the window. */
   focus(on: boolean): void
-  /** A still of the page as it is now, as an image's bytes (PNG); none while it has nothing drawn. */
+  /** A still of the page as it is now, as an image's bytes (JPEG); none while it has nothing drawn. */
   snapshot(): Promise<Uint8Array | null>
   /**
    * Run `code` (a script's source) in the page, in a world of the app's own beside the page's (its DOM, not its

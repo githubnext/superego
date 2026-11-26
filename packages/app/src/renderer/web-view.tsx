@@ -7,7 +7,12 @@
 // whenever anything of the window's is over it (a menu, a popover, a tooltip, a dialog: OVERLAYS), or the pane is
 // partly out of view (past its row's edge, or under the thread kept in view as the panes scroll under it), the pane
 // shows a still of the page in its place and hides the view until it's clear again. A view can't be cut short: one in a
-// smaller View isn't clipped to it, and smaller bounds would lay the page out again at each step of a scroll. A still is taken just before the view is hidden, and again each second while it's shown.
+// smaller View isn't clipped to it, and smaller bounds would lay the page out again at each step of a scroll.
+//
+// So the view can go at once (the overlay above the page in the same frame), a still of the page is kept on hand under
+// it while it's shown: taken as the page comes to rest after changing (loaded, scrolled, typed in: its `settled`) and
+// after the view is placed somewhere new. Going still shows that one, a moment old, and takes a fresh one in its place,
+// and again each second while it's shown. Before there's any still at all, the view stays until the first is drawn.
 //
 // A pane's page is kept for the pane, not for the component drawing it (kept-web-views.ts): leaving its thread hides
 // it, as it was, and coming back shows it again; it only goes somewhere else when the pane points it there (`src`).
@@ -153,7 +158,7 @@ function FramedWebView({ src, partition, title, sandbox, revision, onEvent, onWa
   )
 }
 
-type Still = { url: string; width: number }
+export type Still = { url: string; width: number }
 
 function NativeWebView({ src, partition, revision, onEvent, onWaiting, sized = false, ref }: WebViewProps) {
   const host = useRef<HTMLDivElement>(null)
@@ -183,6 +188,7 @@ function NativeWebView({ src, partition, revision, onEvent, onWaiting, sized = f
     // Kept, it tells its last state at once: whether it failed is kept for the placer, made once there's a view to place.
     let failed = false
     const holding = holdWebView(pane, asked.current, (event) => {
+      if (event.type === 'settled') placer.current?.settled()
       if (event.type === 'state') {
         failed = Boolean(event.state.error)
         setError(event.state.error)
@@ -254,54 +260,99 @@ function NativeWebView({ src, partition, revision, onEvent, onWaiting, sized = f
   )
 }
 
-type Placer = { stop(): void; block(blocked: boolean): void }
+export type Placer = {
+  stop(): void
+  block(blocked: boolean): void
+  /** The page has come to rest after changing: a still of it, to have on hand. */
+  settled(): void
+}
 
 /** How a view is shown: not at all (its pane is hidden), itself, or as a still while it can't be. */
 type Mode = 'none' | 'live' | 'still'
 
+/** A still's bytes, decoded to show: its address (an object URL, revoked once it's replaced) and width in device pixels. */
+export type DecodeStill = (bytes: Uint8Array) => Promise<{ url: string; width: number }>
+
+const decodeStill: DecodeStill = async (bytes) => {
+  const url = URL.createObjectURL(new Blob([bytes as Uint8Array<ArrayBuffer>], { type: 'image/jpeg' }))
+  const image = new Image()
+  image.src = url
+  try { await image.decode() } catch (error) {
+    URL.revokeObjectURL(url)
+    throw error
+  }
+  return { url, width: image.naturalWidth }
+}
+
+/** How long after a view is placed somewhere new (shown, moved, resized) a still of it is taken, once it's drawn there. */
+const PLACED_MS = 500
+
 /**
  * Keep `view` over `host`: placed at its box, shown while nothing is over it and it's whole in view, else as a still
  * (`setStill`) in its place. Checked each frame while anything moves (a resize, a scroll, the window's page changing,
- * an animation), until it's been still a while.
+ * an animation), until it's been still a while. A still is kept under it while it's shown, so it can go at once.
  */
-function placeView(host: HTMLElement, view: BridgeWebView, setStill: (still: Still | undefined) => void, sized: () => boolean): Placer {
+export function placeView(host: HTMLElement, view: BridgeWebView, setStill: (still: Still | undefined) => void, sized: () => boolean, decode = decodeStill): Placer {
   let mode: Mode = 'none'
   let placed = ''
   let blocked = false
   let frame = 0
   let quiet = 0
   let stopped = false
-  let shownStill: Still | undefined
-  let capture = 0
+  /** Where it was last placed (none: not at all), and whether over the window there or out of sight. */
+  let lastRect: WebViewRect | null = null
+  let shown = false
+  let still: Still | undefined
+  /** A still being taken, and whether another was asked for meanwhile (taken once it's done). */
+  let taking = false
+  let again = false
+  let placing: ReturnType<typeof setTimeout> | undefined
 
+  const place = (rect: WebViewRect | null, show: boolean) => {
+    view.place(rect, show)
+    shown = Boolean(rect) && show
+  }
   const swapStill = (next: Still | undefined) => {
-    if (shownStill) URL.revokeObjectURL(shownStill.url)
-    shownStill = next
+    if (still) URL.revokeObjectURL(still.url)
+    still = next
     setStill(next)
   }
-  /** A still of the page, shown in its place; then, if it's still to be one, the view hidden. */
-  async function freeze(rect: WebViewRect, tries = 10) {
-    const asked = ++capture
-    let next: Still | undefined
+  /** A still of the page as it is now, sized for where it's placed; none while nothing's drawn. */
+  async function capture(): Promise<Still | undefined> {
+    const rect = lastRect
+    if (!rect) return undefined
     try {
       const bytes = await view.snapshot()
-      if (bytes) {
-        const url = URL.createObjectURL(new Blob([bytes as Uint8Array<ArrayBuffer>], { type: 'image/png' }))
-        const image = new Image()
-        image.src = url
-        await image.decode()
-        next = { url, width: image.naturalWidth / devicePixelRatio * (rect.layout ? rect.layout.width / rect.width : 1) }
+      if (!bytes) return undefined
+      const { url, width } = await decode(bytes)
+      return { url, width: width / devicePixelRatio * (rect.layout ? rect.layout.width / rect.width : 1) }
+    } catch (error) {
+      console.error('A still of the page:', error)
+      return undefined
+    }
+  }
+  /** A fresh still in place of the last; then, if it's to be a still and the view is still shown, the view hidden. */
+  async function take() {
+    if (taking) { again = true; return }
+    taking = true
+    try {
+      for (let tries = 10; !stopped;) {
+        again = false
+        const next = await capture()
+        if (stopped) { if (next) URL.revokeObjectURL(next.url); break }
+        if (next) swapStill(next)
+        // Nothing drawn yet (it's only just been placed), and no still to show for it: again in a moment.
+        else if (mode === 'still' && !still && --tries > 0) {
+          await new Promise((resolve) => setTimeout(resolve, 100))
+          continue
+        }
+        // Drawn before the view goes, so nothing blinks.
+        if (mode === 'still' && shown) requestAnimationFrame(() => requestAnimationFrame(() => { if (!stopped && mode === 'still' && shown) place(lastRect, false) }))
+        if (!again) break
       }
-    } catch (error) { console.error('A still of the page:', error) }
-    if (stopped || asked !== capture || mode !== 'still') { if (next) URL.revokeObjectURL(next.url); return }
-    // Nothing drawn yet (it's only just been placed): again in a moment.
-    if (!next && tries > 1) { setTimeout(() => { if (asked === capture) void freeze(rect, tries - 1) }, 100); return }
-    if (next) swapStill(next)
-    // Drawn before the view goes, so nothing blinks.
-    requestAnimationFrame(() => requestAnimationFrame(() => { if (!stopped && mode === 'still') view.place(rect, false) }))
+    } finally { taking = false }
   }
 
-  let lastRect: WebViewRect | null = null
   function check(): boolean {
     const at = blocked ? null : placeOf(host, sized())
     const rect = at?.rect ?? null
@@ -312,18 +363,21 @@ function placeView(host: HTMLElement, view: BridgeWebView, setStill: (still: Sti
     placed = key
     mode = next
     if (rect) lastRect = rect
+    clearTimeout(placing)
     if (next === 'live') {
-      view.place(rect, true)
-      if (was !== 'live') { capture++; swapStill(undefined) }
+      place(rect, true)
+      // Drawn there in a moment: a still of it as it is there, on hand.
+      placing = setTimeout(() => { if (mode === 'live') void take() }, PLACED_MS)
     } else if (next === 'none') {
-      view.place(null, false)
-      capture++
-      swapStill(undefined)
-    } else {
-      // Over, it keeps its place (and its size, for the still); hidden once the still is shown.
-      if (was === 'live') void freeze(rect!)
-      else if (was === 'none') { view.place(rect, false); void freeze(rect!) }
-      else view.place(rect, false)
+      place(null, false)
+    } else if (still || !shown) {
+      // A still to show (a moment old, if it's just been covered): the view goes at once, and a fresh still replaces it.
+      // Over, it keeps its place (and its size, for the still), out of sight.
+      place(rect, false)
+      if (was !== 'still') void take()
+    } else if (was === 'live') {
+      // No still yet: the page stays until one is drawn.
+      void take()
     }
     return true
   }
@@ -357,7 +411,7 @@ function placeView(host: HTMLElement, view: BridgeWebView, setStill: (still: Sti
   const events = ['scroll', 'resize', 'transitionrun', 'animationstart', 'visibilitychange'] as const
   for (const name of events) window.addEventListener(name, wake, true)
   // A still is the page as it was: kept up to date while it's shown.
-  const refresh = setInterval(() => { if (mode === 'still' && lastRect) void freeze(lastRect) }, 1000)
+  const refresh = setInterval(() => { if (mode === 'still') void take() }, 1000)
   wake()
 
   return {
@@ -365,6 +419,7 @@ function placeView(host: HTMLElement, view: BridgeWebView, setStill: (still: Sti
       stopped = true
       cancelAnimationFrame(frame)
       clearInterval(refresh)
+      clearTimeout(placing)
       resize.disconnect()
       mutations.disconnect()
       for (const name of events) window.removeEventListener(name, wake, true)
@@ -375,6 +430,7 @@ function placeView(host: HTMLElement, view: BridgeWebView, setStill: (still: Sti
       blocked = next
       wake()
     },
+    settled() { if (mode === 'live') void take() },
   }
 }
 
