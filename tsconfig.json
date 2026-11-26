@@ -9,6 +9,7 @@
     { "path": "packages/client" },
     { "path": "packages/cli" },
     { "path": "packages/ui" },
+    { "path": "packages/ui/playground" },
     { "path": "packages/app" },
     { "path": "packages/sdk" },
     { "path": "extensions/threads" },

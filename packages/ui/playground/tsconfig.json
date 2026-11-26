@@ -1,0 +1,2 @@
+// The playground (`pnpm ui:playground`): checked with the rest by `pnpm typecheck`.
+{ "extends": "../../../tsconfig.base.json", "compilerOptions": { "jsx": "react-jsx", "lib": ["es2023", "dom", "dom.iterable"], "types": ["vite/client"] }, "include": ["*.ts", "*.tsx"] }

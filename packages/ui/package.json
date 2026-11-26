@@ -4,6 +4,10 @@
   "license": "MIT",
   "private": true,
   "type": "module",
+  "scripts": {
+    "playground": "vite playground --host 0.0.0.0",
+    "playground:build": "vite build playground"
+  },
   "exports": {
     ".": "./src/index.ts",
     "./styles.css": "./src/styles.css",

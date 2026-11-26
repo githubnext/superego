@@ -1,0 +1,84 @@
+/* The playground's own frame: the window's side (a rail with the sections and the controls) and its sheet (the
+   gallery), drawn from the same tokens as the components, so a theme reaches all of it. */
+.pg { display: grid; grid-template-columns: var(--superego-sidebar) 1fr; height: 100%; background: var(--superego-chrome); }
+.pg__rail { display: flex; flex-direction: column; gap: var(--superego-space-5); min-height: 0; overflow: auto; padding: var(--superego-space-4) var(--superego-space-3); }
+.pg__brand { display: flex; align-items: center; gap: 8px; padding: 2px 8px; font-size: calc(15px * var(--superego-text-scale)); font-weight: 600; }
+.pg__brand svg { color: var(--superego-accent); }
+.pg__nav { display: flex; flex-direction: column; gap: 1px; }
+.pg__nav a { padding: 5px 8px; border-radius: var(--superego-radius); color: inherit; text-decoration: none; }
+.pg__nav a:hover:not(.is-active) { background: var(--superego-hover); }
+.pg__nav a.is-active { background: var(--superego-selected); }
+.pg__controls { display: flex; flex-direction: column; gap: var(--superego-space-4); margin-top: auto; padding: 0 8px; }
+.pg__control { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+.pg__control-label { color: var(--superego-muted); font-size: var(--superego-text-sm); }
+.pg__control .superego-slider { margin: 0 -9px; width: calc(100% + 18px); }
+.pg__select { width: 100%; }
+.pg__switch { display: flex; align-items: center; justify-content: space-between; width: 100%; }
+/* The theme's own accent: every hue, as macOS draws its "multicolour". */
+.pg__swatch-auto { background: conic-gradient(#ff3b30, #ff9500, #ffcc00, #28cd41, #007aff, #8e5cf7, #ff2d55, #ff3b30); }
+
+.pg__main { margin: 8px 8px 8px 0; min-height: 0; overflow: auto; border-radius: 12px; background: var(--superego-bg); box-shadow: var(--superego-card-edge); }
+.pg__main--embedded { height: 100%; margin: 0; border-radius: 0; box-shadow: none; }
+.pg__content { max-width: 1080px; margin: 0 auto; padding: 36px 44px 96px; }
+.pg__main--embedded .pg__content { padding: 20px 16px 64px; }
+/* A phone's width: the gallery again in a frame that wide, so the media queries take it for a phone. */
+.pg__phone { display: grid; place-items: center; padding: 28px; background: var(--superego-ground); box-shadow: none; }
+.pg__phone iframe { width: 390px; height: min(844px, calc(100vh - 72px)); border: 0; border-radius: 44px; background: var(--superego-bg);
+  box-shadow: 0 0 0 9px light-dark(#1d1d1f, #000), 0 0 0 10px light-dark(#3a3a3c, #48484a), var(--superego-shadow-float); }
+
+.pg-section { padding-bottom: 48px; scroll-margin-top: 24px; }
+.pg-section__title { margin: 0 0 4px; font-size: calc(17px * var(--superego-text-scale)); font-weight: 600; }
+.pg-section__note { margin: 0 0 18px; max-width: 60ch; color: var(--superego-muted); }
+.pg-section__title + :not(.pg-section__note) { margin-top: 16px; }
+.pg-row { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 20px 32px; }
+.pg-row + .pg-row { margin-top: 28px; }
+.pg-row--tight { gap: 16px 22px; }
+.pg-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 24px 32px; align-items: start; }
+.pg-specimen { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; min-width: 0; }
+.pg-specimen__label { color: var(--superego-faint); font-size: var(--superego-text-xs); }
+.pg-inline { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.pg-openers .pg-specimen > :not(.pg-specimen__label) { margin-right: 0; }
+.pg-openers .pg-specimen { flex-direction: row; flex-wrap: wrap; align-items: center; }
+.pg-openers .pg-specimen__label { order: -1; width: 100%; }
+.pg-muted { color: var(--superego-muted); }
+.pg-wide { width: 100%; }
+
+/* Dialogs, still: the surfaces on the window's ground, as they'd float over it. */
+.pg-stage { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 28px; margin-bottom: 24px; padding: 32px; border-radius: var(--superego-radius-lg); background: var(--superego-ground); }
+.pg-stage :is(.superego-alert, .superego-dialog) { position: relative; inset: auto; z-index: auto; transform: none; max-width: 100%; max-height: none; transition: none; }
+.pg-stage .superego-dialog--small { width: 380px; }
+/* The field as it is with the focus: its ring, to look at without clicking. */
+.pg-focused { outline: 2px solid var(--superego-ring); outline-offset: 1px; }
+.pg-flush-list { padding: 6px; }
+
+.pg-textarea { width: 100%; padding: 8px 10px; border-radius: 12px; background: var(--superego-surface); }
+.pg-slider { width: 200px; }
+.pg-target { display: grid; place-items: center; width: 200px; height: 72px; border-radius: var(--superego-radius-lg); background: var(--superego-surface); color: var(--superego-muted); }
+.pg-target--small { width: auto; height: auto; padding: 4px 10px; border-radius: 999px; }
+.pg-popover { display: flex; flex-direction: column; gap: 2px; padding: 6px 8px; max-width: 240px; }
+.pg-list { width: 280px; }
+.pg-panel { width: 260px; border-radius: var(--superego-radius-lg); background: var(--superego-chrome); padding-bottom: 6px; }
+.pg-panel .superego-list { padding: 0 6px; }
+.pg-big { font-size: 18px; }
+.pg-status { display: inline-flex; align-items: center; gap: 6px; }
+.pg-machines { font-weight: 500; }
+
+.pg-tokens + .pg-tokens { margin-top: 20px; }
+.pg-tokens__group { margin: 0 0 10px; font-size: var(--superego-text-ui); font-weight: 600; }
+.pg-tokens__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 8px 16px; }
+.pg-token { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.pg-token__swatch { flex: none; width: 28px; height: 28px; border-radius: 8px; background: var(--superego-bg); box-shadow: inset 0 0 0 .5px light-dark(rgb(0 0 0 / .14), rgb(255 255 255 / .16)); }
+.pg-token__name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: var(--superego-text-xs) var(--superego-mono); color: var(--superego-muted); }
+.pg-type { display: flex; flex-direction: column; gap: 10px; margin-top: 32px; }
+.pg-type__row { display: grid; grid-template-columns: 96px 1fr; align-items: baseline; gap: 16px; }
+.pg-type__name { font: var(--superego-text-xs) var(--superego-mono); color: var(--superego-faint); }
+
+/* Opened on a phone itself: the sections one after another, the controls above them. */
+@media (max-width: 760px) {
+  .pg { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
+  .pg__rail { gap: var(--superego-space-3); }
+  .pg__nav { display: none; }
+  .pg__controls { flex-direction: row; flex-wrap: wrap; margin-top: 0; }
+  .pg__main { margin: 0 8px 8px; }
+  .pg__content { padding: 24px 16px 64px; }
+}

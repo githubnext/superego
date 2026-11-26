@@ -13,7 +13,9 @@
     "smoke": "pnpm --filter superego smoke",
     "bundle": "pnpm --filter superego bundle",
     "release": "pnpm --filter superego release",
-    "eval": "node evals/run.ts"
+    "eval": "node evals/run.ts",
+    "ui:playground": "pnpm --filter @superego/ui playground",
+    "ui:playground:build": "pnpm --filter @superego/ui playground:build"
   },
   "devDependencies": {
     "@types/node": "^24",
