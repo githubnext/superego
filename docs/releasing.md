@@ -143,8 +143,15 @@ The build has the app config's `updateFeed` in it (`--update-feed`). `--no-publi
 nothing: the feed still names the release before.
 
 Before releasing, consolidate the changelog: move `## Unreleased`'s notes under a new `## <version>` heading,
-tighten them into short sections grouped by what the user sees, leave an empty `## Unreleased` above it, and merge
-that to main. `pnpm release` stops before building if main's `CHANGELOG.md` has no section for the version.
+leave an empty `## Unreleased` above it, and merge that to main. `pnpm release` stops before building if main's
+`CHANGELOG.md` has no section for the version. The notes are for users, not for us:
+
+- Short and direct, one line each where it can be: what you can now do, or what's fixed ("Fix pasting into a
+  terminal"). No how it works, no internal names, no list of every way to reach it.
+- Upgrade warnings first. Then what users notice, then what's new for extension authors (with the extension API's
+  version). Not as headings: the order is the grouping.
+- The maintainer approves the notes before `pnpm release`: they go out in the release and the update feed, and a
+  published release's notes are fixed in every app that has already fetched them.
 
 Before releasing, say what changed by where it lives, so it's clear what reaches whom: the core (protocol, daemon,
 app), the bundled extensions (by name), the CLI and skill, the extension API (its version, and what breaks), and

@@ -18,6 +18,9 @@ user's point of view. Leave out implementation details, internal refactors, test
 notes are consolidated under the version (see `docs/releasing.md`). Put a plain upgrade warning first when something a
 user has (a profile, an extension, a script) needs changing.
 
+A note says what the user can now do or what's fixed, in a line: "Fix pasting into a terminal", not how it works or
+every way to reach it. Users' changes first, then extension authors'.
+
 ## House rules
 
 - Work in your own worktree. Never reset, stash or overwrite anything in the main checkout.
