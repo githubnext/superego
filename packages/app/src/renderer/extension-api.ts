@@ -327,6 +327,21 @@ export type LinkHandler = {
 /** An entry of a kind an extension writes (`kind` is its own, like `git.commit`). */
 export type EntryProps = { machine: MachineEntry; thread: ThreadInfo; entry: { id: number; kind: string; data?: unknown } }
 
+/**
+ * A fenced code block an extension draws (`codeBlock`), in a message or a rendered Markdown file: its language and
+ * source, and how it's set.
+ */
+export type CodeBlockProps = {
+  /** The fenced block's language tag, lowercased (e.g. 'mermaid'). */
+  language: string
+  /** The raw source inside the fence (without trailing newline). */
+  code: string
+  /** True when drawn inside a compact Markdown block (e.g. folded summary or preview). */
+  compact: boolean
+  /** True while the enclosing assistant message is actively streaming. */
+  streaming: boolean
+}
+
 /** What a settings section's own component gets (`settings`): whose settings (`APP`, or a machine's id), and the section. */
 export type SettingsComponentProps = { target: string; section: SectionInfo }
 
@@ -450,6 +465,12 @@ export type UiApi = {
    * profile's are asked first, then the app's extensions' (threads'), then the core's (files, web pages).
    */
   link(handler: LinkHandler): void
+  /**
+   * (API ^5.14) Draw fenced code blocks of `languages` (their tags, any case: `'mermaid'`, `['math', 'latex']`) in
+   * Markdown: messages and rendered files. A thread's profile's go first, then the app's; a language no one draws is
+   * shown as code.
+   */
+  codeBlock(languages: string | readonly string[], component: ComponentType<CodeBlockProps>): void
   /**
    * Divide runs of work into parts: the tasks an agent reported, say. The first divider to return parts for a run
    * draws it; `undefined` leaves it to the next, then to the core.

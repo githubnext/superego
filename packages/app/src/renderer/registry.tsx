@@ -20,7 +20,7 @@ import { addStyle } from './profile-style.ts'
 import { onMachine } from './machine-view.tsx'
 import { checkTheme, type Theme } from '@superego/ui/themes'
 import type {
-  BehaviourSlot, EntryProps, LinkHandler, NewThreadField, PaneKind, PaneProps, SettingsComponentProps, SidebarFilter, SlotProps, SpaceKind, ToolCallProps, ToolRow, UiApi,
+  BehaviourSlot, CodeBlockProps, EntryProps, LinkHandler, NewThreadField, PaneKind, PaneProps, SettingsComponentProps, SidebarFilter, SlotProps, SpaceKind, ToolCallProps, ToolRow, UiApi,
   UiExtension, View, ViewProps, WindowEvent, WindowEvents, WindowState, WorkPart, WorkRun,
 } from './extension-api.ts'
 
@@ -101,6 +101,8 @@ export type Registry = {
   tools: Owned<{ name: string; component?: ComponentType<ToolCallProps>; row?: ToolRow; fold: boolean }>[]
   entries: Owned<{ kind: string; component: ComponentType<EntryProps> }>[]
   links: Owned<LinkHandler>[]
+  /** Fenced code blocks drawn by an extension (`superego.codeBlock`), by their languages (lowercased). */
+  codeBlocks: Owned<{ languages: string[]; component: ComponentType<CodeBlockProps> }>[]
   panes: Owned<PaneKind & { kind: string }>[]
   /**
    * Spaces (`superego.space`), by kind, each with the machine it opens on (a global or project profile's, its own). A
@@ -152,7 +154,7 @@ export function createRegistry(app: AppConfig, extensions: UiExtension[], core: 
       ...(version ? { version } : {}), ...(api ? { api } : {}), ...(panes ? { panes } : {}),
     })),
     slots: { 'header.chips': [], 'thread.badge': [], 'thread.menu': [], 'sidebar.heading': [], 'composer.above': [], 'details.section': [], 'editor.side': [], 'editor.bar': [], 'overlay': [], 'onboarding': [], 'welcome': [] },
-    views: [], dataViews: {}, machineExtensions: {}, tools: [], entries: [], links: [], panes: [], spaces: [], work: [], settings: [], newThreadFields: [], router: createWindowRouter(), appSettings: [], themes: [], completions: [], sentWith: [], sidebarFilters: [], listeners: [],
+    views: [], dataViews: {}, machineExtensions: {}, tools: [], entries: [], links: [], codeBlocks: [], panes: [], spaces: [], work: [], settings: [], newThreadFields: [], router: createWindowRouter(), appSettings: [], themes: [], completions: [], sentWith: [], sidebarFilters: [], listeners: [],
     window: {
       focused: typeof document === 'undefined' || document.hasFocus(),
       visible: typeof document === 'undefined' || document.visibilityState !== 'hidden',
@@ -347,6 +349,15 @@ export function createRegistry(app: AppConfig, extensions: UiExtension[], core: 
         unique(registry.entries, 'kind', { kind, component }, 'entry kind')
       },
       link: (handler) => { add(registry.links, handler) },
+      codeBlock(languages, component) {
+        const list = (typeof languages === 'string' ? [languages] : [...languages]).map((l) => l.trim().toLowerCase())
+        if (!list.length || list.some((l) => !l || /\s/.test(l))) return console.warn(`Extension ${extension.name}: codeBlock needs language tags, not ${JSON.stringify(languages)}`)
+        // One drawer per language in each scope, as with tools: the first keeps it.
+        life.live('a code block')
+        const taken = registry.codeBlocks.find((c) => c.owner.profile === profile && c.languages.some((l) => list.includes(l)))
+        if (taken) return console.warn(`Extension ${extension.name}: ${list.join(', ')} code blocks are already drawn by ${taken.owner.extension}; keeping that one`)
+        add(registry.codeBlocks, { languages: list, component })
+      },
       work(divide) {
         if (profile) return console.warn(`Profile extension ${extension.name}: dividing work from a profile's UI isn't supported yet`)
         add(registry.work, { divide })

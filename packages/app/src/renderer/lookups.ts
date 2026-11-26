@@ -77,6 +77,17 @@ export const entryView = (registry: Registry, kind: string, where: Where) => loo
 export const entryOwner = (registry: Registry, kind: string, where: Where) => lookUp(registry.entries, where, (e) => e.kind === kind)?.owner
 
 /**
+ * How fenced code blocks in `language` (lowercased) are drawn for `where`, if an extension draws them: its thread's
+ * profile's first, else the app's (not one its thread goes without). Outside a thread (`where` undefined), the app's.
+ */
+export const codeBlockView = (registry: Registry, language: string, where: Where | undefined) => codeBlockEntry(registry, language, where)?.component
+
+/** Who draws fenced code blocks in `language` for `where`, if an extension does. */
+export const codeBlockOwner = (registry: Registry, language: string, where: Where | undefined) => codeBlockEntry(registry, language, where)?.owner
+
+const codeBlockEntry = (registry: Registry, language: string, where: Where | undefined) => lookUp(registry.codeBlocks, where, (c) => c.languages.includes(language))
+
+/**
  * The component under the settings section that names `ui`, on `target` (a machine, or `APP`): a profile's there first,
  * as lookups take it; an app's UI half only where it speaks with the machine's half.
  */

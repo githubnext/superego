@@ -50,6 +50,7 @@ What each half of an extension registers, a line each. The [guide](guide.md) bui
 | `tool(name, Component, { fold })` | drawn whole; `fold: false` shows them outside the run's fold |
 | `tool('mcp__*', …)` | a prefix: tools without their own row; longest wins |
 | `entry(kind, Component)` | transcript entries of a kind it writes |
+| `codeBlock(languages, Component)` | fenced code blocks of a language, drawn yourself: `{ language, code, compact, streaming }` |
 | `link({ match, open, render, target, scheme })` | claim links ([Links](window.md#links)) |
 | `composer.complete({ title, word(text, caret), items(word, { machine, cwd, thread? }) })` | complete the word being typed: `{ label, detail, icon, insert }` |
 | `composer.sentWith({ read(blocks), component, words })` | draw what `beforeSend` added, under sent messages |

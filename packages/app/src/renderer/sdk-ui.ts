@@ -13,7 +13,7 @@ export { defineWindowAction as defineAction, type WindowAction, type WindowConte
 export type { Dispatch } from './actions.tsx'
 export type {
   View, ViewContext, ViewProps, PaneKind, PaneProps, SpaceKind, SpaceProps, SlotProps, BehaviourSlot, EditorSlotProps, SidebarFilter, SidebarRailProps, ToolCallProps, ToolNote, ToolRow,
-  ToolRowCall, ToolState, EntryProps, LinkHandler, LinkProps, LinkWhere, LinkAttributes, NewThreadField, NewThreadFieldProps, SettingsComponentProps,
+  ToolRowCall, ToolState, EntryProps, CodeBlockProps, LinkHandler, LinkProps, LinkWhere, LinkAttributes, NewThreadField, NewThreadFieldProps, SettingsComponentProps,
   WindowEvent, WindowEvents, WindowState, WorkRun, WorkPart, WorkBlock, WorkStatus,
 } from './extension-api.ts'
 export type { Place, Placement } from '../shared/layout.ts'

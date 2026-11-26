@@ -18,7 +18,8 @@ import { CheckIcon, CopyIcon } from '@superego/ui'
 import { copyText } from './copy-text.ts'
 import { useAppDark } from './appearance.ts'
 import { useOptionalRegistry } from './registry.tsx'
-import { linkHandler, linkSchemes } from './lookups.ts'
+import { codeBlockOwner, codeBlockView, linkHandler, linkSchemes } from './lookups.ts'
+import { Contained } from './contained.tsx'
 import { Claimed, LinkPlace, WIKILINK, wikilinks } from './links.tsx'
 import { useKnownFiles } from './known-files.ts'
 import { proseCell } from './table-cells.ts'
@@ -39,8 +40,40 @@ export function Scroll({ node: _node, ...props }: ComponentProps<'pre'> & { node
   return <pre ref={ref} {...props} />
 }
 
-/** A code block in a message, with a button in its corner that copies all of it: blue with a check once it has. */
+/** How the Markdown a code block is in is set: compact (a preview, a fold's summary), and still streaming. */
+const MarkdownContext = createContext<{ compact: boolean; streaming: boolean }>({ compact: false, streaming: false })
+
+/**
+ * A fenced code block: drawn by the extension that claims its language for the place it's in (`superego.codeBlock`),
+ * else as code.
+ */
 function CodeBlock(props: ComponentProps<'pre'> & { node?: unknown }) {
+  const registry = useOptionalRegistry()
+  const { machine, thread } = useContext(LinkPlace)
+  const { compact, streaming } = useContext(MarkdownContext)
+  const fence = registry?.codeBlocks.length ? fenced(props.node as HastNode | undefined) : undefined
+  const where = machine && thread ? { machine, thread } : undefined
+  const Custom = fence && codeBlockView(registry!, fence.language, where)
+  if (!Custom) return <PlainCodeBlock {...props} />
+  const owner = codeBlockOwner(registry!, fence!.language, where)!
+  return (
+    <Contained name={owner.extension} scope={owner.profile}>
+      <Custom language={fence!.language} code={fence!.code} compact={compact} streaming={streaming} />
+    </Contained>
+  )
+}
+
+/** A `<pre>`'s one `<code>`, by its language (`language-<tag>`, lowercased) and text (without its last newline). */
+function fenced(pre: HastNode | undefined): { language: string; code: string } | undefined {
+  const elements = (pre?.children ?? []).filter((child) => child.type === 'element')
+  const code = elements.length === 1 && elements[0]!.tagName === 'code' ? elements[0]! : undefined
+  const classes = code?.properties?.className
+  const tag = (Array.isArray(classes) ? classes : [classes]).map((c) => /^language-(\S+)$/.exec(String(c))?.[1]).find(Boolean)
+  return tag ? { language: tag.toLowerCase(), code: textOf(code).replace(/\n$/, '') } : undefined
+}
+
+/** A code block in a message, with a button in its corner that copies all of it: blue with a check once it has. */
+function PlainCodeBlock(props: ComponentProps<'pre'> & { node?: unknown }) {
   const ref = useRef<HTMLDivElement>(null)
   const [state, setState] = useState<'idle' | 'copied' | 'failed'>('idle')
   // Each click keeps the feedback up for its full time, even mid-way through the last one's.
@@ -284,10 +317,12 @@ export type MarkdownProps = {
   lines?: number
   /** Set small, for a narrow pane or a preview: the UI's size, a step of space between blocks, headings at the text's size. */
   compact?: boolean
+  /** Still being written: an assistant's message as it streams (extensions' code blocks wait out half-written source). */
+  streaming?: boolean
 }
 
 /** `text` as Markdown, typeset as the transcript sets it (its size and leading too) wherever it's put. */
-export const Markdown = memo(function Markdown({ text, html = false, breaks = false, lines, compact = false }: MarkdownProps) {
+export const Markdown = memo(function Markdown({ text, html = false, breaks = false, lines, compact = false, streaming = false }: MarkdownProps) {
   const registry = useOptionalRegistry()
   // Drawn again when extensions come or go: a profile's UI, loaded once its thread shows, claims links drawn before.
   const version = () => registry?.version ?? 0
@@ -297,11 +332,14 @@ export const Markdown = memo(function Markdown({ text, html = false, breaks = fa
   // Links a handler claims keep their scheme (thread:, wikilink:); [[wikilinks]] are links where one claims them.
   const claimed = (url: string) => Boolean(registry && linkHandler(registry, url, 'link', where))
   const urlTransform = (url: string, key: string) => imageUrl(url, key) || (key === 'href' && claimed(url)) ? url : defaultUrlTransform(url)
+  const set = useMemo(() => ({ compact, streaming }), [compact, streaming])
   const rendered = (
     <div className={`md${compact ? ' md--compact' : ''}${lines ? ' md--clamped' : ''}`} {...(lines ? { style: { WebkitLineClamp: lines } } : {})}>
-      <ReactMarkdown remarkPlugins={breaks ? gfmWithBreaks : gfm} {...(html ? { rehypePlugins: htmlPlugins(registry ? linkSchemes(registry, where) : []), remarkRehypeOptions: noPrefix } : {})} components={components} urlTransform={urlTransform}>
-        {claimed(`${WIKILINK}x`) ? wikilinks(text) : text}
-      </ReactMarkdown>
+      <MarkdownContext.Provider value={set}>
+        <ReactMarkdown remarkPlugins={breaks ? gfmWithBreaks : gfm} {...(html ? { rehypePlugins: htmlPlugins(registry ? linkSchemes(registry, where) : []), remarkRehypeOptions: noPrefix } : {})} components={components} urlTransform={urlTransform}>
+          {claimed(`${WIKILINK}x`) ? wikilinks(text) : text}
+        </ReactMarkdown>
+      </MarkdownContext.Provider>
     </div>
   )
   return images ? <GalleryOf images={images}>{rendered}</GalleryOf> : rendered

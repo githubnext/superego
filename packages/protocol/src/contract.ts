@@ -73,11 +73,13 @@ import type { ExtensionAbout } from './app.ts'
  * image fitting.
  * 5.13: the UI half's `sidebarFilter(useFilter)` (a narrowing of the sidebar's list, which every walk of it follows), and
  * the `thread.menu` (a thread's row menu and phone sheet: `ThreadMenuItem`s) and `sidebar.heading` slots.
+ * 5.14: the UI half's `codeBlock(languages, component)` (`CodeBlockProps`): fenced code blocks of a language, in
+ * messages and rendered Markdown files, drawn by an extension (Mermaid's diagrams, say) rather than as code.
  * Minor: something added (an extension that uses it asks for `^3.<minor>`); major: something an extension could rely
  * on changed or went, from 2.5 on without exception. An extension whose `api` range this doesn't satisfy is refused
  * when it's set up.
  */
-export const EXTENSION_API = '5.13.0'
+export const EXTENSION_API = '5.14.0'
 
 /** What a machine says of an extension set up there: `hello.extensions` and `features.changed` carry one each. */
 export type ExtensionManifest = Pick<ExtensionAbout, 'name' | 'version' | 'api'>

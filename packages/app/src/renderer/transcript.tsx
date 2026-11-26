@@ -113,7 +113,7 @@ export function Transcript({ machine, thread, view, live }: { machine: MachineEn
         switch (item.type) {
           case 'entry': return <Entry key={item.key} entry={item.entry} />
           case 'text': return (
-            <div key={item.key} className={`msg msg__text ${item.narration ? 'msg__text--narration' : ''} ${item.streaming ? 'is-streaming' : ''}`}><Markdown text={item.text} /></div>
+            <div key={item.key} className={`msg msg__text ${item.narration ? 'msg__text--narration' : ''} ${item.streaming ? 'is-streaming' : ''}`}><Markdown text={item.text} streaming={item.streaming} /></div>
           )
           case 'work': {
             // Extensions may divide a run into parts (an agent's reported tasks); the last part is the one going on, and a

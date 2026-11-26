@@ -84,6 +84,7 @@ Nothing else: no npm packages, no CSS imports. The daemon compiles TSX and TS wi
 | `composer.complete({ title, word, items })` | complete a word as it's typed. `word(text, caret)` finds it (`{ start, query, … }`) or nothing; the first to find one completes it, with any other that finds one starting at the same place (one menu: `/` opening the message lists the core's `/clear` and `/compact` beside skills). `items(word, { machine, cwd, thread })` returns (or resolves to) `{ label, detail?, icon?, insert, submit? }[]`, best first (no `thread` in New thread). `insert` replaces the word (end with a space to keep typing); `submit: true`, a command: ⏎ takes it and sends the message. ↑↓ pick, ⇥ or ⏎ take, esc leaves |
 | `composer.sentWith({ read, component?, words? })` | draw what `beforeSend` added to sent messages. `read(blocks)` returns `{ items, blocks }`, the indexes of the blocks found, which leave the text. `component` gets `{ machine, thread, items }`, drawn under the message (a `<Chip icon title>` each). `words(text, items)` rewrites the message's Markdown (`mentions` turns `@thread:42` into a link). Drawn even for threads now without the extension |
 | `entry(kind, component)` | transcript entries of a kind it writes |
+| `codeBlock(languages, component)` | (API ^5.14) draw fenced code blocks of a language yourself: [Code blocks](#code-blocks) |
 | `settings(ui, component)` | drawn below the daemon half's settings section that names `ui` |
 | `appSetting(key)` | an app setting now, outside React (`useAppSetting` in components) |
 | `dispatch(id, params, { machine })` | run an action outside React |
@@ -160,6 +161,27 @@ const BUSY: SidebarFilter = { title: 'Busy', shows: (thread) => thread.status.st
 const useBusy = () => useAppSetting<boolean>('busy.on')[0] ? BUSY : undefined
 
 export default defineUiExtension({ name: 'busy', setup: (superego) => superego.sidebarFilter(useBusy) })
+```
+
+### Code blocks
+
+(API ^5.14) `superego.codeBlock(languages, component)` draws fenced code blocks tagged with one of `languages` (a tag
+or a list, any case) wherever Markdown is: messages, rendered files, `<Markdown>`. `component` gets `{ language, code,
+compact, streaming }`: the tag lowercased, the source without its last newline, whether the Markdown is set compact (a
+preview, a fold), and whether the message is still streaming in (its source half-written: wait quietly rather than
+show an error). A thread's profile's go first, then the app's; a block no one claims, or in a thread that goes without
+your extension, is drawn as code. The bundled `mermaid` extension draws ```` ```mermaid ```` blocks as diagrams.
+
+```tsx
+import { defineUiExtension, type CodeBlockProps } from 'superego/ui'
+
+function Csv({ code, streaming }: CodeBlockProps) {
+  const rows = code.split('\n').map((line) => line.split(','))
+  if (streaming) return <pre>{code}</pre>
+  return <table><tbody>{rows.map((cells, i) => <tr key={i}>{cells.map((c, j) => <td key={j}>{c}</td>)}</tr>)}</tbody></table>
+}
+
+export default defineUiExtension({ name: 'csv', api: '^5.14', setup: (superego) => superego.codeBlock('csv', Csv) })
 ```
 
 ### A mark in the sidebar
