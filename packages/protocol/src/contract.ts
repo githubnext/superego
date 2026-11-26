@@ -75,11 +75,13 @@ import type { ExtensionAbout } from './app.ts'
  * the `thread.menu` (a thread's row menu and phone sheet: `ThreadMenuItem`s) and `sidebar.heading` slots.
  * 5.14: the UI half's `codeBlock(languages, component)` (`CodeBlockProps`): fenced code blocks of a language, in
  * messages and rendered Markdown files, drawn by an extension (Mermaid's diagrams, say) rather than as code.
+ * 5.15: `ConfirmDialog` and `PromptDialog` from 'superego/ui' (asking before doing something, and for a name),
+ * `Button`'s `danger` variant, and `Dialog`'s `footer` and `flush` (its body now has room around it by default).
  * Minor: something added (an extension that uses it asks for `^3.<minor>`); major: something an extension could rely
  * on changed or went, from 2.5 on without exception. An extension whose `api` range this doesn't satisfy is refused
  * when it's set up.
  */
-export const EXTENSION_API = '5.14.0'
+export const EXTENSION_API = '5.15.0'
 
 /** What a machine says of an extension set up there: `hello.extensions` and `features.changed` carry one each. */
 export type ExtensionManifest = Pick<ExtensionAbout, 'name' | 'version' | 'api'>

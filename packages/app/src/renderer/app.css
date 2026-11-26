@@ -977,20 +977,8 @@ button.app__mobiletitle > .superego-status { font-size: 12px; }
     transform: translateY(calc((env(safe-area-inset-top) - 6px) * var(--back))) scale(calc(1 - .08 * var(--back)));
     border-radius: calc((var(--phone-radius) - 18px) * var(--back)); overflow: hidden; }
   :root:has(.superego-dialog--sheet[data-swiping]) .app__indent { transition-duration: 0s; }
-  .superego-discard__backdrop { position: fixed; inset: 0; z-index: 60; background: rgb(0 0 0 / .2); transition: opacity .25s; }
-  .superego-discard__backdrop:is([data-starting-style], [data-ending-style]) { opacity: 0; }
-  /* iOS's action sheet: from the foot, inset, the question and what's destructive in one group, Keep Editing apart. */
-  .superego-discard { position: fixed; z-index: 61; left: var(--superego-space-2); right: var(--superego-space-2); bottom: max(var(--superego-space-2), env(safe-area-inset-bottom));
-    display: flex; flex-direction: column; gap: var(--superego-space-2); outline: none; transition: transform .35s cubic-bezier(.32, .72, 0, 1); }
-  .superego-discard:is([data-starting-style], [data-ending-style]) { transform: translateY(calc(100% + 40px)); }
-  .superego-discard__group { display: flex; flex-direction: column; border-radius: 14px; overflow: hidden; background: color-mix(in srgb, var(--phone-cell) 94%, transparent); -webkit-backdrop-filter: var(--superego-glass-blur); backdrop-filter: var(--superego-glass-blur); }
-  .superego-discard__title { margin: 0; padding: 14px var(--superego-space-4); text-align: center; font-size: calc(13px * var(--superego-text-size)); font-weight: 400; color: var(--superego-muted); border-bottom: .5px solid var(--phone-separator); }
-  .superego-discard__button { min-height: 57px; border: 0; background: none; font: inherit; font-size: calc(20px * var(--superego-text-size)); color: var(--superego-accent); -webkit-tap-highlight-color: transparent; }
-  .superego-discard__button:active { background: var(--phone-pressed); }
-  .superego-discard__button--danger { color: var(--superego-status-error); }
-  .superego-discard__keep { border-radius: 14px; background: var(--phone-cell); font-weight: 600; }
   @media (prefers-reduced-motion: reduce) {
-    .superego-dialog, .superego-dialog__backdrop, .app__indent, .superego-discard, .superego-discard__backdrop { transition: none; }
+    .superego-dialog, .superego-dialog__backdrop, .app__indent { transition: none; }
   }
   .superego-dialog__header { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: var(--superego-space-2); min-height: 60px; padding: 8px max(12px, env(safe-area-inset-right)) 4px max(12px, env(safe-area-inset-left)); border-bottom: 0; background: none; }
   .superego-dialog__title { grid-area: 1 / 2; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: center; font-size: calc(17px * var(--superego-text-size)); }
@@ -1479,7 +1467,6 @@ a.pane-header__url:hover { color: var(--superego-link); }
 .setting__control:has(.setting__secret) { max-width: 100%; }
 .setting__secret .superego-field { flex: 1 1 auto; min-width: 0; }
 .layout-editor__text { width: 100%; min-height: 12em; font: var(--superego-text-sm) var(--superego-mono); }
-.layout-editor__actions { display: flex; justify-content: flex-end; margin-top: var(--superego-space-3); }
 
 /* What a profile draws is inside its scope's mark (contained.tsx), for its styles: no box of its own. */
 .profile-scope { display: contents; }

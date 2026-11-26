@@ -1,8 +1,11 @@
-import type { ButtonHTMLAttributes } from 'react'
+import type { ButtonHTMLAttributes, Ref } from 'react'
 
-type Props = ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'default' | 'primary' | 'ghost' }
+type Props = ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'default' | 'primary' | 'danger' | 'ghost'; ref?: Ref<HTMLButtonElement> }
 
-/** A push button: `default`, `primary` (the one to press), or `ghost` (no box until hovered). */
+/**
+ * A push button: `default`, `primary` (the one to press), `danger` (the one to press, and it destroys something: Delete,
+ * Discard), or `ghost` (no box until hovered).
+ */
 export function Button({ variant = 'default', className = '', ...props }: Props) {
   return <button type="button" className={`superego-button superego-button--${variant} ${className}`} {...props} />
 }

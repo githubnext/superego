@@ -20,10 +20,11 @@
 .mcp-secrets { display: flex; flex-direction: column; gap: 6px; }
 .mcp-secrets__field { display: grid; grid-template-columns: minmax(90px, auto) 1fr; align-items: center; gap: 8px; }
 .mcp-secrets__actions { display: flex; gap: 6px; }
-.mcp-sign-in .auth-flow { margin-top: 0; }
+/* In its own dialog, the flow is the body: no box of its own inside it. */
+.mcp-sign-in .auth-flow { margin-top: 0; padding: 0; border: 0; background: none; }
 
 /* Add server and Edit. */
-.mcp-dialog__form { display: flex; flex-direction: column; gap: 10px; padding: var(--superego-space-4); }
+.mcp-dialog__form { display: flex; flex-direction: column; gap: 10px; }
 .mcp-dialog__label { font-size: var(--superego-text-sm); color: var(--superego-muted); margin-bottom: -4px; }
 .mcp-dialog__form label > span { display: block; font-size: var(--superego-text-sm); color: var(--superego-muted); margin-bottom: 3px; }
 .mcp-dialog__form .superego-field { width: 100%; box-sizing: border-box; }

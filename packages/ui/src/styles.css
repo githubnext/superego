@@ -190,6 +190,11 @@ button, summary { -webkit-user-select: none; user-select: none; }
 /* The one action a view is for: few of these. */
 .superego-button--primary { background: var(--superego-accent); color: var(--superego-accent-text); box-shadow: 0 0 0 .5px rgb(0 0 0 / .15), 0 1px 1.5px rgb(0 0 0 / .18), inset 0 .5px 0 rgb(255 255 255 / .25); }
 .superego-button--primary:active:not(:disabled) { background: color-mix(in srgb, var(--superego-accent) 85%, #000); }
+/* The one action, and it destroys something (Delete, Discard): the same button in the error's red. */
+.superego-button--danger { --danger: light-dark(color-mix(in oklab, var(--superego-status-error) 88%, #000), var(--superego-status-error)); background: var(--danger); color: #ffffff; box-shadow: 0 0 0 .5px rgb(0 0 0 / .15), 0 1px 1.5px rgb(0 0 0 / .18), inset 0 .5px 0 rgb(255 255 255 / .25); }
+.superego-button--danger:active:not(:disabled) { background: color-mix(in srgb, var(--danger) 85%, #000); }
+/* A filled button's ring stands just off it: inside, it would vanish into the fill. */
+:is(.superego-button--primary, .superego-button--danger):focus-visible { outline-offset: 1px; }
 /* No background until hovered; for the rare control that sits inside text. */
 .superego-button--ghost { background: transparent; box-shadow: none; font-weight: 400; }
 .superego-button--ghost:hover { background: var(--superego-hover); }
@@ -322,7 +327,75 @@ button, summary { -webkit-user-select: none; user-select: none; }
 .superego-dialog__title { font-size: calc(13px * var(--superego-text-scale)); font-weight: 600; margin: 0; }
 .superego-dialog__actions { display: flex; gap: 4px; align-items: center; }
 .superego-dialog__extra { display: contents; }
-.superego-dialog__body { flex: 1; min-height: 0; overflow: auto; }
+.superego-dialog__body { flex: 1; min-height: 0; overflow: auto; padding: var(--superego-space-4); }
+.superego-dialog__body > :first-child { margin-top: 0; }
+.superego-dialog__body > :last-child { margin-bottom: 0; }
+/* Edge to edge (`flush`): for what lays out its own. */
+.superego-dialog--flush .superego-dialog__body { padding: 0; }
+/* Its buttons, at the trailing edge, under the body's own room; under a flush body, a hairline between. */
+.superego-dialog__footer { flex: none; display: flex; align-items: center; justify-content: flex-end; gap: var(--superego-space-2); padding: 0 var(--superego-space-4) var(--superego-space-4); }
+.superego-dialog--flush .superego-dialog__footer { padding-top: var(--superego-space-3); border-top: 1px solid var(--superego-line); }
+@media (max-width: 599px) {
+  .superego-dialog__footer { padding-bottom: max(var(--superego-space-4), env(safe-area-inset-bottom)); }
+  .superego-dialog__footer .superego-button { min-height: 44px; padding: 0 18px; font-size: calc(17px * var(--superego-text-size)); }
+}
+
+/* An alert (ConfirmDialog, PromptDialog): one calm surface, the question, what it means, and its buttons at the
+   trailing edge. No bar, no ✕: Cancel and Escape say no. */
+.superego-alert__backdrop { position: fixed; inset: 0; z-index: 50; background: light-dark(rgb(0 0 0 / .18), rgb(0 0 0 / .42)); transition: opacity .14s; }
+.superego-alert__backdrop:is([data-starting-style], [data-ending-style]) { opacity: 0; }
+.superego-alert {
+  position: fixed; z-index: 51; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  width: 360px; max-width: calc(100vw - 32px); max-height: calc(100vh - 32px); overflow: auto; padding: 20px;
+  border-radius: 18px; color: var(--superego-text); background: light-dark(var(--superego-bg), var(--superego-raised));
+  box-shadow: 0 0 0 .5px light-dark(rgb(0 0 0 / .12), rgb(255 255 255 / .12)), 0 24px 64px -12px light-dark(rgb(0 0 0 / .28), rgb(0 0 0 / .6)), 0 2px 8px light-dark(rgb(0 0 0 / .06), rgb(0 0 0 / .25));
+  outline: none; transition: opacity .14s, transform .14s;
+}
+.superego-alert:is([data-starting-style], [data-ending-style]) { opacity: 0; transform: translate(-50%, calc(-50% + 6px)) scale(.985); }
+.superego-alert__title { margin: 0; font-size: calc(15px * var(--superego-text-scale)); font-weight: 600; line-height: 1.3; overflow-wrap: anywhere; }
+.superego-alert__message, .superego-alert__detail { margin: 6px 0 0; font-size: var(--superego-text-ui); line-height: 1.45; color: var(--superego-muted); }
+.superego-alert__label { display: block; margin: 14px 0 6px; font-size: var(--superego-text-sm); font-weight: 500; }
+/* The field fills the width; the room around it (the alert's padding) keeps its ring whole. */
+.superego-alert__field { display: block; width: 100%; min-height: 30px; padding: 5px 10px; margin-top: 14px; }
+.superego-alert__label + .superego-alert__field { margin-top: 0; }
+.superego-alert__error { margin: 8px 0 0; font-size: var(--superego-text-sm); line-height: 1.4; color: var(--superego-status-error-text); }
+.superego-alert__actions { display: flex; justify-content: flex-end; gap: var(--superego-space-2); margin-top: 18px; }
+.superego-alert__actions .superego-button { min-width: 76px; min-height: 28px; padding: 4px 14px; }
+/* On a phone, in the middle of what's above the keyboard, and as a finger needs it: the buttons side by side, as tall
+   as a finger, the field big enough that iOS doesn't zoom into it. */
+@media (max-width: 599px) {
+  .superego-alert { top: calc(var(--superego-viewport-height, 100dvh) / 2); width: 340px; border-radius: 22px; }
+  .superego-alert__title { font-size: calc(17px * var(--superego-text-size)); }
+  .superego-alert__message, .superego-alert__detail { font-size: calc(15px * var(--superego-text-size)); }
+  .superego-alert__field { min-height: 44px; padding: 8px 12px; border-radius: 12px; font-size: var(--superego-text-field); }
+  .superego-alert__actions { display: grid; grid-template-columns: 1fr 1fr; }
+  .superego-alert__actions .superego-button { min-height: 44px; font-size: calc(17px * var(--superego-text-size)); }
+}
+
+/* iOS's action sheet (a phone's ConfirmDialog, and a sheet's "Discard your changes?"): from the foot, inset, the
+   question and what it does in one group, Cancel apart. */
+.superego-action-sheet__backdrop { position: fixed; inset: 0; z-index: 60; background: rgb(0 0 0 / .2); transition: opacity .25s; }
+.superego-action-sheet__backdrop:is([data-starting-style], [data-ending-style]) { opacity: 0; }
+.superego-action-sheet {
+  position: fixed; z-index: 61; left: var(--superego-space-2); right: var(--superego-space-2); bottom: max(var(--superego-space-2), env(safe-area-inset-bottom));
+  display: flex; flex-direction: column; gap: var(--superego-space-2); outline: none; transition: transform .35s cubic-bezier(.32, .72, 0, 1);
+}
+.superego-action-sheet:is([data-starting-style], [data-ending-style]) { transform: translateY(calc(100% + 40px)); }
+.superego-action-sheet__group { display: flex; flex-direction: column; border-radius: 14px; overflow: hidden; background: color-mix(in srgb, var(--superego-raised) 94%, transparent); -webkit-backdrop-filter: var(--superego-glass-blur); backdrop-filter: var(--superego-glass-blur); }
+.superego-action-sheet__head { padding: 14px var(--superego-space-4); text-align: center; border-bottom: .5px solid var(--superego-line); font-size: calc(13px * var(--superego-text-size)); color: var(--superego-muted); }
+.superego-action-sheet__title { margin: 0; font-size: inherit; font-weight: 400; }
+/* With more under it, the question stands out a little, as iOS's does. */
+.superego-action-sheet__title:has(~ *) { font-weight: 600; }
+.superego-action-sheet__message { margin: 4px 0 0; }
+.superego-action-sheet__error { margin: 6px 0 0; color: var(--superego-status-error-text); }
+.superego-action-sheet__button { min-height: 57px; border: 0; background: none; font: inherit; font-size: calc(20px * var(--superego-text-size)); color: var(--superego-accent); -webkit-tap-highlight-color: transparent; }
+.superego-action-sheet__button:active:not(:disabled) { background: light-dark(rgb(0 0 0 / .1), rgb(255 255 255 / .1)); }
+.superego-action-sheet__button:disabled { opacity: .45; }
+.superego-action-sheet__button--danger { color: var(--superego-status-error); }
+.superego-action-sheet__cancel { border-radius: 14px; background: var(--superego-raised); font-weight: 600; }
+@media (prefers-reduced-motion: reduce) {
+  .superego-alert, .superego-alert__backdrop, .superego-action-sheet, .superego-action-sheet__backdrop { transition: none; }
+}
 /* A dialog's search: the field that fills its top (a picker's), borderless, a hairline under it. It wears no ring (see
    Focus below). */
 .superego-dialog__search {

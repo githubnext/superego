@@ -73,7 +73,7 @@ export function Picker<T>({ label, placeholder, className = '', items, filter, r
     else if (shown[does.pick] !== undefined) onPick(shown[does.pick]!, { beside: does.beside })
   }
   return (
-    <Dialog onClose={onClose} size="medium" className={`palette ${className}`} label={label}>
+    <Dialog onClose={onClose} size="medium" flush className={`palette ${className}`} label={label}>
       <BaseUI.Autocomplete.Root inline open items={items} filteredItems={shown} autoHighlight="always" keepHighlight loopFocus={false}
         value={query} onValueChange={(value, details) => { if (details.reason !== 'item-press') setQuery(value) }}
         onItemHighlighted={(item) => { lit.current = item }}>

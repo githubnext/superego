@@ -159,7 +159,7 @@ await openApp({ name: 'phone-look', timeout: 420_000 }, async (t) => {
     const scale = new DOMMatrix(getComputedStyle(indent).transform).a
     if (!popup) return { open: false, scale }
     const r = popup.getBoundingClientRect()
-    return { open: true, top: r.top, height: r.height, scale, asking: Boolean(document.querySelector('.superego-discard')) }
+    return { open: true, top: r.top, height: r.height, scale, asking: Boolean(document.querySelector('.superego-action-sheet')) }
   })()`)
   const bar = async () => { const s = await sheet(); return [PHONE.width / 2, Math.round(s.top + 30)] }
   const openNew = async () => {
@@ -243,13 +243,13 @@ await openApp({ name: 'phone-look', timeout: 420_000 }, async (t) => {
     const tugged = await sheet()
     if (!(tugged.top - rest.top < rest.height * 0.15)) t.fail(`the sheet only tugging, holding changes: ${JSON.stringify({ rest, tugged })}`)
     await release()
-    await p.until(`Boolean(document.querySelector('.superego-discard'))`, 'asked whether to discard')
+    await p.until(`Boolean(document.querySelector('.superego-action-sheet'))`, 'asked whether to discard')
     await both('new-thread-discard')
-    await p.run(`document.querySelector('.superego-discard__keep').click()`)
-    await p.until(`!document.querySelector('.superego-discard') && document.querySelector('.new-thread [data-field="name"] input')?.value === 'Parse the bank’s dates'`, 'kept editing')
+    await p.run(`document.querySelector('.superego-action-sheet__cancel').click()`)
+    await p.until(`!document.querySelector('.superego-action-sheet') && document.querySelector('.new-thread [data-field="name"] input')?.value === 'Parse the bank’s dates'`, 'kept editing')
     await pull(await bar(), rest.height * 0.5)
-    await p.until(`Boolean(document.querySelector('.superego-discard__button--danger'))`, 'asked again')
-    await p.run(`document.querySelector('.superego-discard__button--danger').click()`)
+    await p.until(`Boolean(document.querySelector('.superego-action-sheet__button--danger'))`, 'asked again')
+    await p.run(`document.querySelector('.superego-action-sheet__button--danger').click()`)
     await p.until(`!document.querySelector('.new-thread')`, 'New thread discarded')
     await p.run(`document.getElementById('phone-chrome')?.remove()`)
   }

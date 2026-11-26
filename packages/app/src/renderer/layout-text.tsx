@@ -124,10 +124,10 @@ function LayoutDialog({ onClose }: { onClose(): void }) {
     registry.router.dispatch('app.settings.set', { key: LAYOUT, value: read.layout }, { machine: APP, source: 'layout' }).then(onClose, (error: Error) => setProblem(error.message))
   }
   return (
-    <Dialog title="Layout" size="medium" onClose={onClose} className="layout-editor" unsaved={text !== shown}>
+    <Dialog title="Layout" size="medium" onClose={onClose} className="layout-editor" unsaved={text !== shown}
+      footer={<><Button onClick={onClose}>Cancel</Button><Button variant="primary" onClick={save}>Save</Button></>}>
       <TextArea className="layout-editor__text" aria-label="Layout" value={text} maxRows={20} spellCheck={false} onChange={(e) => { setText(e.target.value); setProblem(undefined) }} />
       {problem && <div className="layout-note is-problem" role="status">{problem}</div>}
-      <div className="layout-editor__actions"><Button variant="primary" onClick={save}>Save</Button></div>
     </Dialog>
   )
 }

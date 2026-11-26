@@ -98,7 +98,7 @@ export function SettingsView({ machines, onClose, place }: { machines: MachineEn
     return (
       <>
         {page}
-        <Dialog title={paged ? title : 'Settings'} size="large" onClose={onClose} className="settings settings--list" initialFocus={() => had.current.focused}
+        <Dialog title={paged ? title : 'Settings'} size="large" flush onClose={onClose} className="settings settings--list" initialFocus={() => had.current.focused}
           {...(paged ? { back: { label: 'Settings', onBack: () => setPaged(false) } } : {})}>
           {paged
             ? <div key={target} className="settings__content">{moved}</div>

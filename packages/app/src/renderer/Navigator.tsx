@@ -197,7 +197,7 @@ export function Navigator({ onClose }: { onClose(): void }) {
   const none = withArchived && !archived ? 'Listing archived threads…' : 'Nothing matches'
 
   return (
-    <Dialog onClose={onClose} size="medium" className="palette navigator" label="Go to">
+    <Dialog onClose={onClose} size="medium" flush className="palette navigator" label="Go to">
       <input className="superego-dialog__search palette__input" autoFocus={autoFocusOnOpen()} value={query} onKeyDown={onKeyDown}
         role="combobox" aria-expanded aria-controls={listId} aria-autocomplete="list"
         aria-activedescendant={shown[active] ? optionId(active) : undefined}

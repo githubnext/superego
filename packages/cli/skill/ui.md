@@ -247,7 +247,8 @@ dispatch('thread.send', { thread: thread.id, text: 'Ship it' }, { machine: machi
 
 | | |
 |---|---|
-| `Button`, `IconButton`, `TextField`, `TextArea`, `Select`, `Switch`, `List`, `ListItem`, `Panel`, `Dialog`, `Menu`, `Popover`, `Tooltip` | the window's controls |
+| `Button`, `IconButton`, `TextField`, `TextArea`, `Select`, `Switch`, `List`, `ListItem`, `Panel`, `Dialog`, `Menu`, `Popover`, `Tooltip` | the window's controls. `Button`'s `variant`: `default`, `primary`, `danger` (API ^5.15: the one to press, and it destroys something), `ghost` |
+| `ConfirmDialog`, `PromptDialog` | (API ^5.15) asking before doing something, and for a line of text (a name): [Dialogs](#dialogs) |
 | `StatusGlyph`, `StatusWord`, `Glyph` | a status's mark and word ([Reading threads](#reading-threads)) |
 | `Markdown` | an agent's text as the transcript sets it, links followed by the same handlers: `<Markdown text={answer} />`; `compact` (UI size, tighter) and `lines={4}` (cut with an ellipsis) for a preview |
 | `FileEditor` | the file editor, Markdown in live preview: `<FileEditor machine={machine} thread={thread} path={path} actions={…} />` |
@@ -265,6 +266,36 @@ with the next message; takes the keyboard); `useLocalState(key, initial, { share
 `shared`: every window); `useShortcut(actionId)` (its key's label); `score` (fuzzy matching);
 `transcriptLinks(machine, thread)` (a transcript's links in order: `{ text, href, target, open(beside) }`);
 `factsOf(thread, name)`; `parseWikilink(href)`; `h` (`React.createElement`, without JSX).
+
+### Dialogs
+
+(API ^5.15) To ask, use the ready ones rather than building one from `Dialog`: they're the window's, keyboard and
+phone included. `ConfirmDialog` asks before doing something: `title`, `description`, `confirmLabel` (say what it does),
+`tone="danger"` for what destroys something (a red button, the focus on Cancel so Enter doesn't do it). `PromptDialog`
+asks for a line of text: its field has the focus with its text selected, Enter submits it trimmed, empty (unless
+`allowEmpty`) or failing `validate` it can't. Both close through `onClose` once `onConfirm`/`onSubmit` returns or its
+promise resolves; if it throws, they stay open and say why (or pass `busy` and `error` yourself). Escape cancels.
+
+<!-- check: module; declare function remove(name: string): Promise<void>; declare function rename(from: string, to: string): Promise<void>; declare const names: string[] -->
+```tsx
+import { ConfirmDialog, PromptDialog } from 'superego/ui'
+
+const Delete = ({ name, onClose }: { name: string; onClose(): void }) => (
+  <ConfirmDialog title={`Delete “${name}”?`} description="Its file goes; this can't be undone." confirmLabel="Delete" tone="danger"
+    onConfirm={() => remove(name)} onClose={onClose} />
+)
+
+const Rename = ({ name, onClose }: { name: string; onClose(): void }) => (
+  <PromptDialog title="Rename canvas" defaultValue={name} confirmLabel="Rename" onClose={onClose}
+    validate={(next) => next !== name && names.includes(next) ? `There's a “${next}” already.` : undefined}
+    onSubmit={(next) => rename(name, next)} />
+)
+```
+
+`Dialog` is for the rest: a form, a list, a log. Its body has room around what's in it; `flush` takes that away for
+what lays out its own (a list edge to edge). `footer` holds its buttons at the trailing edge, Cancel before what it's for:
+`<Dialog title="Layout" onClose={close} footer={<><Button onClick={close}>Cancel</Button><Button variant="primary" onClick={save}>Save</Button></>}>`.
+`actions` puts buttons in its header, beside ✕, for one that does something while it stays open (Refresh).
 
 ## Reading threads
 

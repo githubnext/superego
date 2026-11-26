@@ -69,7 +69,8 @@ In components ([From 'superego/ui'](ui.md#from-superegoui)): `useThreads`, `useA
 (set up and on there, at a version; UI-only extensions never appear), `version(machine, 'x')`; `<PaneHeader>`,
 `<PaneNote>`, `<PaneButton>`, `<PaneMessage>`, `useTabNote`, `useTabGlyph`; `<HeaderChip>`, `<ThreadBadge>`, `<Chip>`,
 `<RailButton>`, `factsOf(thread, name)`; `<ThreadRef machine id>`; `transcriptLinks(machine, thread)`; `<Picker>`;
-`FileEditor`, `TextEditor`, `Markdown`, `Diff`, `SignInFlow`.
+`FileEditor`, `TextEditor`, `Markdown`, `Diff`, `SignInFlow`; `<ConfirmDialog>` and `<PromptDialog>` to ask (API ^5.15;
+[Dialogs](ui.md#dialogs)), `<Dialog footer flush>`, `<Button variant="danger">`.
 
 Machines update at different times. The window draws none of a UI half for a machine running its extension at another
 major. A UI half calling its daemon half where there may be none (a window view) checks `has(machine, 'ext:x')` first

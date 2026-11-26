@@ -57,7 +57,7 @@ export { FileEditor, type FileEditorProps } from './file-editor.tsx'
 export { SignInFlow, type SignInFlowProps } from './sign-in-flow.tsx'
 export { SetupRow, type SetupFound } from './Setup.tsx'
 export {
-  Button, ContextMenu, Dialog, Glyph, IconButton, List, ListItem, Menu, Panel, Popover, Select, StatusGlyph, StatusWord, Switch, TextArea,
-  TextField, Tooltip, type GlyphShape, type SelectOption,
+  Button, ConfirmDialog, ContextMenu, Dialog, Glyph, IconButton, List, ListItem, Menu, Panel, Popover, PromptDialog, Select, StatusGlyph, StatusWord,
+  Switch, TextArea, TextField, Tooltip, type ConfirmDialogProps, type DialogProps, type GlyphShape, type PromptDialogProps, type SelectOption,
 } from '@superego/ui'
 export * from '@superego/ui/icons'
