@@ -8,6 +8,7 @@ import files from '@superego/files/ui'
 import git from '@superego/git/ui'
 import images from '@superego/images/ui'
 import links from '@superego/links/ui'
+import mermaid from '@superego/mermaid/ui'
 import mcpServers from '@superego/mcp-servers/ui'
 import mentions from '@superego/mentions/ui'
 import skills from '@superego/skills/ui'
@@ -21,4 +22,4 @@ import browser from '@superego/browser/ui'
 import worktrees from '@superego/worktrees/ui'
 import app from '../../superego.config.ts'
 
-mountApp(app, { extensions: [threads, worktrees, agentUi, claudeAgent, ego, files, git, images, links, mcpServers, mentions, skills, suggestions, tasks, terminal, unread, focus, browser] })
+mountApp(app, { extensions: [threads, worktrees, agentUi, claudeAgent, ego, files, git, images, links, mcpServers, mentions, mermaid, skills, suggestions, tasks, terminal, unread, focus, browser] })

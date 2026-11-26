@@ -56,6 +56,8 @@ declare module '@phosphor-icons/react/dist/csr/Check' { export const CheckIcon: 
 declare module '@phosphor-icons/react/dist/csr/Columns' { export const ColumnsIcon: import('@phosphor-icons/react').Icon }
 declare module '@phosphor-icons/react/dist/csr/ColumnsPlusRight' { export const ColumnsPlusRightIcon: import('@phosphor-icons/react').Icon }
 declare module '@phosphor-icons/react/dist/csr/Copy' { export const CopyIcon: import('@phosphor-icons/react').Icon }
+declare module '@phosphor-icons/react/dist/csr/Code' { export const CodeIcon: import('@phosphor-icons/react').Icon }
+declare module '@phosphor-icons/react/dist/csr/TreeStructure' { export const TreeStructureIcon: import('@phosphor-icons/react').Icon }
 declare module '@phosphor-icons/react/dist/csr/CornersIn' { export const CornersInIcon: import('@phosphor-icons/react').Icon }
 declare module '@phosphor-icons/react/dist/csr/CornersOut' { export const CornersOutIcon: import('@phosphor-icons/react').Icon }
 declare module '@phosphor-icons/react/dist/csr/DotsThree' { export const DotsThreeIcon: import('@phosphor-icons/react').Icon }

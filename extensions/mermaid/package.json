@@ -1,0 +1,27 @@
+{
+  "name": "@superego/mermaid",
+  "version": "0.0.0",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./shared": "./src/shared.ts",
+    "./ui": "./src/ui.tsx"
+  },
+  "dependencies": {
+    "@superego/app": "workspace:*",
+    "@superego/protocol": "workspace:*",
+    "@superego/ui": "workspace:*",
+    "pele": "^1.13.0"
+  },
+  "peerDependencies": {
+    "react": "^19"
+  },
+  "devDependencies": {
+    "@superego/sdk": "workspace:*",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "react": "^19",
+    "react-dom": "^19"
+  }
+}

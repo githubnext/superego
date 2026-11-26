@@ -1,0 +1,51 @@
+/*
+ * A Mermaid diagram: in the well code sits in (`.md pre`'s), its colours the window's tokens, so light and dark and
+ * themes reach it without drawing it again. Its source, when shown, is the well's own text; its tools float in the
+ * corner on hover, as a code block's copy button does.
+ */
+.mermaid {
+  --pele-bg: var(--superego-surface);
+  --pele-fg: var(--superego-text);
+  --pele-muted: var(--superego-muted);
+  --pele-line: var(--superego-muted);
+  --pele-surface: var(--superego-raised);
+  --pele-surface-alt: var(--superego-fill);
+  --pele-border: var(--superego-border);
+  --pele-accent: var(--superego-accent);
+  --pele-font: var(--superego-font);
+  --pele-font-mono: var(--superego-mono);
+  --pele-radius: 6px;
+  /* Pele's zoom buttons (a diagram wider than the column) go to the foot, clear of the tools. */
+  --pele-zoom-top: auto;
+  --pele-zoom-bottom: 8px;
+  position: relative;
+  margin: 0 0 var(--md-gap, var(--superego-space-3));
+  background: var(--superego-surface);
+  border-radius: 10px;
+}
+.mermaid__diagram { width: 100%; overflow-x: auto; padding: var(--superego-space-3); box-sizing: border-box; }
+.mermaid__diagram[hidden] { display: none; }
+.mermaid__diagram > svg { display: block; margin: 0 auto; max-width: 100%; height: auto; }
+/* Pele's own error line: ours says it (`.mermaid__problem`), under the source. */
+.mermaid__diagram > .pele-error { display: none; }
+.mermaid--compact .mermaid__diagram { padding: var(--superego-space-2); }
+
+.md .mermaid .mermaid__source { margin: 0; background: none; border-radius: 0; }
+.mermaid__problem {
+  margin: 0; padding: 0 var(--superego-space-3) 10px; color: var(--superego-muted); font-size: var(--superego-text-xs);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+.mermaid__tools { position: absolute; top: 6px; right: 6px; display: flex; gap: 4px; }
+.mermaid__tool {
+  display: grid; place-items: center; width: 24px; height: 24px; padding: 0; border: 0; border-radius: 6px;
+  background: var(--superego-raised); box-shadow: var(--superego-control-edge); color: var(--superego-muted);
+  opacity: 0; transition: opacity .12s, color .12s, background .12s; cursor: default;
+}
+.mermaid__tool svg { width: 14px; height: 14px; }
+.mermaid:hover .mermaid__tool, .mermaid__tools:focus-within .mermaid__tool, .mermaid__tool:is(.is-copied, .is-failed) { opacity: 1; }
+.mermaid__tool:hover { color: var(--superego-text); background: var(--superego-control-active); }
+.mermaid__tool.is-copied { color: var(--superego-accent-text); background: var(--superego-accent); }
+.mermaid__tool.is-failed { color: var(--superego-status-error); }
+@media (hover: none) { .mermaid__tool { opacity: 1; } }
+.md--clamped .mermaid__tools { display: none; }

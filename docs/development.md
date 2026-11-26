@@ -63,6 +63,7 @@ Extensions) or per profile (`without`).
 | `unread` | `⌘U` and `⌘.`: what agents have for you that you haven't seen (UI) |
 | `focus` | focus mode (`⌘⇧F`): the sidebar narrowed to the threads you focus (`⌘⌥F`) and what needs you (UI) |
 | `links` | `⌃O`: the links in the thread (UI) |
+| `mermaid` | ```` ```mermaid ```` blocks drawn as diagrams, by Pele, in threads and rendered files (UI) |
 | `mentions` | `@` in the composer names another thread or a file |
 | `skills` | skills from `~/.agents/skills`: in the prompt, `$name` in the composer, a view listing them |
 | `suggestions` | after each answer, what you might send next |

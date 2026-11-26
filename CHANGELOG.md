@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **Mermaid diagrams.** ```` ```mermaid ```` blocks in threads and Markdown files show as diagrams, in the window's
+  colours, light or dark. Their corner shows the source or copies it. It's the new Mermaid extension, which Settings →
+  Extensions can turn off.
+- New for extensions (extension API 5.14): `superego.codeBlock(languages, component)` draws fenced code blocks of a
+  language.
+
 ## 0.6.0
 
 - **Inspect views.** `⌘⇧I` (or ⌘K) outlines every view, slot, pane and space. Hover one to see what it is.

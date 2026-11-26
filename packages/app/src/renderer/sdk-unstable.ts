@@ -24,6 +24,7 @@ export { MachineDrift } from './machine-drift.tsx'
 export { useProjectSpaces, type ProjectSpace } from './spaces.tsx'
 export { SpelledBadges } from './marks.tsx'
 export { Output } from './tool-rows.tsx'
+export { copyText } from './copy-text.ts'
 export { ToolSteps } from './transcript.tsx'
 // What's unread: one rule for the bell, notifications and the counts (see @superego/protocol's status.ts); in the
 // window, as `unreadList` (projects.ts).

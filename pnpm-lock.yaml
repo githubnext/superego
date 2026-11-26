@@ -252,6 +252,9 @@ importers:
       '@superego/mentions':
         specifier: workspace:*
         version: link:../extensions/mentions
+      '@superego/mermaid':
+        specifier: workspace:*
+        version: link:../extensions/mermaid
       '@superego/protocol':
         specifier: workspace:*
         version: link:../packages/protocol
@@ -660,6 +663,37 @@ importers:
       react:
         specifier: ^19
         version: 19.3.1
+
+  extensions/mermaid:
+    dependencies:
+      '@superego/app':
+        specifier: workspace:*
+        version: link:../../packages/app
+      '@superego/protocol':
+        specifier: workspace:*
+        version: link:../../packages/protocol
+      '@superego/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
+      pele:
+        specifier: ^1.13.0
+        version: 1.13.0
+    devDependencies:
+      '@superego/sdk':
+        specifier: workspace:*
+        version: link:../../packages/sdk
+      '@types/react':
+        specifier: ^19
+        version: 19.3.0
+      '@types/react-dom':
+        specifier: ^19
+        version: 19.3.0(@types/react@19.3.0)
+      react:
+        specifier: ^19
+        version: 19.3.1
+      react-dom:
+        specifier: ^19
+        version: 19.3.1(react@19.3.1)
 
   extensions/skills:
     dependencies:
@@ -3086,6 +3120,10 @@ packages:
 
   path-to-regexp@8.4.2:
     resolution: {integrity: sha512-qRcuIdP69NPm4qbACK+aDogI5CBDMi1jKe0ry5rSQJz8JVLsC7jV8XpiJjGRLLol3N+R5ihGYcrPLTno6pAdBA==}
+
+  pele@1.13.0:
+    resolution: {integrity: sha512-Ie8UKY9x00MsuR3jO6AzUwzK2Z6MIV3Tf4EDdITiuk8Uaz8K7g0R082WqsqNaSU8DdgkrRvZThzhit83mi/uiw==}
+    engines: {node: '>=20'}
 
   picocolors@1.1.1:
     resolution: {integrity: sha512-xceH2snhtb5M9liqDsmEw56le376mTZkEX/jEb/RxNFyegNul7eNslCXP9FDj/Lcu0X8KEyMceP2ntpaHrDEVA==}
@@ -5874,6 +5912,8 @@ snapshots:
   path-key@3.1.1: {}
 
   path-to-regexp@8.4.2: {}
+
+  pele@1.13.0: {}
 
   picocolors@1.1.1: {}
 

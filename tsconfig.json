@@ -21,6 +21,7 @@
     { "path": "extensions/tasks" },
     { "path": "extensions/suggestions" },
     { "path": "extensions/links" },
+    { "path": "extensions/mermaid" },
     { "path": "extensions/images" },
     { "path": "extensions/mentions" },
     { "path": "extensions/skills" },
