@@ -1,16 +1,20 @@
 // The PTY host: one shell per terminal pane, run by the daemon so it outlives the window (docs/design.md, principle 2). Each
 // keeps what it printed last (its scrollback), so a window that attaches again (a reload, another client, a browser)
 // sees it, and passes on what it prints to every window attached. A slow window slows the shell, as a real terminal's
-// screen does: past HIGH bytes unread by any, the PTY is paused until all are below LOW.
+// screen does: past HIGH bytes unread by any, the PTY is paused until all are below LOW. Its programs may say how to bring
+// them back (OSC 7577: resume.ts), with the token each start of it hands its first process.
 import { createRequire } from 'node:module'
 import { RpcError } from '@superego/protocol'
 import type { IPty } from '@lydell/node-pty'
 import { ProgramStatus, REPLY } from './osc.ts'
+import { newToken, ProgramResume, TOKEN, type Resume } from './resume.ts'
 
 /** How much of what a terminal printed is kept for windows that attach later. */
 export const SCROLLBACK = 1024 * 1024
 const HIGH = 1024 * 1024
 const LOW = 256 * 1024
+/** How often the owners of what its programs reported are looked for, while there are any (ms). */
+const SWEEP = 1000
 
 export type SpawnOptions = { cwd: string; cols: number; rows: number; env: Record<string, string> }
 export type Spawn = (file: string, args: string[], options: SpawnOptions) => IPty
@@ -35,17 +39,22 @@ export const spawnPty: Spawn = (file, args, { cwd, cols, rows, env }) =>
 /** A window attached to a terminal: what it's sent goes on its channel. */
 export type Reader = { write(bytes: Uint8Array): Promise<void> }
 
+/** What a terminal starts: its program (a shell) and its arguments, where and with what; `note`: said as it starts, dim. */
+export type Launch = { file: string; args: string[]; cwd: string; env: Record<string, string>; note?: string }
+
 export type TerminalOptions = {
-  /** The shell and its arguments, and where and with what it starts. */
-  file: string
-  args: string[]
-  cwd: () => string
-  env: () => Record<string, string>
+  /** What it starts, asked each time it does. */
+  launch(): Launch
   spawn: Spawn
   /** What its programs report (OSC 7501) changed. */
   onStatus(): void
   /** Its shell exited, saying `code`. */
   onExit(code: number): void
+  /**
+   * What its programs report would bring them back (OSC 7577) changed: none now, or this. Not given, and its programs
+   * aren't offered a token, so don't report.
+   */
+  onResume?(resume: Resume | undefined): void
 }
 
 export class Terminal {
@@ -59,6 +68,9 @@ export class Terminal {
   #paused = false
   #size = { cols: 80, rows: 24 }
   #killed = false
+  /** What its programs report of resuming them, this run (this token). */
+  #resume: ProgramResume | undefined
+  #sweeping: ReturnType<typeof setInterval> | undefined
 
   constructor(options: TerminalOptions) {
     this.#options = options
@@ -71,21 +83,31 @@ export class Terminal {
   /** Start the shell, unless it's running. Throws an `RpcError` when it can't. */
   start() {
     if (this.#pty || this.#killed) return
+    const { file, args, cwd, env, note } = this.#options.launch()
+    // Its own, new each start, for its first process only: never one the daemon was given.
+    const token = this.#options.onResume ? newToken() : undefined
+    if (note) this.note(note)
     let pty: IPty
     try {
-      pty = this.#options.spawn(this.#options.file, this.#options.args, { cwd: this.#options.cwd(), ...this.#size, env: this.#options.env() })
+      pty = this.#options.spawn(file, args, { cwd, ...this.#size, env: token ? { ...env, [TOKEN]: token } : env })
     } catch (error) {
       if (error instanceof RpcError) throw error
-      throw new RpcError('unavailable', `Couldn't start ${this.#options.file}: ${error instanceof Error ? error.message : String(error)}`)
+      throw new RpcError('unavailable', `Couldn't start ${file}: ${error instanceof Error ? error.message : String(error)}`)
     }
     this.#pty = pty
     this.#paused = false
+    this.#resume = token ? new ProgramResume({ token, root: pty.pid }) : undefined
     pty.onData((text) => this.#printed(Buffer.from(text, 'utf8')))
     pty.onExit(({ exitCode, signal }) => {
       if (this.#pty !== pty) return
       this.#pty = undefined
       if (this.status.reset()) this.#options.onStatus()
+      this.#sweep(false)
+      // Ended by the daemon (stopping, or its pane closed): what would bring its programs back is the daemon's to keep.
       if (this.#killed) return
+      // Exited on its own: so did what ran in it.
+      this.#resume = undefined
+      this.#options.onResume?.(undefined)
       const code = signal ? 128 + signal : exitCode
       this.#options.onExit(code)
       // Said in the terminal, dim; a key starts it again.
@@ -123,23 +145,52 @@ export class Terminal {
     try { this.#pty?.resize(cols, rows) } catch { /* exiting */ }
   }
 
-  /** Stop the shell for good (its pane closed, its thread archived): SIGHUP, as a closed terminal window sends. */
+  /** Say something in the terminal, dim, on a line of its own. */
+  note(text: string) {
+    this.#print(Buffer.from(`\x1b[2m[${text}]\x1b[0m\r\n`))
+  }
+
+  /**
+   * Stop the shell for good (its pane closed, its thread archived, the daemon stopping): SIGHUP, as a closed terminal
+   * window sends. What its programs reported of resuming them stays the daemon's to keep or forget.
+   */
   kill() {
     this.#killed = true
+    this.#sweep(false)
     const pty = this.#pty
     this.#pty = undefined
     try { pty?.kill('SIGHUP') } catch { /* gone already */ }
     this.#readers.clear()
   }
 
-  /** The shell printed `bytes`: kept, passed on, and read for status reports (answering a program that asks). */
+  /** The shell printed `bytes`: kept, passed on, and read for reports (answering a program that asks about status). */
   #printed(bytes: Buffer) {
-    if (bytes.includes(0x1b) || this.status.reading) {
-      const { changed, asked } = this.status.read(bytes.toString('latin1'))
+    if (bytes.includes(0x1b) || this.status.reading || this.#resume?.reading) {
+      const text = bytes.toString('latin1')
+      const { changed, asked } = this.status.read(text)
       if (changed) this.#options.onStatus()
       for (let i = 0; i < asked; i++) this.#pty?.write(REPLY)
+      if (this.#resume?.read(text)) this.#resumed()
     }
     this.#print(bytes)
+  }
+
+  /** What would bring its programs back changed: said, and their owners watched while there are any. */
+  #resumed() {
+    const resume = this.#resume
+    if (!resume) return
+    this.#options.onResume?.(resume.resume())
+    this.#sweep(resume.holding)
+  }
+
+  /** Watch for the owners of what was reported exiting (so what the user quit isn't brought back), or stop. */
+  #sweep(on: boolean) {
+    if (!on) { clearInterval(this.#sweeping); this.#sweeping = undefined; return }
+    this.#sweeping ??= setInterval(() => {
+      if (!this.#resume) this.#sweep(false)
+      else if (this.#resume.sweep() || !this.#resume.holding) this.#resumed()
+    }, SWEEP)
+    this.#sweeping.unref?.()
   }
 
   #print(bytes: Buffer) {

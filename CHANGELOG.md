@@ -5,6 +5,10 @@
 - **Inspect views.** `⌘⇧I` (or "Inspect views" in `⌘K`) outlines every view, slot, pane and space in its extension's
   colour. Hover one to see what it is; click it to paste its identifier into the thread's message, or `⌥`-click to copy
   it. `Esc` leaves.
+- **Terminals bring programs back.** A program in a terminal pane that says how to resume itself (the Program Resume
+  Protocol, OSC 7577: Neovim with a session, an agent, anything run through a small wrapper) is started again, where
+  it was, as you next open the pane after Superego restarts or the machine reboots. A dim line says what was resumed.
+  Closing the pane, archiving its thread or exiting its shell forgets it.
 
 ## 0.5.0
 

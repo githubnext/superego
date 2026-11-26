@@ -12,7 +12,6 @@ import type { TerminalStatus } from './shared.ts'
 /** What this terminal answers a program asking: the states and kinds it understands. */
 export const REPLY = '\x1b]7501;?:states=idle,working,done,blocked,error:kinds=permission,question,auth\x1b\\'
 
-const START = '\x1b]7501;'
 /** Longer than this unterminated, it's not a report: dropped. */
 const LONGEST = 4096
 const STATES = new Set(['idle', 'working', 'done', 'blocked', 'error'])
@@ -20,53 +19,82 @@ const KINDS = new Set(['permission', 'question', 'auth'])
 
 type Record = TerminalStatus & { id: string }
 
+/**
+ * The bodies of one OSC's sequences (`ESC ] <code> ; body (BEL | ESC \)`) in what a terminal prints, read as Latin-1 (byte
+ * for byte), split anywhere across reads. A sequence longer than `longest` bytes (all of it, opener to terminator) is
+ * dropped: it's not one this terminal can hold.
+ */
+export class OscReader {
+  readonly #start: string
+  readonly #longest: number
+  #carry = ''
+
+  constructor(code: number, longest: number) {
+    this.#start = `\x1b]${code};`
+    this.#longest = longest
+  }
+
+  /** Whether a sequence began in what was read last and goes on in what comes next. */
+  get reading() { return this.#carry.length > 0 }
+
+  read(chunk: string): string[] {
+    const start = this.#start
+    const text = this.#carry + chunk
+    this.#carry = ''
+    const bodies: string[] = []
+    let at = 0
+    for (;;) {
+      const from = text.indexOf(start, at)
+      if (from < 0) {
+        // A sequence may begin at the very end: keep what could be its start.
+        for (let n = Math.min(start.length - 1, text.length); n > 0; n--) {
+          if (start.startsWith(text.slice(-n))) { this.#carry = text.slice(-n); break }
+        }
+        break
+      }
+      const body = from + start.length
+      const bel = text.indexOf('\x07', body)
+      const st = text.indexOf('\x1b\\', body)
+      const end = bel < 0 ? st : st < 0 ? bel : Math.min(bel, st)
+      if (end < 0) {
+        if (text.length - from <= this.#longest) this.#carry = text.slice(from)
+        break
+      }
+      at = end + (end === st ? 2 : 1)
+      if (at - from <= this.#longest) bodies.push(text.slice(body, end))
+    }
+    return bodies
+  }
+
+  reset() { this.#carry = '' }
+}
+
 export class ProgramStatus {
   #records = new Map<string, Record>()
-  #carry = ''
+  #osc = new OscReader(7501, LONGEST)
 
   /**
    * Read a chunk of output (as Latin-1, byte for byte; reports are ASCII). Returns whether the status changed, and how
    * many programs asked whether this terminal listens.
    */
   read(chunk: string): { changed: boolean; asked: number } {
-    const text = this.#carry + chunk
-    this.#carry = ''
     let changed = false
     let asked = 0
-    let at = 0
-    for (;;) {
-      const start = text.indexOf(START, at)
-      if (start < 0) {
-        // A report may begin at the very end: keep what could be its start.
-        for (let n = Math.min(START.length - 1, text.length); n > 0; n--) {
-          if (START.startsWith(text.slice(-n))) { this.#carry = text.slice(-n); break }
-        }
-        break
-      }
-      const body = start + START.length
-      const bel = text.indexOf('\x07', body)
-      const st = text.indexOf('\x1b\\', body)
-      const end = bel < 0 ? st : st < 0 ? bel : Math.min(bel, st)
-      if (end < 0) {
-        if (text.length - start <= LONGEST) this.#carry = text.slice(start)
-        break
-      }
-      const report = text.slice(body, end)
+    for (const report of this.#osc.read(chunk)) {
       if (report === '?' || report.startsWith('?:')) asked++
       else if (this.#apply(report)) changed = true
-      at = end + (end === st ? 2 : 1)
     }
     return { changed, asked }
   }
 
   /** Whether a report began in what was read last and goes on in what comes next. */
-  get reading() { return this.#carry.length > 0 }
+  get reading() { return this.#osc.reading }
 
   /** The program is gone (the shell exited): nothing it said holds. */
   reset(): boolean {
     const had = this.#records.size > 0
     this.#records.clear()
-    this.#carry = ''
+    this.#osc.reset()
     return had
   }
 

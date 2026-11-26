@@ -1,6 +1,8 @@
 // terminal's daemon half against a real daemon, over its socket: a pane's shell started by attaching, typed to, read
-// back, resized, attached again with its scrollback, reporting status (OSC 7501), and stopped as its pane closes, its
-// thread is archived, or it exits.
+// back, resized, attached again with its scrollback, reporting status (OSC 7501), stopped as its pane closes, its
+// thread is archived, or it exits; and a program in it resumed as the daemon starts again (OSC 7577).
+import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { expect, it } from 'vitest'
 import { Channels, type Pane, type RpcPeer, type ThreadInfo } from '@superego/protocol'
 import { testDaemon, type TestDaemon } from '@superego/sdk/testing'
@@ -33,6 +35,10 @@ async function attach(peer: RpcPeer, thread: string, pane: string, size = { cols
     type: (text: string) => channel.write(new TextEncoder().encode(text)),
     // Timed out, it says what the shell did print.
     waitFor: (text: string) => until(() => seen.live.includes(text), JSON.stringify(text)).catch((error: Error) => {
+      throw new Error(`${error.message}; the terminal showed ${JSON.stringify(seen.replayed + seen.live)}`)
+    }),
+    /** Waits for `text` in what it was replayed too: said as the shell started, before the window attached. */
+    shows: (text: string) => until(() => (seen.replayed + seen.live).includes(text), JSON.stringify(text)).catch((error: Error) => {
       throw new Error(`${error.message}; the terminal showed ${JSON.stringify(seen.replayed + seen.live)}`)
     }),
   }
@@ -157,5 +163,153 @@ it("runs a program a window asks for in a pane of its own, in the user's shell, 
   const plain = await attach(peer, thread.id, shell.id)
   await plain.type('echo "shell-$((2+2))"\n')
   await plain.waitFor('shell-4')
+  await daemon.close()
+})
+
+/** What the daemon keeps to resume, by `<thread>/<pane>`. */
+const kept = (daemon: TestDaemon): Record<string, { argv: string[]; cwd?: string; first?: boolean }> => {
+  const file = join(daemon.dataDir, 'extensions', 'terminal', 'resume.json')
+  return existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : {}
+}
+
+/**
+ * A program that reports how to resume it (OSC 7577, as the spec's resume-wrap does: its own path, its arguments, and
+ * where it is), unless there's a `quiet` beside it, says what it was given, and stays.
+ */
+function holder(daemon: TestDaemon) {
+  const dir = join(daemon.dataDir, 'bin')
+  mkdirSync(dir, { recursive: true })
+  const file = join(dir, 'hold')
+  writeFileSync(file, `#!/bin/sh
+printf 'holding'; printf ' [%s]' "$@"; printf ' in %s\\n' "$PWD"
+if [ -n "$OSC7577_TOKEN" ] && [ ! -e "$(dirname "$0")/quiet" ]; then
+  args=$(for a in "$0" "$@"; do printf '%s' "$a" | base64 | tr -d '\\n'; echo; done | paste -sd, -)
+  body=$(printf 'pid=%s:time=%s:argv=%s:cwd=%s' "$$" "$(date +%s)" "$args" "$(printf '%s' "$PWD" | base64 | tr -d '\\n')")
+  mac=$(printf '%s:%s' "$body" "$OSC7577_TOKEN" | { sha256sum 2>/dev/null || shasum -a 256; } | cut -c1-64)
+  printf '\\033]7577;%s:mac=%s\\033\\\\' "$body" "$mac"
+fi
+exec sleep 600
+`)
+  chmodSync(file, 0o755)
+  return { file, quiet: (on: boolean) => on ? writeFileSync(join(dir, 'quiet'), '') : rmSync(join(dir, 'quiet'), { force: true }) }
+}
+
+it("gives each shell a token of its own (OSC 7577), never the daemon's", async () => {
+  const before = process.env.OSC7577_TOKEN
+  process.env.OSC7577_TOKEN = 'the-daemons-own-token-not-to-pass-on'
+  try {
+    const daemon = await open()
+    const tokens = []
+    for (const n of [1, 2]) {
+      const { thread, pane } = await terminalPane(daemon.peer, daemon.dataDir, n > 1 ? { n } : undefined)
+      const term = await attach(daemon.peer, thread, pane)
+      await term.type('echo "token=$OSC7577_TOKEN."\n')
+      await until(() => /token=[A-Za-z0-9_-]{32}\./.test(term.seen.live), 'its token')
+      tokens.push(/token=([A-Za-z0-9_-]{32})\./.exec(term.seen.live)![1])
+    }
+    expect(tokens[0]).not.toBe(tokens[1])
+    expect(tokens).not.toContain('the-daemons-own-token-not-to-pass-on')
+    await daemon.close()
+  } finally {
+    if (before === undefined) delete process.env.OSC7577_TOKEN
+    else process.env.OSC7577_TOKEN = before
+  }
+})
+
+it('resumes what a program said would bring it back as the daemon starts again, its words as given, once', async () => {
+  const daemon = await open()
+  const hold = holder(daemon)
+  const work = join(daemon.dataDir, 'work dir')
+  mkdirSync(work, { recursive: true })
+  const { thread, pane } = await terminalPane(daemon.peer, daemon.dataDir)
+  const key = `${thread}/${pane}`
+  const term = await attach(daemon.peer, thread, pane)
+  await term.type(`cd '${work}' && '${hold.file}' 'a b' '$(echo nope)' '' "it's"\n`)
+  await term.waitFor(`holding [a b] [$(echo nope)] [] [it's] in ${work}`)
+  await until(() => Boolean(kept(daemon)[key]), 'what resumes it to be kept')
+  expect(kept(daemon)[key]).toEqual({ argv: [hold.file, 'a b', '$(echo nope)', '', "it's"], cwd: work, uid: process.getuid!() })
+  expect(statSync(join(daemon.dataDir, 'extensions', 'terminal', 'resume.json')).mode & 0o777).toBe(0o600)
+
+  // Stopping keeps it; it's brought back as the pane is attached to again, in the shell (back at its prompt after).
+  await daemon.restart()
+  expect(kept(daemon)[key]).toBeDefined()
+  const again = await attach(daemon.peer, thread, pane)
+  await again.shows(`Resuming ${hold.file} 'a b' '$(echo nope)' '' 'it\\'s'`)
+  await again.shows(`holding [a b] [$(echo nope)] [] [it's] in ${work}`)
+  // It said so again as it started, so it's kept again.
+  await until(() => Boolean(kept(daemon)[key]), 'it to be kept again')
+  await again.type('\x03')
+  await again.type('echo "prompt-$((3+3))"; pwd\n')
+  await again.waitFor('prompt-6')
+
+  // Once: one that doesn't say so again isn't brought back after the next start.
+  hold.quiet(true)
+  await daemon.restart()
+  const third = await attach(daemon.peer, thread, pane)
+  await third.shows(`holding [a b]`)
+  await until(() => !kept(daemon)[key], 'it to be forgotten')
+  await daemon.restart()
+  const fourth = await attach(daemon.peer, thread, pane)
+  await fourth.type('echo "plain-$((4+4))"\n')
+  await fourth.waitFor('plain-8')
+  expect(fourth.seen.replayed + fourth.seen.live).not.toContain('Resuming')
+  await daemon.close()
+})
+
+it("doesn't resume one whose folder is gone, and forgets what a closed pane, an archived thread or an exited shell had", async () => {
+  const daemon = await open()
+  const hold = holder(daemon)
+  const report = async (pane: { thread: string; pane: string }, where = daemon.dataDir) => {
+    const term = await attach(daemon.peer, pane.thread, pane.pane)
+    await term.type(`cd '${where}' && '${hold.file}' x &\n`)
+    await term.waitFor('holding [x]')
+    await until(() => Boolean(kept(daemon)[`${pane.thread}/${pane.pane}`]), 'what resumes it to be kept')
+    return term
+  }
+  const gone = join(daemon.dataDir, 'gone')
+  mkdirSync(gone)
+  const moved = await terminalPane(daemon.peer, daemon.dataDir)
+  await report(moved, gone)
+  await daemon.restart({ whileStopped: () => rmSync(gone, { recursive: true }) })
+  const term = await attach(daemon.peer, moved.thread, moved.pane)
+  await term.shows(`Not resuming ${hold.file} x: ${gone} is gone`)
+  await term.type('echo "shell-$((1+1))"\n')
+  await term.waitFor('shell-2')
+  expect(kept(daemon)[`${moved.thread}/${moved.pane}`]).toBeUndefined()
+
+  const closing = await terminalPane(daemon.peer, daemon.dataDir)
+  await report(closing)
+  await daemon.peer.call('pane.close', { thread: closing.thread, pane: closing.pane })
+  expect(kept(daemon)[`${closing.thread}/${closing.pane}`]).toBeUndefined()
+
+  // Archived after the daemon started again, before the pane was attached to.
+  const archiving = await terminalPane(daemon.peer, daemon.dataDir)
+  await report(archiving)
+  await daemon.restart()
+  expect(kept(daemon)[`${archiving.thread}/${archiving.pane}`]).toBeDefined()
+  await daemon.peer.call('thread.archive', { thread: archiving.thread })
+  expect(kept(daemon)[`${archiving.thread}/${archiving.pane}`]).toBeUndefined()
+
+  const exiting = await terminalPane(daemon.peer, daemon.dataDir)
+  const shell = await report(exiting)
+  // Its program ended with it (not left behind, as a shell exiting leaves what it ran in the background).
+  await shell.type('kill %1; exit 3\n')
+  await shell.waitFor('Exited with 3')
+  expect(kept(daemon)[`${exiting.thread}/${exiting.pane}`]).toBeUndefined()
+  await daemon.close()
+})
+
+it('resumes a program a window ran as the first process again', async () => {
+  const daemon = await open()
+  const hold = holder(daemon)
+  const thread = await daemon.peer.call<ThreadInfo>('thread.start', { cwd: daemon.dataDir })
+  const pane = await daemon.peer.call<Pane>('action.run', { id: RUN, params: { thread: thread.id, command: [hold.file, 'first one'] } })
+  const term = await attach(daemon.peer, thread.id, pane.id)
+  await term.waitFor('holding [first one]')
+  await until(() => Boolean(kept(daemon)[`${thread.id}/${pane.id}`]), 'what resumes it to be kept')
+  expect(kept(daemon)[`${thread.id}/${pane.id}`]).toMatchObject({ argv: [hold.file, 'first one'], first: true })
+  await daemon.restart()
+  const again = await attach(daemon.peer, thread.id, pane.id)
+  await again.shows('holding [first one]')
   await daemon.close()
 })
