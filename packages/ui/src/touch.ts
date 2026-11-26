@@ -1,4 +1,4 @@
-import type { RefObject } from 'react'
+import { useSyncExternalStore, type RefObject } from 'react'
 
 /*
  * Touch, hover and the phone: three questions, each asked one way everywhere.
@@ -13,7 +13,8 @@ import type { RefObject } from 'react'
  *   tap. Then a field doesn't take the focus by itself (`autoFocusOnOpen()`, `popupFocus()`), as that brings up the
  *   on-screen keyboard over what just opened, and the focused region wears no ring (what was tapped is where you are).
  *   A mouse, a trackpad or a key only a hardware keyboard sends (a shortcut, Tab, Escape, the arrows) ends it, so an
- *   iPad with a keyboard keeps its keyboard affordances; until the first of them, it's `pointer: coarse`.
+ *   iPad with a keyboard keeps its keyboard affordances; until the first of them, it's `pointer: coarse`. To follow it
+ *   as it changes (a key's hint shown only while there's a keyboard to press it on), `useUnderFinger()`.
  *
  * The phone's layout (no rail, one column, bigger text) is the window's width, not any of these: the app's media.ts.
  */
@@ -23,10 +24,13 @@ const HARDWARE_KEYS = /^(Tab|Escape|Arrow(Up|Down|Left|Right)|Page(Up|Down)|Home
 
 /** What the last press or key said: a finger, or not; unknown until the first. */
 let finger: boolean | undefined
+const following = new Set<() => void>()
 const coarse = () => typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches
 
 function setFinger(next: boolean) {
+  const was = underFinger()
   finger = next
+  if (next !== was) for (const changed of following) changed()
   document.documentElement.toggleAttribute('data-finger', next)
 }
 
@@ -45,6 +49,11 @@ if (typeof window !== 'undefined' && typeof document !== 'undefined') {
  */
 export function underFinger(): boolean {
   return finger ?? coarse()
+}
+
+/** `underFinger()`, followed: the component draws again as the user goes from a finger to a mouse or a keyboard, or back. */
+export function useUnderFinger(): boolean {
+  return useSyncExternalStore((changed) => { following.add(changed); return () => following.delete(changed) }, underFinger, () => false)
 }
 
 /**

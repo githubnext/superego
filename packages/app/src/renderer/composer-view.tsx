@@ -4,7 +4,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import type { InboxState } from '@earendil-works/pi-durable'
 import type { Attachment, ThreadInfo } from '@superego/protocol'
-import { autoFocusOnOpen, ArrowDownIcon, ArrowElbowRightIcon, ArrowUpIcon, Button, IconButton, ListIcon, XIcon } from '@superego/ui'
+import { autoFocusOnOpen, ArrowDownIcon, ArrowElbowRightIcon, ArrowUpIcon, Button, IconButton, ListIcon, useUnderFinger, XIcon } from '@superego/ui'
 import type { MachineEntry } from '../shared/bridge.ts'
 import { useRegistry } from './registry.tsx'
 import { sentWithIn, shownPanes } from './lookups.ts'
@@ -173,6 +173,8 @@ export function ComposerView({ machine, thread, busy, inbox, onJump }: { machine
   const [offers, setOffers] = useState<{ messages: string[]; picked: number }>({ messages: [], picked: 0 })
   const offering = !claim && !text && !busy && offers.messages.length > 0
   const suggested = offering ? offers.messages[offers.picked] : undefined
+  // ⏎ sends what's suggested; under a finger there's no ⏎ to press (the suggestion's chip is tapped), so no hint of it.
+  const finger = useUnderFinger()
   const suggest = useCallback((messages: string[] | undefined) => setOffers({ messages: messages ?? [], picked: 0 }), [])
   const composer = useMemo<Composer>(() => ({
     text,
@@ -285,7 +287,7 @@ export function ComposerView({ machine, thread, busy, inbox, onJump }: { machine
       items={items} onRemoveItem={(id) => setComposerItems(where, composerItems(where).filter((item) => item.id !== id))}
       open={!claim} disabled={disabled} inputRef={input} onKeyDown={onKeyDown} onSubmit={(typed) => void send('steer', typed)}
       onError={(message) => setError({ message })}
-      placeholder={archived ? 'Archived: read only' : disabled ? `${machine.label} is ${machine.state}` : claim ? claim.placeholder : busy ? 'Steer the agent…' : suggested ? `${suggested}  ⏎` : 'Reply…'}
+      placeholder={archived ? 'Archived: read only' : disabled ? `${machine.label} is ${machine.state}` : claim ? claim.placeholder : busy ? 'Steer the agent…' : suggested ? (finger ? suggested : `${suggested}  ⏎`) : 'Reply…'}
       error={error && (
         error.kind === 'no_model' ? <NoModel machine={machine} back={{ machine: machine.id, thread: thread.id }} />
           // Its profile gone from under it: another picked for it.

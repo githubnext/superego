@@ -625,6 +625,14 @@ code { font-family: var(--superego-mono); font-size: .92em; }
 /* A group's name over its rows, as the sidebar heads a project's. */
 .palette__list li.palette__group { height: 26px; padding-top: 4px; font-size: var(--superego-text-sm); font-weight: 600; color: var(--superego-muted); }
 .palette__list li.palette__group:not(:first-child) { margin-top: 6px; }
+/* As a phone's sheet: the list fills it down to the home indicator; under a finger, rows a finger tall and no keys to
+   press. */
+.superego-dialog--sheet.palette .palette__list { flex: 1; min-height: 0; max-height: none; padding-bottom: calc(env(safe-area-inset-bottom) + 6px); }
+@media (pointer: coarse) {
+  .superego-dialog--sheet.palette .palette__list li { height: 44px; padding: 0 12px; }
+  .superego-dialog--sheet.palette .palette__list li.palette__group { height: 32px; }
+}
+:root[data-finger] .superego-dialog--sheet.palette .palette__list kbd { display: none; }
 /* Under an empty list, in a row's place: it stays in the page, empty, to tell a screen reader when nothing matches. */
 .palette__list:empty { padding: 0; }
 .palette__none { color: var(--superego-muted); }
@@ -738,10 +746,10 @@ button.app__mobiletitle > .superego-status { font-size: 12px; }
   background: var(--superego-glass); -webkit-backdrop-filter: var(--superego-glass-blur); backdrop-filter: var(--superego-glass-blur);
   box-shadow: var(--superego-glass-edge), 0 2px 10px light-dark(rgb(0 0 0 / .06), rgb(0 0 0 / .35)); -webkit-tap-highlight-color: transparent; transition: transform .2s cubic-bezier(.3, 1.6, .5, 1), background-color .2s; }
 .app__mobilebar .superego-button:active:not(:disabled) { transform: scale(1.08); background: color-mix(in srgb, var(--superego-glass) 70%, var(--superego-bg)); transition-duration: .08s; }
-/* The drawer's foot: the sidebars to switch to and the drawer's views, Settings at the end. */
+/* The drawer's foot: the sidebars to switch to and the drawer's views, Commands and Settings at the end. */
 .app__drawer-bar { flex: 1 0 100%; display: flex; align-items: center; gap: 6px; }
 .app__drawer-bar .app__rail-button { width: 40px; height: 40px; min-height: 40px; }
-.app__drawer-end { margin-left: auto; }
+.app__drawer-end { margin-left: auto; display: flex; gap: 6px; }
 .app__drawer-sep { width: 1px; height: 20px; margin: 0 2px; background: var(--superego-line); }
 .app__drawer-sep:last-child, .app__drawer-sep:has(+ .app__drawer-end) { display: none; }
 /* A phone's thread sheet: the title bar's and what's beside the thread, up from the foot over the thread. */
@@ -907,7 +915,8 @@ button.app__mobiletitle > .superego-status { font-size: 12px; }
 .app.is-narrow .dock__box { min-height: 44px; border-radius: 22px; padding: 6px 6px 6px 16px; }
 .app.is-narrow .dock:has(.dock__join) .dock__box { border-radius: 0 0 22px 22px; }
 .app.is-narrow .composer { align-items: flex-end; font-size: calc(17px * var(--superego-text-size)); }
-.app.is-narrow .composer .superego-textarea { line-height: 22px; padding: 3px 0; min-height: 28px; }
+/* A line of words as tall as send (32px), so one line sits at the capsule's middle, level with + and send. */
+.app.is-narrow .composer .superego-textarea { line-height: 22px; padding: 5px 0; min-height: 32px; }
 .app.is-narrow .composer__send { width: 32px; height: 32px; min-height: 32px; }
 .app.is-narrow .composer__send:disabled { background: none; color: var(--superego-faint); }
 .app.is-narrow .composer__steer, .app.is-narrow .composer__unarchive { height: 32px; min-height: 32px; }
