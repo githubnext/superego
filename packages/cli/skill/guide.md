@@ -358,7 +358,7 @@ The build queue is in [`examples/`](examples). The bundled extensions are in Sup
 | `git` | Changes: a `method` (a read), a `pane` the agent is told of, built on the kit's `Diff`, an `action` with keys |
 | `browser` | a pane kind, described in `about.panes` (so no daemon half: the daemon lists its `about`); `urls: true` makes web links open in it, `menu: true` offers it in the pane menu, an app setting (its search engine) and an action with keys (`⌘T`) |
 | `skills` | a prompt section, a `beforeSend` transform, a `method`; `composer.complete` and `composer.sentWith` |
-| `mentions` | a `beforeSend` transform; `composer.complete` (with `superego.window`'s threads and `files.list`) and `composer.sentWith`'s `words` |
+| `mentions` | a `beforeSend` transform (with `mentionResolver`); `composer.complete` (with `superego.window`'s threads, `files.list` and `composer.mentionSources`) and `composer.sentWith`'s `words` |
 | `files` | a `method`, a `pane` the agent is told of, an `overlay`, `store`s, `when` |
 | `links` | UI only: the window declares it to the machine; a `Picker` over `transcriptLinks`, the links handlers drew |
 | `unread` | UI only: a view in the rail `withoutSidebar` and in a phone's `drawer`, an action with keys reading projects, an app setting |

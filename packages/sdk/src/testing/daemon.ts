@@ -31,6 +31,8 @@ export type TestDaemonOptions = {
   callbackPort?: number
   /** How long each extension's `agentParts` may take at a send (5s in the app): longer, for a slow one under test. */
   agentPartsLimit?: number
+  /** How long a mention resolver may take at a send (2s in the app): shorter, to test one that hangs. */
+  mentionLimit?: number
 }
 
 /**
@@ -242,6 +244,7 @@ export async function testDaemon(options: TestDaemonOptions = {}): Promise<TestD
       localServers: [],
       ...(options.setupTimeout ? { setupTimeout: options.setupTimeout } : {}),
       ...(options.agentPartsLimit ? { agentPartsLimit: options.agentPartsLimit } : {}),
+      ...(options.mentionLimit ? { mentionLimit: options.mentionLimit } : {}),
     })
     // Its threads' profiles loaded first, as a window reconnecting finds them once the app's daemon is up a moment: what
     // the test checks right after a start or `restart` (its extensions, a profile's values) is there, not on its way.

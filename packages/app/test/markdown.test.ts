@@ -25,10 +25,15 @@ describe('Markdown', () => {
   })
 
   it('marks a table cell of prose, not one of a few words, and keeps its alignment', () => {
-    const html = render({ text: '| Thread | Where it stands |\n| :-- | --: |\n| [Style](thread:1) | It compared our buttons with **COSS**, and they are identical. |' })
+    const html = render({ text: '| Thread | Where it stands |\n| :-- | --: |\n| [Style](https://example.com/style) | It compared our buttons with **COSS**, and they are identical. |' })
     expect(html).toContain('<th style="text-align:left">Thread</th>')
     expect(html).toContain('<td style="text-align:left"><a')
     expect(html).toContain('<td style="text-align:right" class="is-prose">It compared')
+  })
+
+  it("draws a link to a scheme nothing claims, nor the browser follows, as its words: a mention whose extension is gone", () => {
+    expect(render({ text: 'see [@canvas:fox](<canvas:fox>) and [web](https://example.com)' }))
+      .toBe('<div class="md"><p>see @canvas:fox and <a href="https://example.com" target="_blank" rel="noreferrer">web</a></p></div>')
   })
 
   it('takes no clamp at 0', () => {

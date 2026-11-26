@@ -118,6 +118,18 @@ export type OutgoingMessage = {
   from?: string
 }
 
+/**
+ * A mention of a thing of an extension's kind in a message sent (`@canvas:fox-and-rhino`), as its resolver sees it: as
+ * written (`ref`), its kind and id (unquoted), and the thread it's sent to.
+ */
+export type MentionTarget = { ref: string; kind: string; id: string; thread: ThreadInfo }
+
+/**
+ * What a mention names, said to the agent in a line after `<ref> is a <kind>: `: what it is, and how to read it
+ * (`'"Fox & Rhino". Read it with canvas_read (id: "fox-and-rhino").'`). Undefined: it names nothing, and stays as written.
+ */
+export type MentionResolve = (mention: MentionTarget) => string | undefined | Promise<string | undefined>
+
 /** Changes what a message gives the model: returns the blocks to send instead, or nothing to leave them. */
 export type SendTransform = (message: OutgoingMessage) => MessageBlock[] | void | Promise<MessageBlock[] | void>
 
@@ -491,6 +503,22 @@ export type DaemonApi = {
    * a user's or another thread's (thread tools); tool results aren't. A transform that throws fails the send.
    */
   beforeSend(transform: SendTransform): void
+  /**
+   * (API ^5.16) Say what a mention of `kind` names (`@<kind>:<id>`, as its UI half's `composer.mention` offers them):
+   * the Mentions extension asks `resolve` for each one a message sends, and tells the agent what it said in the block
+   * that goes with the message, a line each (`@canvas:x is a canvas: <what resolve said>`); the window draws those as
+   * links. Answering nothing leaves the mention as written. Asked for threads that don't go without this extension (a
+   * profile's: its own threads), and given 2s: a slower answer, or a throw, counts as nothing (logged). `kind` is
+   * lowercase letters, digits and dashes; one resolver of each among the app's extensions and each profile's, and not
+   * `thread`, `file` or `folder`.
+   */
+  mention(kind: string, resolve: MentionResolve): void
+  /**
+   * (API ^5.16) The resolver of `kind` that `thread` has (its profile's first, else the app's): undefined where there's
+   * none. Asked, it answers within 2s, a late or failing answer as undefined (logged). For an extension that reads
+   * mentions (the Mentions extension's).
+   */
+  mentionResolver(kind: string, thread: ThreadInfo): ((mention: Omit<MentionTarget, 'kind' | 'thread'>) => Promise<string | undefined>) | undefined
   /**
    * Byte streams of kind `<name>.<kind>` that clients open (the protocol's channels: base64 chunks within credit the
    * receiver grants, behind every control message): a terminal's output and keystrokes, say. `accept` gets each one and

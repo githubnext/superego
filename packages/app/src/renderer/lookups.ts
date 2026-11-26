@@ -8,6 +8,9 @@ import { drawsFor, lookUp, preferProfile, sameProject, scopeIsOn, scopeOf, seenI
 /** The composer's completion providers for `where`, in the order registered; for no thread yet, the app's. */
 export const completionsIn = (registry: Registry, where: Where | undefined) => seenIn(registry.completions, where)
 
+/** The mention sources the composer has (`mentionSourcesIn`, the registry's: its `composer.mentionSources` answers with it). */
+export { mentionSourcesIn } from './registry.tsx'
+
 /**
  * What draws sent messages' blocks for `where`: those of the app's extensions (even one its thread goes without now,
  * since it went with the message then), and its own profile's.

@@ -78,6 +78,8 @@ export type DaemonOptions = {
   setupTimeout?: number
   /** How long an extension's `agentParts` may take at submit, in ms, before the turn goes on without its parts. 5s by default. */
   agentPartsLimit?: number
+  /** How long an extension's mention resolver (`superego.mention`) may take, in ms, before its mention counts as naming nothing. 2s by default. */
+  mentionLimit?: number
   /**
    * The other machines this daemon reaches (see relay.ts), given its own identity so it never links to itself. The host
    * builds it from @superego/client (the app's daemon: `machineHub`); without it, this daemon reaches only itself.

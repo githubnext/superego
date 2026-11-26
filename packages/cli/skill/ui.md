@@ -81,8 +81,9 @@ Nothing else: no npm packages, no CSS imports. The daemon compiles TSX and TS wi
 | `style(css)` | CSS scoped to what this profile draws ([Styling](#styling)); returns a remover |
 | `theme({ id, name, appearance, syntax?, terminal?, ui?, accent? })` | (API ^5.5) a theme ([Themes](#themes)) |
 | `store(key, initial, { persist?, shared? })` | window state: `get()`, `set(next)`, `subscribe`, `use()`. Kept as `<name>.<key>` (`'<name>.<key>'` is the same store). `persist`: across reloads, this window only; `shared`: every window |
-| `composer.complete({ title, word, items })` | complete a word as it's typed. `word(text, caret)` finds it (`{ start, query, … }`) or nothing; the first to find one completes it, with any other that finds one starting at the same place (one menu: `/` opening the message lists the core's `/clear` and `/compact` beside skills). `items(word, { machine, cwd, thread })` returns (or resolves to) `{ label, detail?, icon?, insert, submit? }[]`, best first (no `thread` in New thread). `insert` replaces the word (end with a space to keep typing); `submit: true`, a command: ⏎ takes it and sends the message. ↑↓ pick, ⇥ or ⏎ take, esc leaves |
-| `composer.sentWith({ read, component?, words? })` | draw what `beforeSend` added to sent messages. `read(blocks)` returns `{ items, blocks }`, the indexes of the blocks found, which leave the text. `component` gets `{ machine, thread, items }`, drawn under the message (a `<Chip icon title>` each). `words(text, items)` rewrites the message's Markdown (`mentions` turns `@thread:42` into a link). Drawn even for threads now without the extension |
+| `composer.complete({ title, word, items })` | complete a word as it's typed. `word(text, caret)` finds it (`{ start, query, … }`) or nothing; the first to find one completes it, with any other that finds one starting at the same place (one menu: `/` opening the message lists the core's `/clear` and `/compact` beside skills). `items(word, { machine, cwd, thread }, { signal, update })` returns (or resolves to) `{ label, detail?, icon?, insert, submit? }[]`, best first (no `thread` in New thread). `signal` aborts once the word changes; `update(items)` (API ^5.16) offers again with what came late. `insert` replaces the word (end with a space to keep typing); `submit: true`, a command: ⏎ takes it and sends the message. ↑↓ pick, ⇥ or ⏎ take, esc leaves |
+| `composer.mention({ kind, title, icon?, list \| search, href? })` | (API ^5.16) things of yours `@` offers, written `@<kind>:<id>`: [Mentions](#mentions) |
+| `composer.sentWith({ read, component?, words? })` | draw what `beforeSend` added to sent messages. `read(blocks)` returns `{ items, blocks }`, the indexes of the blocks found, which leave the text. `component` gets `{ machine, thread, items }`, drawn under the message (a `<Chip icon title>` each). `words(text, items, { machine, thread })` rewrites the message's Markdown (`mentions` turns `@thread:42` into a link). Drawn even for threads now without the extension |
 | `entry(kind, component)` | transcript entries of a kind it writes |
 | `codeBlock(languages, component)` | (API ^5.14) draw fenced code blocks of a language yourself: [Code blocks](#code-blocks) |
 | `settings(ui, component)` | drawn below the daemon half's settings section that names `ui` |
@@ -182,6 +183,49 @@ function Csv({ code, streaming }: CodeBlockProps) {
 }
 
 export default defineUiExtension({ name: 'csv', api: '^5.14', setup: (superego) => superego.codeBlock('csv', Csv) })
+```
+
+### Mentions
+
+(API ^5.16) `superego.composer.mention(source)` adds things of yours to what `@` offers in the composer, beside threads
+and files (the bundled Mentions extension draws the menu). Taken, one is written `@<kind>:<id>`, or
+`@<kind>:"<id>"` when the id has a space or punctuation (`mentionRef(kind, id)` writes one). `@<kind>:` offers yours
+alone, up to 10. Give a `list` (a few hundred at most: asked once per `@` word, matched locally as it's typed) or a
+`search` (asked at once for a bare `@`, then 80ms after typing pauses). Each gets a `signal`, aborted as the word
+changes or after 800ms: a slow source offers nothing for that word and never holds up the menu. The menu shows at most
+3 of yours beside threads and files, 10 in all. A `MentionItem` is `{ id, label, detail?, icon?, keywords?, order? }`:
+`keywords` match too (below the label), `order` breaks ties (higher first).
+
+Once sent, your daemon half says what each one names (`superego.mention`, [daemon.md](daemon.md#mentions)), and the
+transcript draws the mentions it named as links: `href(id)`, by default `<kind>:<id>` with the id URI-encoded
+(`mentionHref`), which a space's `match: '<kind>:'` or your `link` opens. `href: false` leaves them as text. A
+mention your daemon half didn't name stays as typed. An app extension's or a global profile's sources are offered in
+every thread (not one that goes without it); a project's profile's in that project's threads; any other profile's in
+its own threads.
+
+```tsx
+import { defineUiExtension, type MentionItem } from 'superego/ui'
+
+export default defineUiExtension({
+  name: 'notes', api: '^5.16',
+  setup(superego) {
+    superego.composer.mention({
+      kind: 'note', title: 'Notes',
+      // Small: list them all once per word.
+      async list({ machine }, { signal }) {
+        const notes = await fetch('http://localhost:4000/notes', { signal }).then((r) => r.json() as Promise<{ slug: string; title: string; updated: number }[]>)
+        return notes.map((n): MentionItem => ({ id: n.slug, label: n.title, order: n.updated }))
+      },
+    })
+    superego.composer.mention({
+      kind: 'canvas', title: 'Canvases',
+      // Large: search as it's typed.
+      search: (query, where, { signal }) => fetch(`http://localhost:4000/canvases?q=${encodeURIComponent(query)}`, { signal }).then((r) => r.json() as Promise<MentionItem[]>),
+      // `@canvas:fox` links to canvas:fox, which this opens.
+    })
+    superego.link({ match: 'canvas:', open: (href) => console.log('open', decodeURIComponent(href.slice('canvas:'.length))) })
+  },
+})
 ```
 
 ### A mark in the sidebar

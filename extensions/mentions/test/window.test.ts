@@ -5,8 +5,11 @@
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, expect, it } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { createElement } from 'react'
 import { MESSAGE_ENTRY } from '@superego/protocol'
+import { defineDaemonExtension } from '@superego/daemon'
+import { defineUiExtension } from '@superego/app/ui'
 import { mountUi, testDaemon, type TestDaemon, type TestWindow } from '@superego/sdk/testing'
 import files from '@superego/files/daemon'
 import filesUi from '@superego/files/ui'
@@ -18,6 +21,31 @@ const $ = (selector: string) => document.querySelector<HTMLElement>(selector)
 const $$ = (selector: string) => [...document.querySelectorAll<HTMLElement>(selector)]
 const offered = () => $$('.completions__item').map((item) => item.textContent)
 
+/** An extension of canvases: `@` offers them, its daemon half says what one is, and its links open them. */
+const titles: Record<string, string> = { 'fox-and-rhino': 'Fox and rhino', 'Shoes & socks': 'Shoes & socks' }
+const opened: string[] = []
+const CanvasIcon = ({ size }: { size?: number }) => createElement('svg', { 'data-icon': 'canvas', width: size })
+const canvasUi = defineUiExtension({
+  name: 'canvas',
+  setup(superego) {
+    superego.composer.mention({
+      kind: 'canvas', title: 'Canvases', icon: CanvasIcon,
+      list: () => [{ id: 'fox-and-rhino', label: 'Fox and rhino', detail: 'Sketches' }, { id: 'Shoes & socks', label: 'Shoes & socks' }],
+    })
+    superego.link({ match: 'canvas:', open: (href) => { opened.push(href) } })
+  },
+})
+const canvas = defineDaemonExtension({
+  name: 'canvas',
+  setup(superego) {
+    superego.mention('canvas', ({ id }) => {
+      if (id === 'slow') return new Promise((resolve) => setTimeout(() => resolve('too late'), 1_000))
+      if (id === 'broken') throw new Error('no canvas today')
+      return titles[id] ? `${JSON.stringify(titles[id])}. Read it with canvas_read (id: ${JSON.stringify(id)}).` : undefined
+    })
+  },
+})
+
 let dir: string
 let daemon: TestDaemon
 let ui: TestWindow | undefined
@@ -26,7 +54,7 @@ beforeEach(async () => {
   await mkdir(join(dir, 'src'))
   await writeFile(join(dir, 'src', 'dates.ts'), 'export {}\n')
   await writeFile(join(dir, 'notes.md'), '# notes\n')
-  daemon = await testDaemon({ model: 'echo', extensions: [files, mentions] })
+  daemon = await testDaemon({ model: 'echo', extensions: [files, mentions, canvas], mentionLimit: 300 })
 })
 afterEach(async () => { await ui?.unmount(); await daemon.close(); await rm(dir, { recursive: true, force: true }) })
 
@@ -116,4 +144,77 @@ it("completes in the New thread dialog too, before there's a thread: the folder'
   const sent = (JSON.parse(await daemon.transcript(started.id)) as { kind: string; model?: { content: { type: string; text?: string }[] }[] }[])
     .find((e) => e.kind === MESSAGE_ENTRY)!.model![0]!.content
   expect(sent.map((block) => block.text)).toEqual(['Look at @src/dates.ts', expect.stringContaining("@src/dates.ts is a file, relative to this thread's folder.")])
+})
+
+/** The blocks the newest message in `thread` gave the agent. */
+const lastSent = async (thread: string) => {
+  const entries = (JSON.parse(await daemon.transcript(thread)) as { kind: string; model?: { content: string | { type: string; text?: string }[] }[] }[])
+    .filter((e) => e.kind === MESSAGE_ENTRY)
+  const content = entries.at(-1)!.model![0]!.content
+  return typeof content === 'string' ? [content] : content.map((block) => block.text)
+}
+
+it("completes an extension's things, tells the agent what they are, and draws them as its links", async () => {
+  const here = await daemon.thread(undefined, { title: 'Here', cwd: dir })
+  ui = await mountUi({ window: true, extensions: [threads, filesUi, mentionsUi, canvasUi], machines: [daemon], select: { thread: here.id } })
+  await ui.until(() => $('.thread__title')?.textContent === 'Here', 'the thread shown')
+
+  await ui.type('.composer textarea', 'Draw @can')
+  await ui.until(() => offered().length === 2, 'the canvases offered')
+  expect(offered()).toEqual(['Fox and rhinoSketches', 'Shoes & socksCanvases'])
+  expect($$('.completions__icon svg[data-icon="canvas"]')).toHaveLength(2)
+  await ui.key('enter')
+  await ui.until(() => ($('.composer textarea') as HTMLTextAreaElement).value === 'Draw @canvas:fox-and-rhino ', 'the canvas taken')
+
+  // `@canvas:` offers canvases alone; the one with a space in its name is taken quoted.
+  await ui.type('.composer textarea', 'Draw @canvas:fox-and-rhino with @canvas:sh')
+  await ui.until(() => offered()[0] === 'Shoes & socksCanvases', 'the canvas offered')
+  await ui.key('tab')
+  const text = 'Draw @canvas:fox-and-rhino with @canvas:"Shoes & socks" '
+  await ui.until(() => ($('.composer textarea') as HTMLTextAreaElement).value === text, 'the quoted canvas taken')
+  await ui.type('.composer textarea', `${text}but not @canvas:missing`)
+  await ui.key('enter')
+
+  await daemon.idle(here.id)
+  expect(await lastSent(here.id)).toEqual([
+    'Draw @canvas:fox-and-rhino with @canvas:"Shoes & socks" but not @canvas:missing',
+    [
+      '<mentions>',
+      'The message mentions these. They aren\'t attached: read what you need.',
+      '@canvas:fox-and-rhino is a canvas: "Fox and rhino". Read it with canvas_read (id: "fox-and-rhino").',
+      '@canvas:"Shoes & socks" is a canvas: "Shoes & socks". Read it with canvas_read (id: "Shoes & socks").',
+      '</mentions>',
+    ].join('\n'),
+  ])
+
+  // In the transcript: each as a link its extension opens, the one that named nothing as typed, the block left out.
+  await ui.until(() => $$('.msg a').some((a) => a.textContent === '@canvas:fox-and-rhino'), 'the message drawn')
+  const links = $$('.msg a').filter((a) => a.textContent?.startsWith('@canvas:'))
+  expect(links.map((a) => a.textContent)).toEqual(['@canvas:fox-and-rhino', '@canvas:"Shoes & socks"'])
+  const message = links[0]!.closest('.msg, [class*="msg"]')!
+  expect(message.textContent).toContain('but not @canvas:missing')
+  expect(message.textContent).not.toContain('<mentions>')
+  await ui.window!.click('@canvas:"Shoes & socks"')
+  expect(opened).toEqual(['canvas:Shoes%20%26%20socks'])
+})
+
+it("sends a mention whose resolver is slow, fails or isn't there as written, and holds up the others for none of it", async () => {
+  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+  const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+  const here = await daemon.thread(undefined, { title: 'Here', cwd: dir })
+  const send = async (text: string) => {
+    await daemon.call('thread.send', { thread: here.id, text })
+    await daemon.idle(here.id)
+    return lastSent(here.id)
+  }
+  expect(await send('@canvas:slow, @canvas:broken, @canvas:fox-and-rhino and @ink:x')).toEqual([
+    '@canvas:slow, @canvas:broken, @canvas:fox-and-rhino and @ink:x',
+    expect.stringContaining('@canvas:fox-and-rhino is a canvas: "Fox and rhino".'),
+  ])
+  expect((await lastSent(here.id))[1]!.split('\n')).toHaveLength(4)
+  expect(warn).toHaveBeenCalledWith(expect.stringContaining('Extension canvas: resolving @canvas:slow took over 0.3s'))
+  expect(error).toHaveBeenCalledWith(expect.stringContaining('Extension canvas: resolving @canvas:broken failed'), expect.any(Error))
+  // A thread that goes without the extension: its mentions name nothing.
+  await daemon.call('settings.set', { key: 'extensions.canvas', value: false })
+  expect(await send('@canvas:fox-and-rhino')).toEqual(['@canvas:fox-and-rhino'])
 })

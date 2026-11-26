@@ -64,7 +64,7 @@ Extensions) or per profile (`without`).
 | `focus` | focus mode (`⌘⇧F`): the sidebar narrowed to the threads you focus (`⌘⌥F`) and what needs you (UI) |
 | `links` | `⌃O`: the links in the thread (UI) |
 | `mermaid` | ```` ```mermaid ```` blocks drawn as diagrams, by Pele, in threads and rendered files (UI) |
-| `mentions` | `@` in the composer names another thread or a file |
+| `mentions` | `@` in the composer names another thread, a file, or an extension's thing (`composer.mention`) |
 | `skills` | skills from `~/.agents/skills`: in the prompt, `$name` in the composer, a view listing them |
 | `suggestions` | after each answer, what you might send next |
 | `tasks` | `task_start`/`task_finish`, and the transcript folded by task |

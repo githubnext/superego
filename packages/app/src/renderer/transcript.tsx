@@ -209,7 +209,7 @@ function Sent({ entry, blocks, className, children }: { entry: number; blocks: S
   if (!text && !drawn.length && !files.length && !children) return null
   return (
     <div className={className}>
-      {text && <Markdown text={sentWords(found, text)} breaks />}
+      {text && <Markdown text={sentWords(found, text, { machine: here.machine, thread: here.thread })} breaks />}
       {(drawn.length > 0 || files.length > 0) && (
         <div className="msg__files">
           {drawn.map(({ reader: { component: Component, owner }, items }) => <Contained key={`${owner.profile ?? ''}/${owner.extension}`} name={owner.extension} scope={owner.profile} inline>{Component && <Component {...here} items={items} />}</Contained>)}

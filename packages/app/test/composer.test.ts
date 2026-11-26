@@ -5,7 +5,8 @@ import { defineApp, type ThreadInfo } from '@superego/protocol'
 import { askFor, complete, completing, menuFor, readSent, sentWords, type Completion, type CompletionProvider, type CompletionWord, type Offered, type SentWith } from '../src/renderer/composer.ts'
 import { defineUiExtension } from '../src/renderer/extension-api.ts'
 import { createRegistry } from '../src/renderer/registry.tsx'
-import { completionsIn, sentWithIn } from '../src/renderer/lookups.ts'
+import { completionsIn, mentionSourcesIn, sentWithIn } from '../src/renderer/lookups.ts'
+import type { MentionSource } from '../src/renderer/composer.ts'
 
 const hash: CompletionProvider = {
   title: 'Tags',
@@ -51,7 +52,8 @@ describe('what went with a sent message', () => {
     const upper: SentWith<string> = { read: () => undefined, words: (text, items) => `${text.toUpperCase()} (${items.join(',')})` }
     const broken: SentWith<string> = { read: () => undefined, words: () => { throw new Error('no') } }
     const error = vi.spyOn(console, 'error').mockImplementation(() => {})
-    expect(sentWords([{ reader: upper, items: ['a'] }, { reader: marks, items: ['b'] }, { reader: broken, items: ['c'] }], 'hi')).toBe('HI (a)')
+    const where = { machine: { id: 'local', label: 'local', state: 'connected' as const }, thread: { id: '1' } as ThreadInfo }
+    expect(sentWords([{ reader: upper, items: ['a'] }, { reader: marks, items: ['b'] }, { reader: broken, items: ['c'] }], 'hi', where)).toBe('HI (a)')
     expect(error).toHaveBeenCalledOnce()
     error.mockRestore()
   })
@@ -146,5 +148,87 @@ describe('asking a provider as the word is typed', () => {
     expect(offers.map((o) => o.items.map((i) => i.label))).toEqual([[], [], ['ok']])
     expect(offers[2]!.title).toBe('z')
     vi.restoreAllMocks()
+  })
+})
+
+describe('offering again as late answers come', () => {
+  const where = { machine: { id: 'local', label: 'local', state: 'connected' as const }, cwd: '/p' }
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 0))
+  it("offers a provider's update after its answer, with the others', and aborts what it was asked with once cancelled", async () => {
+    let asked: Parameters<CompletionProvider['items']>[2] | undefined
+    const late: CompletionProvider = { title: 'Late', word: () => ({ start: 0, query: '' }), items: (_w, _where, ask) => { asked = ask; return [{ label: 'a', insert: 'a' }] } }
+    const other: CompletionProvider = { title: 'Other', word: () => ({ start: 0, query: '' }), items: async () => [{ label: 'o', insert: 'o' }] }
+    const offers: string[][] = []
+    const cancel = askFor([late, other].map((provider) => ({ provider, word: { start: 0, query: '' } })), where, (o) => offers.push(o.items.map((i) => i.label)))
+    await settle()
+    expect(offers).toEqual([['a', 'o']])
+    asked!.update([{ label: 'a', insert: 'a' }, { label: 'b', insert: 'b' }])
+    expect(offers.at(-1)).toEqual(['a', 'b', 'o'])
+    expect(asked!.signal.aborted).toBe(false)
+    cancel()
+    expect(asked!.signal.aborted).toBe(true)
+    asked!.update([{ label: 'stale', insert: 'stale' }])
+    expect(offers).toHaveLength(2)
+  })
+})
+
+describe('mention sources', () => {
+  const app = defineApp({ name: 'superego', id: 'superego' })
+  const thread = (extra: Partial<ThreadInfo> = {}): ThreadInfo => ({
+    id: '1', title: 't', cwd: '/work', createdAt: 0, activeAt: 0, project: { root: '/work', name: 'work' }, status: { state: 'idle' }, ...extra,
+  })
+  const source = (kind: string, extra: Partial<MentionSource> = {}): MentionSource => ({ kind, title: kind, list: () => [], ...extra })
+  const ext = (name: string, ...sources: MentionSource[]) => defineUiExtension({ name, setup(superego) { for (const s of sources) superego.composer.mention(s) } })
+  const kinds = (list: readonly MentionSource[]) => list.map((s) => `${(s as { owner?: { extension: string } }).owner?.extension}:${s.kind}`)
+
+  it("offers an app extension's in every thread but those going without it, and before there's a thread", () => {
+    const registry = createRegistry(app, [ext('canvas', source('canvas'))], () => {})
+    expect(kinds(mentionSourcesIn(registry, { machine: 'local', thread: thread() }))).toEqual(['canvas:canvas'])
+    expect(mentionSourcesIn(registry, { machine: 'local', thread: thread({ without: ['canvas'] }) })).toEqual([])
+    expect(kinds(mentionSourcesIn(registry, { machine: 'local' }))).toEqual(['canvas:canvas'])
+  })
+
+  it("keeps a profile's to its threads, a project's profile's to its project, a global one's everywhere, each gone with its profile", () => {
+    const registry = createRegistry(app, [], () => {})
+    const mine = { scope: 'user' as const, name: 'notes', dir: '/home/me/.superego/profiles/notes' }
+    const project = { scope: 'project' as const, name: 'default', dir: '/work/.superego/profiles/default' }
+    const global = { scope: 'user' as const, name: 'everywhere', dir: '/home/me/.superego/profiles/everywhere' }
+    registry.installProfile('local', mine, [ext('notes', source('note'))])
+    registry.installProfile('local', project, [ext('boards', source('board'))])
+    registry.installProfile('local', global, [ext('ink', source('ink'))], { global: true })
+    const at = (t: ThreadInfo) => kinds(mentionSourcesIn(registry, { machine: 'local', thread: t }))
+    expect(at(thread({ profile: mine }))).toEqual(['notes:note', 'boards:board', 'ink:ink'])
+    // Another profile in the project: the project's and the global one's.
+    expect(at(thread({ profile: { ...mine, name: 'other', dir: '/other' } }))).toEqual(['boards:board', 'ink:ink'])
+    // Another project: the global one's alone; as in the New thread dialog.
+    expect(at(thread({ project: { root: '/elsewhere', name: 'elsewhere' } }))).toEqual(['ink:ink'])
+    expect(kinds(mentionSourcesIn(registry, { machine: 'local' }))).toEqual(['ink:ink'])
+    registry.installProfile('local', mine, [])
+    registry.installProfile('local', project, [])
+    registry.installProfile('local', global, [], { global: true })
+    expect(at(thread({ profile: mine }))).toEqual([])
+  })
+
+  it("takes a thread's profile's kind before the app's, and refuses a kind that can't be one", () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const registry = createRegistry(app, [ext('canvas', source('canvas')), ext('copy', source('canvas'))], () => {})
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('mention kind canvas is already drawn by canvas'))
+    const profile = { scope: 'user' as const, name: 'p', dir: '/p' }
+    registry.installProfile('local', profile, [ext('mine', source('canvas'))])
+    expect(kinds(mentionSourcesIn(registry, { machine: 'local', thread: thread({ profile }) }))).toEqual(['mine:canvas'])
+    const failed = (s: MentionSource) => registry.installProfile('local', { ...profile, dir: '/q' }, [ext('bad', s)])[0]?.error
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    expect(String(failed(source('Canvas')))).toMatch(/must be lowercase/)
+    expect(String(failed(source('thread')))).toMatch(/Mentions extension's own/)
+    expect(String(failed({ kind: 'x', title: 'x' }))).toMatch(/needs a list or a search/)
+    expect(String(failed(source('x', { search: () => [] })))).toMatch(/needs a list or a search/)
+    vi.restoreAllMocks()
+  })
+
+  it('answers what a UI half sees through composer.mentionSources', () => {
+    let seen: readonly MentionSource[] = []
+    const reader = defineUiExtension({ name: 'reader', setup(superego) { superego.composer.mention(source('note')); seen = superego.composer.mentionSources({ machine: { id: 'local', label: 'l', state: 'connected' }, cwd: '/' }) } })
+    createRegistry(app, [reader], () => {})
+    expect(seen.map((s) => s.kind)).toEqual(['note'])
   })
 })

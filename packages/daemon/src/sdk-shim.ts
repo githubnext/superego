@@ -9,4 +9,5 @@ export const defineDaemonExtension = get('defineDaemonExtension'), defineAction 
 export const RpcError = (sdk as Record<string, unknown>).RpcError, GenerationTask = (sdk as Record<string, unknown>).GenerationTask
 export const arr = get('arr'), blockErrors = get('blockErrors'), bool = get('bool'), int = get('int'), lit = get('lit'), nullable = get('nullable'), num = get('num')
 export const obj = get('obj'), opt = get('opt'), str = get('str'), union = get('union'), unknown = get('unknown')
+export const mentionHref = get('mentionHref'), mentionRef = get('mentionRef')
 export default sdk

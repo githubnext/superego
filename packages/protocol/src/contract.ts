@@ -77,11 +77,17 @@ import type { ExtensionAbout } from './app.ts'
  * messages and rendered Markdown files, drawn by an extension (Mermaid's diagrams, say) rather than as code.
  * 5.15: `ConfirmDialog` and `PromptDialog` from 'superego/ui' (asking before doing something, and for a name),
  * `Button`'s `danger` variant, and `Dialog`'s `footer` and `flush` (its body now has room around it by default).
+ * 5.16: mentions of an extension's things: the UI half's `composer.mention(source)` (`MentionSource`, `MentionItem`:
+ * what `@` offers, written `@<kind>:<id>`, and the link a sent one is drawn as) and `composer.mentionSources(where)`, the
+ * daemon half's `mention(kind, resolve)` (`MentionTarget`: what a sent one names, told to the agent) and
+ * `mentionResolver(kind, thread)`; `mentionRef` and `mentionHref` from both. A completion provider's `items` is given
+ * `{ signal, update }` (aborted once its answer isn't wanted; late items offered again), and a `sentWith`'s `words`
+ * the message's `{ machine, thread }`.
  * Minor: something added (an extension that uses it asks for `^3.<minor>`); major: something an extension could rely
  * on changed or went, from 2.5 on without exception. An extension whose `api` range this doesn't satisfy is refused
  * when it's set up.
  */
-export const EXTENSION_API = '5.15.0'
+export const EXTENSION_API = '5.16.0'
 
 /** What a machine says of an extension set up there: `hello.extensions` and `features.changed` carry one each. */
 export type ExtensionManifest = Pick<ExtensionAbout, 'name' | 'version' | 'api'>

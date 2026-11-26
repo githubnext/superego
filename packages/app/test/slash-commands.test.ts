@@ -47,7 +47,7 @@ describe('commands', () => {
   })
   it("offers a thread's own: none in the New thread dialog", async () => {
     const machine = { id: 'local', label: 'local', state: 'connected' as const }
-    const offered = async (t?: ThreadInfo) => (await commandCompletions.items({ start: 0, query: '' }, { machine, cwd: '/', ...t ? { thread: t } : {} })).map((c) => c.label)
+    const offered = async (t?: ThreadInfo) => (await commandCompletions.items({ start: 0, query: '' }, { machine, cwd: '/', ...t ? { thread: t } : {} }, { signal: new AbortController().signal, update: () => {} })).map((c) => c.label)
     expect(await offered(thread())).toEqual(['/clear', '/compact'])
     expect(await offered(thread({ hidden: true, owner: 'ego' }))).toEqual(['/compact'])
     expect(await offered(thread({ archived: true }))).toEqual([])

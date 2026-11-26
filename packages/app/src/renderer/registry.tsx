@@ -7,14 +7,14 @@
 // are its project's (`Owner.project`), seen in that project's threads and spaces only; the user's global profile's are the
 // app's; any other profile of the user's adds none.
 import { createContext, useContext, type ComponentType, type ReactNode } from 'react'
-import { contractProblem, Lifetime, parseVersion, UNVERSIONED } from '@superego/protocol'
+import { contractProblem, Lifetime, mentionKindProblem, parseVersion, UNVERSIONED } from '@superego/protocol'
 import type { AppConfig, DataViewInfo, DeclaredSection, ExtensionAbout, ExtensionManifest, ProfileRef, SettingsSnapshot, ThreadInfo } from '@superego/protocol'
 import { createWindowRouter, type WindowAction, type WindowContext, type WindowRouter } from './actions.tsx'
 import { watched } from './client.ts'
 import { createStore } from './local-state.ts'
 import { APP } from '../shared/app-settings.ts'
 import { PLACES, THREAD_PLACES } from '../shared/layout.ts'
-import type { CompletionProvider, SentWith } from './composer.ts'
+import type { CompletionProvider, MentionSource, SentWith } from './composer.ts'
 import { dataIcon, DataViewBody } from './data-views.tsx'
 import { addStyle } from './profile-style.ts'
 import { onMachine } from './machine-view.tsx'
@@ -119,6 +119,8 @@ export type Registry = {
   themes: Owned<Theme>[]
   completions: Owned<CompletionProvider<any>>[]
   sentWith: Owned<SentWith>[]
+  /** What `@` offers of things extensions name (`composer.mention`), by kind: a project's profile's are its project's. */
+  mentions: Owned<MentionSource>[]
   /** Narrowings of the sidebar's list (`superego.sidebarFilter`): each a hook, drawn by the shell's state. */
   sidebarFilters: Owned<{ use: () => SidebarFilter | undefined }>[]
   listeners: Owned<{ event: WindowEvent; listener: (event: never) => void }>[]
@@ -154,7 +156,7 @@ export function createRegistry(app: AppConfig, extensions: UiExtension[], core: 
       ...(version ? { version } : {}), ...(api ? { api } : {}), ...(panes ? { panes } : {}),
     })),
     slots: { 'header.chips': [], 'thread.badge': [], 'thread.menu': [], 'sidebar.heading': [], 'composer.above': [], 'details.section': [], 'editor.side': [], 'editor.bar': [], 'overlay': [], 'onboarding': [], 'welcome': [] },
-    views: [], dataViews: {}, machineExtensions: {}, tools: [], entries: [], links: [], codeBlocks: [], panes: [], spaces: [], work: [], settings: [], newThreadFields: [], router: createWindowRouter(), appSettings: [], themes: [], completions: [], sentWith: [], sidebarFilters: [], listeners: [],
+    views: [], dataViews: {}, machineExtensions: {}, tools: [], entries: [], links: [], codeBlocks: [], panes: [], spaces: [], work: [], settings: [], newThreadFields: [], router: createWindowRouter(), appSettings: [], themes: [], completions: [], sentWith: [], mentions: [], sidebarFilters: [], listeners: [],
     window: {
       focused: typeof document === 'undefined' || document.hasFocus(),
       visible: typeof document === 'undefined' || document.visibilityState !== 'hidden',
@@ -441,6 +443,14 @@ export function createRegistry(app: AppConfig, extensions: UiExtension[], core: 
       composer: {
         complete: (provider) => { add(registry.completions, provider as CompletionProvider<any>) },
         sentWith: (sent) => { add(registry.sentWith, sent as SentWith) },
+        mention(source) {
+          const problem = mentionKindProblem(source.kind)
+          if (problem) throw new Error(`Extension ${extension.name}: ${problem}`)
+          if (Boolean(source.list) === Boolean(source.search)) throw new Error(`Extension ${extension.name}: mention source ${source.kind} needs a list or a search (one of them)`)
+          // A project's profile's are its project's, as its spaces are.
+          unique(registry.mentions, 'kind', { ...source }, 'mention kind', project ? { ...owner, project } : owner)
+        },
+        mentionSources: (where) => mentionSourcesIn(registry, { machine: where.machine.id, ...(where.thread ? { thread: where.thread } : {}) }),
       },
     }
     const teardown = () => {
@@ -542,6 +552,20 @@ export const seenIn = <T,>(list: Owned<T>[], where: Where | undefined, project: 
  */
 export const drawsFor = (owner: Owner, { machine, thread }: { machine: string; thread: ThreadInfo | undefined }) =>
   !(owner.optional && thread?.without?.includes(owner.extension)) && owner.speaks?.(machine) !== false
+
+/**
+ * The mention sources the composer has on `machine`, in `thread` (none: a thread yet to start): its profile's and its
+ * project's, and the app's (not those of extensions it goes without), one of each kind (its profile's first); for no
+ * thread yet, the app's where they speak with the machine.
+ */
+export function mentionSourcesIn(registry: Registry, { machine, thread }: { machine: string; thread?: ThreadInfo }): Owned<MentionSource>[] {
+  const seen = thread
+    ? seenIn(registry.mentions, { machine, thread })
+    : registry.mentions.filter(({ owner }) => !owner.profile && !owner.project && owner.speaks?.(machine) !== false)
+  // One per kind: a profile's (or its project's) before the app's.
+  const kinds = [...new Set(seen.map((s) => s.kind))]
+  return kinds.map((kind) => preferProfile(seen.filter((s) => s.kind === kind))!)
+}
 
 /** The first of `list` that's a profile's own, else the first: a profile's UI goes before the app's. */
 export const preferProfile = <T extends { owner: Owner }>(list: T[]): T | undefined => list.find((entry) => entry.owner.profile) ?? list[0]

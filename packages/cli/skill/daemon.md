@@ -106,7 +106,9 @@ export default defineDaemonExtension({
 | `toolCalls(({ thread, call, result }) => …)` | hear each tool call once it ends: [Watching tool calls](#watching-tool-calls) |
 | `beforeSend(({ thread, text, attachments, content, by, exposure, from }) => …)` | rewrite what a message gives the agent before its turn. `content`: blocks so far (`{ type: 'text', text }`, `{ type: 'image', data, mimeType }`), text first; return new blocks, or nothing. `by`: the sending extension (absent for the user's); `exposure`: `outside` (an outside agent), `cli`, or what `threads.send` passed; `from`: the sending thread, or the parent for a child's prompt. Run in order, each given the last one's; a throw fails the send |
 
-Hooks, `state`, `facts`, `beforeSend` and `toolCalls` skip threads that go without the extension; a profile's apply
+| `mention(kind, ({ ref, kind, id, thread }) => …)` | (API ^5.16) say what `@<kind>:<id>` names in a message sent: [Mentions](#mentions) |
+
+Hooks, `state`, `facts`, `beforeSend`, `mention` and `toolCalls` skip threads that go without the extension; a profile's apply
 only to its own threads.
 
 ### The agent
@@ -226,6 +228,31 @@ See [ui](ui.md).
 **Waiting on the user** (as `agent-ui` does): a tool stores a resolver in a `Map`, publishes the question as a live
 value, and contributes `status` so the thread shows blocked; an action (`<name>.answer`) resolves it. Mark the tool
 `replay: 'safe'` so a restart asks again.
+
+## Mentions
+
+(API ^5.16) `superego.mention(kind, resolve)` says what a mention of yours names, once a message with one is sent
+(`@note:roadmap`, `@canvas:"Fox & Rhino"`: your UI half offers them, `composer.mention`, [ui.md](ui.md#mentions)).
+The bundled Mentions extension asks `resolve` with `{ ref, kind, id, thread }` (the id unquoted) and tells the agent
+in the block that goes with the message, a line each: `<ref> is a <kind>: <what resolve said>`. Say what it is and how
+to read it, in a line; nothing inlined. Answer `undefined` for one that names nothing: it stays as typed, and isn't
+drawn as a link. Each answer gets 2s: a slower one, or a throw, counts as nothing (logged), and never holds up the
+send. `kind` is lowercase letters, digits and dashes, one resolver per kind (not `thread`, `file` or `folder`).
+`mentionResolver(kind, thread)` finds the resolver a thread has, for an extension that reads mentions itself.
+
+```ts
+import { defineDaemonExtension } from 'superego'
+
+export default defineDaemonExtension({
+  name: 'notes', api: '^5.16',
+  setup(superego) {
+    superego.mention('note', async ({ id }) => {
+      const note = await fetch(`http://localhost:4000/notes/${encodeURIComponent(id)}`).then((r) => r.ok ? r.json() as Promise<{ title: string }> : undefined)
+      return note && `${JSON.stringify(note.title)}. Read it with note_read (slug: ${JSON.stringify(id)}).`
+    })
+  },
+})
+```
 
 ## Watching tool calls
 

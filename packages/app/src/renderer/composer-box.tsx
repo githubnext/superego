@@ -91,7 +91,16 @@ export function ComposerBox({ where, className, text, setText, files, setFiles, 
     return askFor(found, where, setOffered)
   }, [JSON.stringify(found.map((f) => [idOf(f.provider), f.word])), machine.id, thread?.id, thread?.archived, thread?.hidden, cwd])
   const menu = menuFor(found, offered, dismissed)
-  useEffect(() => { setPick(0) }, [word?.query, word?.start])
+  // The item the user moved to (↑↓, the pointer) for the word as typed now: kept picked as late items come in around
+  // it, so the menu doesn't move under them. Typing on picks the first again.
+  const moved = useRef<string | undefined>(undefined)
+  useEffect(() => { setPick(0); moved.current = undefined }, [word?.query, word?.start])
+  useEffect(() => {
+    if (!menu) return
+    const at = moved.current === undefined ? 0 : menu.findIndex((item) => item.insert === moved.current)
+    setPick((was) => at >= 0 ? at : Math.min(was, menu.length - 1))
+  }, [offered])
+  const choose = (index: number) => { setPick(index); moved.current = menu?.[index]?.insert }
   useEffect(() => { if (!word) setDismissed(undefined) }, [word === undefined])
   /** Put `item` in place of the word; `run`, a command (`submit`) is sent as it's taken. */
   const take = (item: Completion, run = false) => {
@@ -105,7 +114,7 @@ export function ComposerBox({ where, className, text, setText, files, setFiles, 
     if (menu && word && !event.metaKey && !event.altKey && !event.ctrlKey) {
       if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
         event.preventDefault()
-        setPick((pick + (event.key === 'ArrowDown' ? 1 : -1) + menu.length) % menu.length)
+        choose((pick + (event.key === 'ArrowDown' ? 1 : -1) + menu.length) % menu.length)
         return
       }
       if (event.key === 'Tab' || (event.key === 'Enter' && !event.shiftKey)) { event.preventDefault(); take(menu[pick] ?? menu[0]!, event.key === 'Enter'); return }
@@ -135,7 +144,7 @@ export function ComposerBox({ where, className, text, setText, files, setFiles, 
         <div className="completions" role="listbox" aria-label={offered!.title}>
           {menu.map((item, index) => (
             <div key={`${item.label}-${index}`} role="option" aria-selected={index === pick} className={`completions__item ${index === pick ? 'is-active' : ''}`}
-              onMouseEnter={() => setPick(index)} onMouseDown={(e) => { e.preventDefault(); take(item, true) }}>
+              onMouseEnter={() => choose(index)} onMouseDown={(e) => { e.preventDefault(); take(item, true) }}>
               {item.icon && <span className="completions__icon" aria-hidden>{item.icon}</span>}
               <span className="completions__label">{item.label}</span>
               {item.detail && <span className="completions__detail">{item.detail}</span>}

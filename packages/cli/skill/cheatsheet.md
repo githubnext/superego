@@ -14,6 +14,7 @@ What each half of an extension registers, a line each. The [guide](guide.md) bui
 | `view('x.y', { title, icon, context, fits, default, value \| method })` | a view drawn from blocks, no UI code ([Data-only views](window.md#data-only-views)); its buttons have that machine's authority |
 | `status((thread) => ({ kind: 'question' }))`, `invalidate()` | show a thread as needing you |
 | `beforeSend(({ thread, text, attachments, content, by, exposure }) => [...content, block])` | add to what a message gives the agent; return nothing to leave it. `by`: the sending extension (absent for the user); `exposure`: `outside`, `cli` |
+| `mention('note', ({ ref, id, thread }) => 'a line, or undefined')` | (API ^5.16) what `@note:<id>` names in a message sent, told to the agent; 2s each ([Mentions](daemon.md#mentions)) |
 | `settings.register({ id: 'x', settings })`, `settings.get`, `settings.snapshot`, `settings.onChange` | machine settings of its own (`x.…`); read any |
 | `secrets.get('x.token')`, `secrets.onChange('x.token', fn)` | a `type: 'secret'` setting the user sets; clients see only set or not ([Secrets](daemon.md#secrets)) |
 | `dir` | its folder, `<dataDir>/extensions/x` (0700): JSON, `node:sqlite`, a cache; kept through teardown |
@@ -53,6 +54,7 @@ What each half of an extension registers, a line each. The [guide](guide.md) bui
 | `codeBlock(languages, Component)` | fenced code blocks of a language, drawn yourself: `{ language, code, compact, streaming }` |
 | `link({ match, open, render, target, scheme })` | claim links ([Links](window.md#links)) |
 | `composer.complete({ title, word(text, caret), items(word, { machine, cwd, thread? }) })` | complete the word being typed: `{ label, detail, icon, insert }` |
+| `composer.mention({ kind, title, icon, list \| search, href })` | (API ^5.16) things `@` offers, written `@<kind>:<id>`; sent, drawn as links (`<kind>:<id>`) ([Mentions](ui.md#mentions)) |
 | `composer.sentWith({ read(blocks), component, words })` | draw what `beforeSend` added, under sent messages |
 | `work(divide)` | split a run of work into titled parts; bundled only |
 | `action(defineAction({ id, keys, when, run }))` | a window action with keys, in ⌘K while `when(context)` holds; a profile's only while one of its threads is shown |

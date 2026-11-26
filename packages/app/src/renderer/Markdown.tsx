@@ -259,6 +259,9 @@ const components: Components = {
           {...(Object.keys(attributes).length ? { attributes } : {})}>{children}</Claimed>
       )
     }
+    // Nowhere to go: a scheme no handler claims and the browser shouldn't follow (dropped by `urlTransform`), say a
+    // mention's whose extension is gone. Its words, as words.
+    if (!href) return <>{props.children}</>
     return <a {...props} href={href} target="_blank" rel="noreferrer" />
   },
   code: ({ node: _node, className, children, ...props }) => {

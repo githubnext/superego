@@ -1,12 +1,13 @@
-// mentions, daemon half: a message that mentions a thread (`@thread:42`, `@thread:workbox/42`) or a file (`@src/app.ts`)
-// goes with a short block saying what each is (see shared.ts): a thread's title and where it stands, and how to read
-// it; a file or folder as a path in the thread's folder. Nothing is inlined: the agent reads what it needs. A word that
-// looks like a mention but names no file there (`@someone`) is left alone.
+// mentions, daemon half: a message that mentions a thread (`@thread:42`, `@thread:workbox/42`), a file (`@src/app.ts`)
+// or an extension's thing (`@canvas:fox-and-rhino`) goes with a short block saying what each is (see shared.ts): a
+// thread's title and where it stands, and how to read it; a file or folder as a path in the thread's folder; an
+// extension's thing as the resolver of its kind says (`superego.mention`). Nothing is inlined: the agent reads what it
+// needs. A word that looks like a mention but names nothing there (`@someone`, `@canvas:missing`) is left alone.
 import { stat } from 'node:fs/promises'
 import { isAbsolute, resolve } from 'node:path'
 import { defineDaemonExtension, type DaemonApi } from '@superego/daemon'
 import { machineNamed, statusLabel, type ThreadInfo } from '@superego/protocol'
-import { about, mentionsBlock, mentionsIn, type Mention } from './shared.ts'
+import { about, mentionsBlock, mentionsIn, otherLine, type Mention } from './shared.ts'
 
 /** A string as the agent would pass it to a tool. */
 const q = JSON.stringify
@@ -32,8 +33,19 @@ async function threadLine(superego: DaemonApi, mention: Extract<Mention, { kind:
   }
 }
 
+/**
+ * What an extension's thing names, as a line of the block: as the resolver of its kind (that the thread has) says; a
+ * bare one no extension resolves may be a path with a colon in it.
+ */
+async function describeOther(superego: DaemonApi, thread: ThreadInfo, mention: Extract<Mention, { kind: 'other' }>): Promise<string | undefined> {
+  const resolve = superego.mentionResolver(mention.type, thread)
+  if (!resolve) return mention.quoted ? undefined : fileLine(thread.cwd, { ref: mention.ref, path: mention.ref.slice(1) })
+  const said = await resolve({ ref: mention.ref, id: mention.id })
+  return said?.trim() ? otherLine(mention.ref, mention.type, said) : undefined
+}
+
 /** What a file mention names, as a line of the block: nothing when it names nothing in `cwd`. */
-async function fileLine(cwd: string, { ref, path }: Extract<Mention, { kind: 'file' }>): Promise<string | undefined> {
+async function fileLine(cwd: string, { ref, path }: { ref: string; path: string }): Promise<string | undefined> {
   if (isAbsolute(path)) return undefined
   const found = await stat(resolve(cwd, path)).catch(() => undefined)
   if (!found) return undefined
@@ -47,7 +59,8 @@ export default defineDaemonExtension({
     superego.beforeSend(async ({ thread, text, content }) => {
       const mentions = mentionsIn(text)
       if (!mentions.length) return
-      const lines = await Promise.all(mentions.map((mention) => mention.kind === 'thread' ? threadLine(superego, mention) : fileLine(thread.cwd, mention)))
+      const lines = await Promise.all(mentions.map((mention) => mention.kind === 'thread' ? threadLine(superego, mention)
+        : mention.kind === 'other' ? describeOther(superego, thread, mention) : fileLine(thread.cwd, mention)))
       const said = lines.filter((line): line is string => Boolean(line))
       if (!said.length) return
       return [...content, { type: 'text' as const, text: mentionsBlock(said) }]

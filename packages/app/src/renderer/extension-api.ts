@@ -14,7 +14,7 @@ import type { SetupFound } from './Setup.tsx'
 import type { Dispatch, WindowAction } from './actions.tsx'
 import type { Store } from './local-state.ts'
 import type { Place, Placement } from '../shared/layout.ts'
-import type { CompletionProvider, CompletionWord, SentWith } from './composer.ts'
+import type { CompletionProvider, CompletionWord, ComposerWhere, MentionSource, SentWith } from './composer.ts'
 import type { ImageItem } from './images.tsx'
 import type { Theme } from '@superego/ui/themes'
 
@@ -542,6 +542,19 @@ export type UiApi = {
      * leave those blocks out of its text. Drawn for a thread that goes without the extension now too: it went then.
      */
     sentWith<T>(sent: SentWith<T>): void
+    /**
+     * (API ^5.16) Things of a kind this extension names, offered as `@` is typed (`MentionSource`: a `list` or a
+     * `search`), and `@<kind>:` offers them alone; taken, one is written `@<kind>:<id>`. Its daemon half says what a sent
+     * one names (`superego.mention(kind, resolve)`), and the transcript draws it as a link (`href`). An app extension's
+     * and a global profile's are offered in every thread, but those going without the extension; a project's profile's in
+     * that project's threads; any other profile's in its own threads. One source per kind in each.
+     */
+    mention(source: MentionSource): void
+    /**
+     * (API ^5.16) The mention sources the composer at `where` has: its thread's profile's and project's, and the app's
+     * (none of an extension its thread goes without). For a provider that completes `@` (the Mentions extension's).
+     */
+    mentionSources(where: ComposerWhere): readonly MentionSource[]
   }
 }
 

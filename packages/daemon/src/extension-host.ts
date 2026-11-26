@@ -6,12 +6,12 @@ import { join } from 'node:path'
 import { defineExtension, type Extension, hook, ToolTask } from '@earendil-works/pi-durable'
 import { DEFAULT_IMAGE_LIMITS } from '@earendil-works/pi-durable/tools'
 import {
-  type ChannelAcceptor, Channels, compareVersion, consentRefused, contractProblem, dataViewProblem, machineConsent, EXTENSION_API, FEATURES, Lifetime, manifestOf, paramsParser,
+  type ChannelAcceptor, Channels, compareVersion, consentRefused, contractProblem, dataViewProblem, machineConsent, EXTENSION_API, FEATURES, Lifetime, manifestOf, mentionKindProblem, paramsParser,
   parseVersion, RpcError, UNVERSIONED, DATA_VIEWS, type DataViewInfo, type ExtensionAbout, type ExtensionReport, type ExtensionsReport, type Json,
   type AgentKindMenu, type RpcPeer, type ThreadInfo,
 } from '@superego/protocol'
 import { registerExtensionSettings } from './extension-settings.ts'
-import type { AgentChoice, AgentKind, AgentKindDescription, AgentPartsThread, DaemonApi, DaemonExtension, LiveValue, ScopedValue, SendTransform, StatusContribution, ThreadHooks, ToolCallRecord } from './extension.ts'
+import type { AgentChoice, AgentKind, AgentKindDescription, AgentPartsThread, DaemonApi, DaemonExtension, LiveValue, MentionResolve, ScopedValue, SendTransform, StatusContribution, ThreadHooks, ToolCallRecord } from './extension.ts'
 import { clone, stateOf, type Host, type ThreadMeta } from './host.ts'
 import type { ProfileHost } from './profile-host.ts'
 import { CORE_KEYS, type LoadedProfile, type ProfileRef } from './profiles.ts'
@@ -81,6 +81,7 @@ function aboutOf(about: ExtensionAbout): ExtensionAbout {
 export function createExtensionHost(host: Host, later: { profiles(): ProfileHost; threads(): Threads; relay(): Relay }) {
   const { options, settings, router, registry, values, changed } = host
   const partsLimit = options.agentPartsLimit ?? 5_000
+  const mentionLimit = options.mentionLimit ?? 2_000
   /** An extension's own folder (`superego.dir`), by its name: made as it's first read. */
   const extensionDir = (name: string) => join(options.dataDir, 'extensions', name)
   /** How long an agent kind's group in the model menus may take to say what it is. */
@@ -139,6 +140,8 @@ export function createExtensionHost(host: Host, later: { profiles(): ProfileHost
   const contributors: Owned<(threadId: string) => StatusContribution | undefined>[] = []
   /** Extensions' send transforms, in the order registered. */
   const transforms: Owned<SendTransform>[] = []
+  /** What mentions of each kind name (`mention`): one per kind among the app's, and among each profile's. */
+  const mentionKinds: Owned<{ kind: string; resolve: MentionResolve }>[] = []
   /** Extensions' read methods, `<name>.<method>`: plain requests, looked up when called (a profile's come and go). */
   const methods = new Map<string, (params: unknown) => Promise<Json>>()
   /** Extensions' channels, by kind (`<name>.<kind>`): byte streams a client opens, accepted by their extension. */
@@ -737,6 +740,16 @@ export function createExtensionHost(host: Host, later: { profiles(): ProfileHost
       },
       status(contribute) { own(contributors, contribute, 'a status'); note('status', 'a status') },
       beforeSend(transform) { own(transforms, transform, 'a send transform'); note('beforeSend', 'a send transform') },
+      mention(kind, resolve) {
+        life.live(`the mention kind ${kind}`)
+        const problem = mentionKindProblem(kind)
+        if (problem) throw new Error(`Extension ${extension.name}: ${problem}`)
+        const taken = mentionKinds.find((m) => m.value.kind === kind && m.profiles === profiles)
+        if (taken) throw new Error(`Mention kind ${kind} is ${taken.owner}'s already`)
+        own(mentionKinds, { kind, resolve }, `the mention kind ${kind}`)
+        note('mention kinds', kind)
+      },
+      mentionResolver: (kind, thread) => mentionResolver(kind, thread),
       invalidate() { changed(); later.threads().heedStatus() },
       thread(hooks) { own(threadHooks, hooks as ThreadHooks, 'thread hooks'); note('thread hooks', Object.keys(hooks).join(', ')) },
       state<T extends Json>(options: { publish?: { key: string; empty: T } } = {}) {
@@ -820,6 +833,34 @@ export function createExtensionHost(host: Host, later: { profiles(): ProfileHost
     record.ready = true
     announce()
     return teardown
+  }
+
+  /**
+   * The resolver of mentions of `kind` that `thread` has (its profile's first, else the app's; none of an extension it
+   * goes without): asked, it answers within `mentionLimit`, or undefined (logged).
+   */
+  function mentionResolver(kind: string, thread: ThreadInfo) {
+    const without = new Set(thread.without ?? [])
+    const seen = mentionKinds.filter((m) => m.value.kind === kind && !without.has(m.owner) && (!m.profiles || Boolean(thread.profile && m.profiles.has(thread.profile.dir))))
+    const found = seen.find((m) => m.profiles) ?? seen[0]
+    if (!found) return undefined
+    return async ({ ref, id }: { ref: string; id: string }): Promise<string | undefined> => {
+      let timer: ReturnType<typeof setTimeout> | undefined
+      try {
+        const said = await Promise.race([
+          Promise.resolve().then(() => found.value.resolve({ ref, kind, id, thread: clone(thread) })),
+          new Promise<'late'>((resolve) => { timer = setTimeout(() => resolve('late'), mentionLimit) }),
+        ])
+        if (said === 'late') { console.warn(`Extension ${found.owner}: resolving ${ref} took over ${mentionLimit / 1000}s; it's sent as written`); return undefined }
+        if (said !== undefined && typeof said !== 'string') { console.warn(`Extension ${found.owner}: resolving ${ref} answered ${typeof said}, not a line of text; it's sent as written`); return undefined }
+        return said
+      } catch (error) {
+        console.error(`Extension ${found.owner}: resolving ${ref} failed:`, error)
+        return undefined
+      } finally {
+        clearTimeout(timer)
+      }
+    }
   }
 
   /** Extensions' teardowns still finishing (a write landing, a process exiting), each given `setupTimeout` at most. */

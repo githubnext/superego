@@ -8,6 +8,9 @@
 - Dialogs have room around what's in them: text no longer touches the edge, and a field's focus ring isn't cut off.
 - New for extensions (extension API 5.14): `superego.codeBlock(languages, component)` draws fenced code blocks of a
   language.
+- New for extensions (extension API 5.16): `@` in the composer can mention an extension's things (`@note:roadmap`,
+  `@canvas:"Fox & Rhino"`): `superego.composer.mention` offers them, `superego.mention` tells the agent what a sent one
+  is, and the transcript links it. `@<kind>:` offers that kind alone.
 - New for extensions (extension API 5.15): `ConfirmDialog` and `PromptDialog`, ready-made dialogs to ask before doing
   something and to ask for a name; `Button`'s `danger` variant; and `Dialog`'s `footer` and `flush`.
 
