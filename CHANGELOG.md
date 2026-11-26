@@ -4,15 +4,12 @@
 
 ## 0.6.0
 
-- **Inspect views.** `⌘⇧I` (or ⌘K) outlines every view, slot, pane and space. Hover one to see what it is; click to
-  paste its name into the message, `⌥`-click to copy it. `Esc` leaves.
-- **Terminals bring programs back.** A program that says how to resume itself (OSC 7577, the Program Resume Protocol:
-  Neovim with a session, an agent, anything through a small wrapper) starts again where it was after Superego restarts
-  or the machine reboots. Closing the pane, archiving its thread or exiting its shell forgets it.
-- On a phone, Commands is a tap away: at the drawer's foot and in a thread's menu, as a full sheet.
+- **Inspect views.** `⌘⇧I` (or ⌘K) outlines every view, slot, pane and space. Hover one to see what it is.
+- Support OSC 7577, the Program Resume Protocol
+- On phone, add Commands to the drawer's foot and in a thread's menu.
 - On a phone, the composer's text sits level with + and send.
 - Menus and dialogs over a browser pane show on top of the page at once.
-- Pasting into a terminal works.
+- Fix pasting into a terminal.
 - `superego do settings.set --value true` sets a switch or number setting instead of refusing the text.
 
 ## 0.5.0
