@@ -1,14 +1,16 @@
 // github, UI half: the `pull-request` pane, one pull request beside a thread. It leads with what to fix (failing checks,
 // changes asked for, unresolved review comments, conflicts, in one list), then what's still running, with what's done
-// folded away (checks passed, reviews that ask nothing); and the threads that have it, on any machine. Its tab carries
-// the road to merge. Drawn from the daemon's snapshot (`github.pr`), read again as the thread's summary of it changes.
-import { useState } from 'react'
+// folded away (checks passed, reviews that ask nothing); then its conversation, as GitHub's Conversation tab has it
+// (comments and reviews with words, oldest first); and the threads that have it, on any machine. Its description under
+// its title. Long ones are folded to a few lines. Its tab carries the road to merge. Drawn from the daemon's snapshot
+// (`github.pr`, with the conversation), read again as the thread's summary of it changes.
+import { useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import {
   factsOf, Markdown, PaneButton, PaneHeader, PaneMessage, PaneNote, useAllThreads, useDispatch, useMachines, useMethod, useSelection, useTabNote,
   type PaneProps, type ThreadInfo,
 } from '@superego/app/ui'
 import { CheckGlyph, CommentGlyph, PrGlyph, Road } from './glyphs.tsx'
-import { about, parsePr, problemText, REFRESH, PR, type Check, type GithubFacts, type PrDetail, type PrView, type ReviewBy } from './shared.ts'
+import { about, parsePr, problemText, REFRESH, PR, type Check, type Conversation, type GithubFacts, type PrDetail, type PrView, type Remark, type ReviewBy } from './shared.ts'
 
 /** A check's time: "4m 41s", "38s". */
 const took = (check: Check) => {
@@ -48,7 +50,7 @@ export function PullRequestPane({ machine, thread, pane }: PaneProps) {
   const ref = parsePr(url)
   // Read again whenever the thread's summary of it changes (the poller found something new).
   const summary = factsOf<GithubFacts>(thread, about)?.prs.find((p) => p.key === ref?.key)
-  const { data, error, refetch } = useMethod<PrView>(machine.id, PR, { url }, { enabled: Boolean(ref), refresh: JSON.stringify(summary ?? null) })
+  const { data, error, refetch } = useMethod<PrView>(machine.id, PR, { url, conversation: true }, { enabled: Boolean(ref), refresh: JSON.stringify(summary ?? null) })
   const dispatch = useDispatch()
   const [refreshing, setRefreshing] = useState<string | false>(false)
   const pr = data?.pr
@@ -85,6 +87,8 @@ export function PullRequestPane({ machine, thread, pane }: PaneProps) {
         </div>
         {pr.error && <div className="github-pane__problem">{problemText(pr.error, where)}</div>}
         {typeof refreshing === 'string' && refreshing !== '…' && <div className="github-pane__problem">Refreshing failed: {refreshing}</div>}
+        {data.conversation ? <Description text={data.conversation.body} />
+          : <div className="github-pane__problem">Its description and conversation couldn't be fetched{pr.error ? '' : ': try Refresh'}.</div>}
         {pr.state && (
           <div className="github-pane__summary">
             <Road pr={pr} />
@@ -157,9 +161,78 @@ export function PullRequestPane({ machine, thread, pane }: PaneProps) {
           </div>
         ))}
 
+        {data.conversation && <Talk pr={pr} conversation={data.conversation} />}
+
         <Threads view={data} url={url} here={thread} machine={machine.id} />
         <div className="github-pane__meta">{pr.head && <>On <code>{pr.head.slice(0, 7)}</code> · </>}{pr.polledAt ? `updated ${ago(pr.polledAt)}` : 'not fetched yet'}</div>
       </div>
+    </div>
+  )
+}
+
+/**
+ * Text folded to `height` (CSS) while it runs longer, "Show more" unfolding it. Measured as it changes (an image loaded,
+ * the pane resized).
+ */
+function Folded({ height, children }: { height: string; children: ReactNode }) {
+  const box = useRef<HTMLDivElement>(null)
+  const inner = useRef<HTMLDivElement>(null)
+  const [open, setOpen] = useState(false)
+  const [long, setLong] = useState(false)
+  useLayoutEffect(() => {
+    const outer = box.current
+    const content = inner.current
+    if (!outer || !content || open) return
+    const measure = () => setLong(content.scrollHeight > outer.clientHeight + 1)
+    measure()
+    if (typeof ResizeObserver === 'undefined') return
+    const watch = new ResizeObserver(measure)
+    watch.observe(content)
+    watch.observe(outer)
+    return () => watch.disconnect()
+  }, [open])
+  return <>
+    <div ref={box} className={`github-folded${!open && long ? ' is-folded' : ''}`} style={open ? undefined : { maxHeight: height }}>
+      <div ref={inner}>{children}</div>
+    </div>
+    {(long || open) && <button type="button" className="github-folded__more" onClick={() => setOpen(!open)}>{open ? 'Show less' : 'Show more'}</button>}
+  </>
+}
+
+/** Others' words as GitHub shows them: Markdown with its HTML (sanitized), each newline a break. */
+const Words = ({ text }: { text: string }) => <Markdown text={text} html breaks compact />
+
+/** Its description, under its title: folded to a few lines while long. */
+function Description({ text }: { text: string }) {
+  if (!text.trim()) return <div className="github-pane__none">No description.</div>
+  return <div className="github-pane__description"><Folded height="12em"><Words text={text} /></Folded></div>
+}
+
+/** What a review said, as its remark's head says it. */
+const reviewWord: Record<ReviewBy['verdict'], string> = { approved: 'approved', changes: 'requested changes', commented: 'reviewed', dismissed: 'reviewed (dismissed)', pending: 'reviewed' }
+
+/** Its conversation, oldest first: who, when (a link to it on GitHub), what; those before it on GitHub, a link there. */
+function Talk({ pr, conversation }: { pr: PrDetail; conversation: Conversation }) {
+  const { remarks, earlier } = conversation
+  if (!remarks.length && !earlier) return null
+  return <>
+    <h2 className="github-pane__h">Conversation <span>{remarks.length || ''}</span></h2>
+    {earlier > 0 && <a className="github-talk__earlier" href={pr.url} target="_blank" rel="noreferrer">Earlier comments on GitHub</a>}
+    {remarks.map((r, i) => <Said key={r.url ?? i} remark={r} />)}
+  </>
+}
+
+function Said({ remark: r }: { remark: Remark }) {
+  const when = r.at ? ago(r.at) : ''
+  return (
+    <div className={`github-talk${r.verdict ? ` is-review is-${r.verdict}` : ''}`}>
+      <div className="github-talk__head">
+        {r.verdict ? <CommentGlyph tone={r.verdict === 'approved' ? 'approved' : r.verdict === 'changes' ? 'changes' : 'quiet'} /> : <CommentGlyph tone="quiet" />}
+        <b>{r.who}</b>
+        {r.verdict && <span className={r.verdict === 'approved' ? 'github-word is-pass' : r.verdict === 'changes' ? 'github-word is-changes' : ''}>{reviewWord[r.verdict]}</span>}
+        <span className="github-talk__when">{r.url ? <a href={r.url} target="_blank" rel="noreferrer">{when || 'on GitHub'}</a> : when}</span>
+      </div>
+      {r.hidden ? <div className="github-pane__none">Hidden: {r.hidden}.</div> : <div className="github-talk__body"><Folded height="16em"><Words text={r.body} /></Folded></div>}
     </div>
   )
 }

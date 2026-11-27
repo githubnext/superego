@@ -293,7 +293,7 @@ pull request's title, a review comment or a webhook's payload is written by whoe
 wakes the agent runs on it unattended. So in `agent`, and in a button's `send` (it goes as the user's message), say
 what happened in your own words, with facts you control: names, counts, ids, states, who did it. Leave others' words
 to a tool the agent calls, which hands them over quoted as data, not instructions (GitHub's notices name the pull
-request and what happened; `pr_view` quotes its title and review comments).
+request and what happened; `pr_view` quotes its title, description and comments).
 
 <!-- check: module -->
 ```ts

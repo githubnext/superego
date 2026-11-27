@@ -57,7 +57,7 @@ Extensions) or per profile (`without`).
 | `ego` | Ego, Superego's own agent: one hidden thread per machine, its prompt and setup tools |
 | `agent-ui` | `ask_user`, `ask_ui`, `show_ui`, `open_ui`/`update_ui`: questions and blocks from the agent |
 | `git` | Changes (`⌘⇧D`): the thread's folder's changes |
-| `github` | a thread's pull requests: attached by `gh pr create`, its branch or by hand; their state in the title bar and sidebar, their own pane, `pr_view` |
+| `github` | a thread's pull requests: attached by `gh pr create`, its branch or by hand; their state in the title bar and sidebar, their own pane (with the description and conversation), `pr_view` |
 | `browser` | Browser: a web page or an HTML file the agent wrote, beside the thread (UI) |
 | `files` | the file tree beside the editor and quick open (`⌘P`) |
 | `images` | `show_images`, and the images in the thread |

@@ -1,11 +1,12 @@
 // github, daemon half: GitHub through this machine's own `gh`, its one sign-in. Found on the login shell's PATH (a daemon
 // started from the Dock lacks mise's and Homebrew's), run with no prompts, no terminal and a time limit. What it asks:
 // who it's signed in as (`gh auth status`), the pull requests a branch has (`gh pr list`), and many pull requests at
-// once (`gh api graphql`, every one aliased in one query per host), with the rate limit it reports.
+// once (`gh api graphql`, every one aliased in one query per host), with the rate limit it reports. The same query, for
+// the pane and `pr_view`, with the description and conversation too: the poll leaves those out, to stay small.
 import { execFile } from 'node:child_process'
 import { access, constants } from 'node:fs/promises'
 import { delimiter, join } from 'node:path'
-import type { Check, GhProblem, GhStatus, Mergeable, PrDetail, PrRef, ReviewBy, ReviewComment } from './shared.ts'
+import { CONVERSATION, type Check, type Conversation, type GhProblem, type GhStatus, type Mergeable, type PrDetail, type PrRef, type Remark, type ReviewBy, type ReviewComment } from './shared.ts'
 
 /** A finished `gh`: its exit code (null: it didn't start, or was killed) and what it wrote. */
 export type GhRun = { code: number | null; stdout: string; stderr: string }
@@ -128,10 +129,18 @@ const FIELDS = `number title url state isDraft mergeable reviewDecision headRefN
     ... on StatusContext { context state targetUrl createdAt }
   } } } } } }`
 
-/** The query for these pull requests (all on one host), each aliased `p<i>`, with the rate limit. */
-export function prQuery(prs: PrRef[]): string {
+/** The description and conversation: the latest top-level comments and reviews, and how many there are in all. */
+const CONVERSATION_FIELDS = `body
+  comments(last: ${CONVERSATION}) { totalCount nodes { author { login } body createdAt url isMinimized minimizedReason } }
+  reviews(last: ${CONVERSATION}) { totalCount nodes { author { login } body state submittedAt url isMinimized minimizedReason } }`
+
+/**
+ * The query for these pull requests (all on one host), each aliased `p<i>`, with the rate limit; with `conversation`,
+ * their descriptions and conversations too.
+ */
+export function prQuery(prs: PrRef[], { conversation = false }: { conversation?: boolean } = {}): string {
   const each = prs.map((p, i) => `p${i}: repository(owner: ${JSON.stringify(p.owner)}, name: ${JSON.stringify(p.repo)}) { pullRequest(number: ${p.number}) { ...pr } }`)
-  return `query {\n  rateLimit { remaining resetAt }\n  ${each.join('\n  ')}\n}\nfragment pr on PullRequest { ${FIELDS} }`
+  return `query {\n  rateLimit { remaining resetAt }\n  ${each.join('\n  ')}\n}\nfragment pr on PullRequest { ${FIELDS}${conversation ? `\n  ${CONVERSATION_FIELDS}` : ''} }`
 }
 
 type Node = Record<string, any>
@@ -195,16 +204,41 @@ export function detailOf(ref: PrRef, node: Node, now: number): PrDetail {
   }
 }
 
-/** What one query answered: each pull request (or why it couldn't be had), and how much of the rate limit is left. */
-export type Fetched = { prs: Map<string, PrDetail | GhProblem>; remaining?: number; resetAt?: number }
+/**
+ * A pull request's description and conversation, as GraphQL gave them: its comments and the reviews with words (a review
+ * without any is its verdict, in `PrDetail.reviews`; a draft review isn't said yet), oldest first.
+ */
+export function conversationOf(node: Node, now: number): Conversation {
+  // GitHub's reason is a word of its own (SPAM, OFF_TOPIC, OUTDATED…): kept to letters, said as words.
+  const hidden = (n: Node) => n.isMinimized ? { hidden: String(n.minimizedReason ?? '').toLowerCase().replace(/_/g, ' ').replace(/[^a-z ]/g, '').trim() || 'hidden' } : {}
+  const remark = (n: Node, at: unknown): Remark => ({
+    who: String(n.author?.login ?? 'someone'), body: n.isMinimized ? '' : String(n.body ?? ''),
+    ...(time(at) ? { at: time(at)! } : {}), ...(n.url ? { url: String(n.url) } : {}), ...hidden(n),
+  })
+  const comments: Node[] = (node.comments?.nodes ?? []).filter(Boolean)
+  const reviews: Node[] = (node.reviews?.nodes ?? []).filter(Boolean)
+  const remarks = [
+    ...comments.map((c) => remark(c, c.createdAt)),
+    ...reviews.filter((r) => r.state !== 'PENDING' && String(r.body ?? '').trim())
+      .map((r) => ({ ...remark(r, r.submittedAt), verdict: VERDICT[String(r.state)] ?? 'commented' })),
+  ].map((r, i) => ({ r, i })).sort((a, b) => (a.r.at ?? 0) - (b.r.at ?? 0) || a.i - b.i).map(({ r }) => r)
+  const left = (connection: Node | undefined, got: number) => Math.max(0, Number(connection?.totalCount ?? got) - got)
+  return { body: String(node.body ?? ''), remarks, earlier: left(node.comments, comments.length) + left(node.reviews, reviews.length), fetchedAt: now }
+}
+
+/**
+ * What one query answered: each pull request (or why it couldn't be had), its conversation when asked for, and how much
+ * of the rate limit is left.
+ */
+export type Fetched = { prs: Map<string, PrDetail | GhProblem>; conversations: Map<string, Conversation>; remaining?: number; resetAt?: number }
 
 /**
  * These pull requests (all on `host`), in one `gh api graphql`. Throws a `GhError` when the query as a whole failed
  * (gh missing or signed out, a rate limit, no network); a pull request that isn't there, or isn't visible, is its own
  * `not-found` problem.
  */
-export async function fetchPrs(gh: Gh, host: string, prs: PrRef[], now: number, signal?: AbortSignal): Promise<Fetched> {
-  const run = await gh(['api', 'graphql', '-i', '--hostname', host, '-f', `query=${prQuery(prs)}`], signal ? { signal } : {})
+export async function fetchPrs(gh: Gh, host: string, prs: PrRef[], now: number, { signal, conversation = false }: { signal?: AbortSignal; conversation?: boolean } = {}): Promise<Fetched> {
+  const run = await gh(['api', 'graphql', '-i', '--hostname', host, '-f', `query=${prQuery(prs, { conversation })}`], signal ? { signal } : {})
   const { headers, body } = splitResponse(run.stdout)
   let parsed: { data?: Record<string, any>; errors?: { type?: string; path?: string[]; message: string }[] } | undefined
   try { parsed = body.trim() ? JSON.parse(body) : undefined } catch { parsed = undefined }
@@ -214,10 +248,12 @@ export async function fetchPrs(gh: Gh, host: string, prs: PrRef[], now: number, 
   }
   const errors = new Map((parsed.errors ?? []).map((e) => [e.path?.[0], e.message]))
   const found = new Map<string, PrDetail | GhProblem>()
+  const conversations = new Map<string, Conversation>()
   prs.forEach((ref, i) => {
     const node = parsed!.data![`p${i}`]?.pullRequest
     found.set(ref.key, node ? detailOf(ref, node, now) : { kind: 'not-found', message: errors.get(`p${i}`) ?? `No pull request ${ref.owner}/${ref.repo}#${ref.number}, or no access to it` })
+    if (node && conversation) conversations.set(ref.key, conversationOf(node, now))
   })
   const rate = parsed.data.rateLimit as { remaining?: number; resetAt?: string } | undefined
-  return { prs: found, ...(typeof rate?.remaining === 'number' ? { remaining: rate.remaining } : {}), ...(time(rate?.resetAt) ? { resetAt: time(rate?.resetAt)! } : {}) }
+  return { prs: found, conversations, ...(typeof rate?.remaining === 'number' ? { remaining: rate.remaining } : {}), ...(time(rate?.resetAt) ? { resetAt: time(rate?.resetAt)! } : {}) }
 }

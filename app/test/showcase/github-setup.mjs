@@ -33,6 +33,26 @@ const comment = (path, line, who, body, outdated = false) => ({ isResolved: fals
 const prs = {
   'acme/ledger#418': pr(418, "Mentions of extensions' things: @<kind>:<id>", {
     headRefName: 'superego/mentions-ext', reviewDecision: 'CHANGES_REQUESTED',
+    // Its description and conversation (asked for by the pane only).
+    body: [
+      "Extensions can now be mentioned in the composer: type `@` and pick one of an extension's things (a ticket, a page, a thread), and it goes into the message as `@<kind>:<id>`, drawn as a link.", '',
+      '## What changes', '',
+      '- `composer.mention` lets an extension offer things to mention, searched as you type',
+      '- Mentions are drawn as links in messages, opening what they name',
+      '- Lists are cached per source; searches debounced by 120ms', '',
+      '## Testing', '',
+      '- [x] `pnpm vitest related --run packages/app/src/renderer/mentions.tsx`',
+      '- [x] `pnpm smoke`',
+      '- [ ] Try it with the tickets extension',
+    ].join('\n'),
+    comments: { totalCount: 57, nodes: [
+      { author: { login: 'bo-lin' }, body: 'Love this. Does it work in a phone\'s composer too, or only on the desktop?', createdAt: at(3), url: `${URL(418)}#issuecomment-1` },
+      { author: { login: 'mikker' }, body: '(Agent) It does: the phone composer uses the same `composer.mention` source, so the list shows above the keyboard.', createdAt: at(8), url: `${URL(418)}#issuecomment-2` },
+    ] },
+    reviews: { totalCount: 3, nodes: [
+      { author: { login: 'bo-lin' }, state: 'COMMENTED', body: '', submittedAt: at(5), url: `${URL(418)}#pullrequestreview-1` },
+      { author: { login: 'alice' }, state: 'CHANGES_REQUESTED', body: 'Nice direction. Two things before it goes in: the search refetches too often, and `mention.search` needs a limit the caller sets. See the comments.', submittedAt: at(20), url: `${URL(418)}#pullrequestreview-2` },
+    ] },
     latestReviews: { nodes: [{ author: { login: 'alice' }, state: 'CHANGES_REQUESTED', submittedAt: at(20) }, { author: { login: 'bo-lin' }, state: 'COMMENTED', submittedAt: at(5) }] },
     reviewThreads: { nodes: [
       comment('packages/app/src/renderer/mentions.tsx', 84, 'alice', "This refetches on every keystroke, even when the source's list is cached."),

@@ -61,6 +61,9 @@ it("attaches the pull request the agent's `gh pr create` opened, and tells the a
       { isResolved: true, path: 'src/old.ts', line: 1, comments: { nodes: [{ author: { login: 'bo' }, body: 'Fixed', url: `${URL}#r2` }] } },
     ] },
     commits: { nodes: [{ commit: { statusCheckRollup: { contexts: { nodes: [failedCheck('acme', 'app', 'lint', 42)] } } } }] },
+    body: 'Mentions of things, with **@kind:id**.',
+    comments: { totalCount: 2, nodes: [{ author: { login: 'bo' }, body: 'Looks useful.', createdAt: '2026-01-01T10:30:00Z', url: `${URL}#issuecomment-1` }] },
+    reviews: { totalCount: 1, nodes: [{ author: { login: 'alice' }, state: 'CHANGES_REQUESTED', body: 'A few things.', submittedAt: '2026-01-01T11:00:00Z', url: `${URL}#pullrequestreview-1` }] },
   }) } })
   daemon = await testDaemon({
     extensions: [githubExtension({ env: gh.env, intervals: FAST })],
@@ -83,12 +86,29 @@ it("attaches the pull request the agent's `gh pr create` opened, and tells the a
   expect(view.result?.text).toContain('✗ lint https://github.com/acme/app/actions/runs/42/job/2 (logs: gh run view 42 --log-failed)')
   expect(view.result?.text).toContain('src/mentions.tsx:84 alice: "This refetches on every keystroke."')
   expect(view.result?.text).not.toContain('src/old.ts')
+  // Its description and conversation too, quoted.
+  expect(view.result?.text).toContain('Description: "Mentions of things, with **@kind:id**."')
+  expect(view.result?.text).toContain('Conversation (latest 2; 1 earlier on GitHub), oldest first:')
+  expect(view.result?.text).toContain(`2026-01-01 11:00 alice (review: changes requested): "A few things." ${URL}#pullrequestreview-1`)
+  // Only pr_view asked for them: the poll never does.
+  const queries = (await gh.calls()).filter((c) => c.args[1] === 'graphql').map((c) => c.args.find((a) => a.startsWith('query='))!)
+  expect(queries.filter((q) => q.includes('comments(last:'))).toHaveLength(1)
 
   // The pane's read: everything, and the threads that have it.
   const read = await daemon.call<PrView>(PR, { url: URL })
   expect(read.threads).toEqual([{ id: thread.id, title: thread.title, archived: false }])
   expect(read.pr).toMatchObject({ branch: 'feature', base: 'main', comments: [{ path: 'src/mentions.tsx', line: 84, who: 'alice' }], reviews: [{ who: 'alice', verdict: 'changes' }] })
   expect(read.pr.checkList).toEqual([expect.objectContaining({ name: 'lint', result: 'fail', runId: 42, startedAt: Date.parse('2026-01-01T10:00:00Z'), completedAt: Date.parse('2026-01-01T10:07:55Z') })])
+  expect(read.conversation).toBeUndefined()
+
+  // The pane's read, with its conversation: fetched with the rest (pr_view's, just now, stands).
+  const talk = await daemon.call<PrView>(PR, { url: URL, conversation: true })
+  expect(talk.conversation).toMatchObject({ body: 'Mentions of things, with **@kind:id**.', earlier: 1, remarks: [{ who: 'bo', body: 'Looks useful.' }, { who: 'alice', verdict: 'changes', body: 'A few things.' }] })
+  // Gone from GitHub: the read says why, and keeps what it had.
+  await gh.set({ login: 'octocat', prs: {} })
+  const gone = await daemon.call<PrView>(PR, { url: URL, conversation: true, fresh: true })
+  expect(gone.pr.error?.kind).toBe('not-found')
+  expect(gone.conversation?.body).toBe('Mentions of things, with **@kind:id**.')
 })
 
 it("attaches a worktree thread's branch's pull request once it's pushed, but never one detached there", async () => {

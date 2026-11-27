@@ -7,7 +7,8 @@
 // asks one that's held), resting while gh is missing or signed out (Settings says so, and each pull request's tooltip),
 // and never asking a host gh isn't signed in to. The full snapshot of each (checks, reviews, comments) is kept once per
 // machine, in `<dir>/prs.json` (a `jsonFile`), for the pane and `pr_view`; the agent's prompt only names the thread's
-// pull requests. A watching agent is woken by a notice, within its thread's wake budget: at most `WAKES` an hour about
+// pull requests. Its description and conversation aren't polled: the pane and `pr_view` have them fetched with the rest
+// as they look (the same query, with more), kept in memory. A watching agent is woken by a notice, within its thread's wake budget: at most `WAKES` an hour about
 // one pull request.
 import { execFile } from 'node:child_process'
 import { defineExtension, defineTool, section } from '@earendil-works/pi-durable'
@@ -20,7 +21,7 @@ import { fetchPrs, ghRunner, ghStatus, GhError, prsOfBranch, type Gh } from './g
 import { backoff, due, INTERVALS, type Entry, type Intervals } from './schedule.ts'
 import {
   about, ATTACH, ATTACH_TOOL, DETACH, DETACH_TOOL, lead, NOTICE, parsePr, PANE, PR, PROMPT_SECTION, prsIn, REFRESH, refOf, SECTION, STATUS, UNWATCH, VIEW_TOOL, WATCH,
-  WATCH_TOOL, watchWord, type GhProblem, type GhStatus, type GithubFacts, type GithubState, type How, type NoticeData, type PrDetail, type PrKey, type PrLink,
+  WATCH_TOOL, watchWord, type Conversation, type GhProblem, type GhStatus, type GithubFacts, type GithubState, type How, type NoticeData, type PrDetail, type PrKey, type PrLink,
   type PrSummary, type PrView, type Watch,
 } from './shared.ts'
 
@@ -278,7 +279,11 @@ export function githubExtension(options: GithubOptions = {}) {
         for (const [host, keys] of byHost) {
           const hold = holds.get(host)
           if (hold && hold.until > now && !keys.some((k) => pressed.has(k))) continue
-          for (let i = 0; i < keys.length && !signal.aborted; i += BATCH) await ask(host, keys.slice(i, i + BATCH))
+          // Those whose conversation is wanted (the pane's, pr_view's) asked apart, with it; the rest without.
+          for (const conversation of [true, false]) {
+            const these = keys.filter((k) => Boolean(entry(k).talking) === conversation)
+            for (let i = 0; i < these.length && !signal.aborted; i += BATCH) await ask(host, these.slice(i, i + BATCH), { conversation })
+          }
         }
       }
 
@@ -289,10 +294,10 @@ export function githubExtension(options: GithubOptions = {}) {
         }
       }
 
-      /** One query to `host` for these pull requests; what it found published, what failed said. */
-      async function ask(host: string, keys: PrKey[]) {
+      /** One query to `host` for these pull requests (with `conversation`, theirs too); what it found published, what failed said. */
+      async function ask(host: string, keys: PrKey[], { conversation = false } = {}) {
         const now = Date.now()
-        for (const key of keys) { const e = entry(key); e.forced = false; e.checkedAt = now; pressed.delete(key) }
+        for (const key of keys) { const e = entry(key); e.forced = false; e.talking = false; e.checkedAt = now; pressed.delete(key) }
         // A host gh isn't signed in to isn't asked: with GH_ENTERPRISE_TOKEN set, gh would send it that token.
         if (!known(host)) {
           const problem: GhProblem = { kind: 'unknown-host', message: `gh isn't signed in to ${host}: run \`gh auth login --hostname ${host}\` to follow its pull requests.` }
@@ -300,7 +305,8 @@ export function githubExtension(options: GithubOptions = {}) {
           return
         }
         try {
-          const found = await fetchPrs(gh, host, keys.map((k) => refOf(k)!), now, signal)
+          const found = await fetchPrs(gh, host, keys.map((k) => refOf(k)!), now, { signal, conversation })
+          for (const [key, talk] of found.conversations) entry(key).talk = talk
           holds.delete(host)
           if (found.remaining !== undefined && found.remaining < RESERVE && found.resetAt) {
             holds.set(host, { failures: 0, until: found.resetAt })
@@ -481,14 +487,21 @@ export function githubExtension(options: GithubOptions = {}) {
       })
 
       // ── The window's reads and actions ───────────────────────────────────────────────────────────────────────────
-      /** A pull request as now known, asked about first when it never was (or, merged or closed, not lately). */
-      async function view(key: PrKey, fresh: boolean): Promise<PrDetail> {
+      /**
+       * A pull request as now known, asked about first when it never was (or, merged or closed, not lately); with
+       * `conversation`, its description and conversation too, fetched with it unless they were within `intervals.fast`.
+       * No conversation when it couldn't be fetched: the detail's `error` says why.
+       */
+      async function view(key: PrKey, fresh: boolean, { conversation = false } = {}): Promise<{ detail: PrDetail; conversation?: Conversation }> {
         const e = entries.get(key)
         const terminal = e?.detail?.state === 'merged' || e?.detail?.state === 'closed'
-        if (fresh || !e?.detail || (terminal && Date.now() - (e.checkedAt ?? 0) > intervals.slow) || (!linked.has(key) && due(e, Date.now(), intervals))) await poll([key])
+        const talk = conversation && (fresh || !e?.talk || Date.now() - e.talk.fetchedAt > intervals.fast)
+        if (talk) entry(key).talking = true
+        if (talk || fresh || !e?.detail || (terminal && Date.now() - (e.checkedAt ?? 0) > intervals.slow) || (!linked.has(key) && due(e, Date.now(), intervals))) await poll([key])
         const after = entries.get(key)
         const summary = summaryOf(key, after, problems.get(key) ?? ghProblem)
-        return { checkList: [], reviews: [], comments: [], ...after?.detail, ...summary }
+        const detail = { checkList: [], reviews: [], comments: [], ...after?.detail, ...summary }
+        return { detail, ...(conversation && after?.talk ? { conversation: after.talk } : {}) }
       }
       async function threadsOf(key: PrKey) {
         await indexed
@@ -497,11 +510,12 @@ export function githubExtension(options: GithubOptions = {}) {
           return thread && { id, title: thread.title, archived: Boolean(thread.archived) }
         })).then((all) => all.filter((t) => t !== undefined))
       }
-      superego.method(PR, async ({ url, fresh }): Promise<PrView> => {
+      superego.method(PR, async ({ url, fresh, conversation }): Promise<PrView> => {
         const ref = parsePr(url)
         if (!ref) throw new RpcError('invalid', `Not a pull request's URL: ${url}`)
-        return { pr: await view(ref.key, fresh === true), threads: await threadsOf(ref.key) }
-      }, { params: obj({ url: str(), fresh: opt(bool()) }) })
+        const { detail, conversation: talk } = await view(ref.key, fresh === true, { conversation: conversation === true })
+        return { pr: detail, threads: await threadsOf(ref.key), ...(talk ? { conversation: talk } : {}) }
+      }, { params: obj({ url: str(), fresh: opt(bool()), conversation: opt(bool()) }) })
 
       superego.action(defineAction({
         id: ATTACH, title: 'Attach a pull request', expose: ['ui', 'cli'], description: "Attach a pull request to a thread by its URL: its state shows on the thread, and it's followed.",
@@ -567,15 +581,15 @@ export function githubExtension(options: GithubOptions = {}) {
         tools: [
           defineTool({
             name: VIEW_TOOL,
-            description: "Look at a GitHub pull request: its state, checks (a failed one's run and the command for its logs), reviews and unresolved review comments. Without `pr`, the thread's own.",
+            description: "Look at a GitHub pull request: its state, description, checks (a failed one's run and the command for its logs), reviews, conversation and unresolved review comments. Without `pr`, the thread's own.",
             parameters: obj({ pr: opt(str({ description: "a pull request's URL, owner/repo#123 or #123 (one of the thread's); default: the thread's" })) }),
             replay: 'safe',
             async execute({ pr }, api) {
               const thread = threadOfCall(api.conversationId)
               const key = await named(thread, pr)
               const e = entries.get(key)
-              const detail = await view(key, !e?.checkedAt || Date.now() - e.checkedAt > intervals.fast)
-              return { output: [{ type: 'text', text: digest(detail) }], details: { key, url: detail.url, state: detail.state ?? null } }
+              const { detail, conversation } = await view(key, !e?.checkedAt || Date.now() - e.checkedAt > intervals.fast, { conversation: true })
+              return { output: [{ type: 'text', text: digest(detail, conversation) }], details: { key, url: detail.url, state: detail.state ?? null } }
             },
           }),
           defineTool({

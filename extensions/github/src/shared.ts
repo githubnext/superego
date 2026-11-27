@@ -9,7 +9,7 @@ export const PANE = 'pull-request'
 export const about = {
   name: 'github', version: '1.0.0', api: '^5.21', title: 'GitHub',
   description: "A thread's pull requests: their state in the title bar and sidebar, checks and reviews beside it. Uses this machine's gh.",
-  panes: { [PANE]: 'a GitHub pull request: its state, checks, reviews and unresolved review comments. Params: { url }' },
+  panes: { [PANE]: 'a GitHub pull request: its state, description, checks, reviews, conversation and unresolved review comments. Params: { url }' },
 } satisfies ExtensionAbout
 
 // ── Names ────────────────────────────────────────────────────────────────────────────────────────────────────────
@@ -153,8 +153,25 @@ export type PrDetail = PrSummary & {
   polledAt?: number
 }
 
-/** `github.pr`'s answer: the pull request, and the threads on this machine that have it (archived ones too). */
-export type PrView = { pr: PrDetail; threads: { id: string; title: string; archived: boolean }[] }
+/**
+ * A remark in a pull request's conversation: a top-level comment, or a review with words (its `verdict`). `hidden`: a
+ * maintainer hid it (GitHub's reason: spam, off-topic, outdated…); its body isn't kept.
+ */
+export type Remark = { who: string; body: string; at?: number; url?: string; verdict?: ReviewBy['verdict']; hidden?: string }
+/**
+ * A pull request's description and conversation, as last fetched (`fetchedAt`): asked for by the pane and `pr_view`
+ * only, never by the poll. `remarks` oldest first, the last `CONVERSATION` comments and reviews; `earlier`, how many
+ * more there are on GitHub.
+ */
+export type Conversation = { body: string; remarks: Remark[]; earlier: number; fetchedAt: number }
+/** How many comments, and how many reviews, a conversation is fetched with: the latest. */
+export const CONVERSATION = 50
+
+/**
+ * `github.pr`'s answer: the pull request, and the threads on this machine that have it (archived ones too). With
+ * `conversation: true` asked, its description and conversation; none when they couldn't be fetched (`pr.error` says why).
+ */
+export type PrView = { pr: PrDetail; threads: { id: string; title: string; archived: boolean }[]; conversation?: Conversation }
 
 /** This machine's `gh`: whether it's there, and who it's signed in as where. */
 export type GhStatus = {

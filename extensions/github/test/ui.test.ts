@@ -61,7 +61,14 @@ it('shows a pull request beside the thread, leading with what to fix', async () 
     reviews: [{ who: 'alice', verdict: 'changes' }, { who: 'bo-lin', verdict: 'commented' }],
     comments: [{ path: 'src/mentions.tsx', line: 84, body: 'This refetches on every keystroke.', who: 'alice', outdated: false }],
   }
-  const view: PrView = { pr: detail, threads: [{ id: 't1', title: 'Mentions from extensions', archived: false }, { id: 'old', title: 'Earlier try', archived: true }] }
+  const view: PrView = {
+    pr: detail, threads: [{ id: 't1', title: 'Mentions from extensions', archived: false }, { id: 'old', title: 'Earlier try', archived: true }],
+    conversation: { body: 'Lets an extension **mention** its things.', earlier: 3, fetchedAt: Date.now(), remarks: [
+      { who: 'bo-lin', body: 'Nice, does it work on phones?', at: Date.now() - 2 * 3600_000, url: `${URL}#issuecomment-1` },
+      { who: 'alice', body: 'See the comment on `mentions.tsx`.', at: Date.now() - 3600_000, url: `${URL}#pullrequestreview-2`, verdict: 'changes' },
+      { who: 'spammer', body: '', at: Date.now() - 60_000, hidden: 'spam' },
+    ] },
+  }
   const machine = fakeMachine({ threads: [thread(pr())], extensions: ['github'], methods: { [PR]: () => view } })
   ui = await mountUi({ extensions: [github], machines: [machine] })
   const pane = await ui.render({ pane: { kind: PANE, params: { url: URL } }, thread: 't1' })
@@ -77,5 +84,35 @@ it('shows a pull request beside the thread, leading with what to fix', async () 
   expect(text).toContain('bo-linCommented')
   expect(text).toContain('Earlier tryArchived')
   expect(text).toContain('On a1f3c9e · updated 30s ago')
-  expect(ui.calls.find((c) => c.method === PR)?.params).toEqual({ url: URL })
+  // Its description under its title, the conversation oldest first, each linking to it on GitHub.
+  expect(text).toContain('Lets an extension mention its things.')
+  expect(pane.container.querySelector('.github-pane__description strong')?.textContent).toBe('mention')
+  expect(text).toMatch(/Conversation\s*3/)
+  expect(pane.container.querySelector<HTMLAnchorElement>('.github-talk__earlier')?.href).toBe(URL)
+  expect([...pane.container.querySelectorAll('.github-talk__head b')].map((b) => b.textContent)).toEqual(['bo-lin', 'alice', 'spammer'])
+  expect(text).toContain('alicerequested changes1h ago')
+  expect(text).toContain('Hidden: spam.')
+  expect(pane.container.querySelector<HTMLAnchorElement>('.github-talk__when a')?.href).toBe(`${URL}#issuecomment-1`)
+  expect(pane.container.querySelector<HTMLAnchorElement>('.github-talk__when a')?.target).toBe('_blank')
+  expect(ui.calls.find((c) => c.method === PR)?.params).toEqual({ url: URL, conversation: true })
+})
+
+it("says when a pull request's description and conversation couldn't be fetched, and that it has none", async () => {
+  const detail: PrDetail = { ...pr({ unresolved: 0 }), checkList: [], reviews: [], comments: [], error: { kind: 'failed', message: 'error connecting to api.github.com' } }
+  const { error: _error, ...fine } = detail
+  const views: PrView[] = [{ pr: detail, threads: [] }, { pr: fine, threads: [], conversation: { body: '', remarks: [], earlier: 0, fetchedAt: 0 } }]
+  for (const [i, view] of views.entries()) {
+    const machine = fakeMachine({ threads: [thread(pr())], extensions: ['github'], methods: { [PR]: () => view } })
+    ui = await mountUi({ extensions: [github], machines: [machine] })
+    const text = (await ui.render({ pane: { kind: PANE, params: { url: URL } }, thread: 't1' })).text()
+    if (i === 0) {
+      expect(text).toContain('error connecting to api.github.com')
+      expect(text).toContain("Its description and conversation couldn't be fetched.")
+    } else {
+      expect(text).toContain('No description.')
+      expect(text).not.toContain('Conversation')
+    }
+    await ui.unmount()
+    ui = undefined
+  }
 })

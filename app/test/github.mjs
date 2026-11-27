@@ -2,7 +2,8 @@
 // that opens one (its `gh pr create` attaching it, its link drawn with its state; its checks failing and changes asked
 // for later, notices in the thread), and threads with one attached by hand in every state. Shot in light and dark, into
 // $SUPEREGO_SHOWCASE_OUT: the thread's notices; the window with the pull-request pane beside the thread; the title
-// bar's chip in each state; its menu; a row pointed at, with its card; the pane alone; thread details; Settings → GitHub.
+// bar's chip in each state; its menu; a row pointed at, with its card; the pane alone (its description, then scrolled to
+// its conversation); thread details; Settings → GitHub.
 import { copyFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { openApp } from './harness.mjs'
@@ -63,6 +64,15 @@ await openApp({ name: 'github', timeout: 300_000 }, async (t) => {
     await t.theme(theme)
     await t.shot(`github-pane-${theme}`, pane)
   }
+  // Its description and conversation, further down: the description unfolded, the pane scrolled to the conversation.
+  await until(`Boolean(document.querySelector('.github-talk'))`, 'the conversation', 30_000)
+  await run(`document.querySelector('.github-folded__more')?.click()`)
+  await run(`document.querySelector('.github-talk').scrollIntoView({ block: 'start' })`)
+  for (const theme of ['light', 'dark']) {
+    await t.theme(theme)
+    await t.shot(`github-pane-conversation-${theme}`, pane)
+  }
+  await run(`document.querySelector('.github-pane').scrollTop = 0`)
   await run(`document.querySelector('.github-fold summary').click()`)
   await t.shot('github-pane-passed-dark', pane)
 

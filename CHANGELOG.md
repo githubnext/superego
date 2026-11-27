@@ -13,6 +13,8 @@
   Claude Code runs too.
 - A thread tells you when its pull request's checks fail, a reviewer asks for changes or approves, or it's merged, with
   Fix it to hand it to the agent. Watch… on the pull request wakes the agent instead.
+- The pull request pane shows its description and conversation (comments and reviews), as GitHub's Conversation tab
+  does.
 - **Schedules.** Ask an agent to check something every 30 minutes, or to remind you tomorrow at 9: it wakes the
   thread or just reminds you then. A clock in the title bar and on the thread's row shows the next run, to run, pause,
   edit or cancel it; `/schedule in 30m check the deploy` makes one too.

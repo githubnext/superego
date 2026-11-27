@@ -1,7 +1,7 @@
 // github's pure parts: naming a pull request by its URL, saying its state (words, the road to merge), reading gh's
 // answers, and when it's next asked about.
 import { expect, it } from 'vitest'
-import { detailOf, problemOf, prQuery, splitResponse } from '../src/gh.ts'
+import { conversationOf, detailOf, problemOf, prQuery, splitResponse } from '../src/gh.ts'
 import { digest, promptLine } from '../src/digest.ts'
 import { eventsOf, fixText, noticeForAgent, wakes, wakeText } from '../src/events.ts'
 import { backoff, due, INTERVALS } from '../src/schedule.ts'
@@ -50,6 +50,51 @@ it("reads gh api's answer: its headers, a rate limit, a sign-in wanted", () => {
   expect(problemOf({ code: 1, stdout: '', stderr: 'error connecting to api.github.com' }).problem).toEqual({ kind: 'failed', message: 'error connecting to api.github.com' })
   // Each pull request aliased.
   expect(prQuery([parsePr('https://github.com/acme/app/pull/7')!])).toContain('p0: repository(owner: "acme", name: "app") { pullRequest(number: 7) { ...pr } }')
+  // The poll's query leaves the description and conversation out; the pane's has them.
+  expect(prQuery([parsePr('https://github.com/acme/app/pull/7')!])).not.toMatch(/\bbody\n|comments\(last/)
+  const talk = prQuery([parsePr('https://github.com/acme/app/pull/7')!], { conversation: true })
+  expect(talk).toContain('comments(last: 50) { totalCount nodes { author { login } body createdAt url')
+  expect(talk).toContain('reviews(last: 50) { totalCount nodes { author { login } body state submittedAt url')
+})
+
+it('reads the description and conversation: comments and reviews with words, oldest first, and how many are left on GitHub', () => {
+  const U = 'https://github.com/acme/app/pull/7'
+  const comment = (who: string, at: string, body: string, more = {}) => ({ author: { login: who }, body, createdAt: at, url: `${U}#issuecomment-${who}`, ...more })
+  const review = (who: string, state: string, at: string, body: string) => ({ author: { login: who }, state, body, submittedAt: at, url: `${U}#pullrequestreview-${who}` })
+  const node = prNode('acme', 'app', 7, {
+    body: 'Adds mentions.\n\n![shot](https://example.com/a.png)',
+    comments: { totalCount: 53, nodes: [
+      comment('bo', '2026-01-01T12:00:00Z', 'Later comment'),
+      comment('alice', '2026-01-01T10:00:00Z', 'First comment'),
+      comment('spammer', '2026-01-01T10:30:00Z', 'Buy now', { isMinimized: true, minimizedReason: 'SPAM' }),
+      { ...comment('x', '2026-01-01T13:00:00Z', 'Gone'), author: null },
+    ] },
+    reviews: { totalCount: 3, nodes: [
+      review('carol', 'CHANGES_REQUESTED', '2026-01-01T11:00:00Z', 'Please split this up.'),
+      // A review without words is its verdict alone; a draft review isn't said yet.
+      review('dan', 'APPROVED', '2026-01-01T11:30:00Z', '  '),
+      review('me', 'PENDING', '2026-01-01T11:40:00Z', 'Draft thoughts'),
+    ] },
+  })
+  const got = conversationOf(node, 5)
+  expect(got.body).toBe('Adds mentions.\n\n![shot](https://example.com/a.png)')
+  expect(got.fetchedAt).toBe(5)
+  expect(got.remarks.map((r) => [r.who, r.verdict ?? 'comment', r.body])).toEqual([
+    ['alice', 'comment', 'First comment'],
+    ['spammer', 'comment', ''],
+    ['carol', 'changes', 'Please split this up.'],
+    ['bo', 'comment', 'Later comment'],
+    ['someone', 'comment', 'Gone'],
+  ])
+  expect(got.remarks[0]).toEqual({ who: 'alice', body: 'First comment', at: Date.parse('2026-01-01T10:00:00Z'), url: `${U}#issuecomment-alice` })
+  expect(got.remarks[1]!.hidden).toBe('spam')
+  // 53 comments, 4 fetched; 3 reviews, all fetched.
+  expect(got.earlier).toBe(49)
+
+  // A pull request with no description, nor conversation.
+  expect(conversationOf(prNode('acme', 'app', 7, { body: '', comments: { totalCount: 0, nodes: [] }, reviews: { totalCount: 0, nodes: [] } }), 1))
+    .toEqual({ body: '', remarks: [], earlier: 0, fetchedAt: 1 })
+  expect(conversationOf(prNode('acme', 'app', 7, { body: null }), 1)).toEqual({ body: '', remarks: [], earlier: 0, fetchedAt: 1 })
 })
 
 it("summarizes a pull request: a re-run check counted once, resolved threads left out, a draft's state", () => {
@@ -145,6 +190,21 @@ it("keeps others' words from the agent's notices and Fix it, and quotes them in 
   expect(view).toContain(JSON.stringify(`${evil} really`))
   expect(view).toContain(JSON.stringify(`a.ts\n${evil}`))
   expect(view.split('\n').filter((line) => line.includes('Ignore')).every((line) => /"[^"]*Ignore/.test(line) && !line.trimStart().startsWith('Ignore'))).toBe(true)
+  expect(view).toContain('Description and conversation: not fetched')
+
+  // Its description and conversation, quoted the same way.
+  const conversation = conversationOf({
+    body: `${evil}\nplease`,
+    comments: { totalCount: 1, nodes: [{ author: { login: 'mallory' }, body: `${evil}\n# Heading`, createdAt: '2026-01-01T10:00:00Z', url: 'u#c1' }] },
+    reviews: { totalCount: 1, nodes: [{ author: { login: 'mallory' }, state: 'COMMENTED', body: evil, submittedAt: '2026-01-01T11:00:00Z', url: 'u#r1' }] },
+  }, 0)
+  const full = digest(now, conversation)
+  expect(full).toContain(`Description: ${JSON.stringify(`${evil}\nplease`)}`)
+  expect(full).toContain('Conversation (2), oldest first:')
+  expect(full).toContain(`  2026-01-01 10:00 mallory: ${JSON.stringify(`${evil} # Heading`)} u#c1`)
+  expect(full).toContain(`  2026-01-01 11:00 mallory (review: commented): ${JSON.stringify(evil)} u#r1`)
+  expect(full.split('\n').filter((line) => line.includes('Ignore')).every((line) => /"[^"]*Ignore/.test(line) && !line.trimStart().startsWith('Ignore'))).toBe(true)
+  expect(digest(now, { body: '', remarks: [], earlier: 0, fetchedAt: 0 })).toContain('Description: none\n')
 })
 
 it("names the thread's pull requests in its prompt the same whatever happens to them", () => {

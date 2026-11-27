@@ -135,3 +135,20 @@
 .github-notice { display: grid; gap: 2px; }
 .github-notice__head { display: flex; align-items: center; gap: 6px; font-weight: 500; }
 .github-notice__detail { padding-left: 20px; color: var(--superego-muted); overflow-wrap: anywhere; }
+
+/* Its description and conversation: others' words, folded while long, "Show more" under them. */
+.github-pane__description { display: grid; margin-top: 6px; padding-bottom: 4px; border-bottom: 1px solid var(--superego-border); }
+.github-pane__none { color: var(--superego-faint); font-size: var(--superego-text-sm); }
+.github-folded { position: relative; overflow: hidden; overflow-wrap: anywhere; }
+.github-folded.is-folded { mask-image: linear-gradient(to bottom, #000 calc(100% - 3em), transparent); }
+.github-folded__more { justify-self: start; padding: 2px 0; border: 0; background: none; font: inherit; font-size: var(--superego-text-sm); color: var(--superego-link, var(--superego-accent)); cursor: default; }
+.github-folded__more:hover { text-decoration: underline; }
+.github-talk { display: grid; gap: 2px; padding: 6px 0; }
+.github-talk + .github-talk { border-top: 1px solid var(--superego-border); }
+.github-talk__head { display: flex; align-items: center; gap: 6px; font-size: var(--superego-text-sm); color: var(--superego-muted); }
+.github-talk__head b { font-weight: 500; color: var(--superego-text); }
+.github-talk__when { margin-left: auto; color: var(--superego-faint); font-variant-numeric: tabular-nums; }
+.github-talk__when a, .github-talk__earlier { color: inherit; text-decoration: none; }
+.github-talk__when a:hover, .github-talk__earlier:hover { text-decoration: underline; }
+.github-talk__earlier { color: var(--superego-link, var(--superego-accent)); font-size: var(--superego-text-sm); }
+.github-talk__body { padding-left: 22px; display: grid; }
