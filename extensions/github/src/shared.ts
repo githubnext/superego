@@ -7,7 +7,7 @@ import type { ExtensionAbout } from '@superego/protocol'
 export const PANE = 'pull-request'
 
 export const about = {
-  name: 'github', version: '1.0.0', api: '^5.18', title: 'GitHub',
+  name: 'github', version: '1.0.0', api: '^5.21', title: 'GitHub',
   description: "A thread's pull requests: their state in the title bar and sidebar, checks and reviews beside it. Uses this machine's gh.",
   panes: { [PANE]: 'a GitHub pull request: its state, checks, reviews and unresolved review comments. Params: { url }' },
 } satisfies ExtensionAbout
@@ -126,10 +126,10 @@ export type GithubState = { prs: PrLink[]; detached: PrKey[]; summaries: Record<
 
 /**
  * A notice's data (`NOTICE`): what happened (an event's kind: `checks-failed`, `checks-passed`, `changes`, `approved`,
- * `comments`, `merged`, `closed`) to which pull request, said in a headline and a line of detail. `woke`: it woke the
- * watching agent; `held`: it would have, but the agent was woken too often lately.
+ * `comments`, `merged`, `closed`) to which pull request, said in a headline and a line of detail. `watched`: it's for the
+ * agent watching it, and wakes it (unless the thread's wake budget held it: the notice says so).
  */
-export type NoticeData = { event: string; key: PrKey; url: string; number: number; headline: string; detail?: string; woke?: boolean; held?: boolean }
+export type NoticeData = { event: string; key: PrKey; url: string; number: number; headline: string; detail?: string; watched?: boolean }
 
 /** What a watch wakes the agent for, in words: "checks and reviews", "checks, once". */
 export function watchWord(watch: Watch): string {

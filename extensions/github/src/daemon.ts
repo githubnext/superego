@@ -6,10 +6,10 @@
 // otherwise, never once merged or closed; backing off a failing host, waiting out a rate limit (only the user's Refresh
 // asks one that's held), resting while gh is missing or signed out (Settings says so, and each pull request's tooltip),
 // and never asking a host gh isn't signed in to. The full snapshot of each (checks, reviews, comments) is kept once per
-// machine, in `<dir>/prs.json`, for the pane and `pr_view`; the agent's prompt only names the thread's pull requests.
+// machine, in `<dir>/prs.json` (a `jsonFile`), for the pane and `pr_view`; the agent's prompt only names the thread's
+// pull requests. A watching agent is woken by a notice, within its thread's wake budget: at most `WAKES` an hour about
+// one pull request.
 import { execFile } from 'node:child_process'
-import { readFile, rename, writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
 import { defineExtension, defineTool, section } from '@earendil-works/pi-durable'
 import { bool, lit, obj, opt, str } from '@earendil-works/pi-schema'
 import { defineAction, defineDaemonExtension } from '@superego/daemon'
@@ -40,7 +40,7 @@ const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
 const BATCH = 25
 /** Below this much of the rate limit left, a host waits for it to reset. */
 const RESERVE = 50
-/** The loop guard: at most this many wakes of watching agents per pull request in an hour; past it, a notice instead. */
+/** The loop guard: a thread's watching agent is woken at most this many times an hour about one pull request. */
 const WAKES = 5
 const HOUR = 60 * 60_000
 /** How many told events' keys are kept per pull request. */
@@ -92,12 +92,16 @@ export function githubExtension(options: GithubOptions = {}) {
       let ghNow: GhStatus | null = null
       const troubles = new Map<string, string>()
       const showStatus = () => status.set(ghNow && { ...ghNow, ...(troubles.size ? { troubles: [...troubles.values()] } : {}) })
-      /** Say what went wrong with `what` (logged too), or, with no message, that it's gone right again. */
-      const trouble = (what: string, message?: string, error?: unknown) => {
-        if (message !== undefined) console.error(`github: ${message}`, ...(error === undefined ? [] : [error]))
+      /** Show what's wrong with `what` in Settings, or, with no message, that it's gone right again. */
+      const show = (what: string, message?: string) => {
         if (message === undefined ? !troubles.delete(what) : troubles.get(what) === message) return
         if (message !== undefined) troubles.set(what, message)
         showStatus()
+      }
+      /** Say what went wrong with `what` (logged too), or, with no message, that it's gone right again. */
+      const trouble = (what: string, message?: string, error?: unknown) => {
+        if (message !== undefined) console.error(`github: ${message}`, ...(error === undefined ? [] : [error]))
+        show(what, message)
       }
       const messageOf = (error: unknown) => error instanceof Error ? error.message : String(error)
       /** Whether gh is to be asked about a host's pull requests: github.com, or one it's signed in to (`gh auth status`). */
@@ -117,29 +121,29 @@ export function githubExtension(options: GithubOptions = {}) {
       }
 
       // ── What's known of each pull request, kept across restarts ─────────────────────────────────────────────────
-      const file = join(superego.dir, 'prs.json')
       const entries = new Map<PrKey, Entry>()
       /** Each pull request's own problem (not found, a failed fetch): said in its summary until it's fetched. */
       const problems = new Map<PrKey, GhProblem>()
-      /** What's kept of each in prs.json: as last fetched, the events told of it, when it last woke an agent. */
-      type Kept = { detail: PrDetail; told?: string[]; woke?: number[] }
-      // Unreadable, it's said, and what it kept is fetched again (its told events lost: those of a first fetch aren't news).
-      const loaded = readFile(file, 'utf8').then((text) => {
-        for (const [key, { detail, told, woke }] of Object.entries(JSON.parse(text) as Record<string, Kept>)) {
-          if (detail) entries.set(key, { detail, ...(detail.polledAt ? { checkedAt: detail.polledAt } : {}), ...(told ? { told } : {}), ...(woke ? { woke } : {}) })
+      /** What's kept of each in prs.json: as last fetched, and the events told of it. */
+      type Kept = { detail: PrDetail; told?: string[] }
+      // What's wrong with it (unread and kept aside, a save that failed) is said in Settings, with gh's status.
+      const store = superego.jsonFile<Record<PrKey, Kept>>('prs.json', {
+        empty: {},
+        check: (data) => data && typeof data === 'object' && !Array.isArray(data) ? undefined : 'it has no pull requests by key',
+        trouble: (message) => show('store', message), // logged by the store
+      })
+      // Unreadable, it's kept aside, and what it kept is fetched again (its told events lost: a first fetch's aren't news).
+      const loaded = store.read().then((kept) => {
+        for (const [key, { detail, told }] of Object.entries(kept)) {
+          if (detail) entries.set(key, { detail, ...(detail.polledAt ? { checkedAt: detail.polledAt } : {}), ...(told ? { told } : {}) })
         }
-      }).catch((error: NodeJS.ErrnoException) => { if (error.code !== 'ENOENT') trouble('read', `reading ${file} failed: ${messageOf(error)}`, error) })
-      let saving: ReturnType<typeof setTimeout> | undefined
-      /** Written now: what's known of every pull request a thread has. */
-      const flush = () => {
-        clearTimeout(saving)
-        saving = undefined
-        const kept = Object.fromEntries([...entries].flatMap(([key, e]): [PrKey, Kept][] => e.detail && linked.has(key)
-          ? [[key, { detail: e.detail, ...(e.told?.length ? { told: e.told } : {}), ...(e.woke?.length ? { woke: e.woke } : {}) }]] : []))
-        const temp = `${file}.${process.pid}.tmp`
-        return writeFile(temp, JSON.stringify(kept)).then(() => rename(temp, file)).then(() => trouble('save'), (error: unknown) => trouble('save', `saving ${file} failed: ${messageOf(error)}`, error))
+      })
+      /** What's known of every pull request a thread has, saved (saves made while one writes go as one). */
+      const save = () => {
+        store.save(() => Object.fromEntries([...entries].flatMap(([key, e]): [PrKey, Kept][] => e.detail && linked.has(key)
+          ? [[key, { detail: e.detail, ...(e.told?.length ? { told: e.told } : {}) }]] : [])))
+          .catch(() => { /* said in Settings by the store's `trouble` (and logged) */ })
       }
-      const save = () => { saving ??= setTimeout(() => void flush(), 500) }
       const entry = (key: PrKey) => entries.get(key) ?? entries.set(key, {}).get(key)!
 
       // ── Which threads have which pull request ────────────────────────────────────────────────────────────────────
@@ -325,7 +329,7 @@ export function githubExtension(options: GithubOptions = {}) {
       /**
        * What happened to `key` since it was last fetched, told to each unarchived thread that has it, once: a notice to
        * the user (failed checks, changes requested, approved, merged), and a wake for an agent that watches it (past
-       * the loop guard, a notice instead). A watch ends once merged or closed, or, `until: 'checks'`, once they finish.
+       * its thread's wake budget, the same notice without waking it). A watch ends once merged or closed, or, `until: 'checks'`, once they finish.
        */
       async function tell(key: PrKey, was: PrDetail | undefined, now: PrDetail) {
         const e = entry(key)
@@ -347,43 +351,33 @@ export function githubExtension(options: GithubOptions = {}) {
         const waking = watch ? events.filter((ev) => wakes(watch, ev)) : []
         const over = events.some((ev) => ev.kind === 'merged' || ev.kind === 'closed')
           || (watch?.until === 'checks' && waking.some((ev) => ev.kind === 'checks-failed' || ev.kind === 'checks-passed'))
-        let held = false
         if (waking.length) {
-          const e = entry(key)
-          const now = Date.now()
-          e.woke = (e.woke ?? []).filter((at) => now - at < HOUR)
-          if (e.woke.length < WAKES) {
-            e.woke.push(now)
-            save()
-            // One notice that wakes it: what happened (each event's headline), the agent told it all with pr_view's digest.
-            await superego.threads.notice(thread, { ...noticeOf(thread, pr, waking[0]!, { events: waking }), agent: wakeText(pr, waking, { stopped: over }), wake: true })
-          } else {
-            held = true
-            console.error(`github: not waking thread ${thread} about ${key}: woken ${WAKES} times about it in the last hour.`)
-          }
+          // One notice that wakes it: what happened (each event's headline), the agent told it all with pr_view's digest.
+          // Past the thread's wake budget (`WAKES` an hour about this pull request), shown without waking it, saying so.
+          const { held } = await superego.threads.notice(thread, { ...noticeOf(thread, pr, waking[0]!, { events: waking }), agent: wakeText(pr, waking, { stopped: over }), wake: { source: key, most: WAKES } })
+          if (held) console.error(`github: not waking thread ${thread} about ${key}: ${held}`)
         }
-        // Told the user: what always is, but what woke the agent (its notice says it); all of it, when it was held.
-        for (const ev of events.filter((ev) => held ? NOTICED.has(ev.kind) || waking.includes(ev) : NOTICED.has(ev.kind) && !waking.includes(ev))) {
-          await superego.threads.notice(thread, noticeOf(thread, pr, ev, { held: held && waking.includes(ev) }))
+        // Told the user: what always is, but what the agent's notice says.
+        for (const ev of events.filter((ev) => NOTICED.has(ev.kind) && !waking.includes(ev))) {
+          await superego.threads.notice(thread, noticeOf(thread, pr, ev))
         }
         if (watch && over) await setWatch(thread, key, undefined)
       }
 
       /**
        * A notice of an event: drawn by the UI half, with "Fix it" for what can be fixed, and Show. One that wakes the
-       * agent (`events`, all it wakes it for, in its detail) has no Fix it: the agent's on it. `held`: it would have, but
-       * the loop guard stopped it.
+       * agent (`events`, all it wakes it for, in its detail) has no Fix it: the agent's on it.
        */
-      function noticeOf(thread: string, pr: PrDetail, event: PrEvent, { held = false, events }: { held?: boolean; events?: PrEvent[] } = {}) {
+      function noticeOf(thread: string, pr: PrDetail, event: PrEvent, { events }: { events?: PrEvent[] } = {}) {
         const all = events ?? [event]
         const lines = all.map((ev) => said(pr, ev))
         const { headline } = lines[0]!
         const detail = [lines[0]!.detail, ...lines.slice(1).map((l) => l.detail ? `${l.headline}: ${l.detail}` : l.headline)].filter(Boolean).join(' · ') || undefined
         const fix = events ? undefined : fixText(pr, event)
         const data: NoticeData = {
-          event: event.kind, key: pr.key, url: pr.url, number: pr.number, headline, ...(detail ? { detail } : {}), ...(held ? { held } : {}), ...(events ? { woke: true } : {}),
+          event: event.kind, key: pr.key, url: pr.url, number: pr.number, headline, ...(detail ? { detail } : {}), ...(events ? { watched: true } : {}),
         }
-        const text = `${detail ? `${headline}: ${detail}` : headline}${held ? ` (the agent wasn't woken: it was ${WAKES} times this hour)` : ''}`
+        const text = detail ? `${headline}: ${detail}` : headline
         return {
           text, kind: NOTICE, data, agent: noticeForAgent(pr, event),
           actions: [
@@ -664,7 +658,6 @@ export function githubExtension(options: GithubOptions = {}) {
         clearTimeout(timer)
         for (const t of settling.values()) clearTimeout(t)
         await ticking
-        if (saving) await flush()
       }
     },
   })

@@ -411,7 +411,8 @@ const Entry = memo(function Entry({ entry }: { entry: EntryRecord }) {
 
 /**
  * An extension's notice (`threads.notice`): a card with its name over it, drawn by its entry component for the notice's
- * `kind` (given its `data`), else its text as Markdown; its buttons under it. A button that fails says so there.
+ * `kind` (given its `data`), else its text as Markdown; why it didn't wake the agent, when its wake was held; its
+ * buttons under it. A button that fails says so there.
  */
 function Notice({ id, note }: { id: number; note: Note & { by: string } }) {
   const here = useContext(Here)
@@ -440,6 +441,7 @@ function Notice({ id, note }: { id: number; note: Note & { by: string } }) {
       {Drawn
         ? <Contained name={drawn.owner.extension} scope={drawn.owner.profile}><Drawn {...here} entry={{ id, kind: note.kind!, data: note.data }} /></Contained>
         : <Markdown text={note.text} />}
+      {note.held && <div className="notice__held">{note.held}</div>}
       {note.actions?.length ? (
         <div className="notice__actions">
           {note.actions.map((action, index) => (

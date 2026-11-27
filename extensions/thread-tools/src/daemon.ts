@@ -12,7 +12,7 @@ export default defineDaemonExtension({
       info: (id) => s.threads.get(id).catch(() => undefined),
       list: () => s.threads.list(),
       start: (parent, params) => s.threads.start({ ...params, parent }),
-      send: (id, text, from) => s.threads.send(id, text, { from }),
+      send: async (id, text, from) => { await s.threads.send(id, text, { from }) },
       answer: (id) => s.threads.lastAnswer(id),
       idle: (id, signal) => s.threads.idle(id, { signal }),
       archive: (id) => s.threads.archive(id),

@@ -8,12 +8,13 @@
 // Missed runs (the machine asleep, Superego not running) fire once, late, saying how late and how many were skipped; a
 // one-shot fires however late. A repeating one whose end passed meanwhile ends instead, saying so. An archived thread's
 // schedules wait (`held`) until it's back: a repeating one goes on from then, a one-shot that came due meanwhile waits
-// paused, the thread told. Two wakes in a row whose run failed pause it (no burning tokens on a broken thread).
+// paused, the thread told. Two wakes in a row whose run failed pause it (no burning tokens on a broken thread), as does
+// the thread's wake budget (the core's) being spent.
 //
 // Every change is saved at once (`host.save`) and told (`host.changed`), so the window and the facts follow.
 import { RpcError, type ThreadInfo } from '@superego/protocol'
 import { CAPS, REMINDER, SCHEDULED, type Action, type EndedWhy, type Facts, type Reminder, type Schedule, type When } from './shared.ts'
-import { clockTime, DAY, firstRun, HOUR, howWords, MINUTE, nextAfter, parseAt, parseWhen, repeats, runsBetween, shortDuration, shortestGap, shortWhen, WhenError } from './when.ts'
+import { clockTime, DAY, firstRun, howWords, MINUTE, nextAfter, parseAt, parseWhen, repeats, runsBetween, shortDuration, shortestGap, shortWhen, WhenError } from './when.ts'
 
 /** The guards, as this machine's settings say (`CAPS` bound them). */
 export type Limits = { minInterval: number; maxRuns: number; days: number; perThread: number }
@@ -39,9 +40,10 @@ export type SchedulerHost = {
   busy(thread: ThreadInfo): boolean
   /**
    * Send the thread the firing's message (its words, as the user sees them), which starts its run; `context` goes with
-   * it for the agent alone: which schedule, which run, how late, when to stop.
+   * it for the agent alone: which schedule, which run, how late, when to stop. `budgeted`: it counts in the thread's
+   * wake budget (not a run the user asked for now); past it, it isn't sent, and `held` says why.
    */
-  wake(schedule: Schedule, firing: { message: string; context: string }): Promise<void>
+  wake(schedule: Schedule, firing: { message: string; context: string; budgeted: boolean }): Promise<{ woke: boolean; held?: string }>
   /** Tell the user in the thread (a notice: unread, notified, no run). */
   notice(thread: string, text: string, options: NoticeOptions): Promise<void>
   save(all: Schedule[]): Promise<void>
@@ -141,13 +143,6 @@ export function scheduler(host: SchedulerHost) {
   const tell = (thread: string, text: string, options: NoticeOptions) =>
     host.notice(thread, text, options).catch((error: unknown) => console.error(`schedules: telling ${thread} "${text}" failed:`, error))
   const of = (thread: string) => [...all.values()].filter((s) => s.thread === thread)
-  // When schedules last woke each thread, the past hour's: the wake budget (\`CAPS.wakesPerHour\`), whichever schedules did.
-  const woke = new Map<string, number[]>()
-  const wokeLately = (thread: string, now: number) => {
-    const times = (woke.get(thread) ?? []).filter((at) => now - at < HOUR)
-    woke.set(thread, times)
-    return times
-  }
   const tz = () => host.tz?.() ?? Intl.DateTimeFormat().resolvedOptions().timeZone
 
   function end(s: Schedule, why: EndedWhy, reason?: string) {
@@ -231,14 +226,6 @@ export function scheduler(host: SchedulerHost) {
     let ended: EndedWhy | undefined = repeats(s.when) ? next === null ? 'done' : undefined : 'done'
     if (repeats(s.when) && run >= s.maxRuns) { ended = 'maxRuns'; next = null }
     else if (next !== null && s.ends !== undefined && next > s.ends) { ended = 'ends'; next = null }
-    // Over the thread's wake budget: paused, said, not fired (a loop, or more schedules than a thread should run).
-    if (wakes(s) && !pending.now && wokeLately(s.thread, now).length >= CAPS.wakesPerHour) {
-      s.paused = true
-      delete s.pending
-      touch(s)
-      await tell(s.thread, `${s.label} paused: schedules woke this thread ${CAPS.wakesPerHour} times in the last hour, the most they may. Resume it from the clock if that's meant.`, { agent: true })
-      return
-    }
     try {
       if (s.action !== 'wake' && !pending.reminded) {
         const data: Reminder = {
@@ -256,7 +243,17 @@ export function scheduler(host: SchedulerHost) {
         pending.told = true
         await tell(s.thread, `${s.label} ran ${lateWords(pending.due, pending.since)}.${missed ? ` ${plural(missed, 'run')} skipped.` : ''}`, { agent: false })
       }
-      if (wakes(s)) await host.wake(s, { message: s.message, context: wakeContext(s, { run, next, due: pending.due, now, missed, late }) })
+      if (wakes(s)) {
+        const { woke, held } = await host.wake(s, { message: s.message, context: wakeContext(s, { run, next, due: pending.due, now, missed, late }), budgeted: !pending.now })
+        // Over the thread's wake budget: paused, said, not fired (a loop, or more than a thread should be woken).
+        if (!woke) {
+          s.paused = true
+          delete s.pending
+          touch(s)
+          await tell(s.thread, `${s.label} paused. ${held ?? "The agent wasn't woken."} Resume it from the clock if that's meant.`, { agent: true })
+          return
+        }
+      }
     } catch (error) {
       // It stays due, and goes again with the next tick; its row says why it didn't.
       const message = error instanceof Error ? error.message : String(error)
@@ -270,7 +267,7 @@ export function scheduler(host: SchedulerHost) {
     s.runs = run
     s.lastRun = now
     s.missed += missed
-    if (wakes(s)) { s.awaiting = true; wokeLately(s.thread, now).push(now) }
+    if (wakes(s)) s.awaiting = true
     s.next = next
     touch(s)
     if (ended) end(s, ended)
@@ -329,10 +326,7 @@ export function scheduler(host: SchedulerHost) {
 
   return {
     load(list: Schedule[]) {
-      for (const s of list) {
-        all.set(s.id, s)
-        if (s.lastRun !== undefined && wakes(s)) woke.set(s.thread, [...woke.get(s.thread) ?? [], s.lastRun])
-      }
+      for (const s of list) all.set(s.id, s)
     },
     /** Once what's under way is done: for teardown. */
     settled: () => chain.then(() => undefined),

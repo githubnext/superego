@@ -174,7 +174,7 @@ export const threadReports = (batching: Batching = BATCHING) => defineDaemonExte
     const reports = reporter({
       info, answer: (id) => s.threads.lastAnswer(id), read: (thread) => s.threads.parentRead(thread),
       busy: (thread) => running.has(thread.id) || thread.status.state === 'working' || stuck(thread),
-      send: (id, text) => s.threads.send(id, text, { whenBusy: 'followUp' }),
+      send: async (id, text) => { await s.threads.send(id, text, { whenBusy: 'followUp' }) },
     }, batching)
     // The children whose run answers their parent's thread_send, so their report says "replied".
     const asked = new Set<string>()

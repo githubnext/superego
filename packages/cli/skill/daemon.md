@@ -73,7 +73,7 @@ export default defineDaemonExtension({
 
 | | |
 |---|---|
-| `action(defineAction({ id, title, params?, expose?, keys?, thread?, run }))` | an action `<name>.<action>`, logged. `expose`: `['ui']` (default) for the window; add `'cli'` for the command line (and Ego); `'outside'` makes it a `superego mcp` tool, only for what's safe to hand any MCP client. `run(params, context)` returns JSON or throws `RpcError(code, message, { hint })`. `keys: 'mod+shift+b'` binds it in the window while one of this machine's threads is shown; `thread: true` fills in its `thread` |
+| `action(defineAction({ id, title, params?, expose?, keys?, thread?, run }))` | an action `<name>.<action>`, logged. `expose`: `['ui']` (default) for the window; add `'cli'` for the command line (and Ego); `'outside'` makes it a `superego mcp` tool, only for what's safe to hand any MCP client. `run(params, context)` returns JSON or throws `RpcError(code, message, { hint })`. Who's asking: `context.from`, a thread's agent (from its shell); `context.by` (API ^5.21), the extension that dispatched it; neither, the user `keys: 'mod+shift+b'` binds it in the window while one of this machine's threads is shown; `thread: true` fills in its `thread` |
 | `dispatch(id, params)`, `actions(exposure?)` | run any action on this machine as this extension (`settings.set`, another extension's); list them (`'cli'`: what `superego do` runs) |
 | `method(name, run, { params? })` | a read `<name>.<method>` that clients `call`; params checked first. Not logged, not in ⌘K or the command line |
 | `call(id, params)` | call another extension's method on this machine (`skills.list`); rejects if none has it |
@@ -91,8 +91,8 @@ export default defineDaemonExtension({
 | `threads.conversation(id)` | its pi-durable conversation, to submit to or watch |
 | `threads.attachments(id)` | the folder on this machine where a thread keeps its files. Clients read one with `file.read` by absolute path (an image with `image.read`, thumbnail or whole) |
 | `threads.start({ cwd?, title?, prompt?, profile?, parent?, hidden?, options? })` | start a thread as `thread.start` does, hooks too. `parent`: a child. `hidden`: in no list, no profile, an agent of the extension's own (Ego's); find it by `owner` in `list({ hidden: true })`; it takes no messages while the extension is off. `options`: for `starting` hooks, by name |
-| `threads.send(id, text, { whenBusy?, exposure?, from? })` | send a message (after its run, if working), drawn as an outlined bubble with your extension's title over it, so it doesn't read as typed by the user. `exposure`: whom for, from an action's context; `from`: the thread it's from. Both are kept, and transforms see them |
-| `threads.notice(id, { text, kind?, data?, actions?, agent?, wake? })` | (API ^5.17) tell the user something in a thread without a run (`wake`, API ^5.18: and start its agent's run on it): [Notices](#notices) |
+| `threads.send(id, text, { whenBusy?, exposure?, from?, context?, wake? })` | send a message (after its run, if working), drawn as an outlined bubble with your extension's title over it, so it doesn't read as typed by the user. `exposure`: whom for, from an action's context; `from`: the thread it's from. Both are kept, and transforms see them. `context` (API ^5.21): what the agent alone is told with the words; `wake` (API ^5.21): sent unattended, so within the thread's wake budget: [Waking the agent](#waking-the-agent). Answers `{ woke, held? }` |
+| `threads.notice(id, { text, kind?, data?, actions?, agent?, wake? })` | (API ^5.17) tell the user something in a thread without a run (`wake`, API ^5.18: and start its agent's run on it): [Notices](#notices). Answers `{ woke, held? }` (API ^5.21) |
 | `threads.lastAnswer(id)`, `threads.entries(id, limit?)` | its last answer as text; its newest transcript entries since last cleared, newest first (pi-durable's records: not a stable shape) |
 | `threads.answering(conversationId, callId)` | how the message a tool call answers came: `{ by?, from?, exposure? }` (`{}` for a window's user). Undefined if the call isn't found. To act for the user alone, require no `by`, no `from`, and `exposure` not `outside` |
 | `threads.idle(id, { signal? })` | wait until it isn't working (run ended, or needs the user); resolves to its info (as it is, if `signal` aborts) |
@@ -137,6 +137,7 @@ only to its own threads.
 | `settings.get(key)`, `settings.snapshot()`, `settings.onChange(fn)` | read any setting; all, with sections (a `value` section's as `data`); hear changes |
 | `secrets.get(key)`, `secrets.onChange(key, fn)` | (API ^5.8) one of its own `secret` settings, or undefined while unset; hear it set, replaced or cleared. See [Secrets](#secrets) |
 | `dir` | (API ^5.8) its folder, `<dataDir>/extensions/<name>`, made 0700 when first read: JSON files, a `node:sqlite` database, a cache. Kept through teardown, being switched off and its profile going (`superego extensions` lists orphaned ones). Ego never reads its files, so the extension's own credentials (a refresh token) may go there |
+| `jsonFile(name, { empty, check?, trouble })` | (API ^5.21) its JSON state file, `name` in `dir`: [A state file](#a-state-file) |
 | `dataDir`, `agentsDir` | the data folder (`~/.superego`); the agents' folder (`~/.agents`, or `SUPEREGO_AGENTS`): `skills/`, `AGENTS.md` |
 | `images.fit(image, limits?)` | (API ^5.12) an image (`{ data, mimeType }`, base64) fitted within `{ maxWidth, maxHeight, maxBytes, jpegQuality }` (unset: 2000×2000, 4.5 MB, 80), as the core fits what it sends a model: as it is when it fits, else scaled down and encoded again (PNG, then JPEG at falling qualities). `{ data, mimeType, resized? }`, or undefined when it can't be. On a worker |
 | `loginEnv()` | (API ^5.11) the user's login shell's environment (`zsh -ilc`: their `~/.zshrc`'s keys, the PATH with mise's, Homebrew's and npm's programs), which a daemon started from the Dock lacks: `{ env }`, or `{ error }` when the shell didn't answer. Read once by the daemon; a failed read is tried again by the next to ask |
@@ -282,8 +283,9 @@ at once when the thread is idle, else where its run can next take it, which is a
 | `agent` | what the agent is told instead of `text`; `false`, nothing |
 | `wake` | (API ^5.18) the agent acts on it: a run starts on it (after the one going), as a message would, with no message beside it |
 
-To wake the agent as well, give it `wake: true` (API ^5.18): its run starts on the notice (Processes' reports do).
-An archived thread refuses a notice (`archived`).
+To wake the agent as well, give it `wake: true` (API ^5.18): its run starts on the notice (Processes' reports do),
+within the thread's wake budget ([Waking the agent](#waking-the-agent)). An archived thread refuses a notice
+(`archived`).
 
 **Others' words.** What the agent is told is framed as a notice (`<notice from="…">`), and a `<notice`/`</notice` in
 it is defused, so it can't pass for words from outside the notice. Framing doesn't make it safe to act on, though: a
@@ -312,6 +314,62 @@ export default defineDaemonExtension({
     }))
   },
 })
+```
+
+## Waking the agent
+
+(API ^5.21) An extension wakes a thread's agent, unattended, in one of two ways, and only these:
+
+- **A message the user asked for**, sent by you now: `threads.send(id, text, { context, wake: true })`. Their words
+  (a schedule's "check CI"), drawn as an outlined bubble with your title over it; `context`, what the agent alone is
+  told with them (which schedule, which run, when to stop), after send transforms. Schedules' firings are these.
+- **A notice of something that happened**: `threads.notice(id, { text, agent, wake: true })`. Your words, framed as a
+  notice ([Notices](#notices)): a check failed, a process exited. GitHub's watches and Processes' reports are these.
+
+Either counts in the thread's **wake budget**: every extension's wakes of one thread together, `WAKES_PER_HOUR` (20)
+an hour at most, kept with the thread across restarts. `wake: { source, most }` also holds yours about one thing to
+`most` an hour within it (GitHub: 5 about one pull request, `source` its key; Processes: 5 in all, no `source`). Past
+either, a notice is still shown and told as context, without waking the agent, with a line saying why under it; a
+message isn't sent. Both answer `{ woke, held? }`: `held` is that line ("The agent wasn't woken: …"), for you to say
+what follows (Schedules pauses the schedule and says so). A message the user sends now through you (a button, Run
+now) passes no `wake`: it's theirs, not the budget's. Either way the run starts after the one going, as a
+message's does.
+
+<!-- check: daemon -->
+```ts
+const { woke, held } = await superego.threads.notice('t1', {
+  text: 'Checks failed on #7.', agent: 'Checks failed on acme/app#7: pr_view has which.',
+  wake: { source: 'github.com/acme/app#7', most: 5 },
+})
+if (!woke) console.error(`not woken: ${held}`)
+```
+
+## A state file
+
+(API ^5.21) What an extension keeps across restarts that isn't a thread's (`state`) nor a setting goes in one JSON
+file of its own: `superego.jsonFile(name, { empty, check?, trouble })`, `name` a file in `dir`.
+
+- `read()` it once, at setup: its data, or `empty` when there's none. A file that doesn't parse, or that `check`
+  refuses (return why), is kept aside as `<name>.bad-<time>` (`bad` has its text, for the threads it named), and
+  never written over: one that can't even be moved stops every save until it's fixed or removed.
+- `save(data)` whole, on every change: written atomically (a temporary file, renamed), one save at a time, the saves
+  made meanwhile going as one, the newest (give a function to have it asked as it's written). Waits for `read`.
+- `trouble(message)` is told what's wrong (it didn't read, a save failed) and, with `undefined`, that it's right again:
+  show it where the user looks, a live value your Settings section reads. It's logged too. A failed save also rejects.
+- Teardown waits for the last save, after your cleanup (which may save once more); saves after it are refused.
+
+<!-- check: daemon -->
+```ts
+type Kept = { version: 1; orders: string[] }
+const problem = superego.value<string | null>('problem', null)
+const file = superego.jsonFile<Kept>('orders.json', {
+  empty: { version: 1, orders: [] },
+  check: (data) => Array.isArray((data as Kept).orders) ? undefined : 'it has no list of orders',
+  trouble: (message) => problem.set(message ?? null),
+})
+const kept = await file.read()
+kept.orders.push('1234')
+await file.save(kept)
 ```
 
 ## Processes

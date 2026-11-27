@@ -8,16 +8,17 @@
 export { defineDaemonExtension, defineAction } from './extension.ts'
 export type {
   DaemonExtension, DaemonApi, AgentChoice, AgentPart, AgentPartsAnswer, AgentPartsThread, ExtensionEntry, LiveValue, ScopedValue, ThreadState, ThreadHooks, ThreadStarting,
-  ThreadDraft, OutgoingMessage, MessageBlock, SendTransform, MentionResolve, MentionTarget, ThreadNotice, StatusContribution, ArchiveNote, ArchiveNotes, AuthFlow, AuthFlowEvent, RunRecord, ToolCallRecord, MachineDraft, MachinePatch,
+  ThreadDraft, OutgoingMessage, MessageBlock, SendTransform, MentionResolve, MentionTarget, ThreadNotice, WakeBudget, Woken, StatusContribution, ArchiveNote, ArchiveNotes, AuthFlow, AuthFlowEvent, RunRecord, ToolCallRecord, MachineDraft, MachinePatch,
 } from './extension.ts'
 export type { DaemonContext } from './host.ts'
+export type { BadJsonFile, JsonFile, JsonFileOptions } from './json-file.ts'
 export type { FittedImage, ImageFit } from './extension.ts'
 export type { LoginEnv } from './login-env.ts'
 export { defineProfile } from './profiles.ts'
 export type { LoadedSpec, ProfileSpec, ProfileRef, ProfileKey } from './profiles.ts'
 export { defineExtension, defineTool, GenerationTask, hook, section, wrapSection, wrapTool } from '@earendil-works/pi-durable'
 export type { Extension as AgentExtension } from '@earendil-works/pi-durable'
-export { arr, blockErrors, bool, int, lit, mentionHref, mentionRef, nullable, num, obj, opt, RpcError, str, union, unknown } from '@superego/protocol'
+export { WAKES_PER_HOUR, arr, blockErrors, bool, int, lit, mentionHref, mentionRef, nullable, num, obj, opt, RpcError, str, union, unknown } from '@superego/protocol'
 export { adoptGroup, processTable, spawnGroup } from './process-group.ts'
 export type { AdoptedExit, AdoptedGroup, GroupExit, ProcessEntry, ProcessTable, SpawnedGroup, SpawnGroupOptions } from './process-group.ts'
 export type {

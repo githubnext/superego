@@ -15,6 +15,7 @@ import type { ActionDef, ActionInfo, AgentKindMenu, AppConfig, Attachment, Chann
 import type { SectionSpec } from '@superego/settings'
 import type { AuthFlow } from './auth-flows.ts'
 import type { DaemonContext } from './host.ts'
+import type { JsonFile, JsonFileOptions } from './json-file.ts'
 import type { LoginEnv } from './login-env.ts'
 import type { LoadedSpec, ProfileKey, ProfileRef } from './profiles.ts'
 import type { RunRecord } from './recap.ts'
@@ -138,9 +139,23 @@ export type MentionResolve = (mention: MentionTarget) => string | undefined | Pr
  * `actions`, buttons under it (`NoticeAction`: send the agent a message, or dispatch an action). `agent`: what its agent
  * is told of it, else `text`; false, nothing. `wake` (API ^5.18): it also starts the agent's run on it (after the run
  * going, if one is), as a message would, without a message beside it: for what the agent should act on (a build that
- * failed).
+ * failed). It counts in the thread's wake budget (`WakeBudget`): past it, the notice is shown without waking the agent,
+ * saying why.
  */
-export type ThreadNotice = { text: string; kind?: string; data?: Json; actions?: NoticeAction[]; agent?: string | false; wake?: boolean }
+export type ThreadNotice = { text: string; kind?: string; data?: Json; actions?: NoticeAction[]; agent?: string | false; wake?: boolean | WakeBudget }
+
+/**
+ * (API ^5.21) A wake, as its thread's wake budget counts it: every extension's unattended wakes of a thread together,
+ * `WAKES_PER_HOUR` an hour at most; and, with `most`, this extension's wakes about `source` (a pull request's key; none:
+ * all of this extension's) `most` an hour at most within that. `true`: the thread's budget alone.
+ */
+export type WakeBudget = { source?: string; most?: number }
+
+/**
+ * (API ^5.21) Whether a notice or a send woke the agent: `held`, why not, when the thread's wake budget was spent (a
+ * sentence: "The agent wasn't woken: …"). A held notice is shown without waking it, saying so; a held send isn't sent.
+ */
+export type Woken = { woke: boolean; held?: string }
 
 /** Changes what a message gives the model: returns the blocks to send instead, or nothing to leave them. */
 export type SendTransform = (message: OutgoingMessage) => MessageBlock[] | void | Promise<MessageBlock[] | void>
@@ -382,6 +397,14 @@ export type DaemonApi = {
    * it, so credentials of the extension's own (an OAuth refresh token) may go there; one the user gives is a `secret`.
    */
   readonly dir: string
+  /**
+   * (API ^5.21) Its JSON state file, `name` in its folder (`dir`): `read()` once (`empty` when there's none), then
+   * `save(data)` whole, as often as it changes. Saved atomically, one save at a time, saves made meanwhile collapsing
+   * into the newest. A file that doesn't read (or that `check` refuses) is kept aside as `<name>.bad-<time>` and never
+   * written over (`bad` has its text); `trouble` is told what's wrong, for the user to see (a live value its Settings
+   * section shows), and told again once it's right. Teardown waits for the last save, after the extension's cleanup.
+   */
+  jsonFile<T extends Json>(name: string, options: JsonFileOptions<T>): JsonFile<T>
   /**
    * This extension's secrets: the values of its `secret` settings (`settings.register({ settings: [{ key: '<name>.token',
    * title, type: { type: 'secret' } }] })`), which only the user sets (in Settings, or `superego secrets set`) and no
@@ -636,18 +659,23 @@ export type DaemonApi = {
      * Send a thread a message, as a user would; when it's working, `whenBusy` says how (default: after this run).
      * `exposure`: whom for, when an action of this extension's sends it on a client's behalf (its context's `exposure`).
      * `from`: the thread it's from, when one thread writes another. Both are kept with the message (`answering`), and
-     * send transforms see them.
+     * send transforms see them. `context` (API ^5.21): what goes with the words for the agent alone (the user sees the
+     * words), after send transforms. `wake` (API ^5.21): it's sent unattended (by a clock, not relaying anyone's words
+     * now), so it counts in the thread's wake budget (`WakeBudget`): past it, it isn't sent, and it answers why
+     * (`Woken.held`) for the extension to say.
      */
-    send(id: string, text: string, options?: { whenBusy?: 'steer' | 'followUp'; exposure?: Exposure; from?: string }): Promise<void>
+    send(id: string, text: string, options?: { whenBusy?: 'steer' | 'followUp'; exposure?: Exposure; from?: string; context?: string; wake?: boolean | WakeBudget }): Promise<Woken>
     /**
      * (API ^5.17) Tell the user something in a thread without starting a run (`ThreadNotice`): an entry in its transcript
      * from this extension (the window names it), which makes the thread unread and notifies as a finished run does, its
      * `text` saying why. Its agent is told it with the next turn (as context, not as the user's words): at once when
      * the thread is idle, else where its run can next take it, which is when the entry shows. `archived` for an
      * archived thread. `wake` (API ^5.18) starts its run on it too. Its words are framed as a notice (a tag in them
-     * defused), but others' words (a pull request's title, a comment) are best left to a tool that quotes them.
+     * defused), but others' words (a pull request's title, a comment) are best left to a tool that quotes them. A wake
+     * counts in the thread's wake budget (`WakeBudget`); past it, the notice is shown without waking the agent, saying
+     * why, and it answers that (`Woken`).
      */
-    notice(id: string, notice: ThreadNotice): Promise<void>
+    notice(id: string, notice: ThreadNotice): Promise<Woken>
     /**
      * How the message a tool call answers came (`MessageOrigin`: `{}` for a window's user's), by the call's
      * conversation and id, as a tool's `execute` has them: the input before the model's message that made the call,

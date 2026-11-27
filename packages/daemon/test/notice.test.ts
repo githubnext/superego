@@ -4,7 +4,7 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
-import { defineApp, MESSAGE_ENTRY, NOTE_ENTRY, PROTOCOL_VERSION, type RpcPeer, type ThreadInfo } from '@superego/protocol'
+import { defineApp, MESSAGE_ENTRY, NOTE_ENTRY, PROTOCOL_VERSION, WAKES_PER_HOUR, type RpcPeer, type ThreadInfo } from '@superego/protocol'
 import { connectSocket, defineDaemonExtension, listen, openDaemon, type DaemonApi } from '../src/index.ts'
 import { noticeForAgent } from '../src/threads.ts'
 import { until } from './until.ts'
@@ -17,12 +17,14 @@ afterEach(async () => { await rm(dir, { recursive: true, force: true }) })
 async function open() {
   process.env.SUPEREGO_MODEL = 'faux'
   let api: DaemonApi | undefined
+  let other: DaemonApi | undefined
   const checks = defineDaemonExtension({ name: 'checks', title: 'Checks', setup(superego) { api = superego } })
-  const daemon = await openDaemon({ app: SUPEREGO, dataDir: join(dir, 'home'), defaultCwd: dir, extensions: [checks] })
+  const clock = defineDaemonExtension({ name: 'clock', title: 'Clock', setup(superego) { other = superego } })
+  const daemon = await openDaemon({ app: SUPEREGO, dataDir: join(dir, 'home'), defaultCwd: dir, extensions: [checks, clock] })
   const server = await listen(daemon, join(dir, 'home', 'superego.sock'))
   const { peer, socket } = await connectSocket(join(dir, 'home', 'superego.sock'))
   await peer.call('hello', { client: 'test', version: PROTOCOL_VERSION })
-  return { peer, api: api!, close: async () => { socket.destroy(); server.close(); await daemon.close() } }
+  return { peer, api: api!, other: other!, close: async () => { socket.destroy(); server.close(); await daemon.close() } }
 }
 
 type Entry = { kind: string; data?: Record<string, unknown>; model?: { role: string; content: { type: string; text?: string }[] }[] }
@@ -97,3 +99,45 @@ it('refuses a notice without words, or to an archived thread', async () => {
   await expect(api.threads.notice(thread.id, { text: 'Merged.' })).rejects.toMatchObject({ kind: 'archived' })
   await close()
 })
+
+it("sends a message with what the agent alone is told beside the words", async () => {
+  const { peer, other, close } = await open()
+  const thread = await peer.call<ThreadInfo>('thread.start', { cwd: dir })
+  expect(await other.threads.send(thread.id, 'Check CI.', { context: 'Scheduled: run 1 of 3.' })).toEqual({ woke: true })
+  await until(async () => (await answers(peer, thread.id)).length === 1)
+  const sent = (await entries(peer, thread.id)).find((e) => e.kind === MESSAGE_ENTRY)!
+  expect(sent.data).toEqual({ by: 'clock' })
+  expect(sent.model![0]!.content).toEqual([{ type: 'text', text: 'Check CI.' }, { type: 'text', text: 'Scheduled: run 1 of 3.' }])
+  await close()
+})
+
+it("holds wakes past a thread's budget: a source's own limit, then every extension's together, kept across a restart", async () => {
+  const { peer, api, other, close } = await open()
+  const thread = await peer.call<ThreadInfo>('thread.start', { cwd: dir })
+  const wake = (text: string) => api.threads.notice(thread.id, { text, wake: { source: 'pr#7', most: 2 } })
+  expect(await wake('Checks failed.')).toEqual({ woke: true })
+  expect(await wake('Checks failed again.')).toEqual({ woke: true })
+  // A third about the same pull request: shown, told the agent as context, not waking it; saying why.
+  const held = await wake('And again.')
+  expect(held).toEqual({ woke: false, held: "The agent wasn't woken: Checks woke it 2 times about this in the last hour, the most it may." })
+  // Placed where the run going can take it.
+  const held3 = async () => (await entries(peer, thread.id)).find((e) => e.kind === NOTE_ENTRY && e.data?.text === 'And again.')
+  await until(async () => Boolean(await held3()))
+  const note = (await held3())!
+  expect(note.data).toEqual({ text: 'And again.', by: 'checks', held: held.held })
+  expect(note.model![0]!.content[0]!.text).toBe(noticeForAgent('Checks', 'And again.'))
+  // Another pull request isn't held by that one's.
+  expect(await api.threads.notice(thread.id, { text: 'Other PR.', wake: { source: 'pr#8', most: 2 } })).toEqual({ woke: true })
+  // Every extension's together: the thread's budget.
+  for (let i = 3; i < WAKES_PER_HOUR; i++) expect(await other.threads.send(thread.id, `Tick ${i}.`, { wake: true })).toEqual({ woke: true })
+  const spent = await other.threads.send(thread.id, 'One more.', { wake: true })
+  expect(spent).toEqual({ woke: false, held: `The agent wasn't woken: extensions woke it ${WAKES_PER_HOUR} times in the last hour, the most they may.` })
+  expect(JSON.stringify(await entries(peer, thread.id))).not.toContain('One more.')
+  // What isn't a wake (a relayed message, a notice that doesn't wake) isn't counted, nor held.
+  expect(await other.threads.send(thread.id, 'From the user.')).toEqual({ woke: true })
+  expect(await api.threads.notice(thread.id, { text: 'FYI.' })).toEqual({ woke: false })
+  await close()
+  const again = await open()
+  expect((await again.api.threads.notice(thread.id, { text: 'After a restart.', wake: true })).woke).toBe(false)
+  await again.close()
+}, 30_000)

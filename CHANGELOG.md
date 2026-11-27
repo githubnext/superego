@@ -46,6 +46,10 @@
   the agent's run on it.
 - New for extensions (extension API 5.20): `superego.toolCalls` hears a Claude Agent thread's calls, Claude Code's own
   too (its Bash as `bash`); an agent kind reports its own agent's calls with `superego.reportToolCall`.
+- New for extensions (extension API 5.21): `superego.jsonFile(name, …)` keeps an extension's state in a JSON file,
+  saved safely and never written over when it doesn't read; `threads.send` takes `context`, what the agent alone is
+  told with the words; every unattended wake (a send's or a notice's `wake`) counts in the thread's wake budget, which
+  says when it held one; an action's `context.by` names the extension that dispatched it.
 - New for extensions (extension API 5.14): `superego.codeBlock(languages, component)` draws fenced code blocks of a
   language.
 - New for extensions (extension API 5.16): `@` in the composer can mention an extension's things (`@note:roadmap`,

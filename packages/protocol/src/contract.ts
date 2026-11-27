@@ -96,11 +96,17 @@ import type { ExtensionAbout } from './app.ts'
  * composer, run with what follows it instead of being sent (`{ send }` hands it to the agent after all).
  * 5.20: the daemon half's `reportToolCall(record)`: an agent kind telling `toolCalls` of its own agent's calls (Claude
  * Code's Bash, Read…), so they're heard as a Superego thread's are.
+ * 5.21: one way each to keep state, wake the agent and know who asked: the daemon half's `jsonFile(name, options)`
+ * (`JsonFile`: a JSON state file read once, saved atomically one at a time, one that doesn't read kept aside, never
+ * written over, its trouble said); `threads.send`'s `context` (what the agent alone is told with the words) and `wake`,
+ * and `threads.notice`'s `wake` as a `WakeBudget` (`{ source, most }`), both counted in the thread's wake budget
+ * (`WAKES_PER_HOUR`) and answering `Woken` (a held notice shown saying why: `Note.held`); `DaemonContext.by`, the
+ * extension that dispatched an action.
  * Minor: something added (an extension that uses it asks for `^3.<minor>`); major: something an extension could rely
  * on changed or went, from 2.5 on without exception. An extension whose `api` range this doesn't satisfy is refused
  * when it's set up.
  */
-export const EXTENSION_API = '5.20.0'
+export const EXTENSION_API = '5.21.0'
 
 /** What a machine says of an extension set up there: `hello.extensions` and `features.changed` carry one each. */
 /** `title`: what the window calls it (over a message it sent, a notice of its), when it says. */

@@ -11,4 +11,5 @@ export const RpcError = (sdk as Record<string, unknown>).RpcError, GenerationTas
 export const arr = get('arr'), blockErrors = get('blockErrors'), bool = get('bool'), int = get('int'), lit = get('lit'), nullable = get('nullable'), num = get('num')
 export const obj = get('obj'), opt = get('opt'), str = get('str'), union = get('union'), unknown = get('unknown')
 export const mentionHref = get('mentionHref'), mentionRef = get('mentionRef')
+export const WAKES_PER_HOUR = (sdk as Record<string, unknown>).WAKES_PER_HOUR
 export default sdk

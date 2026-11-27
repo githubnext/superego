@@ -17,6 +17,7 @@ function setUp() {
   let now = START
   const threads = new Map<string, ThreadInfo>([['1', thread('1')], ['2', thread('2')]])
   const woken: [string, string][] = []
+  let budget = Infinity
   const notices: { thread: string; text: string; agent: boolean | string; actions?: unknown[]; kind?: string; data?: unknown }[] = []
   let saved: Schedule[] = []
   const changed: string[][] = []
@@ -25,7 +26,12 @@ function setUp() {
     started: START - HOUR,
     info: async (id) => threads.get(id),
     busy: (t) => t.status.state === 'working' || t.status.state === 'blocked',
-    wake: async (s, { message, context }) => { woken.push([s.thread, `${message}\n---\n${context}`]) },
+    // The core's wake budget, as a test sets it: past `budget` wakes, held.
+    wake: async (s, { message, context, budgeted }) => {
+      if (budgeted && woken.filter(([t]) => t === s.thread).length >= budget) return { woke: false, held: "The agent wasn't woken: extensions woke it 3 times in the last hour, the most they may." }
+      woken.push([s.thread, `${message}\n---\n${context}`])
+      return { woke: true }
+    },
     notice: async (id, text, { agent, actions, kind, data }) => { notices.push({ thread: id, text, agent, ...(actions ? { actions } : {}), ...(kind ? { kind, data } : {}) }) },
     save: async (all) => { saved = structuredClone(all) },
     changed: (ids) => { changed.push(ids) },
@@ -37,6 +43,7 @@ function setUp() {
     /** Move the clock on, then tick as the daemon's timer would. */
     async advance(ms: number) { now += ms; await sched.tick() },
     set(id: string, extra: Partial<ThreadInfo>) { threads.set(id, { ...threads.get(id)!, ...extra }) },
+    budget(most: number) { budget = most },
     get now() { return now },
   }
 }
@@ -286,19 +293,22 @@ it('changes what a schedule says, when and what it does, and keeps its time when
   expect(() => sched.understand('whenever')).toThrow(/isn't a time I understand/)
 })
 
-it("keeps an agent from chaining one-shot wakes, and pauses what's over a thread's wake budget", async () => {
+it("keeps an agent from chaining one-shot wakes, and pauses what the thread's wake budget held", async () => {
   const { sched, woken, notices, advance } = world
   // The agent's one-shot wakes are as far apart as its repeats; the user's, and reminders, needn't be.
   await expect(sched.add({ thread: '1', when: 'in 1m', message: 'Again.' }, 'agent')).rejects.toThrow(/5 min ahead at least/)
   await sched.add({ thread: '1', when: 'in 5m', message: 'Later.' }, 'agent')
   await sched.add({ thread: '1', when: 'in 1m', message: 'Nudge.', action: 'notify' }, 'agent')
   await sched.add({ thread: '2', when: 'in 1m', message: 'Mine.' }, 'user')
-  // Three every 5 minutes: 36 wakes an hour, past the budget of 20.
-  const ids = []
-  for (const k of [1, 2, 3]) ids.push((await sched.add({ thread: '1', when: 'every 5m', message: `Poll ${k}.` }, 'user')).id)
-  for (let i = 0; i < 12; i++) await advance(5 * MINUTE)
-  const ones = woken.filter(([t]) => t === '1')
-  expect(ones).toHaveLength(20)
-  expect(ids.filter((id) => sched.get(id)?.paused)).not.toEqual([])
-  expect(notices.find((n) => /woke this thread 20 times in the last hour/.test(n.text))).toMatchObject({ thread: '1', agent: true })
+  world.budget(3)
+  const s = await sched.add({ thread: '1', when: 'every 5m', message: 'Poll.', label: 'Poll' }, 'user')
+  for (let i = 0; i < 4; i++) { await advance(5 * MINUTE); await sched.turnEnded(world.threads.get('1')!) }
+  expect(woken.filter(([t]) => t === '1')).toHaveLength(3)
+  expect(sched.get(s.id)).toMatchObject({ paused: true, runs: 2 })
+  expect(notices.find((n) => n.text.startsWith('Poll paused.'))).toEqual({
+    thread: '1', agent: true, text: "Poll paused. The agent wasn't woken: extensions woke it 3 times in the last hour, the most they may. Resume it from the clock if that's meant.",
+  })
+  // Run now is the user's: not the budget's to hold.
+  await sched.run(s.id)
+  expect(woken.filter(([t]) => t === '1')).toHaveLength(4)
 })

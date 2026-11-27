@@ -28,9 +28,9 @@ export const INTERVALS: Intervals = {
 
 /**
  * What the poller keeps of a pull request: as last fetched, when it last tried, until when it's hot, and if asked for
- * now; the keys of the events told of it (each told once), and when it last woke a watching agent (the loop guard's).
+ * now; and the keys of the events told of it (each told once).
  */
-export type Entry = { detail?: PrDetail; checkedAt?: number; hotUntil?: number; forced?: boolean; told?: string[]; woke?: number[] }
+export type Entry = { detail?: PrDetail; checkedAt?: number; hotUntil?: number; forced?: boolean; told?: string[] }
 
 /** Whether a pull request is due to be asked about now. */
 export function due(entry: Entry, now: number, intervals: Intervals): boolean {

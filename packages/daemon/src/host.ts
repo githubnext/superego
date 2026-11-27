@@ -22,7 +22,11 @@ export const context = BACKGROUND_CONTEXT
  * when a client ran it as the command line or an outside agent (`action.run`); `from`, when that client runs in a
  * thread's shell (its hello said so): an agent asked, not the user.
  */
-export type DaemonContext = { source: string; notify(event: string, params: unknown): void; exposure?: Exposure; from?: string }
+export type DaemonContext = {
+  source: string; notify(event: string, params: unknown): void; exposure?: Exposure; from?: string
+  /** (API ^5.21) The extension that dispatched it (`superego.dispatch`, `machines.call`); absent for a client's. */
+  by?: string
+}
 
 /** Which conversations are threads, oldest first; child conversations (subagents) aren't. */
 export const Catalog = defineDoc<{ ids: number[] }>({
@@ -63,6 +67,8 @@ export type ThreadMeta = {
   lean?: boolean
   /** The thread it continues (`thread.handoff`), and the one that continues it. */
   continues?: string; continuedIn?: string
+  /** When extensions woke its agent unattended in the past hour, which, and about what: its wake budget (`threads.ts`). */
+  woke?: { at: number; by: string; source?: string }[]
 }
 export const ThreadDoc = defineDoc<ThreadMeta>({
   kind: 'superego.session', version: 1, scope: 'conversation', history: 'latest', fork: 'current',

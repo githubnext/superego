@@ -18,6 +18,7 @@ What each half of an extension registers, a line each. The [guide](guide.md) bui
 | `settings.register({ id: 'x', settings })`, `settings.get`, `settings.snapshot`, `settings.onChange` | machine settings of its own (`x.…`); read any |
 | `secrets.get('x.token')`, `secrets.onChange('x.token', fn)` | a `type: 'secret'` setting the user sets; clients see only set or not ([Secrets](daemon.md#secrets)) |
 | `dir` | its folder, `<dataDir>/extensions/x` (0700): JSON, `node:sqlite`, a cache; kept through teardown |
+| `jsonFile(name, { empty, check?, trouble })` | (API ^5.21) a JSON state file in `dir`: `read()` once, `save(data)` whole; atomic, one save at a time, a bad one kept aside, never written over ([State files](daemon.md#a-state-file)) |
 | `dispatch(id, params)`, `actions(exposure)` | run any action on the machine as this extension; list them |
 | `call(id, params)` | another extension's method on this machine (`skills.list`) |
 | `thread({ starting, abandoned, started, turnStart, turnEnd, stopped, blocked, archiving, archived, unarchiving, unarchiveAbandoned, unarchived })` | a thread's life ([A thread's life](lifecycle.md#a-threads-life)): move it, refuse to archive it, clean up after it, hear its runs |
@@ -30,8 +31,8 @@ What each half of an extension registers, a line each. The [guide](guide.md) bui
 | `agentParts(({ id, hidden, owner, profile }) => [part])` | add parts to any thread's agent at each send (given with `agent(part, { always: false })`); all add up; up to 5s |
 | `auth.flow(context, async (flow) => …)` → `{ flow }` | a sign-in flow for the client running an action: `flow.emit({ type: 'auth_url', url, callback })`, `await flow.prompt({ type: 'manual_code', message })`, `flow.signal`. Drawn with `SignInFlow` |
 | `threads.list({ archived, hidden })`, `get(id)`, `of(conversationId)`, `conversation(id)`, `attachments(id)` | reach threads, and the folder a thread keeps files in |
-| `threads.start({ …, parent, hidden, options })`, `send(id, text)`, `lastAnswer(id)`, `idle(id)`, `entries(id, limit)`, `archive(id, { whenIdle })`, `unarchive(id)`, `clear(id)` | run threads as the thread tools do. `hidden`: an agent of its own, in no list (find it by `owner`); `entries`: not a stable shape; `clear`: start over. A message `send` sends shows your title over it |
-| `threads.notice(id, { text, kind?, data?, actions?, agent?, wake? })` | (API ^5.17) tell the user in a thread, no run (`wake`, API ^5.18: start one): unread and notified, the agent told as context; buttons send a message or dispatch an action ([Notices](daemon.md#notices)) |
+| `threads.start({ …, parent, hidden, options })`, `send(id, text, { context?, wake? })`, `lastAnswer(id)`, `idle(id)`, `entries(id, limit)`, `archive(id, { whenIdle })`, `unarchive(id)`, `clear(id)` | run threads as the thread tools do. `hidden`: an agent of its own, in no list (find it by `owner`); `entries`: not a stable shape; `clear`: start over. A message `send` sends shows your title over it |
+| `threads.notice(id, { text, kind?, data?, actions?, agent?, wake? })` | (API ^5.17) tell the user in a thread, no run (`wake`, API ^5.18: start one): unread and notified, the agent told as context; buttons send a message or dispatch an action ([Notices](daemon.md#notices)). Waking: [Waking the agent](daemon.md#waking-the-agent) |
 | `machines.list()`, `machines.call(machine, method, params)` | the other machines this daemon reaches, and a call to one (no consent actions) |
 | `agentsDir`, `dataDir` | `~/.agents` (skills, `AGENTS.md`); `~/.superego` |
 

@@ -226,6 +226,7 @@
 .notice { border: 1px solid var(--superego-border); border-radius: var(--superego-radius-lg); padding: 8px 12px 10px; }
 .notice > .msg__by { margin-bottom: 4px; }
 .notice__actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.notice__held { margin-top: 6px; color: var(--superego-muted); font-size: var(--superego-text-sm); }
 .notice__problem { margin-top: 6px; color: var(--superego-status-error); font-size: var(--superego-text-sm); }
 /*
  * Work. Every row: an icon on the text's edge, a verb, what it acted on; its chevron hangs in the gutter and shows on

@@ -3,7 +3,7 @@
 // up on a run missed while Superego wasn't running.
 import { afterEach, expect, it } from 'vitest'
 import { callTool, say, testDaemon, type TestDaemon } from '@superego/sdk/testing'
-import { readFile, writeFile } from 'node:fs/promises'
+import { readdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { schedulesExtension, stableLine, type Clock } from '../src/daemon.ts'
 import type { Facts, Schedule, ScheduleDetails } from '../src/shared.ts'
@@ -160,7 +160,8 @@ it("says when its file doesn't read: kept aside, the threads it names told, Sett
   expect(JSON.parse(await readFile(file, 'utf8')).schedules).toHaveLength(1)
   await daemon.restart({ whileStopped: () => writeFile(file, `{"version":1,"schedules":[{"id":"s_1","thread":"${thread.id}",`) })
   await daemon.until(async () => (await said(thread.id)).some((m) => m.notice?.includes("This thread's schedules couldn't be read")), 'the notice')
-  expect(await readFile(`${file}.bad`, 'utf8')).toContain(thread.id)
+  const aside = (await readdir(join(daemon.dataDir, 'extensions', 'schedules'))).find((name) => /^schedules\.json\.bad-\d+$/.test(name))!
+  expect(await readFile(join(daemon.dataDir, 'extensions', 'schedules', aside), 'utf8')).toContain(thread.id)
   const problem = await daemon.watch<string | null>('schedules.problem')
   await problem.until((p) => typeof p === 'string' && p.includes('kept as'), 'the problem')
   expect(await daemon.call('schedules.list', {})).toEqual([])

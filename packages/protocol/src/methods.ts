@@ -28,9 +28,18 @@ export const NOTE_ENTRY = 'superego.note'
 /**
  * A note's data (`NOTE_ENTRY`): what it says (Markdown, a line or a few). A notice, an extension's (`threads.notice`),
  * also says whose it is (`by`, the extension's name), may be drawn by that extension's entry component for `kind` (given
- * `data`) instead of as text, and has buttons (`actions`). `wake`: it started the agent's run on it, as a message does.
+ * `data`) instead of as text, and has buttons (`actions`). `wake`: it started the agent's run on it, as a message does;
+ * `held`: it would have, but the thread's wake budget was spent (`WAKES_PER_HOUR`): why, in a sentence the window shows
+ * under it.
  */
-export type Note = { text: string; by?: string; kind?: string; data?: Json; actions?: NoticeAction[]; wake?: boolean }
+export type Note = { text: string; by?: string; kind?: string; data?: Json; actions?: NoticeAction[]; wake?: boolean; held?: string }
+
+/**
+ * A thread's wake budget: extensions wake its agent unattended (a notice with `wake`, a `threads.send` with `wake`) this
+ * many times an hour at most, all of them together; past it, a notice is shown without waking it (`Note.held`), and a
+ * send isn't sent. An extension may hold one source of its wakes (a pull request) to fewer, within it.
+ */
+export const WAKES_PER_HOUR = 20
 
 /**
  * A notice's button: what it says, and what pressing it does. `send`, sends the thread that message, as the user

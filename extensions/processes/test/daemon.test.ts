@@ -181,7 +181,7 @@ describe.skipIf(process.platform === 'win32')('processes', () => {
     const dir = join(daemon.dataDir, 'extensions', 'processes')
     await daemon.restart({ async whileStopped() { await writeFile(join(dir, 'processes.json'), '{"processes": [') } })
     const trouble = await daemon.watch<string | null>(TROUBLE)
-    expect(await trouble.until((t) => Boolean(t))).toMatch(/processes.json couldn't be read \(kept as .*processes\.json\.bad-\d+\); found 1 process again/)
+    expect(await trouble.until((t) => Boolean(t?.includes('Found')))).toMatch(/^processes\.json didn't read \(.+\), so what it held is gone for now: it's kept as .*processes\.json\.bad-\d+\. Found 1 process again from their folders\.$/)
     expect((await readdir(dir)).some((name) => /^processes\.json\.bad-\d+$/.test(name))).toBe(true)
     await daemon.until(async () => (await list(daemon, thread.id)).length === 1, 'found again')
     expect(await one(daemon, thread.id)).toMatchObject({ id: server.id, state: 'running', pid: server.pid })
@@ -207,17 +207,17 @@ describe.skipIf(process.platform === 'win32')('processes', () => {
   })
 
   it('stops waking the agent once reports have woken it too often', async () => {
-    const daemon = await testDaemon({ extensions: [processes], model: Array.from({ length: WAKES.most + 1 }, () => say('Noted.')) })
+    const daemon = await testDaemon({ extensions: [processes], model: Array.from({ length: WAKES + 1 }, () => say('Noted.')) })
     const thread = await daemon.thread()
-    for (let i = 0; i < WAKES.most + 1; i++) {
+    for (let i = 0; i < WAKES + 1; i++) {
       const p = await daemon.dispatch<ProcessInfo>('processes.start', { thread: thread.id, command: `exit ${i + 1}`, name: `job${i}` })
       await daemon.until(async () => (await daemon.transcript(thread)).includes(`exited with ${i + 1}`), `report ${i + 1}`, 10_000)
       await daemon.until(async () => (await daemon.info(thread)).status.state !== 'working', 'the run over', 10_000)
       expect(p.id).toBeTruthy()
     }
     const transcript = await daemon.transcript(thread)
-    expect(transcript).toContain(`Not waking the agent: processes woke it ${WAKES.most} times in the last hour.`)
-    expect(transcript.match(/Noted\./g)).toHaveLength(WAKES.most)
+    expect(transcript).toContain(`The agent wasn't woken: Processes woke it ${WAKES} times in the last hour, the most it may.`)
+    expect(transcript.match(/Noted\./g)).toHaveLength(WAKES)
     await daemon.close()
   })
 })

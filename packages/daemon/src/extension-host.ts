@@ -18,6 +18,7 @@ import { CORE_KEYS, type LoadedProfile, type ProfileRef } from './profiles.ts'
 import type { RunRecord } from './recap.ts'
 import type { Relay } from './relay.ts'
 import type { Threads } from './threads.ts'
+import { openJsonFile } from './json-file.ts'
 
 /**
  * Names no extension can take: the core's own namespaces (its methods, actions and settings are `<namespace>.<…>`), so
@@ -587,6 +588,13 @@ export function createExtensionHost(host: Host, later: { profiles(): ProfileHost
         chmodSync(dir, 0o700)
         return made = dir
       },
+      jsonFile(name, fileOptions) {
+        life.live(`the JSON file ${name}`)
+        const file = openJsonFile(() => api.dir, name, extension.name, fileOptions)
+        // After its cleanup (added later, so undone first), which may save once more.
+        undo(() => file.close(), `the JSON file ${name}`)
+        return { get path() { return file.path }, get bad() { return file.bad }, read: file.read, save: file.save, settled: file.settled }
+      },
       secrets: {
         get: async (key) => settings.secret(ownSecret(key)),
         onChange(key, listener) {
@@ -673,7 +681,7 @@ export function createExtensionHost(host: Host, later: { profiles(): ProfileHost
       action: (action) => { life.live(`the action ${action.id}`); undo(router.register({ ...action, id: named(extension.name, action.id) }), 'an action'); note('actions', action.keys ? `${action.id} (${action.keys})` : action.id) },
       // The user's consent (allowing code, letting devices in, a secret) is theirs alone: no extension gives it for them,
       // as no agent does (the router refuses it to `extension`).
-      dispatch: (id, params) => router.dispatch(id, params ?? {}, { source: extension.name, notify: () => {} }, { source: extension.name, extension: extension.name }),
+      dispatch: (id, params) => router.dispatch(id, params ?? {}, { source: extension.name, by: extension.name, notify: () => {} }, { source: extension.name, extension: extension.name }),
       actions: (exposure) => router.list(exposure),
       async call(id, params) {
         const run = methods.get(id)

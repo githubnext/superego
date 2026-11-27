@@ -2,7 +2,7 @@
 // `gh pr create`, by a worktree thread's branch; detached for good; followed by the poller (facts, the pane's read),
 // told to the agent (its prompt, pr_view); and what it does without gh, signed out, or rate-limited.
 import { execFileSync } from 'node:child_process'
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
@@ -136,6 +136,24 @@ it("attaches a worktree thread's branch's pull request once it's pushed, but nev
   await gh.set({ login: 'octocat', prs: { 'acme/app#7': prNode('acme', 'app', 7) }, branches: { [branch]: [URL] } })
   await daemon.dispatch(REFRESH, { thread: thread.id })
   await status.until((s) => !s?.troubles, 'gone right')
+})
+
+it("keeps an unreadable prs.json aside rather than writing over it, and says so in Settings", async () => {
+  const gh = await fakeGh(dir, { login: 'octocat', prs: { 'acme/app#7': prNode('acme', 'app', 7, { title: 'Mentions' }) } })
+  daemon = await testDaemon({ extensions: [githubExtension({ env: gh.env, intervals: FAST })] })
+  const thread = await daemon.thread()
+  await daemon.dispatch(ATTACH, { thread: thread.id, url: URL })
+  await until('its state', (f) => f?.prs[0]?.state === 'open', thread)
+  const folder = join(daemon.dataDir, 'extensions', 'github')
+  await daemon.until(async () => (await readdir(folder)).includes('prs.json'), 'saved')
+  await daemon.restart({ whileStopped: () => writeFile(join(folder, 'prs.json'), '{"github.com/acme/app#7": {"detail":') })
+  const status = await daemon.watch<GhStatus | null>(STATUS)
+  await status.until((s) => Boolean(s?.troubles?.some((t) => /^prs\.json didn't read .+ kept as .+prs\.json\.bad-\d+\.$/.test(t))), 'said')
+  // Fetched again, and saved anew; what didn't read is as it was.
+  await daemon.dispatch(REFRESH, { thread: thread.id })
+  await daemon.until(async () => JSON.parse(await readFile(join(folder, 'prs.json'), 'utf8').catch(() => '{}'))[KEY]?.detail?.title === 'Mentions', 'saved anew')
+  const aside = (await readdir(folder)).find((name) => /^prs\.json\.bad-\d+$/.test(name))!
+  expect(await readFile(join(folder, aside), 'utf8')).toBe('{"github.com/acme/app#7": {"detail":')
 })
 
 it("without gh: says so in Settings and on a pull request attached by hand, and picks up once it's there", async () => {
@@ -323,17 +341,17 @@ it('wakes a watching agent instead, no more than 5 times an hour, and stops watc
   expect(woke).toContain('1 check failed on acme/app#7. Fix what failed and push (logs: `gh run view 42 --log-failed`).\npr_view has the details')
   expect(woke).not.toContain('Mentions')
   // Shown as a notice saying so, with no Fix it: the agent's on it.
-  expect((await ofGithub(thread)).at(-1)!.data).toMatchObject({ text: '1 check failing on #7: lint', data: { woke: true }, actions: [{ label: 'Show' }] })
+  expect((await ofGithub(thread)).at(-1)!.data).toMatchObject({ text: '1 check failing on #7: lint', data: { watched: true }, actions: [{ label: 'Show' }] })
   expect(await notices(thread)).toEqual([])
 
-  // Pushed again and again: 5 wakes in all, then a notice instead, saying the agent wasn't woken.
+  // Pushed again and again: 5 wakes in all, then the same notice without waking it, saying why.
   for (let i = 1; i <= 5; i++) {
     await gh.set(world(`h${i}`, i % 2 ? passed('lint') : failedCheck('acme', 'app', 'lint', 42 + i)))
     if (i < 5) await daemon.until(async () => (await wakesOf(thread)).length === i + 1, `woken ${i + 1}`, 10_000)
   }
   await daemon.until(async () => (await notices(thread)).length === 1, 'held: a notice', 10_000)
   expect(await wakesOf(thread)).toHaveLength(5)
-  expect((await notices(thread))[0]).toMatchObject({ data: { event: 'checks-passed', held: true }, text: expect.stringContaining("the agent wasn't woken") })
+  expect((await notices(thread))[0]).toMatchObject({ data: { event: 'checks-passed', watched: true }, held: "The agent wasn't woken: GitHub woke it 5 times about this in the last hour, the most it may." })
 
   // Merged: told, and no longer watched.
   await gh.set({ login: 'octocat', prs: { 'acme/app#7': prNode('acme', 'app', 7, { state: 'MERGED' }) } })

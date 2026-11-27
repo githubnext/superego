@@ -10,7 +10,7 @@ import { RpcError, type ThreadInfo } from '@superego/protocol'
 import { isAbsolute, resolve } from 'node:path'
 import { matcher, READ_AT_MOST, tail } from './log.ts'
 import { reporter, BATCHING, type Batching } from './reports.ts'
-import { Runner, type ProcessRecord, type ProcessSpec } from './runner.ts'
+import { checkKept, EMPTY, Runner, type Kept, type ProcessRecord, type ProcessSpec } from './runner.ts'
 import {
   about, ended, endedHow, LIST, linkTo, live, OUTPUT, PANE, READ, REPORT, span, titleOf, TROUBLE,
   type OutputMark, type ReportData, type OutputSlice, type Owner, type ProcessFacts, type ProcessInfo,
@@ -23,8 +23,8 @@ const REPORT_LINES = 20
 const OUTPUT_EVERY = 100
 /** The longest a tool waits, in seconds. */
 const MOST_WAIT = 600
-/** Reports wake a thread's agent at most this often; past it, they're told without waking it (a loop guard). */
-export const WAKES = { most: 5, within: 3600_000 }
+/** Reports wake a thread's agent at most this many times an hour (within its wake budget); past it, they're told without waking it. */
+export const WAKES = 5
 
 /** What a process shows: its record less what stays on the machine. */
 export function infoOf(record: ProcessRecord): ProcessInfo {
@@ -135,7 +135,17 @@ export function processesExtension({ batching = BATCHING, shell }: { batching?: 
         pendingMarks.clear()
       }
 
-      const runner = new Runner(superego.dir, {
+      // What's wrong with processes.json (unread and kept aside, a save that failed) is said as its trouble too.
+      let fileTrouble: string | undefined
+      const store = superego.jsonFile<Kept>('processes.json', {
+        empty: EMPTY, check: checkKept,
+        trouble(message) {
+          if (message) trouble.set(message)
+          else if (fileTrouble && trouble.get() === fileTrouble) trouble.set(null)
+          fileTrouble = message
+        },
+      })
+      const runner = new Runner(superego.dir, store, {
         changed: (record, removed) => {
           if (removed) marks.delete(record.id)
           publish()
@@ -165,16 +175,6 @@ export function processesExtension({ batching = BATCHING, shell }: { batching?: 
         const there = (await superego.threads.list()).filter((t) => t.cwd === folder && !t.archived && !t.continuedIn)
         return there.sort((a, b) => b.activeAt - a.activeAt)[0]?.id
       }
-      /** When reports last woke each thread's agent: at most `WAKES.most` in `WAKES.within`. */
-      const woke = new Map<string, number[]>()
-      const mayWake = (thread: string) => {
-        const now = Date.now()
-        const recent = (woke.get(thread) ?? []).filter((at) => at > now - WAKES.within)
-        const may = recent.length < WAKES.most
-        if (may) recent.push(now)
-        woke.set(thread, recent)
-        return may
-      }
       /** A process's end as its thread is told it: a card for the user (`Report`), its Restart; the agent, how and its last lines. */
       async function report(id: string): Promise<ThreadNotice | undefined> {
         const record = runner.records.get(id)
@@ -198,14 +198,13 @@ export function processesExtension({ batching = BATCHING, shell }: { batching?: 
         }),
         busy: (thread) => running.has(thread.id) || thread.status.state === 'working',
         wanted: (id) => { const p = runner.records.get(id); return Boolean(p && !p.learnt && !live(p.state)) },
-        // A notice each, the last waking the agent (its run takes them all), unless it was woken too often lately.
+        // A notice each, the last waking the agent (its run takes them all), within the thread's wake budget: past it
+        // (or `WAKES` an hour of Processes'), it's shown without waking it, saying so.
         async send(thread, ids) {
           const notices = (await Promise.all(ids.map(report))).filter((notice): notice is ThreadNotice => Boolean(notice))
-          const wake = notices.length > 0 && mayWake(thread)
           for (const [i, notice] of notices.entries()) {
             const last = i === notices.length - 1
-            const held = last && !wake ? ` (Not waking the agent: processes woke it ${WAKES.most} times in the last hour.)` : ''
-            await superego.threads.notice(thread, { ...notice, text: `${notice.text}${held}`, ...(last && wake ? { wake: true } : {}) })
+            await superego.threads.notice(thread, { ...notice, ...(last ? { wake: { most: WAKES } } : {}) })
           }
           for (const id of ids) runner.learnt(id)
         },
@@ -214,7 +213,9 @@ export function processesExtension({ batching = BATCHING, shell }: { batching?: 
 
       // The records kept, read and taken back before anything acts on them (an action, a read, a tool): a definition
       // put meanwhile would make a second of the same name, and a stop wouldn't find what to stop yet.
-      const loaded = runner.load()
+      const loaded = runner.load().then(({ rebuilt }) => {
+        if (rebuilt !== undefined) trouble.set(`${fileTrouble ?? "processes.json didn't read."} Found ${rebuilt} process${rebuilt === 1 ? '' : 'es'} again from their folders.`)
+      })
       const adopted = loaded.then(() => runner.adopt())
       // Unread (and said so, by `ready` below): what acts on them is refused, rather than losing track of what runs.
       const fromLoaded = loaded.then(
@@ -321,9 +322,9 @@ export function processesExtension({ batching = BATCHING, shell }: { batching?: 
       }
 
       // ── Actions and reads: the window, `superego do`, other extensions ──────────────────────────────────────────
-      const byOf = (context: { source: string; from?: string }): ProcessInfo['by'] => {
+      const byOf = (context: { from?: string; by?: string }): ProcessInfo['by'] => {
         if (context.from) return { thread: context.from }
-        if (superego.extensions().some((e) => e.name === context.source) || context.source === 'run') return { extension: context.source }
+        if (context.by) return { extension: context.by }
         return { user: true }
       }
       const answer = (record: ProcessRecord) => infoOf(record)

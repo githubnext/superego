@@ -6,14 +6,13 @@
 //
 // The agent gets `schedule`, `schedule_list` and `schedule_cancel`, for its own thread's schedules only; the user's
 // actions (`schedules.*`, from the window, `superego do`, another extension's `dispatch`) reach any, and change them
-// (`schedules.update`). A wake is a message from Schedules (`threads.send`); a reminder, and what happened around a
-// firing (late, stopped, paused), a notice in the thread (`threads.notice`: unread, notified, no run).
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
+// (`schedules.update`). A wake is the user's words sent by the clock (`threads.send`, with what the agent alone is told
+// as its `context`, within the thread's wake budget); a reminder, and what happened around a firing (late, stopped,
+// paused), a notice in the thread (`threads.notice`: unread, notified, no run).
 import { defineExtension, defineTool, section } from '@earendil-works/pi-durable'
 import { int, obj, oneOf, opt, str } from '@earendil-works/pi-schema'
 import { defineAction, defineDaemonExtension, type DaemonApi } from '@superego/daemon'
-import { RpcError, stuck, type Json, type ThreadInfo } from '@superego/protocol'
+import { RpcError, stuck, WAKES_PER_HOUR, type Json } from '@superego/protocol'
 import { scheduler, upcoming, type Limits, type NewSchedule, type ScheduleChange } from './scheduler.ts'
 import { about, ACTIONS, ALL_VALUE, CAPS, DEFAULTS, LIST_METHOD, PROBLEM_VALUE, SECTION, SETTINGS, SPLIT_METHOD, THREAD_VALUE, TOOLS, UNDERSTAND_METHOD, type Schedule, type ScheduleDetails } from './shared.ts'
 import { clockTime, dayWord, FORMS, howWords, localWords, repeats, splitSaid, timezone } from './when.ts'
@@ -58,38 +57,24 @@ const SCHEDULE_DESCRIPTION = `Schedule something for this thread: once ("in 30m"
   `and the answer says what was understood, so check it. Accepted: ${FORMS}. ` +
   `A repeating one needs a way to stop: give \`until\` (a condition you check on each run, then call ${TOOLS.cancel} once it holds), ` +
   `and it stops anyway after maxRuns (default ${DEFAULTS.maxRuns}) or at \`ends\` (default ${DEFAULTS.days} days). ` +
-  `A wake runs at most every ${DEFAULTS.minIntervalMinutes} minutes, a one-shot wake is at least that far ahead, and schedules wake a thread ${CAPS.wakesPerHour} times an hour at most: to repeat, use "every …", not one-shot after one-shot.`
+  `A wake runs at most every ${DEFAULTS.minIntervalMinutes} minutes, a one-shot wake is at least that far ahead, and a thread is woken ${WAKES_PER_HOUR} times an hour at most: to repeat, use "every …", not one-shot after one-shot.`
 
 /** The extension, on `clock` (the real one unless a test gives its own; `id`, its schedules' ids, for a test too). */
 export const schedulesExtension = ({ clock = REAL, id }: { clock?: Clock; id?: () => string } = {}) => defineDaemonExtension({
   ...about,
   async setup(superego) {
-    const file = join(superego.dir, FILE)
     const value = superego.scopedValue<Json>(THREAD_VALUE, [])
     const everything = superego.value<Json>(ALL_VALUE, [])
     const problem = superego.value<string | null>(PROBLEM_VALUE, null)
-    // Set when its file couldn't be read nor kept aside: saving would write over it.
-    let broken: string | undefined
+    // What's wrong with its file (unread, kept aside, a save that failed) is said in Settings → Schedules.
+    const store = superego.jsonFile<Stored>(FILE, {
+      empty: { version: 1, schedules: [] },
+      check: (data) => Array.isArray((data as Partial<Stored> | null)?.schedules) ? undefined : 'it has no list of schedules',
+      trouble: (message) => problem.set(message ?? null),
+    })
     // The threads in a run, as the hooks tell it; one resumed after a restart (no turnStart) shows working.
     const running = new Set<string>()
     let stopped = false
-    // What each firing sent tells the agent alone, by thread, until its message goes: found by the message's words (two
-    // firings waiting in one thread are two schedules', so the words tell them apart), and each taken back alone (its
-    // own entry, not every one that reads the same) when its send fails.
-    type Pending = { message: string; context: string }
-    const contexts = new Map<string, Pending[]>()
-    const forget = (thread: string, entry: Pending) => {
-      const left = (contexts.get(thread) ?? []).filter((e) => e !== entry)
-      if (left.length) contexts.set(thread, left)
-      else contexts.delete(thread)
-    }
-    superego.beforeSend(({ thread, by, text, content }) => {
-      if (by !== about.name) return undefined
-      const entry = contexts.get(thread.id)?.find((e) => e.message === text)
-      if (!entry) return undefined
-      forget(thread.id, entry)
-      return [...content, { type: 'text', text: entry.context }]
-    })
 
     superego.settings.register({
       id: SECTION, title: 'Schedules', description: 'Threads woken at a time, or every so often. What a repeating one may cost at most.',
@@ -112,19 +97,6 @@ export const schedulesExtension = ({ clock = REAL, id }: { clock?: Clock; id?: (
       perThread: setting(SETTINGS.perThread, DEFAULTS.perThread, 50),
     })
 
-    // Saved one at a time, through a file beside it, so a crash leaves the last whole one.
-    let saving: Promise<unknown> = Promise.resolve()
-    const save = (all: Schedule[]) => {
-      if (broken) return Promise.reject(new Error(broken))
-      const next = saving.then(async () => {
-        await mkdir(superego.dir, { recursive: true })
-        await writeFile(`${file}.tmp`, JSON.stringify({ version: 1, schedules: all } satisfies Stored, null, 2))
-        await rename(`${file}.tmp`, file)
-      })
-      saving = next.catch(() => undefined)
-      return next
-    }
-
     const info = (id: string) => superego.threads.get(id).catch((error: unknown) => {
       if (error instanceof RpcError && error.kind === 'not_found') return undefined
       throw error
@@ -136,20 +108,15 @@ export const schedulesExtension = ({ clock = REAL, id }: { clock?: Clock; id?: (
       info,
       // Not while it works or waits on the user (a question, a permission, a sign-in), or can't take messages.
       busy: (thread) => running.has(thread.id) || thread.status.state === 'working' || thread.status.state === 'blocked' || stuck(thread),
-      async wake(s, { message, context }) {
-        // The words go as the message; what the agent alone needs goes with it (beforeSend, below).
-        const entry: Pending = { message, context }
-        contexts.set(s.thread, [...contexts.get(s.thread) ?? [], entry])
-        try { await superego.threads.send(s.thread, message, { whenBusy: 'followUp' }) } catch (error) {
-          forget(s.thread, entry)
-          throw error
-        }
+      // The words go as the message; what the agent alone needs goes with it.
+      wake: (s, { message, context, budgeted }) => superego.threads.send(s.thread, message, { whenBusy: 'followUp', context, ...(budgeted ? { wake: true } : {}) }),
+      async notice(thread, text, { agent, actions, kind, data }) {
+        await superego.threads.notice(thread, {
+          text, ...(agent === true ? {} : { agent }), ...(actions ? { actions } : {}), ...(kind ? { kind } : {}), ...(data ? { data: data as unknown as Json } : {}),
+        })
       },
-      notice: (thread, text, { agent, actions, kind, data }) => superego.threads.notice(thread, {
-        text, ...(agent === true ? {} : { agent }), ...(actions ? { actions } : {}), ...(kind ? { kind } : {}), ...(data ? { data: data as unknown as Json } : {}),
-      }),
       tz: timezone,
-      save,
+      save: (all) => store.save({ version: 1, schedules: all }),
       changed(threads) {
         for (const thread of threads) value.set(thread, sched.active(thread) as unknown as Json)
         everything.set(sched.going() as unknown as Json)
@@ -170,32 +137,14 @@ export const schedulesExtension = ({ clock = REAL, id }: { clock?: Clock; id?: (
       timer = clock.after(wait, () => { timer = undefined; sched.tick().catch(failed('a tick')).finally(arm) })
     }
 
-    // What was kept: a file that doesn't read is kept aside, and said (Settings → Schedules, and a notice in each thread
-    // it names), not dropped. One that can't even be kept aside isn't written over: nothing's saved until it's dealt with.
-    let text: string | undefined
-    try {
-      text = await readFile(file, 'utf8')
-      const stored = JSON.parse(text) as Stored
-      if (!Array.isArray(stored.schedules)) throw new Error('it has no list of schedules')
-      sched.load(stored.schedules)
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
-        console.error(`schedules: ${file} doesn't read; keeping it as ${file}.bad:`, error)
-        const why = error instanceof Error ? error.message : String(error)
-        try {
-          await rename(file, `${file}.bad`)
-          problem.set(`Schedules couldn't read its file, so the schedules it held are gone for now (${why}). It's kept as ${file}.bad.`)
-        } catch (renaming) {
-          console.error(`schedules: keeping ${file} aside failed:`, renaming)
-          broken = `Schedules couldn't read ${file} (${why}), nor keep it aside (${renaming instanceof Error ? renaming.message : String(renaming)}), so it saves nothing until the file is fixed or removed.`
-          problem.set(broken)
-        }
-        // The threads it names, as best its text says, are told where their schedules went.
-        const threads = new Set([...(text ?? '').matchAll(/"thread":\s*"([^"]+)"/g)].map((m) => m[1]!))
-        for (const thread of threads) {
-          await superego.threads.notice(thread, { text: `This thread's schedules couldn't be read, and are gone for now: the file is kept as ${broken ? file : `${file}.bad`}.`, agent: false })
-            .catch(failed(`telling ${thread} its schedules are gone`))
-        }
+    // What was kept. A file that doesn't read is kept aside, said in Settings (the store) and in each thread it names.
+    sched.load((await store.read()).schedules)
+    if (store.bad) {
+      const threads = new Set([...(store.bad.text ?? '').matchAll(/"thread":\s*"([^"]+)"/g)].map((m) => m[1]!))
+      const where = store.bad.keptAs ? `kept as ${store.bad.keptAs}` : `left as it was, at ${store.path}`
+      for (const thread of threads) {
+        await superego.threads.notice(thread, { text: `This thread's schedules couldn't be read, and are gone for now: the file is ${where}.`, agent: false })
+          .catch(failed(`telling ${thread} its schedules are gone`))
       }
     }
     for (const thread of new Set(sched.list().map((s) => s.thread))) value.set(thread, sched.active(thread) as unknown as Json)
@@ -214,8 +163,7 @@ export const schedulesExtension = ({ clock = REAL, id }: { clock?: Clock; id?: (
     })
 
     /** Who's asking: the thread's agent (its shell), another extension, or the user. */
-    const names = () => new Set(superego.extensions().map((e) => e.name))
-    const byOf = (context: { source: string; from?: string }) => context.from ? 'agent' : names().has(context.source) ? context.source : 'user'
+    const byOf = (context: { from?: string; by?: string }) => context.from ? 'agent' : context.by ?? 'user'
 
     const ACTION_PARAM = oneOf(['wake', 'notify', 'both'] as const, { description: 'wake: a message that starts a run; notify: a reminder for the user, no run; both' })
     const NEW_PARAMS = {
@@ -269,13 +217,12 @@ export const schedulesExtension = ({ clock = REAL, id }: { clock?: Clock; id?: (
 
     superego.agent(agentPart(superego, sched, () => clock.now()))
 
-    // Torn down (a reload, the daemon closing): no more ticks, and what's under way (a firing, a save) finishes first, so
-    // the next instance reads the file as this one left it.
+    // Torn down (a reload, the daemon closing): no more ticks, and what's under way (a firing) finishes first; its last
+    // save lands before the next instance reads the file (the store's).
     return async () => {
       stopped = true
       timer?.()
       await sched.settled()
-      await saving.catch(() => undefined) // a failed save was said where it failed
     }
   },
 })

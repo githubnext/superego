@@ -4,7 +4,7 @@
 import type { ExtensionAbout } from '@superego/protocol'
 
 export const about = {
-  name: 'schedules', version: '1.1.0', api: '^5.19', title: 'Schedules',
+  name: 'schedules', version: '1.1.0', api: '^5.21', title: 'Schedules',
   description: 'Wake a thread or remind you at a time, every so often or on the calendar: "check CI every 30 minutes", "remind me tomorrow at 9".',
 } satisfies ExtensionAbout
 
@@ -62,10 +62,10 @@ export const SETTINGS = {
 } as const
 
 /**
- * The guards no setting goes past: what a recurring schedule may cost at most, and how often schedules may wake one
- * thread in an hour, all told (one-shots the agent chains one after another too).
+ * The guards no setting goes past: what a recurring schedule may cost at most. How often one thread is woken in an hour,
+ * all told (one-shots the agent chains one after another too), is the core's wake budget (`WAKES_PER_HOUR`).
  */
-export const CAPS = { maxRuns: 500, days: 30, perMachine: 100, minIntervalMinutes: 1, wakesPerHour: 20 } as const
+export const CAPS = { maxRuns: 500, days: 30, perMachine: 100, minIntervalMinutes: 1 } as const
 /** The settings' defaults. */
 export const DEFAULTS = { minIntervalMinutes: 5, maxRuns: 48, days: 7, perThread: 10 } as const
 

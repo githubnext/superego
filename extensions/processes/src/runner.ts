@@ -1,5 +1,5 @@
-// The processes of a machine: their records (`processes.json` in the extension's folder, written whole on each change,
-// and each run's own in its folder, `record.json`, to find them by if `processes.json` is lost), starting and stopping
+// The processes of a machine: their records (`processes.json` in the extension's folder, its `jsonFile`, saved whole on
+// each change, and each run's own in its folder, `record.json`, to find them by if `processes.json` is lost), starting and stopping
 // them, following their output (the log each writes, tailed: for ready text, waiters and the live mark), and taking
 // them back after the daemon restarts (`adopt`): still running, ended while it was away (its exit file says how), or
 // gone with a restart of the machine or the end of the user's session (`lost`, not reported; started again if it's
@@ -9,7 +9,7 @@ import { watch, type FSWatcher } from 'node:fs'
 import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { StringDecoder } from 'node:string_decoder'
-import { adoptGroup, processTable, type ProcessTable } from '@superego/daemon/sdk'
+import { adoptGroup, processTable, type JsonFile, type ProcessTable } from '@superego/daemon/sdk'
 import { matcher, OutputLog, stripAnsi } from './log.ts'
 import { endedHow, live, type Notify, type OutputMark, type Owner, type ProcessInfo, type ProcessState } from './shared.ts'
 import { exitFile, startDetached } from './spawn.ts'
@@ -47,6 +47,11 @@ export type ProcessSpec = {
   keep?: boolean
   by?: ProcessInfo['by']
 }
+
+/** What `processes.json` holds. */
+export type Kept = { processes: ProcessRecord[] }
+export const EMPTY: Kept = { processes: [] }
+export const checkKept = (data: unknown) => Array.isArray((data as Partial<Kept> | null)?.processes) ? undefined : 'it has no list of processes'
 
 /** Each run's copy of its record, in its folder. */
 const RECORD = 'record.json'
@@ -161,55 +166,46 @@ export class Runner {
   readonly records = new Map<string, ProcessRecord>()
   private readonly lives = new Map<string, Live>()
   private readonly listeners = new Map<string, Set<(event: ProcessEvent) => void>>()
-  private saving: Promise<void> = Promise.resolve()
   private closed = false
   /** Which boot of the machine this is: asked once. */
   private boot: Promise<string | undefined> | undefined
   /** The records were read (or there were none): until then, writing them would lose what's in the file. */
   private loaded = false
   readonly dir: string
+  private readonly store: JsonFile<Kept>
   private readonly host: RunnerHost
   private readonly processes: ProcessTable
   private readonly shell: string | undefined
 
-  constructor(dir: string, host: RunnerHost, { processes = processTable, shell }: { processes?: ProcessTable; shell?: string } = {}) {
+  /** In `dir`, its records kept in `store` (`processes.json` there). */
+  constructor(dir: string, store: JsonFile<Kept>, host: RunnerHost, { processes = processTable, shell }: { processes?: ProcessTable; shell?: string } = {}) {
     this.dir = dir
+    this.store = store
     this.host = host
     this.processes = processes
     this.shell = shell
   }
 
-  private get file() { return join(this.dir, 'processes.json') }
   folderOf(id: string) { return join(this.dir, id) }
   logOf(record: ProcessRecord) { return new OutputLog(this.folderOf(record.id), record.base) }
 
   private bootNow() { return this.boot ??= this.processes.boot() }
 
   /**
-   * Read the records kept. A `processes.json` that can't be read as one is put aside (`processes.json.bad-<time>`), said
-   * (`host.error`), and the records found again from each run's own (`<id>/record.json`), so what runs isn't lost track of.
+   * Read the records kept. A `processes.json` that doesn't read (kept aside by the store, and said) is made again from
+   * each run's own record (`<id>/record.json`), so what runs isn't lost track of: how many were found then.
    */
-  async load() {
-    const text = await readFile(this.file, 'utf8').catch((error: NodeJS.ErrnoException) => {
-      if (error.code === 'ENOENT') return undefined
-      throw error
-    })
-    if (text === undefined) { this.loaded = true; return }
-    let data: { processes?: unknown }
-    try {
-      data = JSON.parse(text) as typeof data
-      if (!data || typeof data !== 'object' || !Array.isArray(data.processes)) throw new Error('it has no list of processes')
-    } catch (error) {
-      const aside = `${this.file}.bad-${Date.now()}`
-      await rename(this.file, aside)
+  async load(): Promise<{ rebuilt?: number }> {
+    const kept = await this.store.read()
+    if (this.store.bad) {
       const found = await this.rebuild()
       this.loaded = true
-      this.host.error(`processes.json couldn't be read (kept as ${aside}); found ${found} process${found === 1 ? '' : 'es'} again from their folders`, error)
       await this.save()
-      return
+      return { rebuilt: found }
     }
-    for (const record of data.processes as ProcessRecord[]) this.records.set(record.id, record)
+    for (const record of kept.processes) this.records.set(record.id, record)
     this.loaded = true
+    return {}
   }
 
   /** The records each run left in its folder: how many were found. What ended is taken as reported (none can say). */
@@ -246,18 +242,12 @@ export class Runner {
     }
   }
 
-  /** Write every record, whole: one write at a time, the last always landing. */
+  /** Save every record, whole (the store writes one save at a time, the newest landing). */
   save(): Promise<void> {
-    // Not read (it failed, and said so): what's there stays, for the next daemon to read.
-    if (!this.loaded) return this.saving
-    const text = `${JSON.stringify({ processes: [...this.records.values()] }, null, 1)}\n`
-    this.saving = this.saving.then(async () => {
-      await mkdir(this.dir, { recursive: true })
-      const temp = `${this.file}.${process.pid}.tmp`
-      await writeFile(temp, text, { mode: 0o600 })
-      await rename(temp, this.file)
-    }).catch((error) => this.host.error("couldn't save its processes", error))
-    return this.saving
+    // Not read yet: what's there stays until it is.
+    if (!this.loaded) return Promise.resolve()
+    return this.store.save(() => ({ processes: [...this.records.values()] }))
+      .catch(() => { /* said by the store's `trouble` (Processes' trouble value), and logged */ })
   }
 
   private liveOf(id: string): Live {
@@ -599,6 +589,6 @@ export class Runner {
       state.group?.release?.()
       clearTimeout(state.timer)
     }
-    return this.saving
+    return this.store.settled()
   }
 }

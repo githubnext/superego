@@ -318,8 +318,7 @@ function PrNotice({ entry }: EntryProps) {
     <div className={`github-notice is-${data.event}`}>
       <div className="github-notice__head">{glyph}<span>{data.headline}</span></div>
       {data.detail && <div className="github-notice__detail">{data.detail}</div>}
-      {data.held && <div className="github-notice__detail">The agent wasn't woken: it was woken about #{data.number} too often this hour.</div>}
-      {data.woke && <div className="github-notice__detail">Watching #{data.number}: the agent was woken.</div>}
+      {data.watched && <div className="github-notice__detail">Watching #{data.number}.</div>}
     </div>
   )
 }

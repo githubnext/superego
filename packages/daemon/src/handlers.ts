@@ -231,7 +231,7 @@ export function serveClient(peer: RpcPeer, { via, hangUp }: { via?: Via; hangUp?
     'extension.inspect': ({ thread }: Methods['extension.inspect']['params']) => extensions.inspect(thread),
     ...connection.handlers,
   }
-  const ctx = (caller: Caller): DaemonContext => ({ notify: (event, params) => notify(event as keyof Notifications, params as never), source: caller.extension ?? client, ...(caller.from ? { from: caller.from } : {}) })
+  const ctx = (caller: Caller): DaemonContext => ({ notify: (event, params) => notify(event as keyof Notifications, params as never), source: caller.extension ?? client, ...(caller.extension ? { by: caller.extension } : {}), ...(caller.from ? { from: caller.from } : {}) })
   const open = (method: string, handler: (params: any, caller: Caller) => unknown) => {
     const parse = parsers.get(method)
     return (params: unknown, caller: Caller) => {

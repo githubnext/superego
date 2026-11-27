@@ -6,11 +6,11 @@ import { stat } from 'node:fs/promises'
 import { hostname } from 'node:os'
 import { basename, dirname } from 'node:path'
 import { InboxDoc, type ConversationId, type ConversationRecord, type ConversationView, type Cursor, type EntryId, type EntryRecord, type Harness, type InboxItem, type LiveState } from '@earendil-works/pi-durable'
-import { deriveStatus, linkTo, MESSAGE_ENTRY, NOTE_ENTRY, RpcError, type Attachment, type Exposure, type Json, type MessageOrigin, type NewThread, type Note, type Pane, type ProviderRejection, type ReturnedMessage, type ThreadFailure, type ThreadInfo } from '@superego/protocol'
+import { deriveStatus, linkTo, MESSAGE_ENTRY, NOTE_ENTRY, RpcError, type Attachment, type Exposure, type Json, type MessageOrigin, type NewThread, type Note, type Pane, type ProviderRejection, type ReturnedMessage, type ThreadFailure, type ThreadInfo, WAKES_PER_HOUR } from '@superego/protocol'
 import type { UserMessage } from '@earendil-works/pi-ai'
 import { attachmentsDir, attachmentsIn, contentOf } from './attachments.ts'
 import type { ExtensionHost } from './extension-host.ts'
-import type { ArchiveNote, ArchiveNotes, DaemonApi, MessageBlock, OutgoingMessage, ThreadDraft, ThreadNotice as NoticeInput, ThreadStarting, ThreadStop } from './extension.ts'
+import type { ArchiveNote, ArchiveNotes, DaemonApi, MessageBlock, OutgoingMessage, ThreadDraft, ThreadNotice as NoticeInput, ThreadStarting, ThreadStop, WakeBudget, Woken } from './extension.ts'
 import { git } from './git.ts'
 import { Catalog, clone, context, shortPath, stateOf, ThreadDoc, type Host, type Mounted, type ThreadMeta } from './host.ts'
 import { titleOf } from './names.ts'
@@ -479,13 +479,15 @@ export function createThreads(host: Host, { harness, extensions, profiles }: { h
    * agent (`DaemonContext.exposure`); `from`, the thread it's from. Kept with it, as a `MESSAGE_ENTRY` (`answering`): every
    * input is one, a window's user's too (`{}`), so nothing else in a transcript passes for an input.
    */
-  async function submit(id: string, text: string, requestId: string, whenBusy?: 'steer' | 'followUp', attachments: Attachment[] = [], origin: MessageOrigin = {}) {
+  async function submit(id: string, text: string, requestId: string, whenBusy?: 'steer' | 'followUp', attachments: Attachment[] = [], origin: MessageOrigin = {}, extra?: string) {
     if (!text.trim() && !attachments.length) throw new RpcError('invalid', 'Nothing to send')
     const m = await get(id)
     await ready(id, m, 'send to it')
     if (!m.meta.title) await updateMeta(id, (meta) => { meta.title = titleOf(text.trim() || attachments.map((a) => a.name).join(', ')) })
     const said = originOf(origin)
-    const content = await transformed(id, m, { text, attachments, ...said }, await contentOf(attachmentsDir(options.dataDir, id), text, attachments))
+    const words = await transformed(id, m, { text, attachments, ...said }, await contentOf(attachmentsDir(options.dataDir, id), text, attachments))
+    // What the sending extension tells the agent alone, after what transforms made of the words.
+    const content = extra?.trim() ? [...typeof words === 'string' ? [{ type: 'text' as const, text: words }] : words, { type: 'text' as const, text: extra }] : words
     const submission = await m.conversation.submit({ type: 'input', content, requestId, ...(whenBusy ? { whenBusy } : {}), entry: { kind: MESSAGE_ENTRY, data: said } }, context)
     return String(submission.id)
   }
@@ -963,22 +965,55 @@ export function createThreads(host: Host, { harness, extensions, profiles }: { h
    * idle, else where its run can next take it (between tool calls, or as it ends). It starts no run, and, as the
    * thread's newest entry, makes it done (unread) with the notice's text for what it says.
    */
-  async function notice(id: string, by: { name: string; title: string }, { agent, wake, ...said }: NoticeInput) {
+  async function notice(id: string, by: { name: string; title: string }, { agent, wake, ...said }: NoticeInput): Promise<Woken> {
     if (!said.text.trim()) throw new RpcError('invalid', 'A notice needs text')
     const m = await get(id)
     if (m.meta.archived) throw new RpcError('archived', 'This thread is archived', { hint: 'Unarchive it to tell it something.' })
     const told = agent === false ? undefined : (agent ?? said.text).trim()
-    // One that wakes the agent is its input: a run on it starts (after the one going), as a message's would.
-    if (wake) {
-      if (!told) throw new RpcError('invalid', 'A notice that wakes the agent tells it something')
-      await ready(id, m, 'wake it')
+    const write = async (held?: string) => {
+      const data: Note = { ...said, by: by.name, ...(held ? { held } : {}) }
+      const model: UserMessage[] | undefined = told ? [{ role: 'user', content: [{ type: 'text', text: noticeForAgent(by.title, told) }], timestamp: Date.now() }] : undefined
+      await m.conversation.submit({ type: 'write', entry: { kind: NOTE_ENTRY, data: clone(data) as Json, ...(model ? { model } : {}) } }, context)
+    }
+    if (!wake) { await write(); return { woke: false } }
+    // One that wakes the agent is its input: a run on it starts (after the one going), as a message's would. Past the
+    // thread's wake budget, it's shown (and told) as any notice is, saying why it didn't wake it.
+    if (!told) throw new RpcError('invalid', 'A notice that wakes the agent tells it something')
+    await ready(id, m, 'wake it')
+    const woken = await budgeted(id, by, wake, async () => {
       const data: Note = { ...said, by: by.name, wake: true }
       await m.conversation.submit({ type: 'input', content: [{ type: 'text', text: noticeForAgent(by.title, told) }], requestId: randomUUID(), whenBusy: 'followUp', entry: { kind: NOTE_ENTRY, data: clone(data) as Json } }, context)
-      return
-    }
-    const data: Note = { ...said, by: by.name }
-    const model: UserMessage[] | undefined = told ? [{ role: 'user', content: [{ type: 'text', text: noticeForAgent(by.title, told) }], timestamp: Date.now() }] : undefined
-    await m.conversation.submit({ type: 'write', entry: { kind: NOTE_ENTRY, data: clone(data) as Json, ...(model ? { model } : {}) } }, context)
+    })
+    if (woken.held) await write(woken.held)
+    return woken
+  }
+
+  const HOUR = 3_600_000
+  /** Each thread's wakes, one at a time: a wake is counted against its budget, and done, before the next is weighed. */
+  const waking = new Map<string, Promise<unknown>>()
+  /**
+   * Wake thread `id` with `run` (an extension's unattended wake, `by` it), within its wake budget: every extension's
+   * wakes of it `WAKES_PER_HOUR` an hour at most, and `budget.most` an hour of `by`'s about `budget.source`. Counted
+   * once `run` went (kept with the thread, so a restart doesn't reset it); past either, not run, saying why.
+   */
+  function budgeted(id: string, by: { name: string; title: string }, budget: true | WakeBudget, run: () => Promise<void>): Promise<Woken> {
+    const { source, most } = budget === true ? {} : budget
+    const turn = (waking.get(id) ?? Promise.resolve()).then(async (): Promise<Woken> => {
+      const now = Date.now()
+      const recent = ((await get(id)).meta.woke ?? []).filter((w) => now - w.at < HOUR)
+      const times = (n: number) => n === 1 ? 'once' : `${n} times`
+      if (recent.length >= WAKES_PER_HOUR) return { woke: false, held: `The agent wasn't woken: extensions woke it ${times(WAKES_PER_HOUR)} in the last hour, the most they may.` }
+      if (most !== undefined && recent.filter((w) => w.by === by.name && w.source === source).length >= most) {
+        return { woke: false, held: `The agent wasn't woken: ${by.title} woke it ${times(most)}${source === undefined ? '' : ' about this'} in the last hour, the most it may.` }
+      }
+      await run()
+      await updateMeta(id, (meta) => { meta.woke = [...recent, { at: now, by: by.name, ...(source !== undefined ? { source } : {}) }] })
+      return { woke: true }
+    })
+    const settled = turn.catch(() => undefined)
+    waking.set(id, settled)
+    void settled.then(() => { if (waking.get(id) === settled) waking.delete(id) })
+    return turn
   }
 
   /** Whether a thread has a conversation: a message, to or from its agent, since it was last started over. */
@@ -1081,7 +1116,11 @@ export function createThreads(host: Host, { harness, extensions, profiles }: { h
       attachments: (id) => attachmentsDir(options.dataDir, id),
       // An extension's attachments are inline: it has no connection to upload on.
       start: ({ hidden, ...params }) => startThread({ ...params as ThreadStart, ...(hidden ? { hidden: owner } : {}), by: owner }),
-      async send(id, text, { whenBusy = 'followUp', exposure, from } = {}) { await submit(id, text, randomUUID(), whenBusy, [], { by: owner, exposure, from }) },
+      async send(id, text, { whenBusy = 'followUp', exposure, from, context: extra, wake } = {}) {
+        const send = async () => { await submit(id, text, randomUUID(), whenBusy, [], { by: owner, exposure, from }, extra) }
+        if (!wake) { await send(); return { woke: true } }
+        return budgeted(id, { name: owner, title }, wake, send)
+      },
       notice: (id, said) => notice(id, { name: owner, title }, said),
       answering: (conversationId, callId) => answering(conversationId, callId),
       noteRead: (reader, read) => noteRead(reader, read),
