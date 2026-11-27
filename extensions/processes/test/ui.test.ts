@@ -45,7 +45,7 @@ it('lists them in the pane, the folder’s under its heading, and shows the sele
   const rows = [...pane.container.querySelectorAll('.processes-row')]
   expect(rows.map((r) => r.querySelector('.processes-row__title')?.textContent)).toEqual(['pnpm build', 'pnpm test --watch', 'pnpm dev'])
   expect(rows[0]!.querySelector('.processes-row__state')?.textContent).toBe('Exited with 2 after 8s')
-  expect(rows[2]!.querySelector('.processes-tag')?.textContent).toBe('Run')
+  expect(rows[2]!.querySelector('.processes-tag')?.textContent).toBe('run')
   // The runner's own lines set apart; colours kept.
   expect(pane.container.querySelector('.processes-line--own')?.textContent).toBe('── exited with 2 after 8s ──')
   expect(pane.container.querySelector('.processes-output span[style*="--processes-c1"]')?.textContent).toBe('error TS2322')

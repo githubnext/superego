@@ -1,9 +1,9 @@
-// Screenshots of Processes (run by `test/look.sh <dir> processes`): Run's dev server started with ⌃R, and a thread that
-// started the tests and a build, woken by the build failing (its report in the transcript, the chip saying Failed, the
-// row's mark); the Processes pane on the failed build's output, on a process gone with a restart of the machine, on
-// Run's dev server, and the chip's menu; then a phone: the thread's sheet with the chip's rows, and the pane full
-// screen. Light and dark, into $SUPEREGO_SHOWCASE_OUT as processes-report-, processes-pane-, processes-lost-,
-// processes-run-, processes-menu-, processes-phone-sheet- and processes-phone-pane-<light|dark>.png.
+// Screenshots of Processes (run by `test/look.sh <dir> processes`): the folder's dev server started from the window, and
+// a thread that started the tests and a build, woken by the build failing (its report in the transcript, the chip saying
+// Failed, the row's mark); the Processes pane on the failed build's output, on a process gone with a restart of the
+// machine, on the dev server, and the chip's menu; then a phone: the thread's sheet with the chip's rows, and the pane
+// full screen. Light and dark, into $SUPEREGO_SHOWCASE_OUT as processes-report-, processes-pane-, processes-lost-,
+// processes-dev-, processes-menu-, processes-phone-sheet- and processes-phone-pane-<light|dark>.png.
 import { BrowserWindow } from 'electron'
 import { writeFileSync } from 'node:fs'
 import { openApp } from './harness.mjs'
@@ -18,12 +18,11 @@ await openApp({ name: 'processes', timeout: 300_000 }, async (t) => {
   const call = (method, params) => run(`window.superego.call('local', ${JSON.stringify(method)}, ${JSON.stringify(params)})`)
   const list = (id) => call('processes.list', { thread: id })
 
-  step('a thread starting the tests and a build, Run’s dev server up')
+  step('a thread starting the tests and a build, the folder’s dev server up')
   const { id } = await call('thread.start', { cwd: project, title: 'Fix the import’s month totals' })
-  // Run's dev command, defined from the project's run.json as the thread starts; ⌃R starts it.
-  await until(`window.superego.call('local', 'processes.list', { thread: '${id}' }).then((list) => list.some((p) => p.name === 'run' && p.state === 'idle'))`, 'Run’s dev command defined')
-  await call('action.run', { id: 'run.restart', params: { thread: id } })
-  await until(`window.superego.call('local', 'processes.list', { thread: '${id}' }).then((list) => list.some((p) => p.name === 'run' && p.state === 'running'))`, 'the dev server ready')
+  // The folder's dev server, started from the window: shared by the threads there.
+  await call('action.run', { id: 'processes.start', params: { folder: project, name: 'dev', command: 'npm run dev', ready: 'ready in', notify: 'failure' } })
+  await until(`window.superego.call('local', 'processes.list', { thread: '${id}' }).then((list) => list.some((p) => p.name === 'dev' && p.state === 'running'))`, 'the dev server ready')
   await call('thread.send', { thread: id, text: 'Run the tests in watch mode and a full build while I look at the import’s types.' })
   // Its two turns, then the report waking it and its two more.
   await until(`window.superego.call('local', 'processes.list', { thread: '${id}' }).then((list) => list.some((p) => p.state === 'failed'))`, 'the build failed', 60_000)
@@ -47,10 +46,10 @@ await openApp({ name: 'processes', timeout: 300_000 }, async (t) => {
   await until(`!!document.querySelector('.processes-row.is-selected.is-lost') && [...document.querySelectorAll('.processes-line')].some((l) => l.textContent.includes('gone with a restart'))`, 'the lost one selected')
   await t.both('processes-lost')
 
-  step('Run')
-  await run(`[...document.querySelectorAll('.processes-row')].find((r) => r.querySelector('.processes-tag'))?.click()`)
-  await until(`[...document.querySelectorAll('.processes-line')].some((l) => l.textContent.includes('localhost:5173'))`, 'Run’s output')
-  await t.both('processes-run')
+  step('the dev server')
+  await run(`[...document.querySelectorAll('.processes-row')].find((r) => r.title === 'npm run dev')?.click()`)
+  await until(`[...document.querySelectorAll('.processes-line')].some((l) => l.textContent.includes('localhost:5173'))`, 'the dev server’s output')
+  await t.both('processes-dev')
 
   step('the chip’s menu')
   await run(`document.querySelector('.processes-chip')?.closest('button')?.click()`)

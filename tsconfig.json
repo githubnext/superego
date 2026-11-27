@@ -35,7 +35,6 @@
     { "path": "extensions/ego" },
     { "path": "extensions/terminal" },
     { "path": "extensions/processes" },
-    { "path": "extensions/run" },
     { "path": "extensions/mcp-servers" },
     { "path": "app" },
     { "path": "scripts" },

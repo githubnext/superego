@@ -377,9 +377,10 @@ await file.save(kept)
 (API ^5.18) The bundled Processes extension runs commands that outlive the daemon, and shows them in the Processes
 pane; call it with `superego.dispatch` (actions) and `superego.call` (methods). A process belongs to a thread
 (`{ thread }`, stopped as it's archived), a folder (`{ folder }`, shared by the threads there, stopped with the last
-of them; Run's dev command is one) or the machine (`{ machine: true }`). Each answers a `ProcessInfo`
+of them: a folder's dev server, say) or the machine (`{ machine: true }`). Each answers a `ProcessInfo`
 (`@superego/processes/shared`): `id`, `name`, `owner`, `command`, `cwd`, `state` (`idle`, `starting`, `running`,
-`stopping`, `exited`, `failed`, `lost`), `pid`, `run` (how many times it ran), `exitCode`, `error`, …
+`stopping`, `exited`, `failed`, `lost`), `pid`, `run` (how many times it ran), `exitCode`, `error`, … The pane shows
+one an extension started by its command, tagged with the extension's name.
 
 | | |
 |---|---|

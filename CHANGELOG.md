@@ -2,10 +2,6 @@
 
 ## Unreleased
 
-- **Upgrade:** Run (each folder's dev command, from `.superego/run.json`) is built in now: remove the `run` extension
-  from your profile (its folder and its entries in `profile.ts`). Agents use the `process_*` tools on the process named
-  `run`; the `run_status`, `run_logs`, `run_restart` and `run_stop` tools are gone. The old logs in `~/.superego/run/`
-  can be deleted.
 - **Core or Full.** Setup and Settings → Extensions let you start with Core, the few extensions a newcomer needs, or
   Full, all of them, then switch any one on or off. Extensions added in a later release follow what you picked. Claude
   Agent, experimental, keeps a switch of its own.
@@ -24,8 +20,6 @@
 - **Processes.** Agents run servers and long builds that keep running through Superego's restarts, and are woken
   when one ends or fails; the Processes pane shows them. It's the new Processes extension, which Settings → Extensions
   can turn off.
-- A folder's dev command (`.superego/run.json`, `⌃R`) is one of these processes: it starts again after the computer
-  restarts if it was running, and wakes the thread working there if it fails.
 - **The rail picks the whole window.** A rail button (Threads, Notes, Staff…) changes the sidebar and the main area
   together, and comes back to what you last had there; only one is lit. A project's spaces open from their rows in
   Threads, no longer from rail buttons of their own. Files and Skills go beside the thread or in a pane, not the sidebar.

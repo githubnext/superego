@@ -30,7 +30,7 @@ export const REPORT = 'processes.report'
 
 export type ProcessState = 'idle' | 'starting' | 'running' | 'stopping' | 'exited' | 'failed' | 'lost'
 
-/** Whom a process belongs to: a thread (agent-started), a folder (Run's, shared by every thread there), or the machine. */
+/** Whom a process belongs to: a thread (agent-started), a folder (shared by every thread there), or the machine. */
 export type Owner = { thread: string } | { folder: string } | { machine: true }
 
 /** When its owner thread is woken by its end: any end, only a failure, or never. A stop never wakes it. */
@@ -40,7 +40,7 @@ export type Notify = 'exit' | 'failure' | 'never'
 export type ProcessInfo = {
   /** `p_<8 hex>`, unique on the machine. */
   id: string
-  /** Unique among its owner's live processes; Run's is `run`. */
+  /** Unique among its owner's live processes. */
   name?: string
   owner: Owner
   cwd: string

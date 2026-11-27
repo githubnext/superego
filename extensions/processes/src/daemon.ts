@@ -1,6 +1,6 @@
 // processes, daemon half: long-running commands a thread (or a folder, or the machine) owns, run so they outlive the
-// daemon (runner.ts), with the agent's process_* tools, actions and reads for the window and other extensions (Run,
-// Schedules), live values for the pane and the chip, a mark's facts, reports back to the thread when one ends, and
+// daemon (runner.ts), with the agent's process_* tools, actions and reads for the window and other extensions
+// (Schedules), live values for the pane and the chip, a mark's facts, reports back to the thread when one ends, and
 // their lifetime: a thread's own stopped as it's archived, a folder's as its last thread goes, all of them as
 // Processes is switched off; what ended removed after a week.
 import { defineExtension, defineTool, section } from '@earendil-works/pi-durable'
@@ -159,7 +159,7 @@ export function processesExtension({ batching = BATCHING, shell }: { batching?: 
           if (!wake || record.state === 'lost') return
           const owner = record.owner
           if ('thread' in owner) reports.report(owner.thread, record.id)
-          // A folder's (Run's): the thread working there is told.
+          // A folder's: the thread working there is told.
           else if ('folder' in owner) {
             void workingIn(owner.folder).then((thread) => { if (thread) reports.report(thread, record.id) })
               .catch((error) => fail(`couldn't find whom to tell ${record.id} ended`, error))
@@ -532,7 +532,7 @@ function agentPart(superego: DaemonApi, host: ToolHost) {
       }),
       defineTool({
         name: 'process_list',
-        description: "This thread's processes and its folder's (the dev command's): id, name, state, command, how long up or how it ended. `all`: every process on this machine.",
+        description: "This thread's processes and its folder's: id, name, state, command, how long up or how it ended. `all`: every process on this machine.",
         parameters: obj({ all: opt(bool()) }),
         async execute({ all }, api) {
           const list = await host.list(host.threadOf(api.conversationId), Boolean(all))
