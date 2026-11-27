@@ -1,5 +1,6 @@
 // Screenshots of a machine's extensions (run by test/look.sh <dir> extensions), on a fresh home whose model works:
-// first-run setup's two cards with Full picked (Mikkel's byline under it), Core picked, Full's whole list, GitHub
+// first-run setup's two cards with Full picked (Mikkel's byline under it, Claude Agent's experimental switch apart
+// under them), Core picked, Full's whole list, GitHub
 // switched off making it Custom ("Full without GitHub"), a phone's stacked cards with Full and with Custom; then
 // Settings → Extensions starting from Full, and from Custom with GitHub's switch marked. Light and dark, into
 // $SUPEREGO_SHOWCASE_OUT.
@@ -12,12 +13,15 @@ await openApp({ name: 'extensions', timeout: 180_000, firstRun: true }, async (t
   const picked = `document.querySelector('.presets__card.is-on .presets__title')?.textContent`
   const show = `document.querySelector('.setup__extensions').scrollIntoView({ block: 'start' }); document.querySelector('.setup').scrollBy(0, -140); 0`
   await until(`Boolean(${card('Full')}) && Boolean(document.querySelector('.setup__another'))`, 'setup on the model, with the extensions')
-  await run(show)
-  await t.both('presets-full', show)
+  // The cards and Claude Agent's switch under them, clear of the page's foot.
+  const whole = `document.querySelector('.setup__extensions').scrollIntoView({ block: 'end' }); document.querySelector('.setup').scrollBy(0, 120); 0`
+  await until(`Boolean(document.querySelector('.setup__experimental [data-extension="claude-agent"]'))`, "Claude Agent's switch")
+  await run(whole)
+  await t.both('presets-full', whole)
 
   await run(`${card('Core')}.click()`)
   await until(`${picked} === 'Core'`, 'Core picked')
-  await t.both('presets-core', show)
+  await t.both('presets-core', whole)
   await run(`${card('Full')}.click()`)
   await until(`${picked} === 'Full'`, 'Full picked again')
 
@@ -34,7 +38,7 @@ await openApp({ name: 'extensions', timeout: 180_000, firstRun: true }, async (t
   await run(`${card('Full')}.click()`)
   await until(`${picked} === 'Full'`, 'Full on a phone')
   await run(`document.querySelector('.setup__extensions .setup__link').click(); 0`)
-  const end = `document.querySelector('.setup__extensions').scrollIntoView({ block: 'end' }); 0`
+  const end = whole
   await run(end)
   await t.both('presets-phone', end)
   await run(`document.querySelector('.setup__extensions .setup__link').click(); 0`)

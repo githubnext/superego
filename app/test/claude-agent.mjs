@@ -43,9 +43,6 @@ await new Promise((r) => server.listen(0, '127.0.0.1', r))
 // look.sh's wrapper reads where it is as `claude` starts.
 writeFileSync(`${home}/claude-mock-url`, `http://127.0.0.1:${server.address().port}`)
 
-// Experimental: on only once turned on, as a user does in Settings → Extensions.
-writeFileSync(`${home}/settings.json`, JSON.stringify({ 'extensions.claude-agent': true }, null, 2) + '\n', { mode: 0o600 })
-
 await openApp({ name: 'claude-agent', timeout: 180_000, size: [1100, 760] }, async (t) => {
   const { until } = t
   const { id } = await t.call('thread.start', { cwd: process.env.SUPEREGO_SHOWCASE_PROJECT, title: 'Fix the flaky ledger test', profile: 'claude', model: 'claude-agent/opus', thinking: 'high' })

@@ -249,11 +249,11 @@ export async function testDaemon(options: TestDaemonOptions = {}): Promise<TestD
     // Its threads' profiles loaded first, as a window reconnecting finds them once the app's daemon is up a moment: what
     // the test checks right after a start or `restart` (its extensions, a profile's values) is there, not on its way.
     await daemon.profilesLoaded
-    // The extensions given are what's tested: an experimental one is turned on, as no preset turns it on. Once: a test
-    // that turns it off again finds it off after a restart.
+    // The extensions given are what's tested: an experimental one that's off until turned on (`'off'`) is turned on.
+    // Once: a test that turns it off again finds it off after a restart.
     for (const extension of options.extensions ?? []) {
       const key = extensionSwitch(extension.name)
-      if (extension.experimental && !extension.required && !daemon.settings.isSet(key)) await daemon.settings.set(key, true)
+      if (extension.experimental === 'off' && !extension.required && !daemon.settings.isSet(key)) await daemon.settings.set(key, true)
     }
     const socket = join(dataDir, `d${opened}.sock`)
     const server = await listen(daemon, socket)

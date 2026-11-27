@@ -2,15 +2,15 @@
 // Full), and a switch for each optional one (the core's own agent parts and the bundled extensions), off for every
 // thread here. Required ones aren't listed: they're part of what the app is. Profiles: each one threads here can start
 // as, what it is and what it changes.
-import { EXTENSIONS_PRESET, extensionSwitch, inPreset, type ExtensionAbout, type ExtensionPreset, type Json } from '@superego/protocol'
+import { EXTENSIONS_PRESET, extensionSwitch, onByDefault, type ExtensionAbout, type ExtensionPreset, type Json } from '@superego/protocol'
 import type { SettingsRegistry } from '@superego/settings'
 import { hashProfile, loadProfile, type Allowances, type ProfileKeys, type ProfileRef, type UserRoot } from './profiles.ts'
 
 /**
  * The machine's preset (`extensions.preset`, Full unless picked) and one switch per optional extension,
- * `extensions.<name>`: what the preset says of it until the user changes it, so one that's new follows the preset. Both
- * drawn by the section's own component (`extensions`), from the rows it's given. A switch applies from a thread's next
- * message.
+ * `extensions.<name>`: what the preset says of it until the user changes it, so one that's new follows the preset; an
+ * experimental one, in no preset, says its own (on unless `'off'`). Both drawn by the section's own component
+ * (`extensions`), from the rows it's given. A switch applies from a thread's next message.
  */
 export function registerExtensionSettings(settings: SettingsRegistry, extensions: ExtensionAbout[]) {
   const optional = extensions.filter((e) => !e.required)
@@ -28,7 +28,7 @@ export function registerExtensionSettings(settings: SettingsRegistry, extensions
       },
       ...optional.map((about) => ({
         key: extensionSwitch(about.name), title: about.title ?? about.name, ...(about.description ? { description: about.description } : {}),
-        default: () => inPreset(about, preset()), type: { type: 'boolean' as const }, hidden: () => true,
+        default: () => onByDefault(about, preset()), type: { type: 'boolean' as const }, hidden: () => true,
       })),
     ],
   })

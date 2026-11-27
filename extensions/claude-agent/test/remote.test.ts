@@ -65,8 +65,6 @@ async function start(app: typeof hubApp, name: string, executable: string, reach
   const dataDir = join(dir, name)
   const extensions = [claudeAgent({ executable: async () => executable, env: () => claudeEnv(), skills: [SKILL_DIR] }), agentUi, threadTools]
   const daemon = await openDaemon({ app, dataDir, defaultCwd: dir, agentsDir: join(dir, 'agents'), extensions, ...(reach ? { reach } : {}) })
-  // Experimental: on only once turned on.
-  await daemon.settings.set('extensions.claude-agent', true)
   const socket = join(sockets, `${name}.sock`)
   const server = await listen(daemon, socket)
   cleanups.push(async () => { server.close(); await daemon.close() })

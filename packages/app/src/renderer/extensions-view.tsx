@@ -36,16 +36,16 @@ function useFailure(): [string | undefined, (what: string, change: () => Promise
 }
 
 /**
- * The switches, under their groups' headings: each with its name (and its id, `ids`, for profile authors), a line on
- * what it does, and an experimental one tagged. `mark`: a switch that differs from the preset is filled.
+ * The switches, under their groups' headings (`headings`): each with its name (and its id, `ids`, for profile authors),
+ * a line on what it does, and an experimental one tagged. `mark`: a switch that differs from the preset is filled.
  */
-export function ExtensionSwitches({ rows, onTurn, ids = false, mark = false }: { rows: ExtensionRow[]; onTurn(row: ExtensionRow, on: boolean): void; ids?: boolean; mark?: boolean }) {
+export function ExtensionSwitches({ rows, onTurn, ids = false, mark = false, headings = true }: { rows: ExtensionRow[]; onTurn(row: ExtensionRow, on: boolean): void; ids?: boolean; mark?: boolean; headings?: boolean }) {
   const changed = new Set(mark ? changes(rows).map((row) => row.name) : [])
   return (
     <div className="extensions">
       {grouped(rows).map((group) => (
         <section key={group.id} className="extensions__group" aria-label={group.title}>
-          <h3>{group.title}</h3>
+          {headings && <h3>{group.title}</h3>}
           <ul>
             {group.rows.map((row) => (
               <li key={row.name} className={`extensions__row ${changed.has(row.name) ? 'is-changed' : ''}`} data-extension={row.name}>
@@ -89,14 +89,17 @@ function PresetCard({ title, line, checked, onPick, by, dots }: { title: string;
 }
 
 /**
- * Setup's extensions: Core or Full as two cards (Custom a third once a switch differs, saying how), every switch under
- * them while `open`, and a word that Settings has them too.
+ * Setup's extensions: Core or Full as two cards (Custom a third once a switch differs, saying how), their every switch
+ * under them while `open`, the experimental ones' switches apart (no preset has them), and a word that Settings has them
+ * too.
  */
 export function SetupExtensions({ machine, extensions, open, onOpen }: { machine: string; extensions: Extensions; open: boolean; onOpen(open: boolean): void }) {
   const [error, run] = useFailure()
   const change = useChange(machine, 'setup')
   const now = picked(extensions)
-  const { rows } = extensions
+  const rows = extensions.rows.filter((row) => !row.experimental)
+  const experimental = extensions.rows.filter((row) => row.experimental)
+  const turn = (row: ExtensionRow, on: boolean) => run(`Turning ${row.title} ${on ? 'on' : 'off'}`, () => change.turn(row, on))
   const pick = (preset: ExtensionPreset) => { if (now !== preset) run('Picking extensions', () => change.pick(preset)) }
   const by = (
     <span className="presets__by">
@@ -113,7 +116,8 @@ export function SetupExtensions({ machine, extensions, open, onOpen }: { machine
         {now === 'custom' && <PresetCard title="Custom" line={customLine(extensions)} checked onPick={() => {}} dots={<Dots rows={rows} on={(row) => row.on} />} />}
       </div>
       <p><button type="button" className="setup__link" aria-expanded={open} onClick={() => onOpen(!open)}>{open ? 'Hide the list' : `Show all ${rows.length}`}</button></p>
-      {open && <ExtensionSwitches rows={rows} onTurn={(row, on) => run(`Turning ${row.title} ${on ? 'on' : 'off'}`, () => change.turn(row, on))} />}
+      {open && <ExtensionSwitches rows={rows} onTurn={turn} />}
+      {experimental.length > 0 && <div className="setup__experimental"><ExtensionSwitches rows={experimental} headings={false} onTurn={turn} /></div>}
       {error && <p className="setup__error" role="alert">{error}</p>}
       <p className="setup__note">Change them any time in Settings.</p>
     </section>

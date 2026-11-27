@@ -66,9 +66,15 @@ export type ExtensionPreset = 'core' | 'full'
 export const EXTENSIONS_PRESET = 'extensions.preset'
 /** The setting that turns an optional extension on or off on a machine. */
 export const extensionSwitch = (name: string) => `extensions.${name}`
-/** Whether `preset` turns an optional extension on: never an experimental one. */
+/** Whether `preset` turns an optional extension on: never an experimental one, which is in no preset. */
 export const inPreset = (about: Pick<ExtensionAbout, 'core' | 'experimental'>, preset: ExtensionPreset) =>
   !about.experimental && (preset === 'full' || Boolean(about.core))
+/**
+ * Whether an optional extension is on until the user says otherwise: an experimental one by its own word (on, unless
+ * `experimental: 'off'`), any other as `preset` has it.
+ */
+export const onByDefault = (about: Pick<ExtensionAbout, 'core' | 'experimental'>, preset: ExtensionPreset) =>
+  about.experimental ? about.experimental !== 'off' : inPreset(about, preset)
 
 /**
  * What an extension is, as both its halves declare it (spread into `defineDaemonExtension` and `defineUiExtension`).
@@ -87,10 +93,10 @@ export type ExtensionAbout = {
   /** (API ^5.22) In the Core preset, the few a newcomer starts with, as well as Full. Unset: Full only. */
   core?: boolean
   /**
-   * (API ^5.22) Experimental: in neither preset, so off until it's turned on, and listed as such. Picking Core or Full
-   * leaves its switch as it is.
+   * (API ^5.22) Experimental: listed as such, apart from the presets. Its switch is its own: on until the user turns it
+   * off (`true`), or off until they turn it on (`'off'`); picking Core or Full leaves it as it is.
    */
-  experimental?: boolean
+  experimental?: boolean | 'off'
   /**
    * Its own version, semver: a major for a change its other half, a profile or a script relying on its methods,
    * actions, values or data can't follow; a minor for something added. Machines announce it. The window draws a UI

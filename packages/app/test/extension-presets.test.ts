@@ -1,5 +1,5 @@
 // A machine's extensions as setup and Settings say them: Core, Full, or Custom (the preset and what's changed), the
-// experimental ones in neither and never making it Custom; what each preset turns on, in a line; and the groups.
+// experimental ones in neither, on by their own word and never making it Custom; what each preset turns on, in a line; and the groups.
 import { expect, it } from 'vitest'
 import { extensionSwitch, type SettingsSnapshot } from '@superego/protocol'
 import { changes, customLine, extensionsOf, grouped, picked, presetLine, type ExtensionRow, type Extensions } from '../src/renderer/extension-presets.ts'
@@ -21,7 +21,7 @@ const ABOUTS = [
 
 /** The machine as its settings say: `preset`, and the switches the user changed. */
 function machine(preset: 'core' | 'full', changed: Record<string, boolean> = {}): Extensions {
-  const presetOf = (about: (typeof ABOUTS)[number]) => !('experimental' in about) && (preset === 'full' || 'core' in about)
+  const presetOf = (about: (typeof ABOUTS)[number]) => 'experimental' in about || preset === 'full' || 'core' in about
   const snapshot: SettingsSnapshot = {
     sections: [{
       id: 'extensions', title: 'Extensions', order: 70, ui: 'extensions', data: ABOUTS.map((about) => ({ ...about })),
@@ -60,9 +60,10 @@ it('is the preset until a switch differs from it, then Custom, saying what chang
 })
 
 it('keeps an experimental extension out of it: on or off, the preset stays as it was', () => {
-  expect(picked(machine('full', { 'claude-agent': true }))).toBe('full')
-  expect(picked(machine('core', { 'claude-agent': true }))).toBe('core')
-  expect(customLine(machine('full', { 'claude-agent': true, github: false }))).toBe('Full without GitHub')
+  expect(machine('core').rows.find((r) => r.name === 'claude-agent')).toMatchObject({ on: true, preset: true })
+  expect(picked(machine('full', { 'claude-agent': false }))).toBe('full')
+  expect(picked(machine('core', { 'claude-agent': false }))).toBe('core')
+  expect(customLine(machine('full', { 'claude-agent': false, github: false }))).toBe('Full without GitHub')
 })
 
 it("says what each preset turns on: Core's own by name, Full's past Core's, counting the rest", () => {

@@ -79,7 +79,7 @@ function aboutOf(about: ExtensionAbout): ExtensionAbout {
   const files = Array.isArray(secrets) ? secrets.filter((file) => typeof file === 'string' && file && !/[\\/]/.test(file)) : []
   return {
     name, ...(typeof title === 'string' && title ? { title } : {}), ...(typeof description === 'string' && description ? { description } : {}), ...(required === true ? { required } : {}),
-    ...(typeof group === 'string' && GROUPS.has(group) ? { group } : {}), ...(core === true ? { core } : {}), ...(experimental === true ? { experimental } : {}),
+    ...(typeof group === 'string' && GROUPS.has(group) ? { group } : {}), ...(core === true ? { core } : {}), ...(experimental === true || experimental === 'off' ? { experimental } : {}),
     ...(typeof version === 'string' ? { version } : {}), ...(typeof api === 'string' ? { api } : {}), ...(kinds.length ? { panes: Object.fromEntries(kinds) } : {}),
     ...(files.length ? { secrets: files } : {}),
   }
@@ -928,7 +928,7 @@ export function createExtensionHost(host: Host, later: { profiles(): ProfileHost
     }, undefined, { source })
   }
 
-  // Starting from a preset again: it, and none of the user's changes but to experimental extensions'.
+  // Starting from a preset again: it, and none of the user's changes but to experimental extensions', which are apart.
   router.register(defineAction({
     id: 'extensions.preset', title: 'Start from a preset of extensions', expose: ['ui', 'cli'],
     description: 'Turn on the extensions `preset` has (core: the few a newcomer starts with; full: every one but the experimental), and undo every change to them made since. Experimental ones stay as they are.',

@@ -34,8 +34,8 @@
 # - `providers`: Settings → Providers (signed in, added, searched, the add form), Favourite models, ⌘N's model menu.
 # - `setup`: first-run setup on a fresh home with no model: what it finds (a stand-in Ollama and `claude`), a key's
 #   field, a composer's card when sending failed, a model saying hi, Claude Code used.
-# - `extensions`: first-run setup's extensions: Core and Full as cards, Full's whole list, GitHub switched off making it
-#   Custom, a phone's; Settings → Extensions from Custom (the changed switch marked) and from Full; light and dark.
+# - `extensions`: first-run setup's extensions: Core and Full as cards (Claude Agent's switch apart), Full's whole
+#   list, GitHub switched off making it Custom, a phone's; Settings → Extensions from Custom (the changed switch marked) and from Full; light and dark.
 # - `claude-agent`: a Claude Agent thread waiting on a permission, its model card, the plan's limit noted, a thread
 #   waiting for Claude Code to be signed in, Settings → Claude Agent, and ⌘N's model menu with its group (needs `claude`
 #   installed; nothing is signed in or spent).

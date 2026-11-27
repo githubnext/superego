@@ -80,8 +80,9 @@ the user changes it, so an extension new to a machine follows the preset:
   under Other.
 - `core: true`: in Core, the few a newcomer starts with (coding tools, Git, panes, Ego…), as well as Full. Keep it for
   what a first thread needs. Unset: in Full only.
-- `experimental: true`: in neither preset, so off until the user turns it on, and tagged Experimental. Picking a
-  preset again leaves its switch as it is. `testDaemon` turns on an experimental extension it's given.
+- `experimental`: in neither preset, its switch apart (setup shows it under the presets, Settings under Experimental)
+  and tagged Experimental. Its default is its own: `true`, on until the user turns it off; `'off'`, off until they
+  turn it on. Picking a preset leaves its switch as it is. `testDaemon` turns on an `'off'` one it's given.
 
 Where a window part and a machine part should differ, make them two extensions, a folder and an `about` each:
 `threads` is the required sidebar (UI only), and `thread-tools`, the agent's thread tools, is optional (daemon only).

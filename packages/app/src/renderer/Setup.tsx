@@ -15,7 +15,7 @@
 // machine's extensions to start with: Core or Full (the machine's `extensions.preset`), or every switch of Settings →
 // Extensions on asking, Custom once one differs (extensions-view.tsx). In every state, so a first run that finds a model
 // already still shows them. Not when it was opened from a thread that couldn't send: that wants a model, nothing else.
-// Using what an extension found (Claude Code) turns that extension on, an experimental one too.
+// Using what an extension found (Claude Code) turns that extension on, if it was turned off.
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { extensionSwitch, ONBOARDED, type ModelCatalog, type ModelTest, type ProviderAuthInfo, type SettingsSnapshot, type SetupProbe } from '@superego/protocol'
 import { Button, CheckIcon, GlobeIcon, KeyIcon, LaptopIcon, MagnifyingGlassIcon, Select, StarIcon, TerminalIcon, TextField, WarningIcon } from '@superego/ui'
@@ -207,7 +207,7 @@ export function SetupPage({ machine: machineId }: { machine: string }) {
   const useFound = async (found: SetupFound) => {
     setProblem(undefined); setOpen(undefined)
     try {
-      // Its kind's extension (`<extension>.<kind>/<model>`), on: an experimental one is off until it's picked.
+      // Its kind's extension (`<extension>.<kind>/<model>`), on, if it was turned off.
       const owner = extensionSwitch(found.model.slice(0, found.model.indexOf('/')).split('.')[0]!)
       if (snapshot?.values[owner] === false) await dispatch('settings.set', { key: owner, value: true }, on)
       await dispatch('settings.set', { key: 'agent.model', value: found.model }, on)

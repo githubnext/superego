@@ -93,7 +93,7 @@ it("doesn't let Claude Agent's models be picked while Claude Code isn't signed i
 
 it("makes Claude Code the machine's default when it's used in setup, Claude Agent turned on: ⌘N then starts on it, with the claude profile", async () => {
   await open({ loggedIn: true, authMethod: 'claude.ai', subscriptionType: 'max' })
-  // Off, as an experimental extension is on a fresh machine (the test daemon turns it on): setup still finds Claude Code.
+  // Turned off by the user: setup still finds Claude Code, and using it turns Claude Agent on again.
   await daemon!.call('settings.set', { key: 'extensions.claude-agent', value: false })
   await ui!.registry.router.dispatch('app.setup')
   // The scripted model works already: setup opens on it, and Claude Code is among what's found once another is asked for.

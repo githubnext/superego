@@ -1,7 +1,8 @@
 /* A machine's extensions (extensions-view.tsx). The switches: under quiet group headings, a line each with its name
    (its id beside it in Settings), what it does on one line (all of it on hover) and its switch; one that differs from
    the preset filled, in Settings. Setup's preset cards: two (three with Custom) side by side, the picked one raised
-   with an accent ring, a row of dots saying how much each turns on; stacked, without dots, on a phone. */
+   with an accent ring, a row of dots saying how much each turns on; stacked, without dots, on a phone. The
+   experimental switches apart, under them. */
 .extensions { display: flex; flex-direction: column; gap: var(--superego-space-4); }
 .extensions ul { list-style: none; margin: 0; padding: 0; }
 .extensions h3 { margin: 0 0 var(--superego-space-1); font-size: inherit; font-weight: 400; color: var(--superego-muted); }
@@ -46,6 +47,8 @@
 .presets__dots i.is-on { background: var(--superego-text); opacity: .7; }
 .setup__extensions > p:has(.setup__link) { margin-top: 10px; }
 .setup__extensions > .extensions { margin-top: var(--superego-space-3); }
+/* The experimental switches, in no preset: apart, under the cards and the list. */
+.setup__experimental { margin-top: var(--superego-space-4); }
 
 .app.is-narrow .presets__cards { grid-template-columns: 1fr; }
 .app.is-narrow .presets__dots { display: none; }

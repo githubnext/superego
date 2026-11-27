@@ -11,7 +11,7 @@ import { join } from 'node:path'
 import { act, createElement as h } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, expect, it } from 'vitest'
-import { connectSocket, listen, openDaemon, type Daemon } from '@superego/daemon'
+import { connectSocket, defineDaemonExtension, listen, openDaemon, type Daemon, type DaemonExtension } from '@superego/daemon'
 import { defineApp, ONBOARDED, PROTOCOL_VERSION, RELEASED, type AuthEvent, type Hello, type Notifications, type RpcPeer } from '@superego/protocol'
 import type { MachineEntry, SuperegoEvent } from '../src/shared/bridge.ts'
 import { RegistryProvider } from '../src/renderer/registry.tsx'
@@ -59,11 +59,14 @@ async function mockOllama({ refusing = false } = {}) {
   return `http://127.0.0.1:${(server.address() as { port: number }).port}/v1`
 }
 
-/** A daemon on a fresh folder: with the scripted model (`faux`) or none, and Ollama where `ollama` says (nowhere unset). */
-async function start({ faux = false, ollama = 'http://127.0.0.1:9/v1' }: { faux?: boolean; ollama?: string } = {}) {
+/**
+ * A daemon on a fresh folder: with the scripted model (`faux`) or none, Ollama where `ollama` says (nowhere unset), and
+ * `extensions` as its bundled ones.
+ */
+async function start({ faux = false, ollama = 'http://127.0.0.1:9/v1', extensions = [] }: { faux?: boolean; ollama?: string; extensions?: DaemonExtension[] } = {}) {
   if (faux) process.env.SUPEREGO_MODEL = 'faux'
   else delete process.env.SUPEREGO_MODEL
-  daemon = await openDaemon({ app, dataDir: dir, defaultCwd: dir, agentsDir: join(dir, 'agents'), localServers: [{ id: 'ollama', name: 'Ollama', baseUrl: ollama }] })
+  daemon = await openDaemon({ app, dataDir: dir, defaultCwd: dir, agentsDir: join(dir, 'agents'), localServers: [{ id: 'ollama', name: 'Ollama', baseUrl: ollama }], extensions })
   const listening = await listen(daemon, join(dir, 'superego.sock'))
   const connected = await connectSocket(join(dir, 'superego.sock'))
   peer = connected.peer
@@ -365,7 +368,7 @@ const card = (title: string) => [...container.querySelectorAll<HTMLElement>('.pr
 const pickedCard = () => container.querySelector('.presets__card.is-on .presets__title')?.textContent
 
 it("has the machine's extensions after the model: Full picked, Core or Full by a card, Custom once a switch differs", async () => {
-  await start()
+  await start({ extensions: [defineDaemonExtension({ name: 'lab', title: 'Lab', experimental: true })] })
   await mount()
   await until(() => Boolean(rowOf('Paste an API key')) && Boolean(card('Full')), 'the ways in, and the extensions')
   expect(pickedCard()).toBe('Full')
@@ -374,10 +377,14 @@ it("has the machine's extensions after the model: Full picked, Core or Full by a
   expect(card('Full')!.querySelector('a')!.getAttribute('href')).toBe('https://githubnext.com/people/mikker/')
   expect(card('Core')!.textContent).toContain('Coding tools, Panes and 1 more')
 
-  // Every one, under its group, as Settings has them.
-  const listed = ((await daemon.settings.snapshot()).sections.find((s) => s.id === 'extensions')!.data as { name: string }[]).map((e) => e.name)
+  // The experimental one apart, under the cards: on, as it says, and tagged.
+  const lab = () => container.querySelector('.setup__experimental [data-extension="lab"]')
+  expect(lab()?.textContent).toContain('Experimental')
+  expect(switchOf('lab').getAttribute('aria-checked')).toBe('true')
+  // Every other one, under its group, as Settings has them.
+  const listed = ((await daemon.settings.snapshot()).sections.find((s) => s.id === 'extensions')!.data as { name: string; experimental?: true }[]).filter((e) => !e.experimental).map((e) => e.name)
   await click(button(`Show all ${listed.length}`))
-  expect(extensionRows().map((row) => row.dataset.extension).sort()).toEqual([...listed].sort())
+  expect(extensionRows().filter((row) => !row.closest('.setup__experimental')).map((row) => row.dataset.extension).sort()).toEqual([...listed].sort())
   expect([...container.querySelectorAll('.extensions__group h3')].map((h) => h.textContent)).toContain('The agent')
 
   await click(card('Core')!)
@@ -385,6 +392,11 @@ it("has the machine's extensions after the model: Full picked, Core or Full by a
   expect(await value('extensions.preset')).toBe('core')
   expect(await value('extensions.coding-tools')).toBe(true)
   expect(switchOf('panes').getAttribute('aria-checked')).toBe('true')
+  // No preset has the experimental one: it stays on, and turning it off is no change to Core.
+  expect(await value('extensions.lab')).toBe(true)
+  await click(switchOf('lab'))
+  await until(() => switchOf('lab').getAttribute('aria-checked') === 'false', 'Lab off')
+  expect(pickedCard()).toBe('Core')
 
   // A switch differing from Core: Custom, saying what it is.
   await click(switchOf('panes'))
@@ -396,6 +408,7 @@ it("has the machine's extensions after the model: Full picked, Core or Full by a
   await until(() => pickedCard() === 'Full' && !card('Custom'), 'Full picked again')
   expect(await value('extensions.panes')).toBe(true)
   expect(await value('extensions.preset')).toBe('full')
+  expect(await value('extensions.lab')).toBe(false)
   // Switching extensions isn't setup done: that's a model's answer, or Skip.
   expect(await value(ONBOARDED)).toBe(false)
 })
