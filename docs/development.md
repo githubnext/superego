@@ -68,6 +68,7 @@ Extensions) or per profile (`without`).
 | `mentions` | `@` in the composer names another thread, a file, or an extension's thing (`composer.mention`) |
 | `skills` | skills from `~/.agents/skills`: in the prompt, `$name` in the composer, a view listing them |
 | `suggestions` | after each answer, what you might send next |
+| `schedules` | wake a thread at a time or every so often (`schedule`); the clock in its header and on its row |
 | `tasks` | `task_start`/`task_finish`, and the transcript folded by task |
 | `terminal` | a shell beside a thread, run by the machine; drawn by ghostty-web |
 | `mcp-servers` | MCP servers for the agents in threads ([mcp.md](mcp.md)) |

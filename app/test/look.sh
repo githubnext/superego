@@ -1,6 +1,6 @@
 #!/bin/bash
 # The window's layout in the states the design covers, screenshotted:
-# `test/look.sh <dir> [look|focus|focus-mode|panes|panehead|composer|images|mcp|web|terminal|toolbar|titlebar|titlebar-fit|pins|folds|states|cards|dialogs|machines|staff|picker|providers|keptpage|themes|theme-ui|mac-look|claude-agent|setup|phone-look|header|files|github]` (look, unless given), each a script of
+# `test/look.sh <dir> [look|focus|focus-mode|panes|panehead|composer|images|mcp|web|terminal|toolbar|titlebar|titlebar-fit|pins|folds|states|cards|dialogs|machines|staff|picker|providers|keptpage|themes|theme-ui|mac-look|claude-agent|setup|phone-look|header|files|github|schedules]` (look, unless given), each a script of
 # that name here:
 # - `look`: the sidebar shown, dragged and hidden, the thread alone and with panes, details, a phone; ⌘N's dialog, Settings' General, Appearance and Hotkeys (a clash too);
 # - `focus`: each region holding the focus;
@@ -52,13 +52,15 @@
 # - `github`: threads' pull requests in every state, from a stand-in `gh` on PATH (the machine's own never runs): the
 #   title bar's chip and its menu, a row and its card, the pull-request pane, a PR link in a message, Settings → GitHub;
 #   light and dark.
+# - `schedules`: a thread's schedules: the agent's `schedule` row with its next times, the clock chip and its popover, the
+#   sidebar's clock, a firing, a run that went late while Superego wasn't running, and the phone's sheet; light and dark.
 set -e
 cd "$(dirname "$0")/.."
 # A heavy check: it waits for a slot (../scripts/check.ts), is stopped after 8 minutes (SUPEREGO_SHOWCASE_TIMEOUT, in
 # seconds), and builds the app first if its sources changed.
 [ "$SUPEREGO_CHECK_COMMAND" = test/look.sh ] || exec node ../scripts/check.ts --timeout SUPEREGO_SHOWCASE_TIMEOUT=480 test/look.sh "$@"
 node scripts/build.ts
-OUT="$(cd "$(dirname "${1:?usage: look.sh <dir> [look|focus|focus-mode|panes|panehead|composer|images|mcp|web|terminal|toolbar|titlebar|titlebar-fit|pins|folds|states|cards|dialogs|machines|staff|picker|keptpage|themes|theme-ui|mac-look|claude-agent|setup|phone-look|header|files|github]}")" && pwd)/$(basename "$1")"
+OUT="$(cd "$(dirname "${1:?usage: look.sh <dir> [look|focus|focus-mode|panes|panehead|composer|images|mcp|web|terminal|toolbar|titlebar|titlebar-fit|pins|folds|states|cards|dialogs|machines|staff|picker|keptpage|themes|theme-ui|mac-look|claude-agent|setup|phone-look|header|files|github|schedules]}")" && pwd)/$(basename "$1")"
 mkdir -p "$OUT"
 unset ANTHROPIC_API_KEY ANTHROPIC_OAUTH_TOKEN OPENAI_API_KEY
 export SUPEREGO_HOME="$(mktemp -d)" SUPEREGO_HEADLESS=1 SUPEREGO_SHOWCASE_OUT="$OUT" SUPEREGO_REPLAY_SPEED=0 TZ=Europe/Copenhagen
@@ -116,6 +118,11 @@ if [ "$2" = github ]; then
   node test/showcase/github-setup.mjs "$SUPEREGO_HOME" "$SUPEREGO_HOME/github-turns.jsonl"
   export SUPEREGO_MODEL="replay:$SUPEREGO_HOME/github-turns.jsonl"
   export PATH="$SUPEREGO_HOME/gh/bin:$(printf %s "$PATH" | tr ':' '\n' | while read -r d; do [ -e "$d/gh" ] || printf '%s:' "$d"; done)"
+fi
+# `schedules`: its scene's turns.
+if [ "$2" = schedules ]; then
+  node test/showcase/schedules-setup.mjs "$SUPEREGO_HOME/schedules-turns.jsonl"
+  export SUPEREGO_MODEL="replay:$SUPEREGO_HOME/schedules-turns.jsonl"
 fi
 # Skills of its own (shown in the Skills data view), not this machine's ~/.agents.
 export SUPEREGO_AGENTS="$SUPEREGO_HOME/agents"

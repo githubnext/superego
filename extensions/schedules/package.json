@@ -1,0 +1,28 @@
+{
+  "name": "@superego/schedules",
+  "version": "0.0.0",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./daemon": "./src/daemon.ts",
+    "./shared": "./src/shared.ts",
+    "./ui": "./src/ui.tsx"
+  },
+  "dependencies": {
+    "@earendil-works/pi-durable": "1.6.0",
+    "@earendil-works/pi-schema": "1.6.0",
+    "@superego/app": "workspace:*",
+    "@superego/daemon": "workspace:*",
+    "@superego/protocol": "workspace:*",
+    "@superego/ui": "workspace:*"
+  },
+  "peerDependencies": {
+    "react": "^19"
+  },
+  "devDependencies": {
+    "@superego/sdk": "workspace:*",
+    "@types/react": "^19",
+    "react": "^19"
+  }
+}
