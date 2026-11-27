@@ -12,6 +12,9 @@
   go to any thread's with "Go to pull request…". Pull request links in messages show their state; ⌘-click shows one
   beside. It uses the machine's `gh` (Settings says whether it's signed in), and Settings → Extensions can turn it off.
 - The agent can look at a thread's pull request (`pr_view`), and knows how its checks and review stand.
+- A thread says when its pull request's checks fail, a reviewer asks for changes or approves, or it's merged, with
+  "Fix it" to hand the failure or the review to the agent. The agent isn't woken unless you choose Watch… on the pull
+  request's chip (or ask it to watch): then it's woken when checks finish or a review comes in, until it's merged.
 - **Schedules.** Ask an agent to "check CI every 30 minutes until it's green" or "remind me tomorrow at 9", and it
   wakes the thread then with a message. A clock in the thread's header and on its row in the sidebar shows the next
   run; click it to run one now, pause it or cancel it. Runs missed while the computer slept fire once when it wakes,

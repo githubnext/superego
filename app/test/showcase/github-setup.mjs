@@ -1,6 +1,6 @@
 // The github scene's world (test/github.mjs, run by `test/look.sh <dir> github`): a fake gh (../../../extensions/github/
-// test/fake-gh.cjs) on a PATH of its own, answering for acme/ledger's pull requests in every state, and the turns of the
-// thread that opens one. `node github-setup.mjs <home> <turns.jsonl>` writes <home>/gh/bin/gh, <home>/gh/github.json and
+// test/fake-gh.cjs) on a PATH of its own, answering for acme/ledger's pull requests in every state (and later, the one
+// the thread opens with its checks failed and changes asked for), and the turns of the thread that opens one. `node github-setup.mjs <home> <turns.jsonl>` writes <home>/gh/bin/gh, <home>/gh/github.json and
 // the turns.
 import { chmodSync, mkdirSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
@@ -52,7 +52,12 @@ const prs = {
   'acme/ledger#414': pr(414, 'Mermaid: ```mermaid blocks drawn by Pele', { isDraft: true, reviewDecision: null }, []),
   'acme/ledger#409': pr(409, "Phone: Commands from the drawer's foot", { state: 'CLOSED' }, []),
 }
-writeFileSync(join(dir, 'github.json'), JSON.stringify({ login: 'mikker', prs }))
+// #418 as it's first seen: checks running, not reviewed yet. Then (github.mjs swaps github-later.json in) two checks
+// failed and alice asked for changes: told in the thread as notices.
+writeFileSync(join(dir, 'github-later.json'), JSON.stringify({ login: 'mikker', prs }))
+const first = { ...prs['acme/ledger#418'], reviewDecision: 'REVIEW_REQUIRED', latestReviews: { nodes: [] }, reviewThreads: { nodes: [] },
+  commits: { nodes: [{ commit: { statusCheckRollup: { contexts: { nodes: [run('test (ubuntu-latest)', null, 0, 0, 9101), run('smoke', null, 0, 0, 9103), ...passing] } } } }] } }
+writeFileSync(join(dir, 'github.json'), JSON.stringify({ login: 'mikker', prs: { ...prs, 'acme/ledger#418': first } }))
 
 // The thread that opens #418: pushes, runs `gh pr create` (its output stands in: the fake has no repository to push), says so.
 const text = (t) => ({ type: 'text', text: t })

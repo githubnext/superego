@@ -2,8 +2,9 @@
 // answers, and when it's next asked about.
 import { expect, it } from 'vitest'
 import { detailOf, problemOf, prQuery, splitResponse } from '../src/gh.ts'
+import { eventsOf, wakes } from '../src/events.ts'
 import { backoff, due, INTERVALS } from '../src/schedule.ts'
-import { parsePr, prsIn, refOf, road, spell, word, type PrSummary } from '../src/shared.ts'
+import { parsePr, prsIn, refOf, road, spell, word, type PrDetail, type PrSummary } from '../src/shared.ts'
 import { failedCheck, prNode } from './fake-gh.ts'
 
 it('names a pull request by its URL, any host, whatever follows its number', () => {
@@ -76,4 +77,40 @@ it('asks often while checks run or something just happened, rarely otherwise, ne
   expect(due({ ...open, detail: { ...open.detail, state: 'merged' } }, at + 3_600_000, INTERVALS)).toBe(false)
   expect(due({ ...open, detail: { ...open.detail, state: 'merged' }, forced: true }, at, INTERVALS)).toBe(true)
   expect([1, 2, 3, 10].map((n) => backoff(n, INTERVALS))).toEqual([60_000, 120_000, 240_000, 30 * 60_000])
+})
+
+it('derives what happened between two polls, each once', () => {
+  const ref = parsePr('https://github.com/acme/app/pull/7')!
+  const at = (more: Record<string, unknown>) => detailOf(ref, prNode('acme', 'app', 7, more), 0)
+  const checks = (head: string, ...nodes: unknown[]) => ({ headRefOid: head, commits: { nodes: [{ commit: { statusCheckRollup: { contexts: { nodes } } } }] } })
+  const running = { __typename: 'CheckRun', name: 'test', status: 'IN_PROGRESS' }
+  const kinds = (was: PrDetail | undefined, now: PrDetail, told: string[] = []) => eventsOf(was, now, new Set(told)).map((e) => e.kind)
+  const failed = at(checks('a', failedCheck('acme', 'app', 'lint', 1)))
+  // First seen: nothing's news.
+  expect(kinds(undefined, failed)).toEqual([])
+  expect(kinds(at(checks('a', running)), failed)).toEqual(['checks-failed'])
+  expect(eventsOf(at(checks('a', running)), failed, new Set())[0]!.keys).toEqual(['checks-failed@a'])
+  // Told already (a restart), or the same again: not again. A new head failing: again.
+  expect(kinds(at(checks('a', running)), failed, ['checks-failed@a'])).toEqual([])
+  expect(kinds(failed, failed)).toEqual([])
+  expect(kinds(failed, at(checks('b', failedCheck('acme', 'app', 'lint', 2))))).toEqual(['checks-failed'])
+  // Re-run green on the same head: passed.
+  expect(kinds(failed, at(checks('a', { ...running, status: 'COMPLETED', conclusion: 'SUCCESS' })))).toEqual(['checks-passed'])
+
+  // Comments alone, comments with a review asking for changes (one event), approved, merged, closed.
+  const thread = (body: string) => ({ isResolved: false, path: 'a.ts', line: 1, comments: { nodes: [{ author: { login: 'bo' }, body, url: `u#${body}` }] } })
+  const base = at({})
+  expect(kinds(base, at({ reviewThreads: { nodes: [thread('x')] } }))).toEqual(['comments'])
+  const asked = eventsOf(base, at({ reviewThreads: { nodes: [thread('x')] }, latestReviews: { nodes: [{ author: { login: 'bo' }, state: 'CHANGES_REQUESTED', submittedAt: '2026-01-01T00:00:00Z' }] } }), new Set())
+  expect(asked).toEqual([{ kind: 'changes', who: ['bo'], comments: [expect.objectContaining({ body: 'x' })], keys: ['review@bo@1767225600000', 'comment@u#x'] }])
+  expect(kinds(base, at({ latestReviews: { nodes: [{ author: { login: 'al' }, state: 'APPROVED', submittedAt: '2026-01-01T00:00:00Z' }] } }))).toEqual(['approved'])
+  expect(kinds(base, at({ state: 'MERGED' }))).toEqual(['merged'])
+  expect(kinds(base, at({ state: 'CLOSED' }))).toEqual(['closed'])
+
+  // Who a watch wakes for.
+  const [checksFailed] = eventsOf(at(checks('a', running)), failed, new Set())
+  expect(wakes({}, checksFailed!)).toBe(true)
+  expect(wakes({ checks: false }, checksFailed!)).toBe(false)
+  expect(wakes({ until: 'checks', checks: true }, asked[0]!)).toBe(false)
+  expect(wakes({}, asked[0]!)).toBe(true)
 })

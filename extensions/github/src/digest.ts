@@ -34,7 +34,8 @@ export function promptLine(prs: { summary: PrSummary; detail?: PrDetail }[]): st
   if (!open.length) return undefined
   const each = open.map(({ summary, detail }) => `${summary.repo}#${summary.number}${summary.title ? ` ${JSON.stringify(summary.title)}` : ''} (${stateLine(summary, detail)})`)
   return `This thread's pull request${open.length > 1 ? 's' : ''}: ${each.join('; ')}. pr_view has the details. `
-    + "Superego shows its state to the user as it changes: don't wait on or watch its checks yourself (no `gh pr checks --watch`)."
+    + "Superego shows its state to the user as it changes: don't wait on or watch its checks yourself (no `gh pr checks --watch`); "
+    + 'pr_watch wakes you when they finish or it\'s reviewed.'
 }
 
 /** `pr_view`'s account of a pull request: compact, everything to act on. */

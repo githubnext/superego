@@ -1,8 +1,10 @@
 // Threads' pull requests (run by `test/look.sh <dir> github`), from a stand-in gh (showcase/github-setup.mjs): a thread
-// that opens one (its `gh pr create` attaching it, its link drawn with its state), and threads with one attached by hand
-// in every state. Shot in light and dark, into $SUPEREGO_SHOWCASE_OUT: the window with the pull-request pane beside the
-// thread; the title bar's chip in each state; its menu; a row pointed at, with its card; the pane alone; thread
-// details; Settings → GitHub.
+// that opens one (its `gh pr create` attaching it, its link drawn with its state; its checks failing and changes asked
+// for later, notices in the thread), and threads with one attached by hand in every state. Shot in light and dark, into
+// $SUPEREGO_SHOWCASE_OUT: the thread's notices; the window with the pull-request pane beside the thread; the title
+// bar's chip in each state; its menu; a row pointed at, with its card; the pane alone; thread details; Settings → GitHub.
+import { copyFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { openApp } from './harness.mjs'
 
 const URL = (n) => `https://github.com/acme/ledger/pull/${n}`
@@ -37,6 +39,17 @@ await openApp({ name: 'github', timeout: 300_000 }, async (t) => {
   // Its `gh pr create` attached #418, and the poller has every pull request's state.
   await until(`document.querySelector('.github-chip')?.textContent.startsWith('#418')`, "the thread's pull request in the title bar", 60_000)
   await until(`[...document.querySelectorAll('.github-link')].some((a) => a.querySelector('.github-glyph.is-merged'))`, 'the merged link drawn with its state', 30_000)
+
+  // Then its checks fail and alice asks for changes: notices in the thread, each with Fix it.
+  await until(`Boolean(document.querySelector('.github-chip .github-road .is-pending'))`, 'its checks running', 30_000)
+  copyFileSync(join(process.env.SUPEREGO_HOME, 'gh', 'github-later.json'), join(process.env.SUPEREGO_HOME, 'gh', 'github.json'))
+  await t.call('action.run', { id: 'github.refresh', params: { pr: URL(418) } })
+  await until(`document.querySelectorAll('.notice .github-notice').length === 2`, 'the notices', 30_000)
+  const thread = `({ getBoundingClientRect: () => { const c = document.querySelector('.thread .composer, .composer')?.getBoundingClientRect(); const m = [...document.querySelectorAll('.msg')].at(-3).getBoundingClientRect(); return { x: m.left - 24, y: m.top - 16, width: Math.max(m.width, c?.width ?? 0) + 48, height: (c?.bottom ?? m.bottom) - m.top + 32 } } })`
+  for (const theme of ['light', 'dark']) {
+    await t.theme(theme)
+    await t.shot(`github-notices-${theme}`, thread)
+  }
   await until(`document.querySelectorAll('.threads-project .github-mark').length === ${THREADS.length}`, 'a mark on every row but the closed one', 30_000)
 
   // The window: the pane beside the thread.

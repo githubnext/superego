@@ -6,11 +6,11 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
-import type { ThreadInfo } from '@superego/protocol'
+import { NOTE_ENTRY, type ThreadInfo } from '@superego/protocol'
 import { callTool, say, testDaemon, type TestDaemon } from '@superego/sdk/testing'
 import worktrees from '@superego/worktrees/daemon'
 import { githubExtension } from '../src/daemon.ts'
-import { ATTACH, DETACH, PR, REFRESH, STATUS, type GhStatus, type GithubFacts, type PrView } from '../src/shared.ts'
+import { ATTACH, DETACH, PR, REFRESH, STATUS, UNWATCH, WATCH, type GhStatus, type GithubFacts, type PrView } from '../src/shared.ts'
 import { failedCheck, fakeGh, prNode } from './fake-gh.ts'
 
 const URL = 'https://github.com/acme/app/pull/7'
@@ -171,4 +171,131 @@ it("says a pull request that isn't there is not found, and pr_attach attaches on
   })
   const thread = await daemon.thread('This is the PR for it')
   await until('not found', (f) => f?.prs[0]?.how === 'agent' && f.prs[0].error?.kind === 'not-found', thread)
+})
+
+type Entry = { kind: string; data?: Record<string, any>; model?: { role: string; content: string | { type: string; text?: string }[] }[] }
+const textOf = (content: string | { text?: string }[]) => typeof content === 'string' ? content : content.map((c) => c.text ?? '').join('')
+const entriesOf = async (thread: ThreadInfo) => (await daemon!.call<{ value: { entries: Entry[] } }>('thread.watch', { thread: thread.id })).value.entries
+const ofGithub = async (thread: ThreadInfo) => (await entriesOf(thread)).filter((e) => e.kind === NOTE_ENTRY && e.data?.by === 'github')
+/** What it told the user, not waking the agent. */
+const notices = async (thread: ThreadInfo) => (await ofGithub(thread)).filter((e) => !e.data!.wake).map((e) => e.data!)
+/** What it woke the agent with: what the agent was told. */
+const wakesOf = async (thread: ThreadInfo) => (await ofGithub(thread)).filter((e) => e.data!.wake).map((e) => textOf(e.model![0]!.content))
+const pending = (name: string) => ({ __typename: 'CheckRun', name, status: 'IN_PROGRESS', conclusion: null, startedAt: '2026-01-01T10:00:00Z' })
+const passed = (name: string) => ({ __typename: 'CheckRun', name, status: 'COMPLETED', conclusion: 'SUCCESS', startedAt: '2026-01-01T10:00:00Z', completedAt: '2026-01-01T10:01:00Z' })
+const withChecks = (head: string, ...nodes: unknown[]) => ({ headRefOid: head, commits: { nodes: [{ commit: { statusCheckRollup: { contexts: { nodes } } } }] } })
+const changes = (who: string, at: string, ...comments: [string, number, string][]) => ({
+  reviewDecision: 'CHANGES_REQUESTED', latestReviews: { nodes: [{ author: { login: who }, state: 'CHANGES_REQUESTED', submittedAt: at }] },
+  reviewThreads: { nodes: comments.map(([path, line, body], i) => ({ isResolved: false, isOutdated: false, path, line, comments: { nodes: [{ author: { login: who }, body, url: `${URL}#c${line}-${i}` }] } })) },
+})
+
+it("tells the user what happened, once: failed checks and changes requested with Fix it, approved, merged; the agent isn't woken", async () => {
+  const world = (more: Record<string, unknown>) => ({ login: 'octocat', prs: { 'acme/app#7': prNode('acme', 'app', 7, { title: 'Mentions', ...more }) } })
+  const gh = await fakeGh(dir, world(withChecks('aaa', pending('lint'), pending('test'))))
+  daemon = await testDaemon({ model: 'echo', extensions: [githubExtension({ env: gh.env, intervals: FAST })] })
+  const thread = await daemon.thread()
+  await daemon.dispatch(ATTACH, { thread: thread.id, url: URL })
+  await until('checks running', (f) => f?.prs[0]?.checks === 'pending', thread)
+
+  // One failed while the other runs: not yet. Both finished, one failed: told, with Fix it and Show.
+  await gh.set(world(withChecks('aaa', failedCheck('acme', 'app', 'lint', 42), pending('test'))))
+  await until('failing', (f) => f?.prs[0]?.checks === 'failing', thread)
+  expect(await notices(thread)).toEqual([])
+  await gh.set(world(withChecks('aaa', failedCheck('acme', 'app', 'lint', 42), passed('test'))))
+  await daemon.until(async () => (await notices(thread)).length === 1, 'the notice', 10_000)
+  const [failed] = await notices(thread)
+  expect(failed).toMatchObject({
+    by: 'github', kind: 'github.event', text: '1 check failing on #7: lint',
+    data: { event: 'checks-failed', key: KEY, url: URL, number: 7, headline: '1 check failing on #7', detail: 'lint' },
+  })
+  expect(failed!.actions).toEqual([
+    { label: 'Fix it', style: 'primary', send: expect.stringContaining('Checks failed on acme/app#7:\n- lint (logs: `gh run view 42 --log-failed`)') },
+    { label: 'Show', action: 'pane.open', params: { thread: thread.id, kind: 'pull-request', params: { url: URL } } },
+  ])
+  // Unread, saying it; the agent told as context, not woken.
+  expect((await daemon.info(thread)).status).toMatchObject({ state: 'done', msg: '1 check failing on #7: lint' })
+  expect(await wakesOf(thread)).toEqual([])
+  expect((await entriesOf(thread)).some((e) => e.model?.[0]?.role === 'assistant')).toBe(false)
+
+  // Asked again and again, the same: not told again; nor after a restart.
+  await daemon.dispatch(REFRESH, { pr: URL })
+  daemon = await daemon.restart()
+  await daemon.dispatch(REFRESH, { pr: URL })
+  await new Promise((resolve) => setTimeout(resolve, 300))
+  expect(await notices(thread)).toHaveLength(1)
+
+  // Pushed and passing: no notice (only a watching agent is woken for that). A review asking for changes, with comments.
+  await gh.set(world({ ...withChecks('bbb', passed('lint'), passed('test')), ...changes('alice', '2026-01-02T10:00:00Z', ['src/a.ts', 3, 'Rename this.']) }))
+  await daemon.until(async () => (await notices(thread)).length === 2, 'the review', 10_000)
+  const review = (await notices(thread))[1]!
+  expect(review).toMatchObject({ text: 'alice requested changes: 1 comment on #7', data: { event: 'changes', headline: 'alice requested changes' } })
+  expect(review.actions[0].send).toContain('alice requested changes on acme/app#7. Address the review comments:\n- src/a.ts:3 (alice): Rename this.')
+
+  await gh.set(world({ ...withChecks('bbb', passed('lint'), passed('test')), reviewDecision: 'APPROVED', latestReviews: { nodes: [{ author: { login: 'alice' }, state: 'APPROVED', submittedAt: '2026-01-03T10:00:00Z' }] } }))
+  await daemon.until(async () => (await notices(thread)).length === 3, 'approved', 10_000)
+  expect((await notices(thread))[2]).toMatchObject({ text: 'alice approved #7', actions: [{ label: 'Show' }] })
+  await gh.set(world({ state: 'MERGED' }))
+  await daemon.until(async () => (await notices(thread)).length === 4, 'merged', 10_000)
+  expect((await notices(thread))[3]).toMatchObject({ text: '#7 was merged: Mentions', data: { event: 'merged' } })
+  expect(await wakesOf(thread)).toEqual([])
+})
+
+it('wakes a watching agent instead, no more than 5 times an hour, and stops watching once merged', async () => {
+  const world = (head: string, ...checks: unknown[]) => ({ login: 'octocat', prs: { 'acme/app#7': prNode('acme', 'app', 7, { title: 'Mentions', ...withChecks(head, ...checks) }) } })
+  const gh = await fakeGh(dir, world('h0', pending('lint')))
+  daemon = await testDaemon({ model: [callTool('pr_watch', {}), say('Watching.')], extensions: [githubExtension({ env: gh.env, intervals: FAST })] })
+  const thread = await daemon.thread()
+  await daemon.dispatch(ATTACH, { thread: thread.id, url: URL })
+  await until('checks running', (f) => f?.prs[0]?.checks === 'pending', thread)
+  // The agent arms it (pr_watch); the chip shows it.
+  await daemon.send(thread, 'Tell me when CI is done')
+  await until('watched', (f) => Boolean(f?.prs[0]?.watch), thread)
+  expect((await factsOf(thread))!.prs[0]!.watch).toEqual({})
+  expect((await daemon.toolCalls(thread))[0]!.result?.text).toContain(`Watching ${KEY} for checks and reviews`)
+  await daemon.idle(thread)
+
+  // Failed: woken, with what failed and pr_view's account; no notice (the message says it).
+  await gh.set(world('h0', failedCheck('acme', 'app', 'lint', 42)))
+  await daemon.until(async () => (await wakesOf(thread)).length === 1, 'woken', 10_000)
+  const [woke] = await wakesOf(thread)
+  expect(woke).toContain('1 check failing on #7: lint. Fix what failed and push.')
+  expect(woke).toContain('✗ lint https://github.com/acme/app/actions/runs/42/job/2 (logs: gh run view 42 --log-failed)')
+  // Shown as a notice saying so, with no Fix it: the agent's on it.
+  expect((await ofGithub(thread)).at(-1)!.data).toMatchObject({ text: '1 check failing on #7: lint', data: { woke: true }, actions: [{ label: 'Show' }] })
+  expect(await notices(thread)).toEqual([])
+
+  // Pushed again and again: 5 wakes in all, then a notice instead, saying the agent wasn't woken.
+  for (let i = 1; i <= 5; i++) {
+    await gh.set(world(`h${i}`, i % 2 ? passed('lint') : failedCheck('acme', 'app', 'lint', 42 + i)))
+    if (i < 5) await daemon.until(async () => (await wakesOf(thread)).length === i + 1, `woken ${i + 1}`, 10_000)
+  }
+  await daemon.until(async () => (await notices(thread)).length === 1, 'held: a notice', 10_000)
+  expect(await wakesOf(thread)).toHaveLength(5)
+  expect((await notices(thread))[0]).toMatchObject({ data: { event: 'checks-passed', held: true }, text: expect.stringContaining("the agent wasn't woken") })
+
+  // Merged: told, and no longer watched.
+  await gh.set({ login: 'octocat', prs: { 'acme/app#7': prNode('acme', 'app', 7, { state: 'MERGED' }) } })
+  await until('unwatched', (f) => f?.prs[0]?.state === 'merged' && !f.prs[0].watch, thread)
+  expect((await notices(thread)).at(-1)).toMatchObject({ data: { event: 'merged' } })
+})
+
+it("watches by hand once, until its checks finish, and stops by hand", async () => {
+  const world = (...checks: unknown[]) => ({ login: 'octocat', prs: { 'acme/app#7': prNode('acme', 'app', 7, withChecks('h0', ...checks)) } })
+  const gh = await fakeGh(dir, world(pending('lint')))
+  daemon = await testDaemon({ model: 'echo', extensions: [githubExtension({ env: gh.env, intervals: FAST })] })
+  const thread = await daemon.thread()
+  await daemon.dispatch(ATTACH, { thread: thread.id, url: URL })
+  await until('checks running', (f) => f?.prs[0]?.checks === 'pending', thread)
+  await daemon.dispatch(WATCH, { thread: thread.id, pr: URL, until: 'checks' })
+  await until('watched once', (f) => f?.prs[0]?.watch?.until === 'checks', thread)
+  await gh.set(world(passed('lint')))
+  await daemon.until(async () => (await wakesOf(thread)).length === 1, 'woken', 10_000)
+  expect((await wakesOf(thread))[0]).toContain("Checks passed on #7: 1 check.\n(You're no longer watching it.)")
+  await until('no longer watched', (f) => !f?.prs[0]?.watch, thread)
+
+  await daemon.dispatch(WATCH, { thread: thread.id, pr: KEY, reviews: false })
+  await until('watched for checks', (f) => f?.prs[0]?.watch?.reviews === false, thread)
+  await daemon.dispatch(UNWATCH, { thread: thread.id, pr: KEY })
+  await until('unwatched', (f) => !f?.prs[0]?.watch, thread)
+  await expect(daemon.dispatch(WATCH, { thread: thread.id, pr: 'github.com/acme/app#8' })).rejects.toThrow(/no pull request/)
 })

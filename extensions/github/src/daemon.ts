@@ -10,15 +10,17 @@ import { execFile } from 'node:child_process'
 import { readFile, rename, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { defineExtension, defineTool, section } from '@earendil-works/pi-durable'
-import { bool, obj, opt, str } from '@earendil-works/pi-schema'
+import { bool, lit, obj, opt, str } from '@earendil-works/pi-schema'
 import { defineAction, defineDaemonExtension } from '@superego/daemon'
 import { RpcError, type ThreadInfo } from '@superego/protocol'
 import { digest, promptLine } from './digest.ts'
+import { eventsOf, fixText, NOTICED, noticeForAgent, said, wakes, wakeText, type PrEvent } from './events.ts'
 import { fetchPrs, ghRunner, ghStatus, GhError, prsOfBranch, type Gh } from './gh.ts'
 import { backoff, due, INTERVALS, type Entry, type Intervals } from './schedule.ts'
 import {
-  about, ATTACH, ATTACH_TOOL, DETACH, DETACH_TOOL, lead, parsePr, PR, PROMPT_SECTION, prsIn, REFRESH, refOf, SECTION, STATUS, VIEW_TOOL,
-  type GhProblem, type GhStatus, type GithubFacts, type GithubState, type How, type PrDetail, type PrKey, type PrLink, type PrSummary, type PrView,
+  about, ATTACH, ATTACH_TOOL, DETACH, DETACH_TOOL, lead, NOTICE, parsePr, PANE, PR, PROMPT_SECTION, prsIn, REFRESH, refOf, SECTION, STATUS, UNWATCH, VIEW_TOOL, WATCH,
+  WATCH_TOOL, watchWord, type GhProblem, type GhStatus, type GithubFacts, type GithubState, type How, type NoticeData, type PrDetail, type PrKey, type PrLink,
+  type PrSummary, type PrView, type Watch,
 } from './shared.ts'
 
 export type GithubOptions = {
@@ -28,12 +30,20 @@ export type GithubOptions = {
   intervals?: Partial<Intervals>
 }
 
+/** A watch from what was asked: both checks and reviews unless said. */
+const watchOf = (checks?: boolean, reviews?: boolean, until?: 'checks'): Watch =>
+  until === 'checks' ? { checks: true, until } : { ...(checks === false ? { checks: false } : {}), ...(reviews === false ? { reviews: false } : {}) }
 const empty = (): GithubState => ({ prs: [], detached: [], summaries: {} })
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
 /** How many pull requests go in one query. */
 const BATCH = 25
 /** Below this much of the rate limit left, a host waits for it to reset. */
 const RESERVE = 50
+/** The loop guard: at most this many wakes of watching agents per pull request in an hour; past it, a notice instead. */
+const WAKES = 5
+const HOUR = 60 * 60_000
+/** How many told events' keys are kept per pull request. */
+const TOLD = 200
 
 /** A pull request's summary: as last fetched, with what's wrong now; from its key alone before it was ever fetched. */
 function summaryOf(key: PrKey, entry: Entry | undefined, error: GhProblem | undefined): PrSummary {
@@ -67,7 +77,7 @@ export function githubExtension(options: GithubOptions = {}) {
       // ── The thread's pull requests, as clients see them ──────────────────────────────────────────────────────────
       superego.facts<GithubState>(({ state }) => {
         if (!state?.prs.length) return undefined
-        const prs = [...state.prs].sort((a, b) => b.at - a.at).map((link) => ({ ...state.summaries[link.key] ?? summaryOf(link.key, undefined, undefined), how: link.how, at: link.at }))
+        const prs = [...state.prs].sort((a, b) => b.at - a.at).map((link) => ({ ...state.summaries[link.key] ?? summaryOf(link.key, undefined, undefined), how: link.how, at: link.at, ...(link.watch ? { watch: link.watch } : {}) }))
         return { prs } satisfies GithubFacts
       })
 
@@ -95,15 +105,20 @@ export function githubExtension(options: GithubOptions = {}) {
       const entries = new Map<PrKey, Entry>()
       /** Each pull request's own problem (not found, a failed fetch): said in its summary until it's fetched. */
       const problems = new Map<PrKey, GhProblem>()
+      /** What's kept of each in prs.json: as last fetched, the events told of it, when it last woke an agent. */
+      type Kept = { detail: PrDetail; told?: string[]; woke?: number[] }
       const loaded = readFile(file, 'utf8').then((text) => {
-        for (const [key, detail] of Object.entries(JSON.parse(text) as Record<string, PrDetail>)) entries.set(key, { detail, ...(detail.polledAt ? { checkedAt: detail.polledAt } : {}) })
+        for (const [key, { detail, told, woke }] of Object.entries(JSON.parse(text) as Record<string, Kept>)) {
+          if (detail) entries.set(key, { detail, ...(detail.polledAt ? { checkedAt: detail.polledAt } : {}), ...(told ? { told } : {}), ...(woke ? { woke } : {}) })
+        }
       }, (error: NodeJS.ErrnoException) => { if (error.code !== 'ENOENT') console.error(`github: reading ${file} failed:`, error) })
       let saving: ReturnType<typeof setTimeout> | undefined
       /** Written now: what's known of every pull request a thread has. */
       const flush = () => {
         clearTimeout(saving)
         saving = undefined
-        const kept = Object.fromEntries([...entries].flatMap(([key, e]) => e.detail && linked.has(key) ? [[key, e.detail]] : []))
+        const kept = Object.fromEntries([...entries].flatMap(([key, e]): [PrKey, Kept][] => e.detail && linked.has(key)
+          ? [[key, { detail: e.detail, ...(e.told?.length ? { told: e.told } : {}), ...(e.woke?.length ? { woke: e.woke } : {}) }]] : []))
         const temp = `${file}.${process.pid}.tmp`
         return writeFile(temp, JSON.stringify(kept)).then(() => rename(temp, file)).catch((error: unknown) => console.error(`github: saving ${file} failed:`, error))
       }
@@ -252,11 +267,13 @@ export function githubExtension(options: GithubOptions = {}) {
             holds.set(host, { failures: 0, until: found.resetAt })
             console.error(`github: ${found.remaining} of the rate limit on ${host} left: waiting until ${new Date(found.resetAt).toISOString()}.`)
           }
+          const news: [PrKey, PrDetail | undefined, PrDetail][] = []
           for (const [key, got] of found.prs) {
-            if ('checkList' in got) { entry(key).detail = got; problems.delete(key) } else problems.set(key, got)
+            if ('checkList' in got) { news.push([key, entry(key).detail, got]); entry(key).detail = got; problems.delete(key) } else problems.set(key, got)
             await publish(key)
           }
           save()
+          for (const [key, was, now] of news) await tell(key, was, now)
         } catch (error) {
           if (signal.aborted) return
           const problem: GhProblem = error instanceof GhError ? error.problem : { kind: 'failed', message: (error as Error).message }
@@ -267,6 +284,94 @@ export function githubExtension(options: GithubOptions = {}) {
           console.error(`github: asking ${host} about ${keys.length} pull request${keys.length === 1 ? '' : 's'} failed (${problem.message}); again at ${new Date(until).toISOString()}.`)
           for (const key of keys) { problems.set(key, problem); await publish(key) }
         }
+      }
+
+      // ── Telling: what happened to a pull request, to the threads that have it ───────────────────────────────────
+      /**
+       * What happened to `key` since it was last fetched, told to each unarchived thread that has it, once: a notice to
+       * the user (failed checks, changes requested, approved, merged), and a wake for an agent that watches it (past
+       * the loop guard, a notice instead). A watch ends once merged or closed, or, `until: 'checks'`, once they finish.
+       */
+      async function tell(key: PrKey, was: PrDetail | undefined, now: PrDetail) {
+        const e = entry(key)
+        const told = new Set(e.told ?? [])
+        const events = eventsOf(was, now, told)
+        if (!events.length) return
+        e.told = [...told, ...events.flatMap((ev) => ev.keys)].slice(-TOLD)
+        save()
+        for (const thread of linked.get(key) ?? []) {
+          if (archived.has(thread)) continue
+          await tellThread(thread, key, now, events).catch((error: unknown) => console.error(`github: telling thread ${thread} about ${key} failed:`, error))
+        }
+      }
+
+      async function tellThread(thread: string, key: PrKey, pr: PrDetail, events: PrEvent[]) {
+        const link = (await keptOf(thread))?.prs.find((p) => p.key === key)
+        if (!link) return
+        const watch = link.watch
+        const waking = watch ? events.filter((ev) => wakes(watch, ev)) : []
+        const over = events.some((ev) => ev.kind === 'merged' || ev.kind === 'closed')
+          || (watch?.until === 'checks' && waking.some((ev) => ev.kind === 'checks-failed' || ev.kind === 'checks-passed'))
+        let held = false
+        if (waking.length) {
+          const e = entry(key)
+          const now = Date.now()
+          e.woke = (e.woke ?? []).filter((at) => now - at < HOUR)
+          if (e.woke.length < WAKES) {
+            e.woke.push(now)
+            save()
+            // One notice that wakes it: what happened (each event's headline), the agent told it all with pr_view's digest.
+            await superego.threads.notice(thread, { ...noticeOf(thread, pr, waking[0]!, { events: waking }), agent: wakeText(pr, waking, { stopped: over }), wake: true })
+          } else {
+            held = true
+            console.error(`github: not waking thread ${thread} about ${key}: woken ${WAKES} times about it in the last hour.`)
+          }
+        }
+        // Told the user: what always is, but what woke the agent (its notice says it); all of it, when it was held.
+        for (const ev of events.filter((ev) => held ? NOTICED.has(ev.kind) || waking.includes(ev) : NOTICED.has(ev.kind) && !waking.includes(ev))) {
+          await superego.threads.notice(thread, noticeOf(thread, pr, ev, { held: held && waking.includes(ev) }))
+        }
+        if (watch && over) await setWatch(thread, key, undefined)
+      }
+
+      /**
+       * A notice of an event: drawn by the UI half, with "Fix it" for what can be fixed, and Show. One that wakes the
+       * agent (`events`, all it wakes it for, in its detail) has no Fix it: the agent's on it. `held`: it would have, but
+       * the loop guard stopped it.
+       */
+      function noticeOf(thread: string, pr: PrDetail, event: PrEvent, { held = false, events }: { held?: boolean; events?: PrEvent[] } = {}) {
+        const all = events ?? [event]
+        const lines = all.map((ev) => said(pr, ev))
+        const { headline } = lines[0]!
+        const detail = [lines[0]!.detail, ...lines.slice(1).map((l) => l.detail ? `${l.headline}: ${l.detail}` : l.headline)].filter(Boolean).join(' · ') || undefined
+        const fix = events ? undefined : fixText(pr, event)
+        const data: NoticeData = {
+          event: event.kind, key: pr.key, url: pr.url, number: pr.number, headline, ...(detail ? { detail } : {}), ...(held ? { held } : {}), ...(events ? { woke: true } : {}),
+        }
+        const text = `${detail ? `${headline}: ${detail}` : headline}${held ? ` (the agent wasn't woken: it was ${WAKES} times this hour)` : ''}`
+        return {
+          text, kind: NOTICE, data, agent: noticeForAgent(pr, event),
+          actions: [
+            ...(fix ? [{ label: 'Fix it', send: fix, style: 'primary' as const }] : []),
+            { label: 'Show', action: 'pane.open', params: { thread, kind: PANE, params: { url: pr.url } } },
+          ],
+        }
+      }
+
+      /** Watch a thread's pull request (or stop, with none), as kept with the thread. */
+      async function setWatch(thread: string, key: PrKey, watch: Watch | undefined) {
+        let had = false
+        await state.update(thread, (s) => {
+          const kept = s ?? empty()
+          had = kept.prs.some((p) => p.key === key)
+          return { ...kept, prs: kept.prs.map((p) => {
+            if (p.key !== key) return p
+            const { watch: _was, ...rest } = p
+            return watch ? { ...rest, watch } : rest
+          }) }
+        })
+        if (!had) throw new RpcError('not_found', `This thread has no pull request ${key}`)
+        if (watch) { entry(key).hotUntil = Date.now() + intervals.hot; void poll([key]) }
       }
 
       // ── A thread's branch ────────────────────────────────────────────────────────────────────────────────────────
@@ -365,6 +470,22 @@ export function githubExtension(options: GithubOptions = {}) {
         params: obj({ thread: str(), pr: str() }),
         async run({ thread, pr }) { await detach(thread, pr); return null },
       }))
+      const watchParams = { checks: opt(bool()), reviews: opt(bool()), until: opt(lit('checks')) }
+      superego.action(defineAction({
+        id: WATCH, title: 'Watch a pull request', expose: ['ui', 'cli'], description: "Wake a thread's agent when its pull request's checks finish or it's reviewed (both unless said; `until: 'checks'`, once its checks finish), until it's merged or closed.",
+        params: obj({ thread: str(), pr: str(), ...watchParams }),
+        async run({ thread, pr, checks, reviews, until }) {
+          const key = parsePr(pr)?.key ?? pr
+          const watch = watchOf(checks, reviews, until)
+          await setWatch(thread, key, watch)
+          return watch
+        },
+      }))
+      superego.action(defineAction({
+        id: UNWATCH, title: 'Stop watching a pull request', expose: ['ui', 'cli'], description: "Stop waking a thread's agent about its pull request.",
+        params: obj({ thread: str(), pr: str() }),
+        async run({ thread, pr }) { await setWatch(thread, parsePr(pr)?.key ?? pr, undefined); return null },
+      }))
       superego.action(defineAction({
         id: REFRESH, title: 'Refresh pull requests', expose: ['ui', 'cli'], description: "Ask GitHub now: about a pull request (by URL), a thread's, or every one; and look at gh again.",
         params: obj({ thread: opt(str()), pr: opt(str()) }),
@@ -422,6 +543,35 @@ export function githubExtension(options: GithubOptions = {}) {
               const thread = threadOfCall(api.conversationId)
               const summary = await attach(thread, url, 'agent')
               return { output: [{ type: 'text', text: `Attached ${summary.repo}#${summary.number} to this thread.` }], details: { key: summary.key, url: summary.url } }
+            },
+          }),
+          defineTool({
+            name: WATCH_TOOL,
+            description: "Be woken when this thread's pull request's checks finish or it's reviewed (a notice tells you what happened), "
+              + "instead of waiting on it yourself. Both unless said; `until: 'checks'` wakes you once, when its checks finish. Watching ends once it's merged or closed. `stop: true` stops it.",
+            parameters: obj({
+              pr: opt(str({ description: "a pull request's URL, owner/repo#123 or #123 (one of the thread's); default: the thread's" })),
+              checks: opt(bool({ description: 'woken when its checks finish (passed or failed); default true' })),
+              reviews: opt(bool({ description: "woken when it's reviewed or gets review comments; default true" })),
+              until: opt(lit('checks', { description: "'checks': once, when its checks next finish" })),
+              stop: opt(bool({ description: 'stop watching it' })),
+            }),
+            async execute({ pr, checks, reviews, until, stop }, api) {
+              const thread = threadOfCall(api.conversationId)
+              const key = await named(thread, pr)
+              if (stop) {
+                await setWatch(thread, key, undefined)
+                return { output: [{ type: 'text', text: `No longer watching ${key}.` }], details: { key, watch: null } }
+              }
+              const watch = watchOf(checks, reviews, until)
+              if (watch.checks === false && watch.reviews === false) throw new Error('Watching for neither checks nor reviews: say one, or stop: true.')
+              await setWatch(thread, key, watch)
+              const state = entries.get(key)?.detail?.state
+              const ended = state === 'merged' || state === 'closed' ? ` It's ${state} already: nothing more will happen.` : ''
+              return {
+                output: [{ type: 'text', text: `Watching ${key} for ${watchWord(watch)}: you'll be woken with what happened. Don't wait on it yourself.${ended}` }],
+                details: { key, watch },
+              }
             },
           }),
           defineTool({

@@ -28,7 +28,7 @@ export const OFFERED = new Set([
   'ask_user', 'ask_ui', 'show_ui', 'open_ui', 'update_ui',
   'show_images',
   'task_start', 'task_finish',
-  'pr_view', 'pr_attach', 'pr_detach',
+  'pr_view', 'pr_attach', 'pr_detach', 'pr_watch',
   'process_start', 'process_list', 'process_logs', 'process_wait', 'process_stop', 'process_restart',
 ])
 

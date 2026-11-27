@@ -37,6 +37,7 @@
 .github-chip { display: inline-flex; align-items: center; gap: 6px; font-variant-numeric: tabular-nums; }
 .github-chip.is-closed .github-chip__n { text-decoration: line-through; }
 .github-chip__more { color: var(--superego-faint); }
+.github-chip__watch { flex: none; color: var(--superego-muted); }
 
 /* Its menu: the pull request's title, then checks, review and merge, each how it stands. */
 .github-menu__head { min-width: 240px; max-width: 300px; padding: 4px 10px 2px; display: grid; gap: 2px; font-size: var(--superego-text-sm); }
@@ -123,3 +124,14 @@
 .github-comment { flex: none; color: var(--superego-faint); }
 .github-comment.is-changes { color: var(--github-changes); }
 .github-comment.is-approved { color: var(--github-pass); }
+
+/* Watch…: a switch a line. */
+.github-watch { display: grid; gap: 10px; }
+.github-watch__say { margin: 0; color: var(--superego-muted); }
+.github-watch__row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.github-watch__problem { margin: 0; color: var(--superego-status-error-text); }
+
+/* A notice in the thread: what happened, a glyph and a headline, a line of detail under it. */
+.github-notice { display: grid; gap: 2px; }
+.github-notice__head { display: flex; align-items: center; gap: 6px; font-weight: 500; }
+.github-notice__detail { padding-left: 20px; color: var(--superego-muted); overflow-wrap: anywhere; }

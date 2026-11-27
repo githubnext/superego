@@ -7,7 +7,7 @@ import type { ExtensionAbout } from '@superego/protocol'
 export const PANE = 'pull-request'
 
 export const about = {
-  name: 'github', version: '1.0.0', api: '^5.17', title: 'GitHub',
+  name: 'github', version: '1.0.0', api: '^5.18', title: 'GitHub',
   description: "A thread's pull requests: their state in the title bar and sidebar, checks and reviews beside it. Uses this machine's gh.",
   panes: { [PANE]: 'a GitHub pull request: its state, checks, reviews and unresolved review comments. Params: { url }' },
 } satisfies ExtensionAbout
@@ -17,6 +17,9 @@ export const about = {
 export const ATTACH = 'github.attach'
 export const DETACH = 'github.detach'
 export const REFRESH = 'github.refresh'
+/** Actions: watch a thread's pull request (its agent woken when its checks finish or it's reviewed), or stop. */
+export const WATCH = 'github.watch'
+export const UNWATCH = 'github.unwatch'
 /** A read: one pull request as the pane shows it, and the threads on this machine that have it (`PrView`). */
 export const PR = 'github.pr'
 /** A live value: this machine's `gh`, as Settings says it (`GhStatus`). */
@@ -27,6 +30,9 @@ export const SECTION = 'github'
 export const VIEW_TOOL = 'pr_view'
 export const ATTACH_TOOL = 'pr_attach'
 export const DETACH_TOOL = 'pr_detach'
+export const WATCH_TOOL = 'pr_watch'
+/** The kind of the notices it tells a thread (`NoticeData`), drawn by the UI half. */
+export const NOTICE = 'github.event'
 /** The prompt section about the thread's pull request. */
 export const PROMPT_SECTION = 'pull_request'
 
@@ -69,7 +75,13 @@ export function refOf(key: PrKey): PrRef | undefined {
  * (`branch`), the user attached it (`hand`), or the agent did (`agent`, `pr_attach`).
  */
 export type How = 'created' | 'branch' | 'hand' | 'agent'
-export type PrLink = { key: PrKey; url: string; how: How; at: number }
+/**
+ * A watch on a thread's pull request: its agent is woken when its checks finish (`checks`) or it's reviewed (`reviews`,
+ * new review comments too); both unless said. `until: 'checks'`: once, when its checks next finish. Over once merged or
+ * closed.
+ */
+export type Watch = { checks?: boolean; reviews?: boolean; until?: 'checks' }
+export type PrLink = { key: PrKey; url: string; how: How; at: number; watch?: Watch }
 
 export type PrState = 'open' | 'draft' | 'merged' | 'closed'
 export type Checks = 'passing' | 'failing' | 'pending' | 'none'
@@ -98,7 +110,7 @@ export type PrSummary = {
 }
 
 /** A thread's pull request as clients see it (`facts.github.prs`): its summary and how it came. */
-export type PrFact = PrSummary & { how: How; at: number }
+export type PrFact = PrSummary & { how: How; at: number; watch?: Watch }
 /** `facts.github`: the thread's pull requests, newest first. Absent while it has none. */
 export type GithubFacts = { prs: PrFact[] }
 
@@ -107,6 +119,20 @@ export type GithubFacts = { prs: PrFact[] }
  * itself), their summaries, and the tip of the thread's branch's upstream when it last looked for a pull request there.
  */
 export type GithubState = { prs: PrLink[]; detached: PrKey[]; summaries: Record<PrKey, PrSummary>; looked?: string }
+
+/**
+ * A notice's data (`NOTICE`): what happened (an event's kind: `checks-failed`, `checks-passed`, `changes`, `approved`,
+ * `comments`, `merged`, `closed`) to which pull request, said in a headline and a line of detail. `woke`: it woke the
+ * watching agent; `held`: it would have, but the agent was woken too often lately.
+ */
+export type NoticeData = { event: string; key: PrKey; url: string; number: number; headline: string; detail?: string; woke?: boolean; held?: boolean }
+
+/** What a watch wakes the agent for, in words: "checks and reviews", "checks, once". */
+export function watchWord(watch: Watch): string {
+  if (watch.until === 'checks') return 'checks, once'
+  const what = [watch.checks !== false && 'checks', watch.reviews !== false && 'reviews'].filter(Boolean)
+  return what.join(' and ') || 'nothing'
+}
 
 // ── What the pane reads ──────────────────────────────────────────────────────────────────────────────────────────
 /** A check on the pull request's head: its result, where its run is, and when it started and finished (ms). */

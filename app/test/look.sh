@@ -52,8 +52,8 @@
 # - `files`: a folder pane's New file: the name typed in place, a taken one refused there, the file made open in the
 #   editor, light and dark.
 # - `github`: threads' pull requests in every state, from a stand-in `gh` on PATH (the machine's own never runs): the
-#   title bar's chip and its menu, a row and its card, the pull-request pane, a PR link in a message, Settings → GitHub;
-#   light and dark.
+#   title bar's chip and its menu, a row and its card, the pull-request pane, a PR link in a message, notices of failed
+#   checks and a review, Settings → GitHub; light and dark.
 # - `schedules`: a thread's schedules: the agent's `schedule` row with its next times, the clock chip and its popover, the
 #   sidebar's clock, a firing, a run that went late while Superego wasn't running, and the phone's sheet; light and dark.
 set -e

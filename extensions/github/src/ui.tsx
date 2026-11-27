@@ -5,28 +5,31 @@
 // the sidebar, its glyph with a dot for its checks, spelled out on the row's card with the road; in thread details,
 // every one with how it came. Its own pane (`pull-request`). A pull request's URL in a message drawn with its state,
 // ⌘-click showing it beside. In ⌘K: attach one, show the thread's, go to any thread's. Settings: this machine's gh.
-//
-// The chip's menu is drawn here, in a span of its own, until the window's HeaderChip takes a menu (phase 3).
+// What happened to it (checks failed, a review, merged), the daemon half's notices in the thread: drawn here, a glyph
+// and a headline. Watch… (the chip's menu) wakes the thread's agent when its checks finish or it's reviewed.
 import { useState } from 'react'
 import {
-  copyText, defineAction, defineUiExtension, Dialog, factsOf, hasWebViews, HeaderChip, Menu, Picker, PromptDialog, score, ThreadBadge, ThreadMenuItem, useAllThreads,
+  copyText, defineAction, defineUiExtension, Dialog, type EntryProps, factsOf, hasWebViews, HeaderChip, Menu, Picker, PromptDialog, score, ThreadBadge, ThreadMenuItem, useAllThreads,
   useDispatch, useMachines, useNarrow, useSelection, type LinkProps, type MachineEntry, type SettingsComponentProps, type SlotProps, type Store, type ThreadInfo, type UiApi,
   type WindowContext,
 } from '@superego/app/ui'
-import { ArrowClockwiseIcon, ArrowSquareOutIcon, Button, CopyIcon, GitPullRequestIcon, GlobeIcon, LinkBreakIcon } from '@superego/ui'
-import { PrGlyph, PrMark, Road } from './glyphs.tsx'
+import { ArrowClockwiseIcon, ArrowSquareOutIcon, BellIcon, Button, CopyIcon, GitPullRequestIcon, GlobeIcon, LinkBreakIcon, Switch } from '@superego/ui'
+import { CheckGlyph, CommentGlyph, PrGlyph, PrMark, Road } from './glyphs.tsx'
 import { PullRequestPane } from './pane.tsx'
 import {
-  about, ATTACH, DETACH, howWord, lead, PANE, parsePr, problemText, REFRESH, road, SECTION, spell, word,
-  type GhStatus, type GithubFacts, type PrFact, type PrSummary,
+  about, ATTACH, DETACH, howWord, lead, NOTICE, PANE, parsePr, problemText, REFRESH, road, SECTION, spell, UNWATCH, WATCH, watchWord, word,
+  type GhStatus, type GithubFacts, type NoticeData, type PrFact, type PrSummary, type Watch,
 } from './shared.ts'
 import './styles.css'
 
 /** A thread's pull requests, newest first. */
 export const prsOf = (thread: ThreadInfo): PrFact[] => factsOf<GithubFacts>(thread, about)?.prs ?? []
 
-/** What's open now: the Attach prompt (for a thread, with the URL it starts with), the Go to picker, or what failed. */
-type Asking = { attach?: { machine: string; thread: string; url: string }; going?: boolean; failed?: string }
+/**
+ * What's open now: the Attach prompt (for a thread, with the URL it starts with), the Watch dialog (for a thread's pull
+ * request), the Go to picker, or what failed.
+ */
+type Asking = { attach?: { machine: string; thread: string; url: string }; watch?: { machine: string; thread: string; pr: PrFact }; going?: boolean; failed?: string }
 
 let api: UiApi
 let asking: Store<Asking>
@@ -70,6 +73,7 @@ export default defineUiExtension({
     superego.slot('details.section', PrDetails)
     superego.slot('overlay', Asks)
     superego.settings(SECTION, GhSection)
+    superego.entry(NOTICE, PrNotice)
     superego.link({
       match: (href, kind) => kind === 'link' && Boolean(parsePr(href)),
       render: PrLink,
@@ -123,6 +127,7 @@ function PrChip({ machine, thread }: SlotProps['header.chips']) {
         <span className="github-chip__n">#{first.number}</span>
         <Road pr={first} />
         {others.length > 0 && <span className="github-chip__more">+{others.length}</span>}
+        {first.watch && <BellIcon className="github-chip__watch" size={12} aria-label={`Watching ${watchWord(first.watch)}`} />}
       </span>
     </HeaderChip>
   )
@@ -148,7 +153,7 @@ function PrMenuHead({ pr, machine }: { pr: PrSummary; machine: MachineEntry }) {
 }
 
 /** What to do with a pull request: the chip's menu (on a phone, rows of the thread's sheet). */
-function PrActions({ machine, thread, pr, separated }: { machine: MachineEntry; thread: ThreadInfo; pr: PrSummary; separated: boolean }) {
+function PrActions({ machine, thread, pr, separated }: { machine: MachineEntry; thread: ThreadInfo; pr: PrFact; separated: boolean }) {
   return <>
     <ThreadMenuItem icon={GitPullRequestIcon} keys="github.show" onClick={() => showPr(machine.id, thread.id, pr.url)}>Show pull request</ThreadMenuItem>
     <ThreadMenuItem icon={ArrowSquareOutIcon} onClick={() => onGitHub(pr.url)}>Open on GitHub</ThreadMenuItem>
@@ -158,6 +163,9 @@ function PrActions({ machine, thread, pr, separated }: { machine: MachineEntry; 
     <ThreadMenuItem icon={CopyIcon} onClick={() => reported(copyText(pr.url), 'Copying its URL')}>Copy URL</ThreadMenuItem>
     {separated && <Menu.Separator />}
     <ThreadMenuItem icon={ArrowClockwiseIcon} onClick={() => reported(run(REFRESH, { pr: pr.url }, machine.id), 'Refreshing it')}>Refresh</ThreadMenuItem>
+    {(pr.state === 'open' || pr.state === 'draft' || pr.watch) && (
+      <ThreadMenuItem icon={BellIcon} onClick={() => asking.set({ watch: { machine: machine.id, thread: thread.id, pr } })}>{pr.watch ? `Watching ${watchWord(pr.watch)}…` : 'Watch…'}</ThreadMenuItem>
+    )}
     {separated && <Menu.Separator />}
     <ThreadMenuItem icon={LinkBreakIcon} onClick={() => reported(run(DETACH, { thread: thread.id, pr: pr.key }, machine.id), 'Detaching it')}>Detach</ThreadMenuItem>
   </>
@@ -248,6 +256,7 @@ function Asks() {
   const now = asking.use()
   const close = () => asking.set({})
   if (now.attach) return <AttachPrompt {...now.attach} onClose={close} />
+  if (now.watch) return <WatchDialog {...now.watch} onClose={close} />
   if (now.going) return <GoTo onClose={close} />
   if (now.failed) return <Dialog title="GitHub" onClose={close} footer={<Button variant="primary" onClick={close}>OK</Button>}>{now.failed}</Dialog>
   return null
@@ -259,6 +268,59 @@ function AttachPrompt({ machine, thread, url, onClose }: { machine: string; thre
       defaultValue={url} confirmLabel="Attach" onClose={onClose}
       validate={(text) => parsePr(text) ? undefined : "That isn't a pull request's URL."}
       onSubmit={async (text) => { await run(ATTACH, { thread, url: text }, machine) }} />
+  )
+}
+
+/**
+ * Watch…: wake the thread's agent when the pull request's checks finish, when it's reviewed, or both; or stop. Saved
+ * on the thread's machine; what fails said in the dialog.
+ */
+function WatchDialog({ machine, thread, pr, onClose }: { machine: string; thread: string; pr: PrFact; onClose(): void }) {
+  const was: Watch = pr.watch ?? {}
+  const [checks, setChecks] = useState(was.checks !== false)
+  const [reviews, setReviews] = useState(pr.watch ? was.reviews !== false && was.until !== 'checks' : true)
+  const [busy, setBusy] = useState(false)
+  const [failed, setFailed] = useState<string>()
+  const act = (work: Promise<unknown>, what: string) => {
+    setBusy(true)
+    setFailed(undefined)
+    work.then(onClose, (error: Error) => { console.error(`github: ${what} failed:`, error); setFailed(`${what} failed: ${error.message}`); setBusy(false) })
+  }
+  const save = () => act(run(WATCH, { thread, pr: pr.key, ...(checks ? {} : { checks: false }), ...(reviews ? {} : { reviews: false }) }, machine), 'Watching it')
+  const stop = () => act(run(UNWATCH, { thread, pr: pr.key }, machine), 'Stopping')
+  return (
+    <Dialog title={`Watch #${pr.number}`} size="small" onClose={onClose} footer={<>
+      {pr.watch && <Button variant="danger" disabled={busy} onClick={stop}>Stop watching</Button>}
+      <Button onClick={onClose}>Cancel</Button>
+      <Button variant="primary" disabled={busy || (!checks && !reviews)} onClick={save}>{pr.watch ? 'Save' : 'Watch'}</Button>
+    </>}>
+      <div className="github-watch">
+        <p className="github-watch__say">Wake the agent, until it's merged or closed:</p>
+        <div className="github-watch__row"><span>When its checks finish</span><Switch label="When its checks finish" checked={checks} onChange={setChecks} /></div>
+        <div className="github-watch__row"><span>When it's reviewed</span><Switch label="When it's reviewed" checked={reviews} onChange={setReviews} /></div>
+        {failed && <p className="github-watch__problem" role="alert">{failed}</p>}
+      </div>
+    </Dialog>
+  )
+}
+
+// ── Notices ──────────────────────────────────────────────────────────────────────────────────────────────────────
+/** What happened to a pull request, as the daemon half told the thread: a glyph, a headline, a line of detail. */
+function PrNotice({ entry }: EntryProps) {
+  const data = entry.data as NoticeData
+  const glyph = data.event === 'checks-failed' ? <CheckGlyph result="fail" size={14} />
+    : data.event === 'checks-passed' ? <CheckGlyph result="pass" size={14} />
+    : data.event === 'changes' ? <CommentGlyph size={14} tone="changes" />
+    : data.event === 'approved' ? <CheckGlyph result="pass" size={14} />
+    : data.event === 'comments' ? <CommentGlyph size={14} tone="quiet" />
+    : <PrGlyph state={data.event === 'merged' ? 'merged' : 'closed'} size={14} />
+  return (
+    <div className={`github-notice is-${data.event}`}>
+      <div className="github-notice__head">{glyph}<span>{data.headline}</span></div>
+      {data.detail && <div className="github-notice__detail">{data.detail}</div>}
+      {data.held && <div className="github-notice__detail">The agent wasn't woken: it was woken about #{data.number} too often this hour.</div>}
+      {data.woke && <div className="github-notice__detail">Watching #{data.number}: the agent was woken.</div>}
+    </div>
   )
 }
 
