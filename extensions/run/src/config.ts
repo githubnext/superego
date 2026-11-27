@@ -1,5 +1,5 @@
 // A folder's run config: `.superego/run.json`, in the folder or the nearest folder above it up to the repository's
-// root. `{ "command": ["just", "run"], "ready": "STATUS:READY", "grace": 5, "env": { "PORT": "3000" } }`.
+// root: `{ "command": ["just", "run"], "ready": "STATUS:READY", "grace": 5, "env": { "PORT": "3000" } }`.
 import { readFile, stat } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 
@@ -73,21 +73,11 @@ const exists = (path: string) => stat(path).then(() => true, () => false)
 export async function findConfig(folder: string): Promise<FoundConfig | undefined> {
   for (let dir = folder; ; dir = dirname(dir)) {
     const path = join(dir, CONFIG_FILE)
+    // None there (or unreadable as a file): look further up.
     const text = await readFile(path, 'utf8').catch(() => undefined)
     if (text !== undefined) {
       try { return { ...parseConfig(text), path, dir } } catch (error) { throw new Error(`${path} ${(error as Error).message}`) }
     }
     if (dirname(dir) === dir || await exists(join(dir, '.git'))) return undefined
   }
-}
-
-/**
- * How to run `command` in `shell`: as a login and interactive shell, so the user's PATH and aliases are there as in
- * their terminal; with job control off, so what it starts in the background stays in its process group (and stops
- * with it); and ending on SIGTERM, which an interactive shell otherwise ignores (a loop would last till the SIGKILL).
- */
-export function shellArgs(shell: string, command: string): string[] {
-  const name = shell.split('/').pop() ?? ''
-  const off = name === 'fish' ? 'status job-control none; ' : /^(ba|z|k|da|mk)?sh$/.test(name) ? "set +m; trap 'exit 143' TERM; " : ''
-  return ['-l', '-i', '-c', `${off}${command}`]
 }

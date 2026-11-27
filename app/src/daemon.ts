@@ -23,6 +23,7 @@ import mcpServers from '@superego/mcp-servers/daemon'
 import mentions from '@superego/mentions/daemon'
 import schedules from '@superego/schedules/daemon'
 import processes from '@superego/processes/daemon'
+import run from '@superego/run/daemon'
 import { skillsExtension } from '@superego/skills/daemon'
 import { SKILL_DIR } from '@superego/cli/skill'
 import suggestions from '@superego/suggestions/daemon'
@@ -48,7 +49,7 @@ const claude = claudeAgent({ skills: [SKILL_DIR] })
 // them to browsers and agents (see the daemon's relay.ts).
 serveDaemon({
   app, defaultCwd: homedir(), extensions: [
-    worktrees, agentUi, claude, ego, files, git, github, images, links, mcpServers, mentions, mermaid, processes, schedules, skills, suggestions, tasks, terminal, threadTools, threadReports, unread, focus, browser,
+    worktrees, agentUi, claude, ego, files, git, github, images, links, mcpServers, mentions, mermaid, processes, run, schedules, skills, suggestions, tasks, terminal, threadTools, threadReports, unread, focus, browser,
   ], ...(webRoot ? { webRoot } : {}),
   reach: (dataDir, self) => machineHub({ app, dataDir, self }),
 }).catch((error) => {

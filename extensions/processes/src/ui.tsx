@@ -66,6 +66,8 @@ function useNow(every = 1000) {
 }
 
 const isRun = (p: ProcessInfo) => 'folder' in p.owner && p.name === 'run'
+/** What a row calls it: Run's dev command by its command (its tag says it's Run's), the rest by name or command. */
+const shownTitle = (p: ProcessInfo) => isRun(p) ? titleOf({ command: p.command }) : titleOf(p)
 
 /** A process's mark: what state it's in, as the list, the chip and the report draw it. */
 function Mark({ p, size = 'row' }: { p: Pick<ProcessInfo, 'state' | 'ready' | 'exitCode' | 'stopped'>; size?: 'row' | 'chip' }) {
@@ -102,7 +104,7 @@ function chipOf(list: ProcessInfo[]): { state: string; label: string } | undefin
   if (starting.length) return { state: 'starting', label: total > 1 ? `Starting · ${total}` : 'Starting' }
   if (running.length) return { state: 'running', label: running.length > 1 ? `${running.length} running` : 'Running' }
   // Only a definition (Run's, before it's started): what starts it.
-  if (idle.length === 1) return { state: 'idle', label: titleOf(idle[0]!) === 'run' ? 'Run' : titleOf(idle[0]!) }
+  if (idle.length === 1) return { state: 'idle', label: isRun(idle[0]!) ? 'Run' : titleOf(idle[0]!) }
   return undefined
 }
 
@@ -116,11 +118,11 @@ function ProcessesChip({ machine, thread }: SlotProps['header.chips']) {
     <>
       <ThreadMenuItem icon={TerminalIcon} keys="processes.show" onClick={() => show()}>Show processes</ThreadMenuItem>
       {list.filter((p) => live(p.state) || p.state === 'failed' || p.state === 'idle').slice(0, 6).map((p) => live(p.state)
-        ? <ThreadMenuItem key={p.id} icon={ArrowClockwiseIcon} onClick={() => act('processes.restart', { id: p.id })}>Restart {titleOf(p)}</ThreadMenuItem>
-        : <ThreadMenuItem key={p.id} icon={p.state === 'idle' ? PlayIcon : ArrowClockwiseIcon} onClick={() => act('processes.restart', { id: p.id })}>{p.state === 'idle' ? 'Start' : 'Restart'} {titleOf(p)}</ThreadMenuItem>)}
+        ? <ThreadMenuItem key={p.id} icon={ArrowClockwiseIcon} keys={isRun(p) ? 'run.restart' : undefined} onClick={() => act('processes.restart', { id: p.id })}>Restart {shownTitle(p)}</ThreadMenuItem>
+        : <ThreadMenuItem key={p.id} icon={p.state === 'idle' ? PlayIcon : ArrowClockwiseIcon} keys={isRun(p) ? 'run.restart' : undefined} onClick={() => act('processes.restart', { id: p.id })}>{p.state === 'idle' ? 'Start' : 'Restart'} {shownTitle(p)}</ThreadMenuItem>)}
     </>
   )
-  const title = list.filter((p) => !ended(p.state) || p.state === 'failed').map((p) => `${titleOf(p)}: ${stateText(p, Date.now())}`).join('\n')
+  const title = list.filter((p) => !ended(p.state) || p.state === 'failed').map((p) => `${shownTitle(p)}: ${stateText(p, Date.now())}`).join('\n')
   return (
     <HeaderChip title={title} menu={menu}>
       <span className={`processes-chip is-${chip.state}`}>
@@ -185,7 +187,7 @@ function Row({ p, now, selected, onPick, act }: { p: ProcessInfo; now: number; s
     <div role="option" aria-selected={selected} tabIndex={0} className={`processes-row is-${p.state}${selected ? ' is-selected' : ''}`} onClick={onPick}
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onPick() } }} title={p.command}>
       <Mark p={p} />
-      <span className="processes-row__title">{titleOf(p) === 'run' && isRun(p) ? p.command : titleOf(p)}</span>
+      <span className="processes-row__title">{shownTitle(p)}</span>
       {isRun(p) && <span className="processes-tag">Run</span>}
       <span className="processes-row__state">
         {p.state === 'idle'

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **Upgrade:** Run (each folder's dev command, from `.superego/run.json`) is built in now: remove the `run` extension
+  from your profile (its folder and its entries in `profile.ts`). Agents use the `process_*` tools on the process named
+  `run`; the `run_status`, `run_logs`, `run_restart` and `run_stop` tools are gone. The old logs in `~/.superego/run/`
+  can be deleted.
 - **Pull requests on threads.** A pull request the agent opens, or the one a worktree thread's branch has, is
   attached to its thread: its state, checks and review show in the title bar and on its row, and Show pull request
   opens what's failing and the unresolved review comments beside it. Attach one by hand from a row's menu or ⌘K, and
@@ -18,6 +22,8 @@
   the Processes pane: each process, and the selected one's output, live and in colour. A thread's row is marked while
   one runs or failed. Archiving a thread stops its processes. It's the new Processes extension, which Settings →
   Extensions can turn off.
+- A folder's dev command (`.superego/run.json`, `⌃R`) is one of these processes: it keeps running through Superego's
+  updates, starts again after the computer restarts if it was running, and wakes the thread working there if it dies.
 - **Mermaid diagrams.** ```` ```mermaid ```` blocks in threads and Markdown files show as diagrams, in the window's
   colours, light or dark. Their corner shows the source or copies it. It's the new Mermaid extension, which Settings →
   Extensions can turn off.

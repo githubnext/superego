@@ -180,6 +180,11 @@ export function processesExtension({ batching = BATCHING, shell }: { batching?: 
         error: fail,
       }, batching)
 
+      // The records kept, read before anything acts on them (an action, a read, a tool): a definition put meanwhile would
+      // make a second of the same name.
+      const loaded = runner.load()
+      const fromLoaded = loaded.catch(() => undefined)
+
       // ── Starting, finding, stopping ─────────────────────────────────────────────────────────────────────────────
       type SpecParams = { owner?: Owner; thread?: string; folder?: string; name?: string; command: string; cwd?: string; env?: Record<string, string>; ready?: string; grace?: number; notify?: ProcessInfo['notify']; restart?: ProcessInfo['restart']; keep?: boolean }
       const ownerOf = (p: { owner?: Owner; thread?: string; folder?: string }): Owner => {
@@ -292,27 +297,27 @@ export function processesExtension({ batching = BATCHING, shell }: { batching?: 
       superego.action(defineAction({
         id: 'processes.start', title: 'Start a process', description: 'Start a command as a process of a thread, a folder or the machine.',
         expose: ['ui', 'cli'], params: obj({ ...specFields, ifRunning: opt(oneOf(['error', 'keep', 'restart'] as const)) }),
-        run: async (params, context) => answer(await start(await specOf(params, byOf(context)), params.ifRunning).catch(rpc)),
+        run: async (params, context) => { await fromLoaded; return answer(await start(await specOf(params, byOf(context)), params.ifRunning).catch(rpc)) },
       }))
       superego.action(defineAction({
         id: 'processes.define', title: 'Define a process', description: 'Put a process, idle, to start later (its Start in the pane); a stopped one’s command changed.',
         expose: ['ui', 'cli'], params: obj(specFields),
-        run: async (params, context) => answer(runner.define(await specOf(params, byOf(context)))),
+        run: async (params, context) => { await fromLoaded; return answer(runner.define(await specOf(params, byOf(context)))) },
       }))
       superego.action(defineAction({
         id: 'processes.restart', title: 'Restart a process', description: 'Start a process again, stopping it first if it runs.',
         expose: ['ui', 'cli'], params: obj(targetFields),
-        run: async (params) => { refuseOff(); const record = find(params); runner.seen(record.id); return answer(await runner.restart(record.id).catch(rpc)) },
+        run: async (params) => { await fromLoaded; refuseOff(); const record = find(params); runner.seen(record.id); return answer(await runner.restart(record.id).catch(rpc)) },
       }))
       superego.action(defineAction({
         id: 'processes.stop', title: 'Stop a process', description: 'Stop a process and everything it started.',
         expose: ['ui', 'cli'], params: obj(targetFields),
-        run: async (params) => answer(await runner.stop(find(params).id).catch(rpc)),
+        run: async (params) => { await fromLoaded; return answer(await runner.stop(find(params).id).catch(rpc)) },
       }))
       superego.action(defineAction({
         id: 'processes.remove', title: 'Remove a process', description: 'Forget a process that ended, and its output.',
         expose: ['ui', 'cli'], params: obj(targetFields),
-        run: async (params) => { const record = find(params); await runner.remove(record.id).catch(rpc); return null },
+        run: async (params) => { await fromLoaded; const record = find(params); await runner.remove(record.id).catch(rpc); return null },
       }))
       superego.action(defineAction({
         id: 'processes.seen', title: 'Mark a failure seen', description: 'Its thread’s row stops showing it failed.',
@@ -329,6 +334,7 @@ export function processesExtension({ batching = BATCHING, shell }: { batching?: 
       }))
 
       superego.method('processes.list', async ({ thread, folder, all }) => {
+        await fromLoaded
         if (all) return [...runner.records.values()].map(infoOf)
         if (thread) {
           if (!threads.has(thread)) know(await superego.threads.get(thread))
@@ -337,17 +343,18 @@ export function processesExtension({ batching = BATCHING, shell }: { batching?: 
         if (folder) return [...runner.records.values()].filter((p) => 'folder' in p.owner && p.owner.folder === folder).map(infoOf)
         throw new RpcError('invalid_params', 'Say whose: `thread`, `folder` or `all`.')
       }, { params: obj({ thread: opt(str()), folder: opt(str()), all: opt(bool()) }) })
-      superego.method(READ, async ({ id, since, lines, plain }) => read(find({ id }), {
+      superego.method(READ, async ({ id, since, lines, plain }) => (await fromLoaded, read(find({ id }), {
         ...(since !== undefined ? { since } : {}), ...(lines !== undefined ? { lines } : {}), ...(plain !== undefined ? { plain } : {}),
-      }), { params: obj({ id: str(), since: opt(int({ minimum: 0 })), lines: opt(int({ minimum: 1 })), plain: opt(bool()) }) })
-      superego.method('processes.wait', async ({ id, for: what, timeout }) => wait(find({ id }), what, timeout),
+      })), { params: obj({ id: str(), since: opt(int({ minimum: 0 })), lines: opt(int({ minimum: 1 })), plain: opt(bool()) }) })
+      superego.method('processes.wait', async ({ id, for: what, timeout }) => (await fromLoaded, wait(find({ id }), what, timeout)),
         { params: obj({ id: str(), for: str(), timeout: int({ minimum: 0, maximum: MOST_WAIT }) }) })
-      superego.method('processes.output', async ({ id }) => runner.mark(find({ id })), { params: obj({ id: str() }) })
+      superego.method('processes.output', async ({ id }) => (await fromLoaded, runner.mark(find({ id }))), { params: obj({ id: str() }) })
 
       // ── The agent ───────────────────────────────────────────────────────────────────────────────────────────────
       agentPart(superego, {
         threadOf: (conversationId) => superego.threads.of(conversationId as never)!,
         start: async (thread, args) => {
+          await fromLoaded
           const record = await start(await specOf({ ...args, thread }, { thread }))
           return record
         },
@@ -398,7 +405,7 @@ export function processesExtension({ batching = BATCHING, shell }: { batching?: 
 
       // ── Set up: the records, then (not awaited) what an earlier daemon left running, the threads, a week's pruning ─
       const ready = (async () => {
-        await runner.load()
+        await loaded
         await runner.adopt()
         await runner.prune(KEEP_ENDED)
         await relist()

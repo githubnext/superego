@@ -48,12 +48,24 @@ tab's button, a double click on its title or `⌘⇧↩`; `Esc` restores it.
 | Pane | From |
 |---|---|
 | File editor (Markdown in live preview, or source), another thread | built in |
-| Changes (git's diff), Browser, Terminal, file tree | bundled extensions |
+| Changes (git's diff), Browser, Terminal, Processes, file tree | bundled extensions |
 
 **Browser.** A web page or an HTML file the agent wrote. A `localhost` page on another machine is forwarded here
 ([Machines](machines.md#localhost-on-another-machine)). A page beyond this computer and its network that the agent
 opened waits for you to press Open page. Pages ask for camera, microphone, notifications and local network as a browser
 does; Settings → Site permissions forgets your answers.
+
+**Processes.** What a thread runs that lasts longer than a command (a server, a watcher, a long build), started by its
+agent (`process_start`), and its folder's dev command: each with its state, and the selected one's output, live. They
+run on through Superego's updates and restarts; the thread is woken with the last lines when a build ends or a server
+fails. The chip in the title bar says how they stand. Archiving a thread stops its own, and its folder's with the last
+thread there.
+
+**A folder's dev command** (Run) is `.superego/run.json`, in the folder or one above it up to the repository's root:
+`{ "command": ["npm", "run", "dev"], "ready": "ready in", "grace": 5, "env": { "PORT": "3000" } }` (`command`, an argv
+or a shell line, run in your login shell where the file is; `ready`, text in its output that says it's up; `grace`,
+seconds between SIGTERM and SIGKILL). The setting `run.command` is the default where there's none. `⌃R` starts or
+restarts it, and it starts again after the computer restarts if it was running.
 
 **Layout.** Where views sit (the rail, beside the thread, the pane menu, the header) is
 `~/.superego/layout.json`: Edit layout… in `⌘K` opens it, and it applies as you save. Or right-click a view to move it.
@@ -119,6 +131,7 @@ Turn either off for a profile (`without: ['skills', 'agents-md']`) or a machine 
 | `⌘⌥N` | A new file, in the folder pane with the focus |
 | `⌘T` | A new Browser pane |
 | `` ⌃` `` | A terminal beside the thread |
+| `⌃R` | Start or restart the folder's dev command |
 | `⌘W` | Close the focused pane |
 | `⌘⇧W` | Close the window (Superego keeps running) |
 | `⌘,` | Settings |

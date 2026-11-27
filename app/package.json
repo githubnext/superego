@@ -27,6 +27,7 @@
     "@superego/mentions": "workspace:*",
     "@superego/mermaid": "workspace:*",
     "@superego/processes": "workspace:*",
+    "@superego/run": "workspace:*",
     "@superego/skills": "workspace:*",
     "@superego/suggestions": "workspace:*",
     "@superego/tasks": "workspace:*",

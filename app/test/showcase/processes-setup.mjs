@@ -1,5 +1,6 @@
 // Writes what test/processes.mjs looks at, before the app starts: `node processes-setup.mjs <data dir> <project> <turns.jsonl>`.
-// The project's scripts (a dev server that says it's ready, a test watcher, a build that fails with a type error),
+// The project's scripts (a dev server that says it's ready, Run's from its .superego/run.json; a test watcher; a build
+// that fails with a type error),
 // a process an earlier daemon left that went with a restart of the machine (its pid gone: lost as the daemon starts),
 // and the turns of a thread that starts the tests and a build, is woken by the build failing, reads its output and
 // says what it'll fix.
@@ -41,6 +42,9 @@ setTimeout(() => {
   process.exit(2)
 }, 2500)
 `)
+
+// Its dev command, for Run.
+write(join(project, '.superego/run.json'), `${JSON.stringify({ command: ['npm', 'run', 'dev'], ready: 'ready in' })}\n`)
 
 // Left by an earlier daemon, running then; its pid gone now, as after a restart of the machine.
 const id = 'p_5t0rybk1'
