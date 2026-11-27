@@ -114,9 +114,10 @@ export function Shell() {
     if (view.id !== sections.section || shownAlone) sections.show(view.id)
     else settings.close()
   }
-  // The main area of a section holding nothing yet: its own word.
+  // The main area of a section holding nothing yet: its own word (a thread section's, first-run setup while it's due).
+  const holdsSpaces = Boolean(sections.list.find((s) => s.id === sections.section)?.owns)
   const emptyText = () => !sidebarViews.length ? `Start a thread with: ${registry.app.id}`
-    : sections.list.find((s) => s.id === sections.section)?.owns ? `Nothing open in ${sidebarView?.title ?? 'this section'}.` : 'Select or start a thread.'
+    : holdsSpaces ? `Nothing open in ${sidebarView?.title ?? 'this section'}.` : 'Select or start a thread.'
   // The rail's tabs, which ⌘1–⌘9 go to (see rail-tabs.ts): as the rail is when asked.
   const tabsNow = () => narrow ? [] : railTabs(viewsIn(registry, placed, 'rail'), sidebarViews, {
     offered: registry.router.offered,
@@ -299,7 +300,7 @@ export function Shell() {
                 <ThreadView key={`${selection.machine}/${selection.thread}`} machine={machine} thread={thread} />
               </SwipeEdgeRef.Provider></StripSlot.Provider>
             )
-            : setup ? <SetupPage key={setup} machine={setup} /> : <div className="app__empty">{emptyText()}</div>}
+            : setup && !holdsSpaces ? <SetupPage key={setup} machine={setup} /> : <div className="app__empty">{emptyText()}</div>}
         </main>}
         {tab !== 'settings' && !narrow && where && viewsIn(registry, threadPlaced, 'beside', where).length > 0 && (
           <aside className="app__beside"><PlacedViews place="beside" machine={machine} thread={thread} frame={withMenuButton('beside', where)} /></aside>

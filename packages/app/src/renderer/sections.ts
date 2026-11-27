@@ -84,6 +84,9 @@ export function show(state: Sections, held: Held, sections: Section[]): Sections
   return { ...state, at, held: { ...state.held, [at]: held }, ...(holdsThreads(sections, at) ? { threads: at } : {}), ...(at !== ALONE ? { sidebar: at } : {}) }
 }
 
+/** A window's sections starting on `held`, in its section, as its own: a window opened where it was left. */
+export const startingWith = (held: Held, sections: Section[]): Sections => keep(show(NO_SECTIONS, held, sections), sections, () => true)
+
 /** Show nothing in the section shown (no thread selected). What it kept stays, to come back to. */
 export function clear(state: Sections, sections: Section[]): Sections {
   const { [shownSection(state, sections)]: _, ...held } = state.held

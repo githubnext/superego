@@ -10,7 +10,7 @@ import {
 import type { MachineEntry, SuperegoBridge, SuperegoEvent } from '@superego/app/shared'
 import {
   bound, closeWebViews, DescribedCall, describeRun, LAYOUT, layoutOf, linkHandler, mainKind, normalize, pageApp, PaneBody, paneKind, placedFor, PlacedViews, NO_SHELL, profileUisLoaded, provideProfileUi, RegistryProvider, resetProfileUi, spaceFor,
-  scopedViews, seenIn, Shell as Window, ShellStateProvider, Slot, SpaceMain, toolRow, urlKind, ViewScopeProvider, useAllThreads, useMachines, useSelection, useSpace, useWindowContext, windowRegistry,
+  scopedViews, seenIn, setLocalState, NO_SECTIONS, startingWith, Shell as Window, ShellStateProvider, Slot, SpaceMain, toolRow, urlKind, ViewScopeProvider, useAllThreads, useMachines, useSelection, useSpace, useWindowContext, windowRegistry,
   type BehaviourSlot, type SpaceAt, type Layout, type Place, type Registry, type SlotProps, type UiExtension, type ViewProps,
 } from '@superego/app/internals'
 import type { LinkHandler, LinkWhere, ToolRow, ToolRowCall } from '@superego/app/ui'
@@ -492,6 +492,12 @@ export async function mountUi(options: MountOptions = {}): Promise<TestWindow> {
       throw error
     }
   })()
+  // The thread asked for, shown as the window opens: as one left there is, in its sidebar's section (sections.ts).
+  if (options.select) {
+    const sidebars = placedFor(registry, undefined, { narrow }).sidebar.map((id) => ({ id }))
+    const held = { thread: { machine: options.select.machine ?? machines[0]!.id, thread: options.select.thread } }
+    setLocalState('sections', startingWith(held, sidebars), NO_SECTIONS)
+  }
   // As the app sets a window up: the app's own actions fetched, and the app settings its extensions declare registered.
   await registry.router.load('app')
   for (const { owner: _owner, ...section } of registry.appSettings) await appSide.call('settings.register', { section })
@@ -534,12 +540,6 @@ export async function mountUi(options: MountOptions = {}): Promise<TestWindow> {
   }
   // The shell's state, drawn once: machines and their threads followed, selection and context kept. The whole window, if asked.
   const base = await draw(options.window ? <Window /> : null)
-  // The thread asked for, selected as the window starts: in the section it goes to (sections.ts).
-  if (options.select) {
-    const { machine, thread } = options.select
-    await inAct(async () => { shell.select({ machine: machine ?? machines[0]!.id, thread }) })
-    await settle()
-  }
   const machineOf = (id?: string) => id ?? machines[0]!.id
 
   /** What's drawn in `container`, to look in and click. */
