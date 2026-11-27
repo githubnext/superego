@@ -95,6 +95,6 @@ it('makes a schedule in the form, saying what its time comes to as it’s typed'
 })
 
 it("says under a reminder which schedule and run it is, and how late", () => {
-  expect(reminderCaption({ id: 's_1', label: 'Stretch', message: 'Stretch your legs.', run: 3, maxRuns: 48, how: 'every 2 h', late: NOW })).toBe('Stretch · every 2 h, run 3 of 48 · due 14:00, late')
+  expect(reminderCaption({ id: 's_1', label: 'Stretch', message: 'Stretch your legs.', run: 3, maxRuns: 48, how: 'every 2 h', late: NOW })).toBe('every 2 h, run 3 of 48 · due 14:00, late')
   expect(reminderCaption({ id: 's_1', label: "Review Mia's PR", message: "Review Mia's PR", run: 1 })).toBe('')
 })

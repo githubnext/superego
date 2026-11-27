@@ -1,8 +1,10 @@
 // Screenshots of schedules (run by `test/look.sh <dir> schedules`): a thread that opened a PR and scheduled a check of
 // its CI every 30 minutes until green, and a reminder for the morning; the agent's `schedule` rows with their next
-// times; the clock chip in its header and its popover, a paused schedule among them; the clock on its row and another
-// thread's in the sidebar; a firing (Run now from the popover); a run missed while Superego wasn't running, fired once
-// it's back, late; and the phone's sheet. Light and dark, into $SUPEREGO_SHOWCASE_OUT.
+// times; the clock chip in its header and its popover, a paused schedule among them; Edit, and New schedule… with a
+// calendar time and what it comes to; `/schedule` in the composer; the clock on its row and another thread's in the
+// sidebar; a firing (Run now from the popover); a run missed while Superego wasn't running, fired once it's back, late;
+// the reminder, a notice with no run; every schedule on the machine; and the phone's sheet. Light and dark, into
+// $SUPEREGO_SHOWCASE_OUT.
 import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { openApp } from './harness.mjs'
@@ -50,11 +52,45 @@ await openApp({ name: 'schedules', timeout: 300_000 }, async (t) => {
   // The popover.
   await run(`document.querySelector('.schedules-chip').click()`)
   await until(`document.querySelectorAll('.schedules-popup .schedules-row').length === 3`, 'the popover')
+  await until(`Boolean([...document.querySelectorAll('.schedules-popup .schedules-row')].find((r) => r.textContent.includes("Review Mia's PR"))?.querySelector('[aria-label="Reminds you"]'))`, 'the reminder’s bell')
   await t.hover('.schedules-popup .schedules-row__label', 'Check CI')
   await t.both('schedules-popover')
 
+  // Edit, from the popover: the form, what its time comes to under it.
+  await run(`[...document.querySelectorAll('.schedules-popup .schedules-row')].find((r) => r.textContent.includes('Check CI')).querySelector('[aria-label="Edit"]').click()`)
+  await until(`document.querySelector('#schedules-when')?.value === 'every 30m' && /^Every 30 min: /.test(document.querySelector('.schedules-form__hint')?.textContent ?? '')`, 'the Edit form')
+  await t.both('schedules-edit')
+  await t.click('.schedules-form-dialog .superego-button', 'Cancel')
+  await until(`!document.querySelector('.schedules-form')`, 'the form closed')
+
+  // New schedule…, on the calendar.
+  await run(`document.querySelector('.schedules-chip').click()`)
+  await until(`Boolean(document.querySelector('.schedules-popup__item'))`, 'the popover again')
+  await t.click('.schedules-popup__item', 'New schedule…')
+  await until(`Boolean(document.querySelector('#schedules-when'))`, 'the New form')
+  await t.type('#schedules-message', 'Look at the overnight import errors and say if any need me.')
+  await t.type('#schedules-when', 'every weekday at 8:30')
+  await until(`/^Every weekday at 08:30: /.test(document.querySelector('.schedules-form__hint')?.textContent ?? '')`, 'what the time comes to')
+  await t.type('#schedules-until', 'the importer is fixed')
+  await t.both('schedules-new')
+  await t.click('.schedules-form-dialog .superego-button', 'Cancel')
+  await until(`!document.querySelector('.schedules-form')`, 'the form closed again')
+
+  // `/schedule` in the composer: offered as it's typed, then a reminder made from the words.
+  const typeComposer = (text, enter = false) => run(`(() => {
+    const ta = document.querySelector('.composer textarea')
+    ta.focus()
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(ta, ${JSON.stringify(text)})
+    ta.dispatchEvent(new Event('input', { bubbles: true }))
+    if (${enter}) ta.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+  })()`)
+  await typeComposer('/sch')
+  await until(`[...document.querySelectorAll('.completions__item')].some((i) => i.textContent.includes('/schedule'))`, '/schedule offered')
+  await t.both('schedules-command')
+  await typeComposer('/schedule remind me in 2h to stretch my legs', true)
+  await until(`window.superego.call('local', 'schedules.list', { thread: '${id}' }).then((list) => list.some((s) => s.label === 'Stretch my legs' && s.action === 'notify'))`, 'the reminder /schedule made')
+
   // The sidebar's clocks, the row's tooltip.
-  await run(`document.activeElement?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`)
   await until(`!document.querySelector('.schedules-popup')`, 'the popover closed')
   await bothOf('schedules-sidebar', `({ getBoundingClientRect: () => { const r = document.querySelector('.app__sidebar').getBoundingClientRect(); return { x: r.x, y: r.y, width: r.width, height: 220 } } })`)
 
@@ -84,6 +120,22 @@ await openApp({ name: 'schedules', timeout: 300_000 }, async (t) => {
   await call('thread.seen', { thread: id })
   await until(`Boolean([...document.querySelectorAll('.transcript .notice')].find((n) => n.textContent.includes('late')))`, 'the late notice')
   await t.both('schedules-late', `document.querySelectorAll('.thread__scroll').forEach((el) => { el.scrollTop = el.scrollHeight })`)
+
+  // The morning's reminder, run now: a notice, no run.
+  const mia = (await call('schedules.list', { thread: id })).find((s) => s.label === "Review Mia's PR")
+  await call('schedules.run', { id: mia.id })
+  await until(`Boolean(document.querySelector('.transcript .schedules-reminder'))`, 'the reminder')
+  await call('thread.seen', { thread: id })
+  await t.both('schedules-reminder', `document.querySelectorAll('.thread__scroll').forEach((el) => { el.scrollTop = el.scrollHeight })`)
+
+  // Every schedule on the machine, by thread.
+  await run(`document.querySelector('.schedules-chip').click()`)
+  await until(`Boolean(document.querySelector('.schedules-popup__item--quiet'))`, 'the popover once more')
+  await t.click('.schedules-popup__item--quiet', 'All schedules')
+  await until(`document.querySelectorAll('.schedules-all .schedules-thread').length === 2`, 'every schedule')
+  await t.both('schedules-all')
+  await run(`document.activeElement?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`)
+  await until(`!document.querySelector('.schedules-all')`, 'every schedule closed')
 
   // A phone: the thread's menu, then the schedules' sheet.
   await t.resize(600, 1000)

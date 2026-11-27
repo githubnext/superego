@@ -6,30 +6,32 @@
 .schedules-chip:hover, .schedules-chip[data-popup-open] { background: var(--superego-hover); color: var(--superego-text); }
 .schedules-chip.is-paused { color: var(--superego-faint); }
 
-.schedules-popup { width: 320px; max-width: calc(100vw - 32px); padding: 4px 2px; }
+.schedules-popup { width: 340px; max-width: calc(100vw - 32px); padding: 4px 2px; }
 .schedules-popup__title { font-size: var(--superego-text-xs); font-weight: 500; color: var(--superego-muted); margin: 0 6px 4px; }
 
 .schedules-list { display: flex; flex-direction: column; gap: 2px; }
 .schedules-list__empty { font-size: var(--superego-text-sm); color: var(--superego-muted); padding: 4px 6px; }
 .schedules-list__error { font-size: var(--superego-text-sm); color: var(--superego-status-error); padding: 4px 6px; overflow-wrap: anywhere; }
 
-.schedules-row { position: relative; display: grid; grid-template-columns: auto 1fr auto; column-gap: 8px; align-items: start; padding: 6px; border-radius: var(--superego-radius); }
+.schedules-row { position: relative; display: grid; grid-template-columns: auto 1fr; column-gap: 8px; align-items: start; padding: 6px; border-radius: var(--superego-radius); }
 .schedules-row:hover, .schedules-row:focus-within { background: var(--superego-hover); }
 .schedules-row__icon { margin-top: 2px; color: var(--superego-muted); }
 .schedules-row__text { min-width: 0; }
-.schedules-row__label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.schedules-row__head { display: flex; align-items: center; gap: 6px; min-height: 20px; }
+.schedules-row__label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .schedules-row__when, .schedules-row__more { font-size: var(--superego-text-sm); color: var(--superego-muted); font-variant-numeric: tabular-nums; }
 .schedules-row__more { color: var(--superego-faint); }
 .schedules-row__error { font-size: var(--superego-text-sm); color: var(--superego-status-error); overflow-wrap: anywhere; }
 .schedules-row.is-paused .schedules-row__label, .schedules-row.is-paused .schedules-row__icon { color: var(--superego-muted); }
 
 /* Hover's icons, over the row's end: always there for a keyboard's focus. */
-.schedules-row__actions { display: flex; gap: 2px; opacity: 0; }
+.schedules-row__actions { flex: none; display: flex; gap: 2px; margin: -2px 0; opacity: 0; }
 .schedules-row:hover .schedules-row__actions, .schedules-row:focus-within .schedules-row__actions { opacity: 1; }
 .schedules-row__actions .superego-icon-button { width: 24px; height: 24px; min-height: 24px; }
 
 /* A sheet's rows (a phone, thread details): the time at the end, the buttons under it. */
 .schedules-list--sheet { gap: 6px; }
+.schedules-list--sheet .schedules-row { grid-template-columns: auto 1fr auto; }
 .schedules-list--sheet .schedules-row { padding: 10px 12px; background: var(--superego-raised); border: 1px solid var(--superego-border); border-radius: var(--superego-radius-lg); }
 .schedules-row__time { color: var(--superego-muted); font-variant-numeric: tabular-nums; }
 .schedules-row__buttons { grid-column: 2 / -1; display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
@@ -75,3 +77,4 @@ span.schedules-row__icon { display: inline-flex; }
 .schedules-reminder { display: flex; gap: 8px; align-items: flex-start; }
 .schedules-reminder__bell { flex: none; margin-top: 3px; color: var(--superego-accent); }
 .schedules-reminder__caption { margin-top: 2px; font-size: var(--superego-text-xs); color: var(--superego-muted); font-variant-numeric: tabular-nums; }
+.schedules-form__says { min-height: calc(3em + 8px); line-height: 1.5; }

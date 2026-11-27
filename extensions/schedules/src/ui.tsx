@@ -62,7 +62,7 @@ export default defineUiExtension({
     }))
     // `/schedule in 30m check the deploy`: a time found, it's scheduled; none, the agent is asked instead.
     superego.composer.command({
-      name: 'schedule', detail: 'Schedule a wake or a reminder: in 30m check the deploy, remind me tomorrow at 9 to…',
+      name: 'schedule', detail: 'Schedule a wake or a reminder: in 30m check the deploy',
       async run(rest, { machine, thread }) {
         if (!rest) { open.form.set({ machine: machine.id, thread: thread.id }); return }
         const found = await call<{ when: string; message: string; action?: Action } | null>(machine.id, SPLIT_METHOD, { text: rest })
@@ -278,15 +278,17 @@ function Rows({ machine, list, thread, sheet, onEdit }: { machine: MachineEntry;
           <div key={s.id} className={`schedules-row ${s.paused ? 'is-paused' : ''}`}>
             <ActionIcon action={s.action} />
             <div className="schedules-row__text">
-              <div className="schedules-row__label">{s.label}</div>
+              <div className="schedules-row__head">
+                <div className="schedules-row__label">{s.label}</div>
+                {/* Hover's icons, on the name's line: the lines under it keep the row's width. */}
+                {!sheet && <div className="schedules-row__actions">{buttons.map((b) => <IconButton key={b.label} label={b.label} variant="ghost" onClick={b.run}>{b.icon}</IconButton>)}</div>}
+              </div>
               <div className="schedules-row__when">{when}</div>
               {more && <div className="schedules-row__more">{more}</div>}
               {s.error && <div className="schedules-row__error">Couldn’t send: {s.error}</div>}
             </div>
             {sheet && <div className="schedules-row__time">{s.paused ? 'Paused' : s.next !== null ? clockTime(s.next) : ''}</div>}
-            {sheet
-              ? <div className="schedules-row__buttons">{buttons.map((b) => <Button key={b.label} onClick={b.run}>{b.label}</Button>)}</div>
-              : <div className="schedules-row__actions">{buttons.map((b) => <IconButton key={b.label} label={b.label} variant="ghost" onClick={b.run}>{b.icon}</IconButton>)}</div>}
+            {sheet && <div className="schedules-row__buttons">{buttons.map((b) => <Button key={b.label} onClick={b.run}>{b.label}</Button>)}</div>}
           </div>
         )
       })}
@@ -358,11 +360,11 @@ export function ScheduleForm({ machine, thread, id, onClose }: { machine: Machin
     }
   }
   const hint = !said ? '' : understood.error ? understood.error.message
-    : understood.data ? `${understood.data.repeats ? `${capital(understood.data.how)}: ` : ''}${understood.data.times.map((t) => shortWhen(t, now)).join(', ')}${understood.data.tz !== Intl.DateTimeFormat().resolvedOptions().timeZone ? ` (${understood.data.tz})` : ''}`
+    : understood.data ? `${understood.data.repeats ? `${capital(understood.data.how)}: ` : ''}${understood.data.times.map((t) => `${dayWord(t, now)} ${clockTime(t)}`).join(', ')}${understood.data.tz !== Intl.DateTimeFormat().resolvedOptions().timeZone ? ` (${understood.data.tz})` : ''}`
     : '…'
   const footer = (
     <>
-      {was && <span className="schedules-form__by">{[was.by === 'agent' ? 'Made by the agent' : was.by !== 'user' ? `Made by ${was.by}` : '', repeats(was.when) ? `run ${was.runs} of ${was.maxRuns}` : ''].filter(Boolean).join(' · ')}</span>}
+      {was && <span className="schedules-form__by">{[was.by === 'agent' ? 'Made by the agent' : was.by !== 'user' ? `Made by ${was.by}` : '', repeats(was.when) ? was.runs ? `run ${was.runs} of ${was.maxRuns}` : `up to ${was.maxRuns} runs` : ''].filter(Boolean).join(' · ')}</span>}
       <Button onClick={onClose}>Cancel</Button>
       <Button variant="primary" disabled={saving || !fields.message.trim() || !fields.when.trim()} onClick={() => void save()}>{was ? 'Save' : 'Schedule'}</Button>
     </>
@@ -371,7 +373,7 @@ export function ScheduleForm({ machine, thread, id, onClose }: { machine: Machin
     <Dialog title={was ? 'Edit schedule' : 'New schedule'} onClose={onClose} size="small" footer={footer} unsaved className="schedules-form-dialog">
       <form className="schedules-form" onSubmit={(e) => { e.preventDefault(); void save() }}>
         <label htmlFor="schedules-message">Says</label>
-        <TextArea id="schedules-message" value={fields.message} maxRows={6} placeholder={action === 'notify' ? "Review Mia's PR" : 'Check CI on #212, and say what still fails'}
+        <TextArea id="schedules-message" className="superego-field schedules-form__says" value={fields.message} maxRows={6} placeholder={action === 'notify' ? "Review Mia's PR" : 'Check CI on #212, and say what still fails'}
           onChange={(e) => set({ message: e.target.value })} />
         <label htmlFor="schedules-when">When</label>
         <div className="schedules-form__when">
@@ -447,7 +449,7 @@ export function MachineSchedules({ machine, named, onEdit, onGo }: { machine: Ma
 
 /** Under a reminder's words: its name (when its own), how it repeats and its run, how late. */
 export const reminderCaption = (r: Reminder) => [
-  r.label !== r.message && r.label,
+  !r.message.startsWith(r.label) && r.label,
   r.how && `${r.how}, run ${r.run}${r.maxRuns ? ` of ${r.maxRuns}` : ''}`,
   r.late !== undefined && `due ${clockTime(r.late)}, late`,
 ].filter(Boolean).join(' · ')
