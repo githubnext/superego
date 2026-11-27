@@ -28,7 +28,7 @@ A profile's halves import `'superego'` and `'superego/ui'`; a bundled extension'
 
 | Import | What | Stability |
 |---|---|---|
-| `'superego'` | the daemon half and a profile: `defineDaemonExtension`, `defineProfile`, `defineExtension`, `defineTool`, `defineAction`, the schema helpers (`obj`, `str`, …), `RpcError`, `spawnGroup` (a command run as a process tree that stops as one), and their types (`DaemonApi`, `ScopedValue`, `Block`, …) | stable: follows the extension API's version |
+| `'superego'` | the daemon half and a profile: `defineDaemonExtension`, `defineProfile`, `defineExtension`, `defineTool`, `defineAction`, the schema helpers (`obj`, `str`, …), `RpcError`, `spawnGroup` (a command run as a process tree that stops as one; `outlive` and `adoptGroup` for one that outlives the daemon), and their types (`DaemonApi`, `ScopedValue`, `Block`, …) | stable: follows the extension API's version |
 | `'superego/ui'` | the UI half: `defineUiExtension`, `defineAction`, hooks (`useMethod`, `useValue`, `useDispatch`, `useSelection`, …), `call`, `has`, `version`, components to build from (`Markdown`, `PaneHeader`, `Picker`, `Diff`, `FileEditor`, `Button`, the icons), and their types | stable |
 | `'superego/testing'` | test helpers: a daemon with a scripted model, a window with a fake bridge, `isRunning(pid)` (see [Testing](#testing)) | stable |
 | `'superego/unstable'` | the window's workings the bundled extensions build on: `useRegistry`, `useShell`, `fileKind`, `Slot`, the project list, `useThreadView`, `channel`, `MONO_FONT`, … | none: changes with the window |

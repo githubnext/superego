@@ -10,6 +10,7 @@
 // stops, or (a profile's) when the profile's files change. Torn down, its `signal` aborts, what it registers after is
 // refused, and its live values' `set` and `update` do nothing.
 import type { AnyTask, Conversation, EntryRecord, Extension } from '@earendil-works/pi-durable'
+import type { Teardown } from '@superego/protocol'
 import type { ActionDef, ActionInfo, AgentKindMenu, AppConfig, Attachment, ChannelAcceptor, BlockedKind, DataView, Exposure, ExtensionAbout, Json, JsonSchema, MachineEntry, MessageOrigin, NewThread, NoticeAction, Pane, SettingsSnapshot, Static, ThreadInfo } from '@superego/protocol'
 import type { SectionSpec } from '@superego/settings'
 import type { AuthFlow } from './auth-flows.ts'
@@ -135,9 +136,11 @@ export type MentionResolve = (mention: MentionTarget) => string | undefined | Pr
  * (Markdown, a line or a few), also the thread's status line and its notification; drawn by this extension's entry
  * component for `kind` (`entry(kind, …)` in its UI half, given `data`) when it has one there, else as `text`; with
  * `actions`, buttons under it (`NoticeAction`: send the agent a message, or dispatch an action). `agent`: what its agent
- * is told of it, else `text`; false, nothing.
+ * is told of it, else `text`; false, nothing. `wake` (API ^5.18): it also starts the agent's run on it (after the run
+ * going, if one is), as a message would, without a message beside it: for what the agent should act on (a build that
+ * failed).
  */
-export type ThreadNotice = { text: string; kind?: string; data?: Json; actions?: NoticeAction[]; agent?: string | false }
+export type ThreadNotice = { text: string; kind?: string; data?: Json; actions?: NoticeAction[]; agent?: string | false; wake?: boolean }
 
 /** Changes what a message gives the model: returns the blocks to send instead, or nothing to leave them. */
 export type SendTransform = (message: OutgoingMessage) => MessageBlock[] | void | Promise<MessageBlock[] | void>
@@ -409,8 +412,12 @@ export type DaemonApi = {
   /**
    * Aborted when this extension is torn down, before its registrations go: for its own timers, watchers and fetches
    * (`fetch(url, { signal })`, `watch(path, { signal })`, `signal.addEventListener('abort', …)`; one that throws is logged, not fatal).
+   * (API ^5.18) Its `reason` then says why: a `Teardown` (an `AbortError`) whose `why` is `'stopping'` (the daemon stops or
+   * restarts: leave running what the next daemon takes back), `'reload'` (its profile changed or went) or `'failed'`
+   * (its setup failed or took too long). Switching an extension off in Settings doesn't tear it down: its threads go
+   * without it (`settings.onChange`, `extensions()` say so).
    */
-  signal: AbortSignal
+  signal: AbortSignal & { readonly reason: Teardown | undefined }
   /**
    * Give the agents tools, system prompt sections, hooks or tasks. `always: false`: to no thread but those an
    * `agentFor` or `agentParts` of this extension gives it to. Its handle replaces it (as its tools change, say) or takes

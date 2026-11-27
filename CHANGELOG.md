@@ -12,6 +12,12 @@
   wakes the thread then with a message. A clock in the thread's header and on its row in the sidebar shows the next
   run; click it to run one now, pause it or cancel it. Runs missed while the computer slept fire once when it wakes,
   saying how late. It's the new Schedules extension, which Settings → Extensions can turn off.
+- **Processes.** Agents run servers, watchers and long builds as processes of their thread (`process_start`), not with
+  `&`: they keep running through Superego's updates and restarts, and the thread is woken with the last lines when a
+  build ends or a server fails, with Restart. A chip in the title bar says how they stand (`● Failed · 3`) and opens
+  the Processes pane: each process, and the selected one's output, live and in colour. A thread's row is marked while
+  one runs or failed. Archiving a thread stops its processes. It's the new Processes extension, which Settings →
+  Extensions can turn off.
 - **Mermaid diagrams.** ```` ```mermaid ```` blocks in threads and Markdown files show as diagrams, in the window's
   colours, light or dark. Their corner shows the source or copies it. It's the new Mermaid extension, which Settings →
   Extensions can turn off.
@@ -25,6 +31,11 @@
   rows of the thread's sheet on a phone.
 - New for extensions (extension API 5.17): a sidebar mark (`ThreadBadge`) can say how a thread's card spells it out
   (`spelled`).
+- New for extensions (extension API 5.18): the Processes extension's actions (`processes.start`, `define`, `restart`,
+  `stop`, `remove`) and methods (`processes.list`, `read`, `wait`) run a command as a thread's, a folder's or the
+  machine's process; `spawnGroup`'s `outlive` and `adoptGroup` keep one of your own through a daemon restart;
+  `superego.signal.reason.why` says why an extension is torn down; a notice with `wake: true` starts the agent's run
+  on it.
 - New for extensions (extension API 5.14): `superego.codeBlock(languages, component)` draws fenced code blocks of a
   language.
 - New for extensions (extension API 5.16): `@` in the composer can mention an extension's things (`@note:roadmap`,

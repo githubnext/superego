@@ -1,6 +1,6 @@
 #!/bin/bash
 # The window's layout in the states the design covers, screenshotted:
-# `test/look.sh <dir> [look|focus|focus-mode|panes|panehead|composer|images|mcp|web|terminal|toolbar|titlebar|titlebar-fit|pins|folds|states|cards|dialogs|machines|staff|picker|providers|keptpage|themes|theme-ui|mac-look|claude-agent|setup|phone-look|header|files|github|schedules]` (look, unless given), each a script of
+# `test/look.sh <dir> [look|focus|focus-mode|panes|panehead|composer|images|mcp|web|terminal|toolbar|titlebar|titlebar-fit|pins|folds|states|cards|dialogs|machines|staff|picker|providers|keptpage|themes|theme-ui|mac-look|claude-agent|setup|phone-look|header|files|github|schedules|processes]` (look, unless given), each a script of
 # that name here:
 # - `look`: the sidebar shown, dragged and hidden, the thread alone and with panes, details, a phone; ⌘N's dialog, Settings' General, Appearance and Hotkeys (a clash too);
 # - `focus`: each region holding the focus;
@@ -47,6 +47,8 @@
 #   its search (empty, with matches, with none), a thread, the keyboard up, the thread's menu, New thread, a pane, Settings.
 # - `header`: threads in three projects, one building a page with the page in a Browser pane beside it (the README's
 #   header and the site's link preview: ../site/shots.sh).
+# - `processes`: a thread woken by its build failing (the report, the chip, the row's mark), the Processes pane on the
+#   build's output and on a process gone with a restart of the machine, the chip's menu, and a phone's sheet and pane.
 # - `files`: a folder pane's New file: the name typed in place, a taken one refused there, the file made open in the
 #   editor, light and dark.
 # - `github`: threads' pull requests in every state, from a stand-in `gh` on PATH (the machine's own never runs): the
@@ -60,7 +62,7 @@ cd "$(dirname "$0")/.."
 # seconds), and builds the app first if its sources changed.
 [ "$SUPEREGO_CHECK_COMMAND" = test/look.sh ] || exec node ../scripts/check.ts --timeout SUPEREGO_SHOWCASE_TIMEOUT=480 test/look.sh "$@"
 node scripts/build.ts
-OUT="$(cd "$(dirname "${1:?usage: look.sh <dir> [look|focus|focus-mode|panes|panehead|composer|images|mcp|web|terminal|toolbar|titlebar|titlebar-fit|pins|folds|states|cards|dialogs|machines|staff|picker|keptpage|themes|theme-ui|mac-look|claude-agent|setup|phone-look|header|files|github|schedules]}")" && pwd)/$(basename "$1")"
+OUT="$(cd "$(dirname "${1:?usage: look.sh <dir> [look|focus|focus-mode|panes|panehead|composer|images|mcp|web|terminal|toolbar|titlebar|titlebar-fit|pins|folds|states|cards|dialogs|machines|staff|picker|keptpage|themes|theme-ui|mac-look|claude-agent|setup|phone-look|header|files|github|schedules|processes]}")" && pwd)/$(basename "$1")"
 mkdir -p "$OUT"
 unset ANTHROPIC_API_KEY ANTHROPIC_OAUTH_TOKEN OPENAI_API_KEY
 export SUPEREGO_HOME="$(mktemp -d)" SUPEREGO_HEADLESS=1 SUPEREGO_SHOWCASE_OUT="$OUT" SUPEREGO_REPLAY_SPEED=0 TZ=Europe/Copenhagen
@@ -106,6 +108,14 @@ if [ "$2" = staff ]; then
   rm "$SUPEREGO_HOME/profiles/README.md"
   node test/showcase/staff.mjs "$SUPEREGO_HOME/staff-turns.jsonl"
   export SUPEREGO_MODEL="replay:$SUPEREGO_HOME/staff-turns.jsonl"
+fi
+# `processes`: the project's scripts, a process an earlier daemon left (lost as this one starts), the thread's turns;
+# zsh without the user's own startup files, so what a process prints is the scene's.
+if [ "$2" = processes ]; then
+  node test/showcase/processes-setup.mjs "$SUPEREGO_HOME" "$SUPEREGO_SHOWCASE_PROJECT" "$SUPEREGO_HOME/processes-turns.jsonl"
+  export SUPEREGO_MODEL="replay:$SUPEREGO_HOME/processes-turns.jsonl"
+  mkdir -p "$SUPEREGO_HOME/zdot"
+  [ -x /bin/zsh ] && export SHELL=/bin/zsh ZDOTDIR="$SUPEREGO_HOME/zdot"
 fi
 # `header`: its scene's turns.
 if [ "$2" = header ]; then

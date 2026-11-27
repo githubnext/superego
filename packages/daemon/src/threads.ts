@@ -648,8 +648,8 @@ export function createThreads(host: Host, { harness, extensions, profiles }: { h
 
   /** Whether a thread's newest message is the user's, with no reply begun: one just sent, before its run starts. */
   async function unanswered(id: string) {
-    // A notice the agent was told of is no message to answer.
-    const last = (await newest(id, 20)).filter((entry) => entry.kind !== NOTE_ENTRY).map((entry) => entry.model?.[0] as { role?: string } | undefined).find((message) => message?.role)
+    // A notice the agent was told of is no message to answer, unless it woke it.
+    const last = (await newest(id, 20)).filter((entry) => entry.kind !== NOTE_ENTRY || (entry.data as Note | undefined)?.wake).map((entry) => entry.model?.[0] as { role?: string } | undefined).find((message) => message?.role)
     return last?.role === 'user'
   }
 
@@ -957,12 +957,20 @@ export function createThreads(host: Host, { harness, extensions, profiles }: { h
    * idle, else where its run can next take it (between tool calls, or as it ends). It starts no run, and, as the
    * thread's newest entry, makes it done (unread) with the notice's text for what it says.
    */
-  async function notice(id: string, by: { name: string; title: string }, { agent, ...said }: NoticeInput) {
+  async function notice(id: string, by: { name: string; title: string }, { agent, wake, ...said }: NoticeInput) {
     if (!said.text.trim()) throw new RpcError('invalid', 'A notice needs text')
     const m = await get(id)
     if (m.meta.archived) throw new RpcError('archived', 'This thread is archived', { hint: 'Unarchive it to tell it something.' })
-    const data: Note = { ...said, by: by.name }
     const told = agent === false ? undefined : (agent ?? said.text).trim()
+    // One that wakes the agent is its input: a run on it starts (after the one going), as a message's would.
+    if (wake) {
+      if (!told) throw new RpcError('invalid', 'A notice that wakes the agent tells it something')
+      await ready(id, m, 'wake it')
+      const data: Note = { ...said, by: by.name, wake: true }
+      await m.conversation.submit({ type: 'input', content: [{ type: 'text', text: noticeForAgent(by.title, told) }], requestId: randomUUID(), whenBusy: 'followUp', entry: { kind: NOTE_ENTRY, data: clone(data) as Json } }, context)
+      return
+    }
+    const data: Note = { ...said, by: by.name }
     const model: UserMessage[] | undefined = told ? [{ role: 'user', content: [{ type: 'text', text: noticeForAgent(by.title, told) }], timestamp: Date.now() }] : undefined
     await m.conversation.submit({ type: 'write', entry: { kind: NOTE_ENTRY, data: clone(data) as Json, ...(model ? { model } : {}) } }, context)
   }

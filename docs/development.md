@@ -71,6 +71,7 @@ Extensions) or per profile (`without`).
 | `schedules` | wake a thread at a time or every so often (`schedule`); the clock in its header and on its row |
 | `tasks` | `task_start`/`task_finish`, and the transcript folded by task |
 | `terminal` | a shell beside a thread, run by the machine; drawn by ghostty-web |
+| `processes` | servers, watchers and long builds a thread (or a folder) runs, outliving the daemon; `process_*`, the chip, the Processes pane, reports when one ends |
 | `mcp-servers` | MCP servers for the agents in threads ([mcp.md](mcp.md)) |
 | `claude-agent` | threads that run the user's own Claude Code ([claude-agent.md](claude-agent.md)) |
 

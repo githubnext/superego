@@ -9,9 +9,8 @@
 // what brings it back has changed. An accepted one is its owner's record (`clear=1` removes it), while its owner runs
 // (and GRACE after, as a program may exit just before the terminal does). What's brought back is one record: an
 // ancestor's before its descendant's, else the latest.
-import { execFileSync } from 'node:child_process'
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto'
-import { readFileSync, readlinkSync } from 'node:fs'
+import { processTable, type ProcessTable } from '@superego/daemon/sdk'
 import { OscReader } from './osc.ts'
 
 /** The variable a terminal's first process finds its token in: none, and programs don't report. */
@@ -41,13 +40,8 @@ export type Resume = {
   first?: true
 }
 
-/** What a terminal asks of the machine about the processes in it. */
-export type Processes = {
-  /** A running process's parent, and when it started (as text: another process given its pid starts at another). */
-  info(pid: number): { ppid: number; start: string } | undefined
-  /** Its working directory, if the machine says. */
-  cwd(pid: number): string | undefined
-}
+/** What a terminal asks of the machine about the processes in it: the daemon's process table, or a test's. */
+export type Processes = ProcessTable
 
 /** What OSC 7577 says to a terminal: a program's report verified, its owner, and what it asks. */
 export type Report =
@@ -140,30 +134,6 @@ export function shown(argv: string[]): string {
   return line.length > 200 ? `${line.slice(0, 199)}…` : line
 }
 
-/** The processes on this machine, as Linux (`/proc`) or any other Unix (`ps`) tells. Gone, or unreadable, is gone. */
-export const machine: Processes = process.platform === 'linux'
-  ? {
-      info(pid) {
-        let stat: string
-        try { stat = readFileSync(`/proc/${pid}/stat`, 'latin1') } catch { return undefined /* gone */ }
-        // After the name (in parentheses, which it may have in it too): state, ppid, … and the start time, 20th.
-        const fields = stat.slice(stat.lastIndexOf(')') + 2).split(' ')
-        return { ppid: Number(fields[1]), start: fields[19] ?? '' }
-      },
-      cwd(pid) {
-        try { return readlinkSync(`/proc/${pid}/cwd`) } catch { return undefined /* gone, or not ours to read */ }
-      },
-    }
-  : {
-      info(pid) {
-        let out: string
-        try { out = execFileSync('ps', ['-o', 'ppid=,lstart=', '-p', String(pid)], { encoding: 'utf8', timeout: 2000, stdio: ['ignore', 'pipe', 'ignore'] }) } catch { return undefined /* gone: ps says so by failing */ }
-        const line = /^\s*(\d+)\s+(.+?)\s*$/.exec(out)
-        return line ? { ppid: Number(line[1]), start: line[2]! } : undefined
-      },
-      cwd: () => undefined,
-    }
-
 type Record = Resume & {
   pid: number
   start: string
@@ -190,7 +160,7 @@ export class ProgramResume {
   #processes: Processes
   #now: () => number
 
-  constructor({ token, root, processes = machine, now = Date.now }: { token: string; root: number; processes?: Processes; now?: () => number }) {
+  constructor({ token, root, processes = processTable, now = Date.now }: { token: string; root: number; processes?: Processes; now?: () => number }) {
     this.#token = token
     this.#root = root
     this.#processes = processes

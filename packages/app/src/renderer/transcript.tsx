@@ -307,8 +307,8 @@ function flatten(entries: readonly EntryRecord[], partial: Message | undefined, 
     else if (message?.role === 'toolResult' || entry.kind === 'pi.system') continue
     else if (contextOf(entry)) boundaries.push({ type: 'entry', key: String(entry.id), entry })
     else {
-      // A notice the agent was told of (placed mid-run, say) starts no turn.
-      if (message?.role === 'user' && entry.kind !== NOTE_ENTRY) { end(String(entry.id)); since = message.timestamp }
+      // A notice the agent was told of (placed mid-run, say) starts no turn, unless it woke the agent.
+      if (message?.role === 'user' && (entry.kind !== NOTE_ENTRY || (entry.data as Partial<Note> | undefined)?.wake)) { end(String(entry.id)); since = message.timestamp }
       pass()
       items.push({ type: 'entry', key: String(entry.id), entry })
     }

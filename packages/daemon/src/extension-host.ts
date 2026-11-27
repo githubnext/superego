@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { defineExtension, type Extension, hook, ToolTask } from '@earendil-works/pi-durable'
 import { DEFAULT_IMAGE_LIMITS } from '@earendil-works/pi-durable/tools'
 import {
-  type ChannelAcceptor, Channels, compareVersion, consentRefused, contractProblem, dataViewProblem, machineConsent, EXTENSION_API, FEATURES, Lifetime, manifestOf, mentionKindProblem, paramsParser,
+  type ChannelAcceptor, Channels, compareVersion, Teardown, type TeardownReason, consentRefused, contractProblem, dataViewProblem, machineConsent, EXTENSION_API, FEATURES, Lifetime, manifestOf, mentionKindProblem, paramsParser,
   parseVersion, RpcError, UNVERSIONED, DATA_VIEWS, type DataViewInfo, type ExtensionAbout, type ExtensionReport, type ExtensionsReport, type Json,
   type AgentKindMenu, type RpcPeer, type ThreadInfo,
 } from '@superego/protocol'
@@ -807,7 +807,8 @@ export function createExtensionHost(host: Host, later: { profiles(): ProfileHost
       },
     }
     /** Torn down: resolves once everything it undoes has finished (see `ended`). */
-    const teardown = () => ending(extension.name, life.dispose())
+    /** Torn down, saying why (`signal.reason`): the daemon stopping, else its profile let go of, unless its setup failed. */
+    const teardown = (why: TeardownReason = host.state.closing || host.state.restarting ? 'stopping' : 'reload') => ending(extension.name, life.dispose(new Teardown(why)))
     // Given up on when it takes too long: torn down (its signal aborted, what it registered undone, what it registers
     // after refused), so the profiles waiting behind it load. A cleanup it returns after that runs at once.
     const setup = Promise.resolve().then(() => extension.setup?.(api))
@@ -821,7 +822,7 @@ export function createExtensionHost(host: Host, later: { profiles(): ProfileHost
       }
       if (cleanup) undo(cleanup, 'a cleanup')
     } catch (error) {
-      teardown()
+      teardown('failed')
       report((error as { timedOut?: boolean }).timedOut ? 'timed out' : 'failed', error instanceof Error ? error.message : String(error))
       console.error(`Extension ${extension.name} failed to start:`, error)
       throw new Error(`Extension ${extension.name} failed to start: ${error instanceof Error ? error.message : String(error)}`, { cause: error })
@@ -832,7 +833,7 @@ export function createExtensionHost(host: Host, later: { profiles(): ProfileHost
     failures.delete(from.file ?? extension.name)
     record.ready = true
     announce()
-    return teardown
+    return () => teardown()
   }
 
   /**

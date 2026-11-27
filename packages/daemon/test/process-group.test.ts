@@ -3,7 +3,7 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { spawnGroup } from '../src/process-group.ts'
+import { adoptGroup, processTable, spawnGroup } from '../src/process-group.ts'
 
 /** Whether a process is still there (as superego/testing's `isRunning`). */
 const isRunning = (pid: number) => { try { process.kill(pid, 0); return true } catch { return false } }
@@ -65,5 +65,29 @@ describe.skipIf(process.platform === 'win32')('spawnGroup', () => {
   it("doesn't let a signal aborted already run anything for long", async () => {
     const run = spawnGroup('bash', ['-c', 'sleep 30'], { stdio: 'ignore', signal: AbortSignal.abort() })
     expect((await run.exited).stopped).toBe(true)
+  })
+})
+
+describe.skipIf(process.platform === 'win32')('outliving the daemon', () => {
+  it('lets an outliving group be taken back by its pid, and stopped as one', async () => {
+    const run = spawnGroup('bash', ['-c', 'sleep 30 & echo $! > sleeper.pid; wait'], { cwd: dir, stdio: 'ignore', outlive: true })
+    const sleeper = await pidIn('sleeper.pid')
+    const leader = run.child.pid!
+    // What the next daemon checks before it adopts one: the pid is still the process that started then.
+    const start = processTable.info(leader)?.start
+    expect(start).toBeTruthy()
+    expect(processTable.info(leader)?.start).toBe(start)
+    const adopted = adoptGroup(leader, { poll: 20 })
+    expect(await adopted.stop()).toEqual({ stopped: true })
+    expect(isRunning(sleeper)).toBe(false)
+    await run.exited
+  })
+
+  it("says an adopted group exited once its leader has, and ends what the leader left behind", async () => {
+    const run = spawnGroup('bash', ['-c', 'sleep 30 & echo $! > sleeper.pid; sleep 0.3'], { cwd: dir, stdio: 'ignore', outlive: true })
+    const sleeper = await pidIn('sleeper.pid')
+    const adopted = adoptGroup(run.child.pid!, { poll: 20 })
+    expect(await adopted.exited).toEqual({ stopped: false })
+    expect(isRunning(sleeper)).toBe(false)
   })
 })

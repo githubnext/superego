@@ -28,9 +28,9 @@ export const NOTE_ENTRY = 'superego.note'
 /**
  * A note's data (`NOTE_ENTRY`): what it says (Markdown, a line or a few). A notice, an extension's (`threads.notice`),
  * also says whose it is (`by`, the extension's name), may be drawn by that extension's entry component for `kind` (given
- * `data`) instead of as text, and has buttons (`actions`).
+ * `data`) instead of as text, and has buttons (`actions`). `wake`: it started the agent's run on it, as a message does.
  */
-export type Note = { text: string; by?: string; kind?: string; data?: Json; actions?: NoticeAction[] }
+export type Note = { text: string; by?: string; kind?: string; data?: Json; actions?: NoticeAction[]; wake?: boolean }
 
 /**
  * A notice's button: what it says, and what pressing it does. `send`, sends the thread that message, as the user

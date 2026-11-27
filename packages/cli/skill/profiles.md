@@ -128,6 +128,7 @@ import {
   defineExtension, defineTool, section,              // agent parts
   wrapTool, wrapSection, hook,                       // decorating other extensions' tools and sections
   defineDaemonExtension, defineAction, RpcError, spawnGroup,   // daemon halves (`runs: 'machine'` is implied)
+  adoptGroup, processTable,                          // a process group that outlives the daemon, taken back
   obj, str, num, int, bool, arr, opt, lit, union, nullable, unknown,   // JSON Schema for parameters
 } from 'superego'
 ```

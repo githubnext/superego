@@ -88,11 +88,14 @@ import type { ExtensionAbout } from './app.ts'
  * `NoticeAction`; the agent told it as context), `Note` and `NoticeAction` from both; `HeaderChip`'s `menu`
  * (`ThreadMenuItem`s: a menu, or rows of a phone's sheet), and `ThreadBadge`'s `spelled` (how a thread's card spells a
  * mark out). Messages an extension sent, and its notices, are drawn under its title.
+ * 5.18: processes that outlive the daemon: `spawnGroup`'s `outlive`, `adoptGroup(pid)` to take one back after a
+ * restart, and `processTable` (a pid's parent and start time); a daemon half's `signal.reason` at teardown (a
+ * `Teardown`: `stopping`, `reload` or `failed`); a notice's `wake`, starting the agent's run on it.
  * Minor: something added (an extension that uses it asks for `^3.<minor>`); major: something an extension could rely
  * on changed or went, from 2.5 on without exception. An extension whose `api` range this doesn't satisfy is refused
  * when it's set up.
  */
-export const EXTENSION_API = '5.17.0'
+export const EXTENSION_API = '5.18.0'
 
 /** What a machine says of an extension set up there: `hello.extensions` and `features.changed` carry one each. */
 /** `title`: what the window calls it (over a message it sent, a notice of its), when it says. */

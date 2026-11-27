@@ -49,12 +49,13 @@ export class Lifetime {
   /**
    * End it: abort the signal, then run every disposer, last added first. Each is tried whatever the others did, and the
    * failures are logged. Resolves once every one has finished, those that return a promise included: what it owned is
-   * done with then (a write it made has landed). Ending it again gives the same promise.
+   * done with then (a write it made has landed). Ending it again gives the same promise. `reason` is the signal's
+   * (`signal.reason`): why it ends, for listeners that act on it (a `Teardown`).
    */
-  dispose(): Promise<void> {
+  dispose(reason?: unknown): Promise<void> {
     if (this.#ended) return this.#ended
     const failed = (error: unknown) => console.error(`${this.name}: a cleanup failed`, error)
-    try { this.#controller.abort() } catch (error) { failed(error) }
+    try { this.#controller.abort(reason) } catch (error) { failed(error) }
     const running: Promise<unknown>[] = []
     for (const step of this.#steps.splice(0).reverse()) {
       try {
@@ -65,6 +66,23 @@ export class Lifetime {
       }
     }
     return this.#ended = Promise.all(running).then(() => {})
+  }
+}
+
+/**
+ * Why an extension is torn down, as its signal's `reason` says: `stopping`, the daemon is stopping (or restarting:
+ * what it started to outlive the daemon is taken back by the next); `reload`, its profile changed, went or was let go
+ * of; `failed`, its setup failed or took too long.
+ */
+export type TeardownReason = 'stopping' | 'reload' | 'failed'
+
+/** An extension's signal's `reason` at teardown: an `AbortError`, as a signal's own is, saying why (`why`). */
+export class Teardown extends Error {
+  override readonly name = 'AbortError'
+  readonly why: TeardownReason
+  constructor(why: TeardownReason) {
+    super(why === 'stopping' ? 'The daemon is stopping' : why === 'reload' ? 'Its profile was reloaded' : 'Its setup failed')
+    this.why = why
   }
 }
 

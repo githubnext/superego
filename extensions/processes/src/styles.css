@@ -1,0 +1,83 @@
+/* processes: the chip, the row's mark, the pane (list over output), a report's card. The window's tokens, so light and
+   dark both work. */
+.processes-chip, .processes-pane, .processes-report, .processes-badge {
+  --processes-green: light-dark(#1f9d45, #32d74b); --processes-amber: light-dark(#c27c00, #ffc53d);
+  --processes-red: var(--superego-status-error, light-dark(#d70015, #ff6961));
+}
+
+/* A state's mark: a dot (green running, breathing slowly once ready; red failed; grey stopped), a dashed ring when lost. */
+.processes-mark { flex: none; }
+.processes-dot { display: inline-block; width: 7px; height: 7px; margin: 0 2.5px; border-radius: 50%; background: var(--superego-faint); }
+.processes-dot.is-running { background: var(--processes-green); }
+.processes-dot.is-running.is-ready { animation: processes-breathe 3.2s ease-in-out infinite; }
+.processes-dot.is-failed { background: var(--processes-red); }
+.processes-dot.is-stopped { border-radius: 1.5px; background: var(--superego-faint); }
+.processes-dot.is-lost { background: none; box-shadow: none; border: 1.2px dashed var(--superego-faint); width: 9px; height: 9px; margin: 0 1.5px; }
+.processes-mark.is-done { color: var(--superego-muted); }
+.processes-mark.is-idle { color: var(--superego-muted); margin: 0 1.5px; }
+.processes-mark.superego-status { width: 12px; height: 12px; color: var(--superego-accent); }
+@keyframes processes-breathe { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
+@media (prefers-reduced-motion: reduce) { .processes-dot.is-running.is-ready { animation: none; } }
+
+/* The chip: a dot and a word, red text when one failed. */
+.processes-chip { display: inline-flex; align-items: center; gap: 5px; }
+.processes-chip.is-failed { color: var(--processes-red); }
+.processes-chip .processes-mark--chip.superego-status { width: 11px; height: 11px; }
+
+.processes-badge.is-running { color: var(--processes-green); }
+.processes-badge.is-starting { color: var(--processes-amber); }
+.processes-badge.is-failed { color: var(--processes-red); }
+
+/* The pane: the list on top, the selected one's output below. */
+.processes-pane { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.processes-list { flex: none; max-height: 40%; overflow: auto; padding: 4px; border-bottom: 1px solid var(--superego-border); }
+.processes-group + .processes-group { margin-top: 6px; }
+.processes-group__title { padding: 6px 8px 3px; font-size: var(--superego-text-xs); color: var(--superego-muted); }
+.processes-row { display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 6px 0 8px; border-radius: var(--superego-radius);
+  font-size: var(--superego-text-sm); cursor: default; outline: none; }
+.processes-row:hover { background: var(--superego-hover); }
+.processes-row.is-selected { background: var(--superego-selected); }
+.processes-row:focus-visible { box-shadow: inset 0 0 0 2px var(--superego-accent); }
+.processes-row__title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--superego-mono); font-size: var(--superego-text-xs); }
+.processes-row.is-lost .processes-row__title, .processes-row.is-exited .processes-row__title { color: var(--superego-muted); }
+.processes-tag { flex: none; padding: 0 5px; border-radius: 4px; background: var(--superego-hover); font-size: 11px; color: var(--superego-muted); }
+.processes-row__state { margin-left: auto; flex: none; color: var(--superego-muted); font-size: var(--superego-text-xs); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.processes-row.is-failed .processes-row__state { color: var(--processes-red); }
+.processes-row__start { height: 22px; padding: 0 10px; }
+.processes-row__actions { display: none; flex: none; gap: 0; }
+.processes-row:hover .processes-row__actions, .processes-row.is-selected .processes-row__actions { display: inline-flex; }
+.processes-row:hover .processes-row__state, .processes-row.is-selected .processes-row__state { margin-left: auto; }
+@media (hover: none) { .processes-row__actions { display: none !important; } }
+
+.processes-selected { position: relative; flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+.processes-bar { flex: none; display: flex; align-items: center; gap: 8px; padding: 6px 8px 6px 12px; }
+.processes-bar__command { flex: none; max-width: 60%; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--superego-mono); font-size: var(--superego-text-xs); }
+.processes-bar__cwd { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left; font-family: var(--superego-mono); font-size: var(--superego-text-xs); color: var(--superego-muted); }
+.processes-bar__buttons { flex: none; margin-left: auto; display: inline-flex; gap: 6px; }
+.processes-bar__buttons button { display: inline-flex; align-items: center; gap: 5px; }
+.processes-problem { margin: 0 12px 6px; font-size: var(--superego-text-sm); color: var(--processes-red); }
+
+.processes-output-wrap { position: relative; flex: 1 1 auto; min-height: 0; display: flex; }
+.processes-output { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 4px 12px 24px; font-family: var(--superego-mono);
+  font-size: var(--superego-text-mono, 12px); line-height: 1.5; color: var(--superego-text); user-select: text;
+  --processes-c0: light-dark(#1d1d1f, #48484a); --processes-c1: light-dark(#c9241b, #ff6961); --processes-c2: light-dark(#1a7f37, #4cd964); --processes-c3: light-dark(#946200, #ffd60a);
+  --processes-c4: light-dark(#0a5fd6, #64a8ff); --processes-c5: light-dark(#a23ec4, #da8fff); --processes-c6: light-dark(#0a7c8c, #5ac8fa); --processes-c7: light-dark(#8e8e93, #d1d1d6);
+  --processes-c8: light-dark(#636366, #8e8e93); --processes-c9: light-dark(#e0382d, #ff8f88); --processes-c10: light-dark(#24963f, #7ee08f); --processes-c11: light-dark(#b07800, #ffe066);
+  --processes-c12: light-dark(#2f7cf6, #8cc0ff); --processes-c13: light-dark(#bf5af2, #e5b0ff); --processes-c14: light-dark(#1695a8, #8ad8fb); --processes-c15: light-dark(#c7c7cc, #ffffff);
+}
+.processes-line { white-space: pre-wrap; overflow-wrap: anywhere; }
+.processes-line--own { margin: 6px 0; text-align: center; color: var(--superego-faint); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.processes-follow { position: absolute; right: 14px; bottom: 12px; display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 10px;
+  border: 1px solid var(--superego-border); border-radius: 999px; background: var(--superego-raised, var(--superego-bg));
+  box-shadow: var(--superego-shadow-float, none); font: inherit; font-size: var(--superego-text-xs); color: var(--superego-text); cursor: default; }
+
+/* A report, in its notice's card: how it ended, then its last lines, tinted when it failed. */
+.processes-report { display: flex; flex-direction: column; gap: 6px; }
+.processes-report__head { display: flex; align-items: center; gap: 8px; font-size: var(--superego-text-sm); }
+.processes-report__title { font-family: var(--superego-mono); font-size: var(--superego-text-xs); font-weight: 600; }
+.processes-report__how { color: var(--superego-muted); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.processes-report__open { margin-left: auto; border: 0; background: none; font: inherit; color: var(--superego-muted); cursor: default; padding: 2px 4px; border-radius: 4px; }
+.processes-report__open:hover { color: var(--superego-text); background: var(--superego-hover); }
+.processes-report__tail { margin: 0; padding: 8px 10px; border-radius: var(--superego-radius); max-height: 14em; overflow: auto; font-family: var(--superego-mono); font-size: 11.5px;
+  line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--superego-muted); background: var(--superego-hover); }
+.processes-report.is-failed .processes-report__tail { background: color-mix(in srgb, var(--processes-red) 7%, transparent); }

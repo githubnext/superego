@@ -67,6 +67,22 @@ it('tells the user without a run: unread, saying it, the agent told with its nex
   await close()
 })
 
+it('wakes the agent with one that says so: its run starts on the notice, with no message beside it', async () => {
+  const { peer, api, close } = await open()
+  const thread = await peer.call<ThreadInfo>('thread.start', { cwd: dir, prompt: 'hello' })
+  await until(async () => (await answers(peer, thread.id)).length === 1)
+  await api.threads.notice(thread.id, { text: 'The build failed.', agent: 'The build failed: a.ts(1,2).', kind: 'checks.failed', wake: true })
+  await until(async () => (await answers(peer, thread.id)).length === 2)
+  const all = await entries(peer, thread.id)
+  const woke = all.at(-2)!
+  expect(woke.kind).toBe(NOTE_ENTRY)
+  expect(woke.data).toEqual({ text: 'The build failed.', kind: 'checks.failed', by: 'checks', wake: true })
+  expect(woke.model![0]!.content[0]!.text).toBe(noticeForAgent('Checks', 'The build failed: a.ts(1,2).'))
+  expect(all.filter((e) => e.kind === MESSAGE_ENTRY)).toHaveLength(1)
+  await expect(api.threads.notice(thread.id, { text: 'Quiet.', agent: false, wake: true })).rejects.toMatchObject({ kind: 'invalid' })
+  await close()
+})
+
 it('refuses a notice without words, or to an archived thread', async () => {
   const { peer, api, close } = await open()
   const thread = await peer.call<ThreadInfo>('thread.start', { cwd: dir })

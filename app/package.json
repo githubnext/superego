@@ -26,6 +26,7 @@
     "@superego/mcp-servers": "workspace:*",
     "@superego/mentions": "workspace:*",
     "@superego/mermaid": "workspace:*",
+    "@superego/processes": "workspace:*",
     "@superego/skills": "workspace:*",
     "@superego/suggestions": "workspace:*",
     "@superego/tasks": "workspace:*",

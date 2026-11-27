@@ -1244,6 +1244,8 @@ export default defineDaemonExtension({ name: 'notes', setup() { return () => { g
   expect(await peer.call('action.run', { id: 'vault.answer', params: {} })).toBe('two')
   expect(left.__notesCleaned).toBe(1)
   expect(old.signal.aborted).toBe(true)
+  // Told why: its profile changed.
+  expect(old.signal.reason).toMatchObject({ name: 'AbortError', why: 'reload' })
   await until(async () => status === 'two')
   // The old version's publisher, from work that outlived it: nothing changes.
   old.status.set('stale')
@@ -1263,7 +1265,7 @@ it("gives up on a profile whose setup hangs, without holding up another profile'
     'stuck.ts': `import { defineDaemonExtension } from 'superego'
 export default defineDaemonExtension({ name: 'stuck', async setup(superego) {
   await new Promise((resolve) => superego.signal.addEventListener('abort', resolve))
-  globalThis.__stuckAborted = true
+  globalThis.__stuckAborted = superego.signal.reason.why
   superego.method('stuck.late', () => 1)
 } })
 `,
@@ -1279,7 +1281,7 @@ export default defineDaemonExtension({ name: 'stuck', async setup(superego) {
   expect(await peer.call('action.run', { id: 'vault.answer', params: {} })).toBe('one')
   expect((await hanging)?.message).toMatch(/stuck failed to start: its setup didn't finish in 3s/)
   // Given up on, it was told (its signal), and what it registered after that was refused.
-  expect(left.__stuckAborted).toBe(true)
+  expect(left.__stuckAborted).toBe('failed')
   const hello = await peer.call<{ methods: string[] }>('hello', { client: 'test', version: PROTOCOL_VERSION })
   expect(hello.methods).not.toContain('stuck.late')
   await close()
@@ -1295,7 +1297,11 @@ it("lists a profile's threads to an extension that reads them as it's set up, be
   let read: Promise<ThreadInfo[]> | undefined
   const early = defineDaemonExtension({ name: 'early', setup(superego) { read = superego.threads.list() } })
   const slow = defineDaemonExtension({ name: 'slow', async setup() { await new Promise((r) => setTimeout(r, 50)) } })
-  const daemon = await openDaemon({ app: SUPEREGO, dataDir: home, defaultCwd: dir, extensions: [early, slow] })
+  let stopped: unknown
+  const told = defineDaemonExtension({ name: 'told', setup(superego) { superego.signal.addEventListener('abort', () => { stopped = superego.signal.reason?.why }) } })
+  const daemon = await openDaemon({ app: SUPEREGO, dataDir: home, defaultCwd: dir, extensions: [early, slow, told] })
   expect((await read!).map((t) => t.id)).toEqual([thread.id])
   await daemon.close()
+  // A bundled one, as the daemon stops, is told so.
+  expect(stopped).toBe('stopping')
 })

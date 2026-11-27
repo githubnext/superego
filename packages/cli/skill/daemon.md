@@ -58,6 +58,11 @@ export default defineDaemonExtension({
 - Run commands with `spawnGroup(command, args, { cwd, signal })`, not `spawn`: `stop()` (or the signal) ends the whole
   process group, SIGTERM then SIGKILL after `grace`, and `exited` resolves once none of it is left. Stopping a shell
   alone leaves what it started running.
+- (API ^5.18) What should outlive the daemon (it restarts on every update): `spawnGroup(…, { outlive: true })`, its
+  output to a file rather than a pipe, its leader's pid and `processTable.info(pid).start` kept; after a restart,
+  check the pid is still that process and take it back with `adoptGroup(pid, { grace })` (`exited`, `stop()`). Leave
+  it running as `superego.signal.reason.why` says `'stopping'`. Most extensions want the bundled Processes instead
+  (`superego.dispatch('processes.start', …)`): it does all of this, and the user sees and stops them.
 - After teardown, registering throws, and a live value's `set` and `update` do nothing.
 - An edit to any local file an extension imports reloads it with the new code; packages load once.
 
@@ -86,7 +91,7 @@ export default defineDaemonExtension({
 | `threads.attachments(id)` | the folder on this machine where a thread keeps its files. Clients read one with `file.read` by absolute path (an image with `image.read`, thumbnail or whole) |
 | `threads.start({ cwd?, title?, prompt?, profile?, parent?, hidden?, options? })` | start a thread as `thread.start` does, hooks too. `parent`: a child. `hidden`: in no list, no profile, an agent of the extension's own (Ego's); find it by `owner` in `list({ hidden: true })`; it takes no messages while the extension is off. `options`: for `starting` hooks, by name |
 | `threads.send(id, text, { whenBusy?, exposure?, from? })` | send a message (after its run, if working), drawn as an outlined bubble with your extension's title over it, so it doesn't read as typed by the user. `exposure`: whom for, from an action's context; `from`: the thread it's from. Both are kept, and transforms see them |
-| `threads.notice(id, { text, kind?, data?, actions?, agent? })` | (API ^5.17) tell the user something in a thread without a run: [Notices](#notices) |
+| `threads.notice(id, { text, kind?, data?, actions?, agent?, wake? })` | (API ^5.17) tell the user something in a thread without a run (`wake`, API ^5.18: and start its agent's run on it): [Notices](#notices) |
 | `threads.lastAnswer(id)`, `threads.entries(id, limit?)` | its last answer as text; its newest transcript entries since last cleared, newest first (pi-durable's records: not a stable shape) |
 | `threads.answering(conversationId, callId)` | how the message a tool call answers came: `{ by?, from?, exposure? }` (`{}` for a window's user). Undefined if the call isn't found. To act for the user alone, require no `by`, no `from`, and `exposure` not `outside` |
 | `threads.idle(id, { signal? })` | wait until it isn't working (run ended, or needs the user); resolves to its info (as it is, if `signal` aborts) |
@@ -143,7 +148,7 @@ only to its own threads.
 | `auth.flow(context, async (flow) => …)` | a sign-in flow from an action, for the client that ran it (`auth.event`, `auth.respond`, `auth.cancel`). Answers `{ flow }` to return. `flow.emit(event)` (`auth_url` with an optional loopback `callback`, `device_code`, `info`, `progress`), `await flow.prompt({ type, message })` (`text`, `secret`, `select`, `manual_code`), `flow.signal`. Ends `done` on resolve, `failed` on throw. The window draws it with `SignInFlow` ([ui](ui.md)) |
 | `extensions()` | the app's extensions here (core, bundled, windows'; not profiles'): `{ name, title?, description?, version?, optional, on, secrets? }`. `secrets`: files in the data folder an extension says hold keys (`about.secrets`), which Ego never reads |
 | `app` | `{ name, id }` |
-| `signal` | aborted at teardown (profile reloaded or gone, daemon stopping) |
+| `signal` | aborted at teardown (profile reloaded or gone, daemon stopping); (API ^5.18) its `reason.why` says which: `'stopping'`, `'reload'` or `'failed'` (its setup) |
 
 ### A kind of agent
 
@@ -269,9 +274,10 @@ at once when the thread is idle, else where its run can next take it, which is a
 | `kind`, `data` | drawn by your UI half's `entry(kind, component)` (its `entry.data` is `data`) instead of as text |
 | `actions` | buttons under it: `{ label, send }` sends the thread `send` as the user's message ("Fix it"); `{ label, action, params? }` dispatches an action on the thread's machine ("Restart"). `style`: `'primary'` or `'danger'`. One that fails says so on the notice |
 | `agent` | what the agent is told instead of `text`; `false`, nothing |
+| `wake` | (API ^5.18) the agent acts on it: a run starts on it (after the one going), as a message would, with no message beside it |
 
-To wake the agent as well, `threads.send` it a message: that one starts a run, and shows your extension's title over
-it. An archived thread refuses a notice (`archived`).
+To wake the agent as well, give it `wake: true` (API ^5.18): its run starts on the notice (Processes' reports do).
+An archived thread refuses a notice (`archived`).
 
 <!-- check: module -->
 ```ts

@@ -14,7 +14,9 @@ does nothing.
 **What needs cleaning up:** not registrations, but what isn't one: a timer, a watcher, a fetch, a listener, a process.
 Give it the signal (`setInterval` cleared on `abort`, `watch(path, { signal })`, `fetch(url, { signal })`,
 `addEventListener(…, { signal })`, `spawnGroup(command, args, { signal })`) or return a cleanup that stops it. A signal
-listener that throws is logged as the extension's; the others are still told.
+listener that throws is logged as the extension's; the others are still told. (API ^5.18) `signal.reason.why` says why
+it ends: `'stopping'` (the daemon stops or restarts), `'reload'` (its profile changed or went) or `'failed'` (its setup
+failed or took too long). Switching an extension off doesn't tear it down: its threads go without it.
 
 **What stays:** its folder (`superego.dir`) and its secrets, through teardown, reloads, being switched off and its
 profile going. `superego extensions` lists the folders, and `superego secrets` and `superego extensions` the secrets
