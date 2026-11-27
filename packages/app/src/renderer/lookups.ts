@@ -76,6 +76,17 @@ export const linkSchemes = (registry: Registry, where: LinkWhere) => [...new Set
 /** How entries of `kind` are drawn for `where`, if an extension draws them. */
 export const entryView = (registry: Registry, kind: string, where: Where) => lookUp(registry.entries, where, (e) => e.kind === kind)?.component
 
+/** What draws an extension's notices of `kind` for `where` (`threads.notice`), and whose it is: only `by`'s own. */
+export const noticeView = (registry: Registry, by: string, kind: string, where: Where) =>
+  preferProfile(seenIn(registry.entries, where).filter((e) => e.kind === kind && e.owner.extension === by))
+
+/**
+ * An extension's name as the window says it: its title, as `machine` offers it (a daemon half's) or the app's extensions
+ * declare it (a UI half's), else the name.
+ */
+export const extensionTitle = (registry: Registry, name: string, machine: string) =>
+  registry.machineExtensions[machine]?.find((e) => e.name === name)?.title ?? registry.extensions.find((e) => e.name === name)?.title ?? name
+
 /** Who draws entries of `kind` for `where`, if an extension does. */
 export const entryOwner = (registry: Registry, kind: string, where: Where) => lookUp(registry.entries, where, (e) => e.kind === kind)?.owner
 

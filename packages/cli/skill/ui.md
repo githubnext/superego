@@ -84,7 +84,7 @@ Nothing else: no npm packages, no CSS imports. The daemon compiles TSX and TS wi
 | `composer.complete({ title, word, items })` | complete a word as it's typed. `word(text, caret)` finds it (`{ start, query, … }`) or nothing; the first to find one completes it, with any other that finds one starting at the same place (one menu: `/` opening the message lists the core's `/clear` and `/compact` beside skills). `items(word, { machine, cwd, thread }, { signal, update })` returns (or resolves to) `{ label, detail?, icon?, insert, submit? }[]`, best first (no `thread` in New thread). `signal` aborts once the word changes; `update(items)` (API ^5.16) offers again with what came late. `insert` replaces the word (end with a space to keep typing); `submit: true`, a command: ⏎ takes it and sends the message. ↑↓ pick, ⇥ or ⏎ take, esc leaves |
 | `composer.mention({ kind, title, icon?, list \| search, href? })` | (API ^5.16) things of yours `@` offers, written `@<kind>:<id>`: [Mentions](#mentions) |
 | `composer.sentWith({ read, component?, words? })` | draw what `beforeSend` added to sent messages. `read(blocks)` returns `{ items, blocks }`, the indexes of the blocks found, which leave the text. `component` gets `{ machine, thread, items }`, drawn under the message (a `<Chip icon title>` each). `words(text, items, { machine, thread })` rewrites the message's Markdown (`mentions` turns `@thread:42` into a link). Drawn even for threads now without the extension |
-| `entry(kind, component)` | transcript entries of a kind it writes |
+| `entry(kind, component)` | transcript entries of a kind it writes, and the daemon half's notices of that `kind` (API ^5.17: `entry.data` is the notice's `data`; [Notices](daemon.md#notices)) |
 | `codeBlock(languages, component)` | (API ^5.14) draw fenced code blocks of a language yourself: [Code blocks](#code-blocks) |
 | `settings(ui, component)` | drawn below the daemon half's settings section that names `ui` |
 | `appSetting(key)` | an app setting now, outside React (`useAppSetting` in components) |
@@ -134,7 +134,7 @@ Each gets `{ machine, thread }`; the editor's also `path` and `open(path)`.
 
 | Slot | |
 |---|---|
-| `header.chips` | among the chips saying where a thread works (a branch): a `<HeaderChip title>` |
+| `header.chips` | among the chips saying where a thread works (a branch): a `<HeaderChip title menu?>`. `menu` (API ^5.17): `<ThreadMenuItem>` items, a menu from the chip, and on a phone rows of the thread's sheet under the chip's |
 | `thread.badge` | after a thread's title in the sidebar: a `<ThreadBadge label>` around a 12px icon, or nothing ([below](#a-mark-in-the-sidebar)) |
 | `thread.menu` | (API ^5.13) a thread's row menu in the sidebar (right-click), and on a phone its sheet: `<ThreadMenuItem icon keys onClick>` items, which take either shape (`keys`: an action's id, for its shortcut) |
 | `sidebar.heading` | (API ^5.13; the app's, no thread: `{}`) in the Threads sidebar's heading, before ··· and +: a small `<IconButton>`. The phone's drawer has it too |

@@ -30,7 +30,8 @@ What each half of an extension registers, a line each. The [guide](guide.md) bui
 | `agentParts(({ id, hidden, owner, profile }) => [part])` | add parts to any thread's agent at each send (given with `agent(part, { always: false })`); all add up; up to 5s |
 | `auth.flow(context, async (flow) => …)` → `{ flow }` | a sign-in flow for the client running an action: `flow.emit({ type: 'auth_url', url, callback })`, `await flow.prompt({ type: 'manual_code', message })`, `flow.signal`. Drawn with `SignInFlow` |
 | `threads.list({ archived, hidden })`, `get(id)`, `of(conversationId)`, `conversation(id)`, `attachments(id)` | reach threads, and the folder a thread keeps files in |
-| `threads.start({ …, parent, hidden, options })`, `send(id, text)`, `lastAnswer(id)`, `idle(id)`, `entries(id, limit)`, `archive(id, { whenIdle })`, `unarchive(id)`, `clear(id)` | run threads as the thread tools do. `hidden`: an agent of its own, in no list (find it by `owner`); `entries`: not a stable shape; `clear`: start over |
+| `threads.start({ …, parent, hidden, options })`, `send(id, text)`, `lastAnswer(id)`, `idle(id)`, `entries(id, limit)`, `archive(id, { whenIdle })`, `unarchive(id)`, `clear(id)` | run threads as the thread tools do. `hidden`: an agent of its own, in no list (find it by `owner`); `entries`: not a stable shape; `clear`: start over. A message `send` sends shows your title over it |
+| `threads.notice(id, { text, kind?, data?, actions?, agent? })` | (API ^5.17) tell the user in a thread, no run: unread and notified, the agent told as context; buttons send a message or dispatch an action ([Notices](daemon.md#notices)) |
 | `machines.list()`, `machines.call(machine, method, params)` | the other machines this daemon reaches, and a call to one (no consent actions) |
 | `agentsDir`, `dataDir` | `~/.agents` (skills, `AGENTS.md`); `~/.superego` |
 
@@ -50,7 +51,7 @@ What each half of an extension registers, a line each. The [guide](guide.md) bui
 | `tool(name, { icon, verbs, subject, stat, meta, body, phrase, file, weight }, { fold })` | how a tool's calls look, described ([Tool rows](ui.md#tool-rows)) |
 | `tool(name, Component, { fold })` | drawn whole; `fold: false` shows them outside the run's fold |
 | `tool('mcp__*', …)` | a prefix: tools without their own row; longest wins |
-| `entry(kind, Component)` | transcript entries of a kind it writes |
+| `entry(kind, Component)` | transcript entries of a kind it writes; also draws the daemon half's notices of that `kind` (API ^5.17) |
 | `codeBlock(languages, Component)` | fenced code blocks of a language, drawn yourself: `{ language, code, compact, streaming }` |
 | `link({ match, open, render, target, scheme })` | claim links ([Links](window.md#links)) |
 | `composer.complete({ title, word(text, caret), items(word, { machine, cwd, thread? }) })` | complete the word being typed: `{ label, detail, icon, insert }` |
@@ -69,7 +70,7 @@ In components ([From 'superego/ui'](ui.md#from-superegoui)): `useThreads`, `useA
 `useSelection`, `useMachines` ([Reading threads](ui.md#reading-threads)), `useValue(machine, key, { scope })`,
 `useMethod(machine.id, method, params, { enabled, refresh })`, `useDispatch`, `call`, `has(machine, 'ext:x@^1.2')`
 (set up and on there, at a version; UI-only extensions never appear), `version(machine, 'x')`; `<PaneHeader>`,
-`<PaneNote>`, `<PaneButton>`, `<PaneMessage>`, `useTabNote`, `useTabGlyph`; `<HeaderChip>`, `<ThreadBadge>`, `<Chip>`,
+`<PaneNote>`, `<PaneButton>`, `<PaneMessage>`, `useTabNote`, `useTabGlyph`; `<HeaderChip menu?>` (API ^5.17 `menu`: `<ThreadMenuItem>`s), `<ThreadBadge>`, `<Chip>`,
 `<RailButton>`, `factsOf(thread, name)`; `<ThreadRef machine id>`; `transcriptLinks(machine, thread)`; `<Picker>`;
 `FileEditor`, `TextEditor`, `Markdown`, `Diff`, `SignInFlow`; `<ConfirmDialog>` and `<PromptDialog>` to ask (API ^5.15;
 [Dialogs](ui.md#dialogs)), `<Dialog footer flush>`, `<Button variant="danger">`.

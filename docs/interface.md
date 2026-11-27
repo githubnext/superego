@@ -151,5 +151,6 @@ its thread opens as the thread.
 | **Space** | a view that fills the main area, opened with params, with a thread of its own |
 | **Slot** | a spot inside another part (above the message box, after a thread's title in the sidebar) that extensions add to; the layout doesn't move it |
 | **UI half / daemon half** | an extension's code for the window, and for its machine |
+| **Notice** | what an extension tells you in a thread without a run (checks failed, a reminder): a card under its name, with buttons, that makes the thread unread and notifies; the agent is told it with its next turn |
 | **Data view** | a view drawn from blocks a daemon half sends, with no code in the window |
 | **Global profile** | one of your profiles that's part of the app, not only of its threads |

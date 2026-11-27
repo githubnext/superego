@@ -1,8 +1,8 @@
 // A phone's thread sheet: what the title bar holds wide, as a menu up from the foot, its rows in iOS's inset groups. One
-// row each, an icon and what it says (and a detail after, where there's one): the thread's own (its profile, where it came from, extensions' chips and
+// row each, an icon and what it says (and a detail after, where there's one): the thread's own (its profile, where it came from, extensions' chips, their menus' items after them, and
 // header views), renaming (the title at its top becomes a field), pinning, extensions' actions (`thread.menu`) and archiving, the panes to open beside it; under them, the views the layout puts beside the
 // thread, which are panels, not rows.
-import { useLayoutEffect, useRef, useState, type ComponentType, type ReactNode } from 'react'
+import { useLayoutEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from 'react'
 import type { ThreadInfo } from '@superego/protocol'
 import { ArchiveIcon, ArrowCounterClockwiseIcon, ArrowElbowDownRightIcon, BaseUI, CommandIcon, IdentificationBadgeIcon, PencilSimpleIcon, popupFocus, PushPinIcon } from '@superego/ui'
 import type { MachineEntry } from '../shared/bridge.ts'
@@ -18,7 +18,7 @@ import { isPinned } from './pins.ts'
 import { useProjects, useSelection } from './state.tsx'
 import { startRename, useRenaming } from './rename.ts'
 import { TitleField } from './thread-header.tsx'
-import { SheetItem, SheetMenu } from './thread-menu.tsx'
+import { ChipRows, SheetItem, SheetMenu } from './thread-menu.tsx'
 
 type Icon = ComponentType<{ size?: number; 'aria-hidden'?: boolean }>
 
@@ -83,7 +83,7 @@ export function ThreadSheet({ machine, thread, open, onOpenChange, handle, conta
                   </HostedItem>
                 )}
                 <Slot name="header.chips" props={{ machine, thread }} frame={(key, drawn) => (
-                  <HostedItem key={key} id={`chip:${key}`} onDone={close}>{drawn}</HostedItem>
+                  <ChipItem key={key} id={`chip:${key}`} onDone={close}>{drawn}</ChipItem>
                 )} />
                 <PlacedViews place="header" machine={machine} thread={thread} frame={(view, drawn) => (
                   <HostedItem id={`view:${view.id}`} icon={view.icon} title={view.title} said={<Said view={view} machine={machine} thread={thread} />} onDone={close}>
@@ -173,6 +173,18 @@ function HostedItem({ id, icon, title, of, said, onDone, children }: {
       {said && <span ref={saidRef} className="thread-sheet__host" aria-hidden>{said}</span>}
       <SheetItem id={id} icon={icon} hint={hint} checked={shown?.pressed} disabled={!shown?.control} onClick={choose}>{label}</SheetItem>
     </div>
+  )
+}
+
+/** A header chip's row, and after it, the rows of its menu (`HeaderChip`'s `menu`), when it has one. */
+function ChipItem({ id, onDone, children }: { id: string; onDone(): void; children: ReactNode }) {
+  const [rows, setRows] = useState<HTMLDivElement | null>(null)
+  const value = useMemo(() => ({ rows, close: onDone }), [rows, onDone])
+  return (
+    <>
+      <ChipRows.Provider value={value}><HostedItem id={id} onDone={onDone}>{children}</HostedItem></ChipRows.Provider>
+      <div ref={setRows} className="thread-sheet__rows" />
+    </>
   )
 }
 

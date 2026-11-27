@@ -85,7 +85,8 @@ export default defineDaemonExtension({
 | `threads.conversation(id)` | its pi-durable conversation, to submit to or watch |
 | `threads.attachments(id)` | the folder on this machine where a thread keeps its files. Clients read one with `file.read` by absolute path (an image with `image.read`, thumbnail or whole) |
 | `threads.start({ cwd?, title?, prompt?, profile?, parent?, hidden?, options? })` | start a thread as `thread.start` does, hooks too. `parent`: a child. `hidden`: in no list, no profile, an agent of the extension's own (Ego's); find it by `owner` in `list({ hidden: true })`; it takes no messages while the extension is off. `options`: for `starting` hooks, by name |
-| `threads.send(id, text, { whenBusy?, exposure?, from? })` | send a message (after its run, if working). `exposure`: whom for, from an action's context; `from`: the thread it's from. Both are kept, and transforms see them |
+| `threads.send(id, text, { whenBusy?, exposure?, from? })` | send a message (after its run, if working), drawn with your extension's title over it so it doesn't read as the user's. `exposure`: whom for, from an action's context; `from`: the thread it's from. Both are kept, and transforms see them |
+| `threads.notice(id, { text, kind?, data?, actions?, agent? })` | (API ^5.17) tell the user something in a thread without a run: [Notices](#notices) |
 | `threads.lastAnswer(id)`, `threads.entries(id, limit?)` | its last answer as text; its newest transcript entries since last cleared, newest first (pi-durable's records: not a stable shape) |
 | `threads.answering(conversationId, callId)` | how the message a tool call answers came: `{ by?, from?, exposure? }` (`{}` for a window's user). Undefined if the call isn't found. To act for the user alone, require no `by`, no `from`, and `exposure` not `outside` |
 | `threads.idle(id, { signal? })` | wait until it isn't working (run ended, or needs the user); resolves to its info (as it is, if `signal` aborts) |
@@ -250,6 +251,45 @@ export default defineDaemonExtension({
       const note = await fetch(`http://localhost:4000/notes/${encodeURIComponent(id)}`).then((r) => r.ok ? r.json() as Promise<{ title: string }> : undefined)
       return note && `${JSON.stringify(note.title)}. Read it with note_read (slug: ${JSON.stringify(id)}).`
     })
+  },
+})
+```
+
+## Notices
+
+(API ^5.17) `superego.threads.notice(id, notice)` tells the user something in a thread without starting a run: checks
+failed, a reminder came due, a process exited. It's an entry in the transcript under your extension's title, which
+makes the thread unread and notifies as a finished run does, `text` saying why (the thread's status line and the
+notification). The agent is told it with its next turn, as context rather than the user's words (`<notice from="…">`):
+at once when the thread is idle, else where its run can next take it, which is also when it shows.
+
+| | |
+|---|---|
+| `text` | what it says: Markdown, a line or a few |
+| `kind`, `data` | drawn by your UI half's `entry(kind, component)` (its `entry.data` is `data`) instead of as text |
+| `actions` | buttons under it: `{ label, send }` sends the thread `send` as the user's message ("Fix it"); `{ label, action, params? }` dispatches an action on the thread's machine ("Restart"). `style`: `'primary'` or `'danger'`. One that fails says so on the notice |
+| `agent` | what the agent is told instead of `text`; `false`, nothing |
+
+To wake the agent as well, `threads.send` it a message: that one starts a run, and shows your extension's title over
+it. An archived thread refuses a notice (`archived`).
+
+<!-- check: module -->
+```ts
+import { defineAction, defineDaemonExtension, obj, str } from 'superego'
+
+export default defineDaemonExtension({
+  name: 'deploys', title: 'Deploys', api: '^5.17',
+  setup(superego) {
+    superego.action(defineAction({
+      id: 'deploys.failed', title: 'Say a deploy failed', runs: 'machine', expose: ['cli'], params: obj({ thread: str(), log: str() }),
+      async run({ thread, log }) {
+        await superego.threads.notice(thread, {
+          text: 'The deploy **failed**.', agent: `The deploy failed. Its log ends:\n${log}`,
+          actions: [{ label: 'Fix it', send: 'The deploy failed: find out why and fix it.', style: 'primary' }],
+        })
+        return null
+      },
+    }))
   },
 })
 ```

@@ -37,7 +37,7 @@ export { useShortcut, useRailShortcut, keyLabel } from './keys.ts'
 export { useComposer, useComposerClaim, type Composer, type ComposerClaim } from './composer-view.tsx'
 export { addToComposer, type ComposerItem } from './composer-items.ts'
 export { EXTENSION_API, mentionHref, mentionRef, statusLabel, statusShape, statusWord, STATUS_WORDS } from '@superego/protocol'
-export type { Json, Status, StatusShape, StatusState, ThreadInfo } from '@superego/protocol'
+export type { Json, Note, NoticeAction, Status, StatusShape, StatusState, ThreadInfo } from '@superego/protocol'
 export type { MachineEntry } from '../shared/bridge.ts'
 
 // Components to build from; `h` for a module that isn't JSX.

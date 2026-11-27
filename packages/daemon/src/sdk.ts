@@ -8,7 +8,7 @@
 export { defineDaemonExtension, defineAction } from './extension.ts'
 export type {
   DaemonExtension, DaemonApi, AgentChoice, AgentPart, AgentPartsAnswer, AgentPartsThread, ExtensionEntry, LiveValue, ScopedValue, ThreadState, ThreadHooks, ThreadStarting,
-  ThreadDraft, OutgoingMessage, MessageBlock, SendTransform, MentionResolve, MentionTarget, StatusContribution, ArchiveNote, ArchiveNotes, AuthFlow, AuthFlowEvent, RunRecord, ToolCallRecord, MachineDraft, MachinePatch,
+  ThreadDraft, OutgoingMessage, MessageBlock, SendTransform, MentionResolve, MentionTarget, ThreadNotice, StatusContribution, ArchiveNote, ArchiveNotes, AuthFlow, AuthFlowEvent, RunRecord, ToolCallRecord, MachineDraft, MachinePatch,
 } from './extension.ts'
 export type { DaemonContext } from './host.ts'
 export type { FittedImage, ImageFit } from './extension.ts'
@@ -21,6 +21,6 @@ export { arr, blockErrors, bool, int, lit, mentionHref, mentionRef, nullable, nu
 export { spawnGroup } from './process-group.ts'
 export type { GroupExit, SpawnedGroup, SpawnGroupOptions } from './process-group.ts'
 export type {
-  ActionDef, ActionInfo, AuthEvent, AuthPrompt, DataIcon, DataPlace, DataView, ExtensionAbout, Exposure, Json, JsonSchema, MachineEntry, MessageOrigin, Static, ThreadInfo,
+  ActionDef, ActionInfo, AuthEvent, AuthPrompt, DataIcon, DataPlace, DataView, ExtensionAbout, Exposure, Json, JsonSchema, MachineEntry, MessageOrigin, Note, NoticeAction, Static, ThreadInfo,
   Block, BlocksUse, Button, ListItem, Value,
 } from '@superego/protocol'

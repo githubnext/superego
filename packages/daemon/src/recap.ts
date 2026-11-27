@@ -2,7 +2,7 @@
 // run (`superego.recap`: the tasks extension's last outcome, say), else the first sentence of its answer. Worked out
 // once the run ends, before clients hear it's done.
 import type { EntryRecord } from '@earendil-works/pi-durable'
-import { firstSentence, plainText, shorten, type Json } from '@superego/protocol'
+import { firstSentence, NOTE_ENTRY, plainText, shorten, type Json, type Note } from '@superego/protocol'
 
 /** A run that ended, as an extension's `recap` sees it: the tool calls it made, in order, and its answer, if any. */
 export type RunRecord = {
@@ -16,12 +16,16 @@ export type RunRecord = {
 type Block = { type: string; text?: string; id?: string; name?: string; arguments?: Json }
 type Message = { role?: string; content?: unknown; toolCallId?: string; isError?: boolean }
 
-/** A thread's last run, from its newest entries (newest first): everything since the message that started it. */
+/**
+ * A thread's last run, from its newest entries (newest first): everything since the message that started it. A notice
+ * (`NOTE_ENTRY`) the agent was told of during it is no message that starts one.
+ */
 export function lastRun(newestFirst: readonly EntryRecord[]): Omit<RunRecord, 'thread'> {
   const calls: RunRecord['calls'] = []
   const failed = new Set<string>()
   let answer: string | undefined
   for (const entry of newestFirst) {
+    if (entry.kind === NOTE_ENTRY) continue
     for (const message of [...(entry.model ?? [])].reverse() as Message[]) {
       // The message the run answers: what came before is another run's.
       if (message.role === 'user') return { ...(answer ? { answer } : {}), calls }
@@ -54,4 +58,11 @@ export function recapOf(run: RunRecord, recaps: { owner: string; recap: (run: Ru
     }
   }
   return run.answer ? firstSentence(run.answer) : undefined
+}
+
+/** What a thread's newest entry says, when it's a note (an extension's notice, say): its text, plain and shortened, for its `done` status. */
+export function noteRecap(newest: EntryRecord | undefined): string | undefined {
+  if (newest?.kind !== NOTE_ENTRY) return undefined
+  const text = (newest.data as Note | undefined)?.text
+  return typeof text === 'string' && text.trim() ? shorten(plainText(text)) : undefined
 }

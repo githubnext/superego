@@ -139,6 +139,9 @@
 .overflow-row__blank { flex: none; width: 14px; }
 .overflow-row__label { min-width: 0; max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .header__chip { white-space: nowrap; }
+/* A chip with a menu: pressed like a button, looking like the chip it is. */
+.header__chip--menu { padding: 2px 6px; margin: -2px -6px; border: 0; border-radius: 6px; background: none; color: inherit; font: inherit; cursor: default; }
+.header__chip--menu:hover, .header__chip--menu[data-popup-open] { background: var(--superego-hover); color: var(--superego-text); }
 .app__titlebar :is(.thread__tools, .thread__chips) { display: contents; }
 .thread__chips { font-size: var(--superego-text-sm); color: var(--superego-faint); }
 .app__titlebar .thread__chips .titlebar__item { font-size: var(--superego-text-sm); color: var(--superego-faint); }
@@ -212,6 +215,14 @@
 /* Narration leads straight into the work it announces. */
 .msg__text.is-streaming .md > :last-child::after { content: '▍'; color: var(--superego-muted); animation: superego-pulse 1s infinite; }
 .msg--note { color: var(--superego-muted); font: var(--superego-text-xs) var(--superego-mono); }
+/* Who sent it, when it wasn't you or Superego: an extension's name, quietly over its message or notice. */
+.msg__by { color: var(--superego-muted); font-size: var(--superego-text-xs); line-height: 1.4; white-space: normal; }
+.msg--user > .msg__by { margin-bottom: 2px; }
+/* An extension's notice: a card in the column, not a bubble (nobody said it), its buttons under it. */
+.notice { border: 1px solid var(--superego-border); border-radius: var(--superego-radius-lg); padding: 8px 12px 10px; }
+.notice > .msg__by { margin-bottom: 4px; }
+.notice__actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.notice__problem { margin-top: 6px; color: var(--superego-status-error); font-size: var(--superego-text-sm); }
 /*
  * Work. Every row: an icon on the text's edge, a verb, what it acted on; its chevron hangs in the gutter and shows on
  * hover or while open. What a row opens to sits under its icon; inside a run, rows sit under the run's label.
@@ -783,11 +794,14 @@ button.app__mobiletitle > .superego-status { font-size: 12px; }
 .thread-sheet__header { margin: 4px 16px 6px; font-size: calc(13px * var(--superego-text-size)); color: var(--superego-muted); }
 .thread-sheet__group { flex: none; margin-bottom: 20px; border-radius: var(--phone-card-radius); background: var(--phone-cell); overflow: hidden; }
 .thread-sheet__group:last-child { margin-bottom: 0; }
-.thread-sheet__group:not(:has(> :not([hidden], template))) { display: none; }
+.thread-sheet__group:not(:has(> :not([hidden], template, .thread-sheet__rows:empty))) { display: none; }
 .thread-sheet__item { position: relative; width: 100%; min-height: 48px; padding: 0 16px; border: 0; border-radius: 0; background: none; color: inherit; font: inherit; text-align: left; -webkit-tap-highlight-color: transparent; }
 .thread-sheet__item:active:not(:disabled), .thread-sheet__item:focus-visible { background: var(--phone-pressed); }
-.thread-sheet__group > :not([hidden]) ~ :is(.thread-sheet__item, .thread-sheet__hosted:not([hidden])) .thread-sheet__item::before,
-.thread-sheet__group > :not([hidden]) ~ .thread-sheet__item::before { content: ''; position: absolute; top: 0; right: 0; left: calc(16px + 22px + 14px); border-top: .5px solid var(--phone-separator); }
+/* A chip's menu's rows, after its own: rows of the group. */
+.thread-sheet__rows { display: contents; }
+.thread-sheet__group > :not([hidden], .thread-sheet__rows:empty) ~ :is(.thread-sheet__item, .thread-sheet__hosted:not([hidden]), .thread-sheet__rows) .thread-sheet__item::before,
+.thread-sheet__group > :not([hidden], .thread-sheet__rows:empty) ~ .thread-sheet__item::before,
+.thread-sheet__rows > .thread-sheet__item ~ .thread-sheet__item::before { content: ''; position: absolute; top: 0; right: 0; left: calc(16px + 22px + 14px); border-top: .5px solid var(--phone-separator); }
 .thread-sheet__label { flex: 1; display: flex; align-items: center; gap: 14px; }
 .thread-sheet__label > svg { flex: none; width: 22px; height: 22px; color: var(--superego-text); }
 .thread-sheet__blank { flex: none; width: 22px; }

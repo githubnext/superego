@@ -10,7 +10,7 @@
 // stops, or (a profile's) when the profile's files change. Torn down, its `signal` aborts, what it registers after is
 // refused, and its live values' `set` and `update` do nothing.
 import type { AnyTask, Conversation, EntryRecord, Extension } from '@earendil-works/pi-durable'
-import type { ActionDef, ActionInfo, AgentKindMenu, AppConfig, Attachment, ChannelAcceptor, BlockedKind, DataView, Exposure, ExtensionAbout, Json, JsonSchema, MachineEntry, MessageOrigin, NewThread, Pane, SettingsSnapshot, Static, ThreadInfo } from '@superego/protocol'
+import type { ActionDef, ActionInfo, AgentKindMenu, AppConfig, Attachment, ChannelAcceptor, BlockedKind, DataView, Exposure, ExtensionAbout, Json, JsonSchema, MachineEntry, MessageOrigin, NewThread, NoticeAction, Pane, SettingsSnapshot, Static, ThreadInfo } from '@superego/protocol'
 import type { SectionSpec } from '@superego/settings'
 import type { AuthFlow } from './auth-flows.ts'
 import type { DaemonContext } from './host.ts'
@@ -129,6 +129,15 @@ export type MentionTarget = { ref: string; kind: string; id: string; thread: Thr
  * (`'"Fox & Rhino". Read it with canvas_read (id: "fox-and-rhino").'`). Undefined: it names nothing, and stays as written.
  */
 export type MentionResolve = (mention: MentionTarget) => string | undefined | Promise<string | undefined>
+
+/**
+ * (API ^5.17) What an extension tells the user in a thread, without a run (`threads.notice`): `text`, what it says
+ * (Markdown, a line or a few), also the thread's status line and its notification; drawn by this extension's entry
+ * component for `kind` (`entry(kind, …)` in its UI half, given `data`) when it has one there, else as `text`; with
+ * `actions`, buttons under it (`NoticeAction`: send the agent a message, or dispatch an action). `agent`: what its agent
+ * is told of it, else `text`; false, nothing.
+ */
+export type ThreadNotice = { text: string; kind?: string; data?: Json; actions?: NoticeAction[]; agent?: string | false }
 
 /** Changes what a message gives the model: returns the blocks to send instead, or nothing to leave them. */
 export type SendTransform = (message: OutgoingMessage) => MessageBlock[] | void | Promise<MessageBlock[] | void>
@@ -616,6 +625,14 @@ export type DaemonApi = {
      * send transforms see them.
      */
     send(id: string, text: string, options?: { whenBusy?: 'steer' | 'followUp'; exposure?: Exposure; from?: string }): Promise<void>
+    /**
+     * (API ^5.17) Tell the user something in a thread without starting a run (`ThreadNotice`): an entry in its transcript
+     * from this extension (the window names it), which makes the thread unread and notifies as a finished run does, its
+     * `text` saying why. Its agent is told it with the next turn (as context, not as the user's words): at once when
+     * the thread is idle, else where its run can next take it, which is when the entry shows. `archived` for an
+     * archived thread. To wake the agent too, `send` it a message as well.
+     */
+    notice(id: string, notice: ThreadNotice): Promise<void>
     /**
      * How the message a tool call answers came (`MessageOrigin`: `{}` for a window's user's), by the call's
      * conversation and id, as a tool's `execute` has them: the input before the model's message that made the call,

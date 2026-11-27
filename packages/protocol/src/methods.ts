@@ -17,8 +17,27 @@ import type { MachineVersion } from './version.ts'
  */
 export const PROTOCOL_VERSION = 2
 
-/** A line Superego writes in a thread's transcript itself, for the user, not the model: an entry of this kind, `{ text }`. */
+/**
+ * A line in a thread's transcript that isn't the conversation's: an entry of this kind, its data a `Note`. Superego's
+ * own (`{ text }`) are for the user, not the model; an extension's (a notice, `threads.notice`) say whose they are
+ * (`by`), and carry what the agent is told of them, as a user-role message nobody sent (`model`), unless the extension
+ * said not to.
+ */
 export const NOTE_ENTRY = 'superego.note'
+
+/**
+ * A note's data (`NOTE_ENTRY`): what it says (Markdown, a line or a few). A notice, an extension's (`threads.notice`),
+ * also says whose it is (`by`, the extension's name), may be drawn by that extension's entry component for `kind` (given
+ * `data`) instead of as text, and has buttons (`actions`).
+ */
+export type Note = { text: string; by?: string; kind?: string; data?: Json; actions?: NoticeAction[] }
+
+/**
+ * A notice's button: what it says, and what pressing it does. `send`, sends the thread that message, as the user
+ * ("Fix the failing checks"); `action`, dispatches that action (an extension's: `processes.restart`) with `params`, on
+ * the thread's machine. `style`: `primary` for the one to press, `danger` for one that destroys.
+ */
+export type NoticeAction = { label: string; style?: 'primary' | 'danger' } & ({ send: string } | { action: string; params?: Record<string, Json> })
 
 /**
  * An input to a thread's agent: an entry of this kind, with the model's user message as a plain one has it and `data`

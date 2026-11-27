@@ -2,11 +2,32 @@
 // on its row in the sidebar, a chip under a sent message, a button in the rail. And what extensions say of a thread (its
 // facts), read typed.
 import { createContext, useContext, type ComponentProps, type ReactNode } from 'react'
-import { IconButton } from '@superego/ui'
+import { createPortal } from 'react-dom'
+import { IconButton, Menu } from '@superego/ui'
 import type { Json, ThreadInfo } from '@superego/protocol'
+import { ChipRows, SheetMenu } from './thread-menu.tsx'
 
-/** In `header.chips`: a chip among those that say where a thread works (its branch, say), cut short to fit. */
-export const HeaderChip = ({ children, title }: { children: ReactNode; title?: string }) => <span className="header__chip" title={title}>{children}</span>
+/**
+ * In `header.chips`: a chip among those that say where a thread works (its branch, say), cut short to fit. With `menu`
+ * (`ThreadMenuItem`s), pressing it opens them as a menu; on a phone, they're rows of the thread's sheet under the chip's.
+ */
+export function HeaderChip({ children, title, menu }: { children: ReactNode; title?: string; menu?: ReactNode }) {
+  const sheet = useContext(ChipRows)
+  if (!menu || sheet) {
+    return (
+      <>
+        <span className="header__chip" title={title}>{children}</span>
+        {menu && sheet?.rows && createPortal(<SheetMenu close={sheet.close}>{menu}</SheetMenu>, sheet.rows)}
+      </>
+    )
+  }
+  return (
+    <Menu.Root>
+      <Menu.Trigger className="header__chip header__chip--menu" title={title}>{children}</Menu.Trigger>
+      <Menu.Popup>{menu}</Menu.Popup>
+    </Menu.Root>
+  )
+}
 
 /**
  * In `thread.badge`: a mark on a thread's row in the sidebar, an icon about 12px (`size={12}`). `label` says what it

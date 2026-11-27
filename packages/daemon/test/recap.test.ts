@@ -37,3 +37,13 @@ it("is an extension's recap, as plain text, shortened; else the answer's first s
   error.mockRestore()
   expect(recapOf({ thread: '1', calls: [] }, [])).toBeUndefined()
 })
+
+it("passes over a notice the agent was told mid-run, and says a note that's newest", async () => {
+  const { NOTE_ENTRY } = await import('@superego/protocol')
+  const { noteRecap } = await import('../src/recap.ts')
+  const notice = { id: ++id, conversationId: 1, kind: NOTE_ENTRY, data: { text: 'Checks **failed**.', by: 'checks' }, model: [{ role: 'user', content: '<notice>' }] } as unknown as EntryRecord
+  const transcript = [user('fix it'), call('a', 'read', { path: 'x' }), notice, result('a'), said('Fixed.')]
+  expect(lastRun([...transcript].reverse())).toEqual({ answer: 'Fixed.', calls: [{ name: 'read', arguments: { path: 'x' }, failed: false }] })
+  expect(noteRecap(notice)).toBe('Checks failed.')
+  expect(noteRecap(said('Fixed.'))).toBeUndefined()
+})

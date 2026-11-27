@@ -6,16 +6,17 @@ import { stat } from 'node:fs/promises'
 import { hostname } from 'node:os'
 import { basename, dirname } from 'node:path'
 import { InboxDoc, type ConversationId, type ConversationRecord, type ConversationView, type Cursor, type EntryId, type EntryRecord, type Harness, type InboxItem, type LiveState } from '@earendil-works/pi-durable'
-import { deriveStatus, linkTo, MESSAGE_ENTRY, NOTE_ENTRY, RpcError, type Attachment, type Exposure, type Json, type MessageOrigin, type NewThread, type Pane, type ProviderRejection, type ReturnedMessage, type ThreadFailure, type ThreadInfo } from '@superego/protocol'
+import { deriveStatus, linkTo, MESSAGE_ENTRY, NOTE_ENTRY, RpcError, type Attachment, type Exposure, type Json, type MessageOrigin, type NewThread, type Note, type Pane, type ProviderRejection, type ReturnedMessage, type ThreadFailure, type ThreadInfo } from '@superego/protocol'
+import type { UserMessage } from '@earendil-works/pi-ai'
 import { attachmentsDir, attachmentsIn, contentOf } from './attachments.ts'
 import type { ExtensionHost } from './extension-host.ts'
-import type { ArchiveNote, ArchiveNotes, DaemonApi, MessageBlock, OutgoingMessage, ThreadDraft, ThreadStarting, ThreadStop } from './extension.ts'
+import type { ArchiveNote, ArchiveNotes, DaemonApi, MessageBlock, OutgoingMessage, ThreadDraft, ThreadNotice as NoticeInput, ThreadStarting, ThreadStop } from './extension.ts'
 import { git } from './git.ts'
 import { Catalog, clone, context, shortPath, stateOf, ThreadDoc, type Host, type Mounted, type ThreadMeta } from './host.ts'
 import { titleOf } from './names.ts'
 import type { ProfileHost } from './profile-host.ts'
 import { findProfile, profileThere, relocated, type ProfileRef } from './profiles.ts'
-import { lastRun, recapOf } from './recap.ts'
+import { lastRun, noteRecap, recapOf } from './recap.ts'
 import { failureKind } from './request-budget.ts'
 import { handoffMessage, HANDOFF_PROMPT, transcriptOf } from './handoff.ts'
 import { opsWithoutPixels, withoutPixels } from './window-images.ts'
@@ -42,6 +43,10 @@ export function paneParams(params: unknown): Json {
 /** An origin with only what it says: no undefined keys, to keep in an entry. */
 /** How long a message just sent may wait for its run to start before `thread.read`'s wait stops waiting for it. */
 const STARTING = 10_000
+
+/** A notice as its thread's agent is told it (`threads.notice`): whose it is, and that it isn't the user's words. */
+export const noticeForAgent = (from: string, text: string) =>
+  `<notice from="${from.replace(/"/g, "'")}">\n${text}\n</notice>\n(A notice ${from} showed the user in this thread, not a message from them.)`
 
 const originOf = ({ by, from, exposure }: MessageOrigin): MessageOrigin => ({ ...(by ? { by } : {}), ...(from ? { from } : {}), ...(exposure ? { exposure } : {}) })
 
@@ -197,7 +202,11 @@ export function createThreads(host: Host, { harness, extensions, profiles }: { h
   async function runRecap(id: string, m: Mounted) {
     try {
       const { items } = await m.conversation.entries({ order: 'descending' }, 50, undefined, context)
-      const run = lastRun(items.filter((entry) => Number(entry.id) >= (m.meta.cleared ?? 0)))
+      const since = items.filter((entry) => Number(entry.id) >= (m.meta.cleared ?? 0))
+      // A note since (an extension's notice, say) is what's new: it says it.
+      const noted = noteRecap(since[0])
+      if (noted) return noted
+      const run = lastRun(since)
       const without = extensions.withoutFor(id, m.meta)
       return recapOf({ thread: id, ...run }, extensions.recapsFor(without, m.meta))
     } catch (error) {
@@ -639,7 +648,8 @@ export function createThreads(host: Host, { harness, extensions, profiles }: { h
 
   /** Whether a thread's newest message is the user's, with no reply begun: one just sent, before its run starts. */
   async function unanswered(id: string) {
-    const last = (await newest(id, 20)).map((entry) => entry.model?.[0] as { role?: string } | undefined).find((message) => message?.role)
+    // A notice the agent was told of is no message to answer.
+    const last = (await newest(id, 20)).filter((entry) => entry.kind !== NOTE_ENTRY).map((entry) => entry.model?.[0] as { role?: string } | undefined).find((message) => message?.role)
     return last?.role === 'user'
   }
 
@@ -941,6 +951,21 @@ export function createThreads(host: Host, { harness, extensions, profiles }: { h
   async function note(id: string, text: string) {
     await (await get(id)).conversation.submit({ type: 'write', entry: { kind: NOTE_ENTRY, data: { text } } }, context)
   }
+  /**
+   * An extension's notice in a thread (`threads.notice`): a note that says whose it is, and, unless `agent` is false,
+   * tells the agent of it (`agent`, else its text) as a user-role message nobody sent: placed at once when the thread is
+   * idle, else where its run can next take it (between tool calls, or as it ends). It starts no run, and, as the
+   * thread's newest entry, makes it done (unread) with the notice's text for what it says.
+   */
+  async function notice(id: string, by: { name: string; title: string }, { agent, ...said }: NoticeInput) {
+    if (!said.text.trim()) throw new RpcError('invalid', 'A notice needs text')
+    const m = await get(id)
+    if (m.meta.archived) throw new RpcError('archived', 'This thread is archived', { hint: 'Unarchive it to tell it something.' })
+    const data: Note = { ...said, by: by.name }
+    const told = agent === false ? undefined : (agent ?? said.text).trim()
+    const model: UserMessage[] | undefined = told ? [{ role: 'user', content: [{ type: 'text', text: noticeForAgent(by.title, told) }], timestamp: Date.now() }] : undefined
+    await m.conversation.submit({ type: 'write', entry: { kind: NOTE_ENTRY, data: clone(data) as Json, ...(model ? { model } : {}) } }, context)
+  }
 
   /** Whether a thread has a conversation: a message, to or from its agent, since it was last started over. */
   async function conversed(id: string) {
@@ -1033,7 +1058,7 @@ export function createThreads(host: Host, { harness, extensions, profiles }: { h
   }
 
   /** The threads as an extension reaches them (`superego.threads`), as `owner`. */
-  function apiFor(owner: string): DaemonApi['threads'] {
+  function apiFor(owner: string, title = owner): DaemonApi['threads'] {
     return {
       list: (options) => list(options),
       get: async (id) => info(id, await get(id)),
@@ -1043,6 +1068,7 @@ export function createThreads(host: Host, { harness, extensions, profiles }: { h
       // An extension's attachments are inline: it has no connection to upload on.
       start: ({ hidden, ...params }) => startThread({ ...params as ThreadStart, ...(hidden ? { hidden: owner } : {}), by: owner }),
       async send(id, text, { whenBusy = 'followUp', exposure, from } = {}) { await submit(id, text, randomUUID(), whenBusy, [], { by: owner, exposure, from }) },
+      notice: (id, said) => notice(id, { name: owner, title }, said),
       answering: (conversationId, callId) => answering(conversationId, callId),
       noteRead: (reader, read) => noteRead(reader, read),
       parentRead: (thread) => (readAt.get(thread.id) ?? -1) >= thread.activeAt,

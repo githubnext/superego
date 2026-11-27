@@ -476,7 +476,7 @@ export function createExtensionHost(host: Host, later: { profiles(): ProfileHost
 
   /** The extensions set up and on: those switched off on this machine aren't offered. */
   const offered = () => [...records.values()].filter((r) => r.ready && r.source !== 'window' && (r.about.required || settings.get(`extensions.${r.about.name}`) !== false))
-    .map((r) => manifestOf(r.about))
+    .map((r) => ({ ...manifestOf(r.about), ...(r.about.title ? { title: r.about.title } : {}) }))
   /**
    * What this daemon offers, as `hello` says and `features.changed` keeps current: the protocol's features, and every
    * extension set up now but those switched off on this machine, each at its version.
@@ -795,7 +795,7 @@ export function createExtensionHost(host: Host, later: { profiles(): ProfileHost
         ...(about.version !== undefined ? { version: about.version } : {}), optional: !about.required,
         on: Boolean(about.required) || settings.get(`extensions.${about.name}`) !== false, ...(about.secrets ? { secrets: [...about.secrets] } : {}),
       })),
-      threads: threads.apiFor(extension.name),
+      threads: threads.apiFor(extension.name, extension.title),
       machines: {
         list: () => later.relay().entries().slice(1),
         // For this extension: refused there what records the user's consent, as its `dispatch` is here.

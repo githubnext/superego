@@ -2,12 +2,12 @@
 // into runs and tasks, each tool call drawn as its tool's row describes it or as an extension draws it.
 import { createContext, memo, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type { ConversationView, EntryRecord, LiveState } from '@earendil-works/pi-durable'
-import { NOTE_ENTRY, stuck, waitingForSignIn, type ThreadInfo } from '@superego/protocol'
+import { MESSAGE_ENTRY, NOTE_ENTRY, stuck, waitingForSignIn, type MessageOrigin, type Note, type NoticeAction, type ThreadInfo } from '@superego/protocol'
 import { ArrowCounterClockwiseIcon, Button, CheckIcon, CornersInIcon, FileIcon, type Icon as PhosphorIcon, MinusIcon, PauseIcon, StatusGlyph, XIcon } from '@superego/ui'
 import type { MachineEntry } from '../shared/bridge.ts'
 import type { ToolRowCall, WorkBlock as Block, WorkPart, WorkStatus } from './extension-api.ts'
 import { useRegistry } from './registry.tsx'
-import { divideWork, entryOwner, entryView, sentWithIn, toolOwner, toolRow, toolView, unfoldedTool } from './lookups.ts'
+import { divideWork, entryOwner, entryView, extensionTitle, noticeView, sentWithIn, toolOwner, toolRow, toolView, unfoldedTool } from './lookups.ts'
 import { useRejections, useSelection, useShell } from './state.tsx'
 import { Markdown } from './Markdown.tsx'
 import { Chevron, DescribedCall, describeRun, mainKind, RowIcon, statOf } from './tool-rows.tsx'
@@ -200,7 +200,7 @@ function WaitingForSignIn() {
  * A message you sent: your words, whole, and what went with them below: what extensions put in it (a skill it named,
  * drawn by the extension that sent it along), then its files.
  */
-function Sent({ entry, blocks, className, children }: { entry: number; blocks: SentBlock[]; className: string; children?: ReactNode }) {
+function Sent({ entry, blocks, className, by, children }: { entry: number; blocks: SentBlock[]; className: string; by?: string | undefined; children?: ReactNode }) {
   const here = useContext(Here)
   const registry = useRegistry()
   const { found, rest, at } = readSent(sentWithIn(registry, { machine: here.machine.id, thread: here.thread }), blocks)
@@ -209,6 +209,7 @@ function Sent({ entry, blocks, className, children }: { entry: number; blocks: S
   if (!text && !drawn.length && !files.length && !children) return null
   return (
     <div className={className}>
+      {by && <div className="msg__by">{extensionTitle(registry, by, here.machine.id)}</div>}
       {text && <Markdown text={sentWords(found, text, { machine: here.machine, thread: here.thread })} breaks />}
       {(drawn.length > 0 || files.length > 0) && (
         <div className="msg__files">
@@ -296,7 +297,8 @@ function flatten(entries: readonly EntryRecord[], partial: Message | undefined, 
     else if (message?.role === 'toolResult' || entry.kind === 'pi.system') continue
     else if (contextOf(entry)) boundaries.push({ type: 'entry', key: String(entry.id), entry })
     else {
-      if (message?.role === 'user') { end(String(entry.id)); since = message.timestamp }
+      // A notice the agent was told of (placed mid-run, say) starts no turn.
+      if (message?.role === 'user' && entry.kind !== NOTE_ENTRY) { end(String(entry.id)); since = message.timestamp }
       pass()
       items.push({ type: 'entry', key: String(entry.id), entry })
     }
@@ -384,14 +386,61 @@ const Entry = memo(function Entry({ entry }: { entry: EntryRecord }) {
   if (custom) { const Custom = custom; const owner = entryOwner(registry, entry.kind, where); return <Contained name={owner?.extension ?? entry.kind} scope={owner?.profile}><Custom {...here} entry={{ id: entry.id, kind: entry.kind, data: entry.data }} /></Contained> }
   const context = contextOf(entry)
   if (context) return <NewContext {...context} />
+  const note = entry.kind === NOTE_ENTRY ? entry.data as Partial<Note> | undefined : undefined
+  // An extension's notice: whose, what it says (drawn by it, or as text), and its buttons.
+  if (note?.by && typeof note.text === 'string') return <Notice id={Number(entry.id)} note={{ ...note, by: note.by, text: note.text }} />
   const message = entry.model?.[0] as Message | undefined
   if (message?.role === 'user') {
-    return <Sent className="msg msg--user" entry={Number(entry.id)} blocks={blocks(message)} />
+    // Sent by an extension (`threads.send`): it says so, so it doesn't read as the user's own words.
+    const by = entry.kind === MESSAGE_ENTRY ? (entry.data as MessageOrigin | undefined)?.by : undefined
+    return <Sent className="msg msg--user" entry={Number(entry.id)} blocks={blocks(message)} by={by} />
   }
   // Superego's own lines (a self-archive that couldn't be done); else the kind, for an entry nothing draws.
-  const said = entry.kind === NOTE_ENTRY ? (entry.data as { text?: unknown } | undefined)?.text : undefined
-  return <div className="msg msg--note">{typeof said === 'string' ? said : entry.kind}</div>
+  return <div className="msg msg--note">{typeof note?.text === 'string' ? note.text : entry.kind}</div>
 })
+
+/**
+ * An extension's notice (`threads.notice`): a card with its name over it, drawn by its entry component for the notice's
+ * `kind` (given its `data`), else its text as Markdown; its buttons under it. A button that fails says so there.
+ */
+function Notice({ id, note }: { id: number; note: Note & { by: string } }) {
+  const here = useContext(Here)
+  const registry = useRegistry()
+  const [problem, setProblem] = useState<string>()
+  const [busy, setBusy] = useState<number>()
+  const drawn = note.kind ? noticeView(registry, note.by, note.kind, { machine: here.machine.id, thread: here.thread }) : undefined
+  const press = async (action: NoticeAction, index: number) => {
+    setProblem(undefined)
+    setBusy(index)
+    try {
+      const options = { machine: here.machine.id, source: 'notice' }
+      if ('send' in action) await registry.router.dispatch('thread.send', { thread: here.thread.id, text: action.send }, options)
+      else await registry.router.dispatch(action.action, { ...action.params }, options)
+    } catch (error) {
+      console.error(`Notice from ${note.by}: ${action.label} failed:`, error)
+      setProblem(`${action.label} failed: ${(error as Error).message}`)
+    } finally {
+      setBusy(undefined)
+    }
+  }
+  const Drawn = drawn?.component
+  return (
+    <div className="msg notice" data-by={note.by}>
+      <div className="msg__by">{extensionTitle(registry, note.by, here.machine.id)}</div>
+      {Drawn
+        ? <Contained name={drawn.owner.extension} scope={drawn.owner.profile}><Drawn {...here} entry={{ id, kind: note.kind!, data: note.data }} /></Contained>
+        : <Markdown text={note.text} />}
+      {note.actions?.length ? (
+        <div className="notice__actions">
+          {note.actions.map((action, index) => (
+            <Button key={index} variant={action.style ?? 'default'} disabled={busy !== undefined} onClick={() => void press(action, index)}>{action.label}</Button>
+          ))}
+        </div>
+      ) : null}
+      {problem && <div className="notice__problem" role="alert">{problem}</div>}
+    </div>
+  )
+}
 
 /**
  * Where the model's context started over, as the transcript shows it: a compaction (its summary of what came before)

@@ -83,14 +83,20 @@ import type { ExtensionAbout } from './app.ts'
  * `mentionResolver(kind, thread)`; `mentionRef` and `mentionHref` from both. A completion provider's `items` is given
  * `{ signal, update }` (aborted once its answer isn't wanted; late items offered again), and a `sentWith`'s `words`
  * the message's `{ machine, thread }`.
+ * 5.17: notices: the daemon half's `threads.notice(id, ThreadNotice)` tells the user something in a thread without a
+ * run (an entry that makes it unread and notifies, drawn by the extension's `entry(kind)` or as text, with buttons,
+ * `NoticeAction`; the agent told it as context), `Note` and `NoticeAction` from both; `HeaderChip`'s `menu`
+ * (`ThreadMenuItem`s: a menu, or rows of a phone's sheet). Messages an extension sent, and its notices, are drawn under
+ * its title.
  * Minor: something added (an extension that uses it asks for `^3.<minor>`); major: something an extension could rely
  * on changed or went, from 2.5 on without exception. An extension whose `api` range this doesn't satisfy is refused
  * when it's set up.
  */
-export const EXTENSION_API = '5.16.0'
+export const EXTENSION_API = '5.17.0'
 
 /** What a machine says of an extension set up there: `hello.extensions` and `features.changed` carry one each. */
-export type ExtensionManifest = Pick<ExtensionAbout, 'name' | 'version' | 'api'>
+/** `title`: what the window calls it (over a message it sent, a notice of its), when it says. */
+export type ExtensionManifest = Pick<ExtensionAbout, 'name' | 'version' | 'api' | 'title'>
 
 /** The version an extension counts as when it says none (a profile's may not). */
 export const UNVERSIONED = '0.0.0'

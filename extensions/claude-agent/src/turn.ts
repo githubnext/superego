@@ -106,12 +106,13 @@ const STEP_TEXT = 2000
 
 /**
  * What the user said in this run, as Claude Code is given it: its inputs (from its first entry on; a run continued
- * without one, the user's messages since the last answer), their text and images. The files sent with them are named
- * by path in their text (`<attachment … path="…">`), for Claude Code to read.
+ * without one, the user's messages since the last answer), their text and images, after the notices extensions gave
+ * the thread since its last answer (`threads.notice`). The files sent with them are named by path in their text
+ * (`<attachment … path="…">`), for Claude Code to read.
  */
-export function inputsOf(entries: readonly { id: EntryId; model?: readonly unknown[] }[], first: EntryId | undefined): Content {
-  const since = first !== undefined ? entries.filter((e) => e.id >= first)
-    : entries.slice(entries.findLastIndex((e) => (e.model as Message[] | undefined)?.some((m) => m.role === 'assistant')) + 1)
+export function inputsOf(entries: readonly { id: EntryId; kind?: string; model?: readonly unknown[] }[], first: EntryId | undefined): Content {
+  const answered = entries.findLastIndex((e) => (first === undefined || e.id < first) && (e.model as Message[] | undefined)?.some((m) => m.role === 'assistant'))
+  const since = entries.slice(answered + 1).filter((e) => first === undefined || e.id >= first || e.kind === NOTE_ENTRY)
   return since.flatMap((entry) => ((entry.model ?? []) as Message[]).flatMap((m) => m.role === 'user' ? contentFor(m.content) : []))
 }
 
