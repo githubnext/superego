@@ -258,9 +258,18 @@ importers:
       '@superego/mermaid':
         specifier: workspace:*
         version: link:../extensions/mermaid
+      '@superego/processes':
+        specifier: workspace:*
+        version: link:../extensions/processes
       '@superego/protocol':
         specifier: workspace:*
         version: link:../packages/protocol
+      '@superego/run':
+        specifier: workspace:*
+        version: link:../extensions/run
+      '@superego/schedules':
+        specifier: workspace:*
+        version: link:../extensions/schedules
       '@superego/skills':
         specifier: workspace:*
         version: link:../extensions/skills
@@ -273,9 +282,6 @@ importers:
       '@superego/terminal':
         specifier: workspace:*
         version: link:../extensions/terminal
-      '@superego/schedules':
-        specifier: workspace:*
-        version: link:../extensions/schedules
       '@superego/thread-reports':
         specifier: workspace:*
         version: link:../extensions/thread-reports
@@ -734,6 +740,59 @@ importers:
       react-dom:
         specifier: ^19
         version: 19.3.1(react@19.3.1)
+
+  extensions/processes:
+    dependencies:
+      '@earendil-works/pi-durable':
+        specifier: file:../../vendor/earendil-works-pi-durable-1.6.0.tgz
+        version: file:vendor/earendil-works-pi-durable-1.6.0.tgz(patch_hash=114ac4f0356aa0503f126f67442a99d99dacc4be8d76afd8dd999750ec462502)(@aws-sdk/credential-provider-node@3.972.97)(@modelcontextprotocol/sdk@1.32.2(zod@4.6.7))(@smithy/signature-v4@5.7.5)(google-auth-library@10.9.1)(react@19.3.1)(undici@7.30.2)(ws@8.23.0)(zod@4.6.7)
+      '@earendil-works/pi-schema':
+        specifier: file:../../vendor/earendil-works-pi-schema-1.6.0.tgz
+        version: file:vendor/earendil-works-pi-schema-1.6.0.tgz
+      '@superego/app':
+        specifier: workspace:*
+        version: link:../../packages/app
+      '@superego/daemon':
+        specifier: workspace:*
+        version: link:../../packages/daemon
+      '@superego/protocol':
+        specifier: workspace:*
+        version: link:../../packages/protocol
+      '@superego/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
+    devDependencies:
+      '@superego/sdk':
+        specifier: workspace:*
+        version: link:../../packages/sdk
+      '@types/react':
+        specifier: ^19
+        version: 19.3.0
+      react:
+        specifier: ^19
+        version: 19.3.1
+
+  extensions/run:
+    dependencies:
+      '@earendil-works/pi-durable':
+        specifier: file:../../vendor/earendil-works-pi-durable-1.6.0.tgz
+        version: file:vendor/earendil-works-pi-durable-1.6.0.tgz(patch_hash=114ac4f0356aa0503f126f67442a99d99dacc4be8d76afd8dd999750ec462502)(@aws-sdk/credential-provider-node@3.972.97)(@modelcontextprotocol/sdk@1.32.2(zod@4.6.7))(@smithy/signature-v4@5.7.5)(google-auth-library@10.9.1)(react@19.3.1)(undici@7.30.2)(ws@8.23.0)(zod@4.6.7)
+      '@earendil-works/pi-schema':
+        specifier: file:../../vendor/earendil-works-pi-schema-1.6.0.tgz
+        version: file:vendor/earendil-works-pi-schema-1.6.0.tgz
+      '@superego/daemon':
+        specifier: workspace:*
+        version: link:../../packages/daemon
+      '@superego/protocol':
+        specifier: workspace:*
+        version: link:../../packages/protocol
+    devDependencies:
+      '@superego/processes':
+        specifier: workspace:*
+        version: link:../processes
+      '@superego/sdk':
+        specifier: workspace:*
+        version: link:../../packages/sdk
 
   extensions/schedules:
     dependencies:
