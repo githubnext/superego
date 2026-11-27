@@ -99,6 +99,28 @@ export type MentionSource = {
   href?: false | ((id: string) => string)
 }
 
+/**
+ * A command an extension adds to the composer (`superego.composer.command`): `/<name>` opening a message, completed as
+ * it's typed beside the composer's own (`/clear`, `/compact`). Sent, the message runs it instead of going to the agent,
+ * given what follows the name (`rest`).
+ */
+export type ComposerCommand = {
+  /** Its name: lowercase letters, digits and `-` (`'schedule'`), typed `/schedule`. Not one of the composer's own. */
+  name: string
+  /** Other names it answers to. */
+  aliases?: string[]
+  /** What it does, beside it in the menu: "Schedule a message or a reminder". */
+  detail: string
+  /** The threads it's for. Default: any that isn't archived. */
+  takes?(thread: ThreadInfo): boolean
+  /**
+   * Run it. Return `{ send }` to send that as the message after all (what's attached going with it): a command that
+   * can't make sense of `rest` hands it to the agent. Throw to say why it couldn't run, under the box, the words back
+   * in it. Otherwise the box is cleared (what's attached stays).
+   */
+  run(rest: string, context: { machine: MachineEntry; thread: ThreadInfo }): void | { send: string } | Promise<void | { send: string }>
+}
+
 /** A provider, and the word it found at the caret. */
 export type Found = { provider: CompletionProvider<any>; word: CompletionWord }
 

@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { defineApp, type ThreadInfo } from '@superego/protocol'
 import { commandAt, commandCompletions, commandIn, commandsFor, takes } from '../src/renderer/slash-commands.ts'
 import { startLike } from '../src/renderer/clear-thread.ts'
-import { createRegistry } from '../src/renderer/registry.tsx'
+import { createRegistry, extensionCommands } from '../src/renderer/registry.tsx'
 import { defineUiExtension } from '../src/renderer/extension-api.ts'
 
 const thread = (more: Partial<ThreadInfo> = {}): ThreadInfo => ({
@@ -47,11 +47,52 @@ describe('commands', () => {
   })
   it("offers a thread's own: none in the New thread dialog", async () => {
     const machine = { id: 'local', label: 'local', state: 'connected' as const }
-    const offered = async (t?: ThreadInfo) => (await commandCompletions.items({ start: 0, query: '' }, { machine, cwd: '/', ...t ? { thread: t } : {} }, { signal: new AbortController().signal, update: () => {} })).map((c) => c.label)
+    const offered = async (t?: ThreadInfo) => (await commandCompletions(() => []).items({ start: 0, query: '' }, { machine, cwd: '/', ...t ? { thread: t } : {} }, { signal: new AbortController().signal, update: () => {} })).map((c) => c.label)
     expect(await offered(thread())).toEqual(['/clear', '/compact'])
     expect(await offered(thread({ hidden: true, owner: 'ego' }))).toEqual(['/compact'])
     expect(await offered(thread({ archived: true }))).toEqual([])
     expect(await offered()).toEqual([])
+  })
+})
+
+describe("extensions' commands", () => {
+  const app = defineApp({ name: 'superego', id: 'superego' })
+  const ran: string[] = []
+  const schedules = defineUiExtension({
+    name: 'schedules',
+    setup(superego) {
+      superego.composer.command({ name: 'schedule', aliases: ['remind'], detail: 'Schedule a message', run: (rest) => { ran.push(rest) } })
+      superego.composer.command({ name: 'snooze', detail: 'Snooze', takes: (t) => t.status.state === 'done', run: () => ({ send: 'later' }) })
+    },
+  })
+  const registry = createRegistry(app, [schedules], () => {})
+  const theirs = (t: ThreadInfo | undefined) => extensionCommands(registry, 'local', t)
+
+  it('reads a message that is one, by any of its names, after the composer’s own, in the threads it takes', () => {
+    const here = thread()
+    const found = commandIn('/Remind in 30m check the deploy', here, theirs(here))
+    expect(found && typeof found.command === 'object' && found.command.name).toBe('schedule')
+    expect(found?.rest).toBe('in 30m check the deploy')
+    expect(commandIn('/snooze', here, theirs(here))).toBeUndefined()
+    expect(commandIn('/clear', here, theirs(here))).toEqual({ command: 'clear', rest: '' })
+    // Archived, or going without the extension: none of its.
+    expect(theirs(thread({ archived: true }))).toEqual([])
+    expect(theirs(thread({ without: ['schedules'] }))).toEqual([])
+    expect(theirs(undefined)).toEqual([])
+  })
+  it('offers them after the composer’s own', async () => {
+    const machine = { id: 'local', label: 'local', state: 'connected' as const }
+    const provider = commandCompletions((_machine, t) => theirs(t))
+    const offered = async (query: string, t: ThreadInfo) => (await provider.items({ start: 0, query }, { machine, cwd: '/', thread: t }, { signal: new AbortController().signal, update: () => {} })).map((c) => c.label)
+    expect(await offered('', thread())).toEqual(['/clear', '/compact', '/schedule'])
+    expect(await offered('', thread({ status: { state: 'done' } }))).toEqual(['/clear', '/compact', '/schedule', '/snooze'])
+    expect(await offered('re', thread())).toEqual(['/remind'])
+  })
+  it("refuses a name that's the composer's own, or not one", () => {
+    const own = defineUiExtension({ name: 'own', setup: (superego) => superego.composer.command({ name: 'new', detail: '', run: () => {} }) })
+    expect(() => createRegistry(app, [own], () => {})).toThrow("/new is the composer's own command")
+    const bad = defineUiExtension({ name: 'bad', setup: (superego) => superego.composer.command({ name: 'Do it', detail: '', run: () => {} }) })
+    expect(() => createRegistry(app, [bad], () => {})).toThrow('lowercase letters')
   })
 })
 

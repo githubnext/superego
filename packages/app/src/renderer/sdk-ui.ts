@@ -21,7 +21,7 @@ export type { Store } from './local-state.ts'
 export { useLocalState } from './local-state.ts'
 export { useSpaceTitle } from './spaces.tsx'
 export { TextEditor, TEXT_MODES, type TextEditorProps, type TextMode } from './text-editor.tsx'
-export type { Completion, CompletionAsk, CompletionProvider, CompletionWord, ComposerWhere, MentionItem, MentionSource, SentBlock, SentWhere, SentWith } from './composer.ts'
+export type { Completion, CompletionAsk, CompletionProvider, CompletionWord, ComposerCommand, ComposerWhere, MentionItem, MentionSource, SentBlock, SentWhere, SentWith } from './composer.ts'
 export type { ImageItem } from './images.tsx'
 export type { Theme, SyntaxRole, TerminalRole, Appearance, Color } from '@superego/ui/themes'
 

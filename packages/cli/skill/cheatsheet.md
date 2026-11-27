@@ -56,6 +56,7 @@ What each half of an extension registers, a line each. The [guide](guide.md) bui
 | `link({ match, open, render, target, scheme })` | claim links ([Links](window.md#links)) |
 | `composer.complete({ title, word(text, caret), items(word, { machine, cwd, thread? }) })` | complete the word being typed: `{ label, detail, icon, insert }` |
 | `composer.mention({ kind, title, icon, list \| search, href })` | (API ^5.16) things `@` offers, written `@<kind>:<id>`; sent, drawn as links (`<kind>:<id>`) ([Mentions](ui.md#mentions)) |
+| `composer.command({ name, detail, takes?, run(rest, { machine, thread }) })` | (API ^5.19) `/<name>` opening a message runs it instead of sending; `{ send }` back sends that after all ([Commands](ui.md#commands)) |
 | `composer.sentWith({ read(blocks), component, words })` | draw what `beforeSend` added, under sent messages |
 | `work(divide)` | split a run of work into titled parts; bundled only |
 | `action(defineAction({ id, keys, when, run }))` | a window action with keys, in ⌘K while `when(context)` holds; a profile's only while one of its threads is shown |

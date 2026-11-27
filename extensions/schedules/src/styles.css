@@ -40,3 +40,38 @@
 /* The schedule tool's row: how often, then its next times as small chips. */
 .schedules-times { display: inline-flex; font-family: var(--superego-font); flex-wrap: wrap; align-items: center; gap: 4px; }
 .schedules-times__time { padding: 0 5px; border-radius: 4px; background: var(--superego-hover); font: var(--superego-text-xs) var(--superego-mono); font-variant-numeric: tabular-nums; color: var(--superego-text); }
+
+/* The popover's foot: New schedule…, and every schedule. */
+.schedules-popup__foot { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin-top: 4px; padding-top: 4px; border-top: 1px solid var(--superego-border); }
+.schedules-popup__item { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 6px; border: 0; border-radius: var(--superego-radius); background: none; font: inherit; font-size: var(--superego-text-sm); color: var(--superego-text); cursor: default; }
+.schedules-popup__item:hover, .schedules-popup__item:focus-visible { background: var(--superego-hover); }
+.schedules-popup__item--quiet { color: var(--superego-muted); }
+.schedules-sheet__new { margin-top: 10px; }
+
+/* A reminder doing both (reminds, and wakes the agent): the bell with a dot. */
+.schedules-row__icon--both { position: relative; display: inline-flex; }
+.schedules-row__icon--both::after { content: ''; position: absolute; right: -2px; bottom: 0; width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
+span.schedules-row__icon { display: inline-flex; }
+
+/* The form: labels at the start, fields after (B's). */
+.schedules-form { display: grid; grid-template-columns: 52px 1fr; gap: 10px 10px; align-items: center; }
+.schedules-form > label { color: var(--superego-muted); font-size: var(--superego-text-sm); text-align: right; align-self: start; padding-top: 6px; }
+.schedules-form__when { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.schedules-form__hint { min-height: 1.2em; font-size: var(--superego-text-xs); color: var(--superego-muted); font-variant-numeric: tabular-nums; }
+.schedules-form__hint.is-error { color: var(--superego-status-error); }
+.schedules-form .superego-segmented { justify-self: start; }
+.schedules-form__error { margin-top: 10px; font-size: var(--superego-text-sm); color: var(--superego-status-error); overflow-wrap: anywhere; }
+.schedules-form__by { margin-right: auto; font-size: var(--superego-text-xs); color: var(--superego-faint); }
+.schedules-form__gone { font-size: var(--superego-text-sm); color: var(--superego-muted); }
+
+/* Every schedule: by machine (when there are several), then by thread. */
+.schedules-machine + .schedules-machine { margin-top: 14px; }
+.schedules-machine__name { margin: 0 0 6px; font-size: var(--superego-text-xs); font-weight: 500; color: var(--superego-muted); }
+.schedules-thread + .schedules-thread { margin-top: 10px; }
+.schedules-thread__title { display: block; max-width: 100%; margin: 0 0 2px; padding: 0 6px; border: 0; background: none; font: inherit; font-weight: 500; color: var(--superego-text); text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: default; }
+.schedules-thread__title:hover { text-decoration: underline; }
+
+/* A reminder's notice: the bell, what it says, and under it which schedule and run. */
+.schedules-reminder { display: flex; gap: 8px; align-items: flex-start; }
+.schedules-reminder__bell { flex: none; margin-top: 3px; color: var(--superego-accent); }
+.schedules-reminder__caption { margin-top: 2px; font-size: var(--superego-text-xs); color: var(--superego-muted); font-variant-numeric: tabular-nums; }

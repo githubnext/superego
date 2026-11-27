@@ -83,6 +83,7 @@ Nothing else: no npm packages, no CSS imports. The daemon compiles TSX and TS wi
 | `store(key, initial, { persist?, shared? })` | window state: `get()`, `set(next)`, `subscribe`, `use()`. Kept as `<name>.<key>` (`'<name>.<key>'` is the same store). `persist`: across reloads, this window only; `shared`: every window |
 | `composer.complete({ title, word, items })` | complete a word as it's typed. `word(text, caret)` finds it (`{ start, query, … }`) or nothing; the first to find one completes it, with any other that finds one starting at the same place (one menu: `/` opening the message lists the core's `/clear` and `/compact` beside skills). `items(word, { machine, cwd, thread }, { signal, update })` returns (or resolves to) `{ label, detail?, icon?, insert, submit? }[]`, best first (no `thread` in New thread). `signal` aborts once the word changes; `update(items)` (API ^5.16) offers again with what came late. `insert` replaces the word (end with a space to keep typing); `submit: true`, a command: ⏎ takes it and sends the message. ↑↓ pick, ⇥ or ⏎ take, esc leaves |
 | `composer.mention({ kind, title, icon?, list \| search, href? })` | (API ^5.16) things of yours `@` offers, written `@<kind>:<id>`: [Mentions](#mentions) |
+| `composer.command({ name, aliases?, detail, takes?, run })` | (API ^5.19) a command, `/<name>` opening a message: [Commands](#commands) |
 | `composer.sentWith({ read, component?, words? })` | draw what `beforeSend` added to sent messages. `read(blocks)` returns `{ items, blocks }`, the indexes of the blocks found, which leave the text. `component` gets `{ machine, thread, items }`, drawn under the message (a `<Chip icon title>` each). `words(text, items, { machine, thread })` rewrites the message's Markdown (`mentions` turns `@thread:42` into a link). Drawn even for threads now without the extension |
 | `entry(kind, component)` | transcript entries of a kind it writes, and the daemon half's notices of that `kind` (API ^5.17: `entry.data` is the notice's `data`; [Notices](daemon.md#notices)) |
 | `codeBlock(languages, component)` | (API ^5.14) draw fenced code blocks of a language yourself: [Code blocks](#code-blocks) |
@@ -224,6 +225,35 @@ export default defineUiExtension({
       // `@canvas:fox` links to canvas:fox, which this opens.
     })
     superego.link({ match: 'canvas:', open: (href) => console.log('open', decodeURIComponent(href.slice('canvas:'.length))) })
+  },
+})
+```
+
+### Commands
+
+(API ^5.19) `superego.composer.command({ name, aliases?, detail, takes?, run })` adds `/<name>` to the composer: a `/`
+opening a message offers it beside the core's `/clear` and `/compact` and the skills, `detail` beside it. Sent, the
+message isn't: `run(rest, { machine, thread })` runs with what follows the name, and the box is cleared. Throw to say
+why it couldn't (said under the box, the words back in it). Return `{ send: text }` to send that as the message after
+all, what's attached going with it: a command that can't make sense of `rest` hands it to the agent. `takes(thread)`
+says which threads it's for (default: any not archived). A name is lowercase letters, digits and `-`; the core's own
+(`clear`, `new`, `compact`) can't be taken, and the first extension to take a name keeps it (a profile's goes before
+the app's in its threads). A profile's commands are its threads'.
+
+```tsx
+import { defineUiExtension } from 'superego/ui'
+
+export default defineUiExtension({
+  name: 'standup', api: '^5.19',
+  setup(superego) {
+    superego.composer.command({
+      name: 'standup', detail: 'Post a standup note for this thread',
+      async run(rest, { machine, thread }) {
+        // Nothing said: let the agent write one.
+        if (!rest) return { send: 'Write my standup note from what we did today.' }
+        await superego.dispatch('standup.post', { thread: thread.id, text: rest }, { machine: machine.id })
+      },
+    })
   },
 })
 ```

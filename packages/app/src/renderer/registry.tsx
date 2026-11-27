@@ -14,7 +14,8 @@ import { watched } from './client.ts'
 import { createStore } from './local-state.ts'
 import { APP } from '../shared/app-settings.ts'
 import { PLACES, THREAD_PLACES } from '../shared/layout.ts'
-import type { CompletionProvider, MentionSource, SentWith } from './composer.ts'
+import type { CompletionProvider, ComposerCommand, MentionSource, SentWith } from './composer.ts'
+import { COMMAND_NAME, OWN_NAMES } from './slash-commands.ts'
 import { dataIcon, DataViewBody } from './data-views.tsx'
 import { addStyle } from './profile-style.ts'
 import { onMachine } from './machine-view.tsx'
@@ -121,6 +122,8 @@ export type Registry = {
   sentWith: Owned<SentWith>[]
   /** What `@` offers of things extensions name (`composer.mention`), by kind: a project's profile's are its project's. */
   mentions: Owned<MentionSource>[]
+  /** Commands extensions add to the composer (`composer.command`): `/schedule …`. */
+  commands: Owned<ComposerCommand>[]
   /** Narrowings of the sidebar's list (`superego.sidebarFilter`): each a hook, drawn by the shell's state. */
   sidebarFilters: Owned<{ use: () => SidebarFilter | undefined }>[]
   listeners: Owned<{ event: WindowEvent; listener: (event: never) => void }>[]
@@ -156,7 +159,7 @@ export function createRegistry(app: AppConfig, extensions: UiExtension[], core: 
       ...(version ? { version } : {}), ...(api ? { api } : {}), ...(panes ? { panes } : {}),
     })),
     slots: { 'header.chips': [], 'thread.badge': [], 'thread.menu': [], 'sidebar.heading': [], 'composer.above': [], 'details.section': [], 'editor.side': [], 'editor.bar': [], 'overlay': [], 'onboarding': [], 'welcome': [] },
-    views: [], dataViews: {}, machineExtensions: {}, tools: [], entries: [], links: [], codeBlocks: [], panes: [], spaces: [], work: [], settings: [], newThreadFields: [], router: createWindowRouter(), appSettings: [], themes: [], completions: [], sentWith: [], mentions: [], sidebarFilters: [], listeners: [],
+    views: [], dataViews: {}, machineExtensions: {}, tools: [], entries: [], links: [], codeBlocks: [], panes: [], spaces: [], work: [], settings: [], newThreadFields: [], router: createWindowRouter(), appSettings: [], themes: [], completions: [], sentWith: [], mentions: [], commands: [], sidebarFilters: [], listeners: [],
     window: {
       focused: typeof document === 'undefined' || document.hasFocus(),
       visible: typeof document === 'undefined' || document.visibilityState !== 'hidden',
@@ -451,6 +454,13 @@ export function createRegistry(app: AppConfig, extensions: UiExtension[], core: 
           unique(registry.mentions, 'kind', { ...source }, 'mention kind', project ? { ...owner, project } : owner)
         },
         mentionSources: (where) => mentionSourcesIn(registry, { machine: where.machine.id, ...(where.thread ? { thread: where.thread } : {}) }),
+        command(command) {
+          for (const name of [command.name, ...command.aliases ?? []]) {
+            if (!COMMAND_NAME.test(name)) throw new Error(`Extension ${extension.name}: a command's name is lowercase letters, digits and -, not "${name}"`)
+            if (OWN_NAMES.has(name)) throw new Error(`Extension ${extension.name}: /${name} is the composer's own command`)
+          }
+          unique(registry.commands, 'name', { ...command }, 'command')
+        },
       },
     }
     const teardown = () => {
@@ -565,6 +575,23 @@ export function mentionSourcesIn(registry: Registry, { machine, thread }: { mach
   // One per kind: a profile's (or its project's) before the app's.
   const kinds = [...new Set(seen.map((s) => s.kind))]
   return kinds.map((kind) => preferProfile(seen.filter((s) => s.kind === kind))!)
+}
+
+/**
+ * The extensions' composer commands a thread on `machine` takes: those it sees (not of an extension it goes without), as
+ * each one's `takes` says (an archived thread's none, unless it says). None for no thread yet.
+ */
+export function extensionCommands(registry: Pick<Registry, 'commands'>, machine: string, thread: ThreadInfo | undefined): Owned<ComposerCommand>[] {
+  if (!thread) return []
+  const seen = seenIn(registry.commands, { machine, thread }).filter((c) => {
+    try { return c.takes ? c.takes(thread) : !thread.archived } catch (error) {
+      console.error(`Extension ${c.owner.extension}: whether /${c.name} takes thread ${thread.id} failed:`, error)
+      return false
+    }
+  })
+  // One per name: a profile's (or its project's) before the app's.
+  const names = [...new Set(seen.map((c) => c.name))]
+  return names.map((name) => preferProfile(seen.filter((c) => c.name === name))!)
 }
 
 /** The first of `list` that's a profile's own, else the first: a profile's UI goes before the app's. */

@@ -5,17 +5,18 @@
 // the agent's tools, actions for the window and the command line, facts for the sidebar and a live value per thread.
 //
 // The agent gets `schedule`, `schedule_list` and `schedule_cancel`, for its own thread's schedules only; the user's
-// actions (`schedules.*`, from the window, `superego do`, another extension's `dispatch`) reach any. A firing is a
-// message from Schedules (`threads.send`); what happened around it (late, stopped, paused) is a notice in the thread.
+// actions (`schedules.*`, from the window, `superego do`, another extension's `dispatch`) reach any, and change them
+// (`schedules.update`). A wake is a message from Schedules (`threads.send`); a reminder, and what happened around a
+// firing (late, stopped, paused), a notice in the thread (`threads.notice`: unread, notified, no run).
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { defineExtension, defineTool, section } from '@earendil-works/pi-durable'
-import { int, obj, opt, str } from '@earendil-works/pi-schema'
+import { int, obj, oneOf, opt, str } from '@earendil-works/pi-schema'
 import { defineAction, defineDaemonExtension, type DaemonApi } from '@superego/daemon'
 import { RpcError, stuck, type Json, type ThreadInfo } from '@superego/protocol'
-import { scheduler, upcoming, type Limits, type NewSchedule } from './scheduler.ts'
-import { about, ACTIONS, CAPS, DEFAULTS, LIST_METHOD, SETTINGS, THREAD_VALUE, TOOLS, type Schedule, type ScheduleDetails } from './shared.ts'
-import { clockTime, dayWord, everyWords, FORMS, localWords, timezone } from './when.ts'
+import { scheduler, upcoming, type Limits, type NewSchedule, type ScheduleChange } from './scheduler.ts'
+import { about, ACTIONS, ALL_VALUE, CAPS, DEFAULTS, LIST_METHOD, SETTINGS, SPLIT_METHOD, THREAD_VALUE, TOOLS, UNDERSTAND_METHOD, type Schedule, type ScheduleDetails } from './shared.ts'
+import { clockTime, dayWord, FORMS, howWords, localWords, repeats, splitSaid, timezone } from './when.ts'
 
 /** The time, and a way to be called back: the real ones, or a test's. */
 export type Clock = { now(): number; after(ms: number, run: () => void): () => void }
@@ -31,20 +32,22 @@ const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? o
 
 /** A schedule as the agent reads it, in a line. */
 function line(s: Schedule, now: number) {
-  const when = 'every' in s.when ? everyWords(s.when.every) : 'once'
+  const when = `${howWords(s.when)}${s.action === 'notify' ? ', reminds the user' : s.action === 'both' ? ', reminds the user and wakes you' : ''}`
   const next = s.ended ? `ended (${s.ended.why}${s.ended.reason ? `: ${s.ended.reason}` : ''})`
     : s.paused ? 'paused' : s.pending ? 'due, waiting for this thread to be free'
     : s.next !== null ? `next ${dayWord(s.next, now)} ${clockTime(s.next)}` : ''
-  const runs = 'every' in s.when ? `, run ${s.runs} of up to ${s.maxRuns}` : ''
+  const runs = repeats(s.when) ? `, run ${s.runs} of up to ${s.maxRuns}` : ''
   return `- ${s.id} "${s.label}": ${when}, ${next}${runs}${s.until ? `, until: ${s.until}` : ''}`
 }
 
-const SCHEDULE_DESCRIPTION = `Wake this thread later with a message: once ("in 30m", "tomorrow 9am") or repeating ("every 30m"). ` +
-  `When it fires, you're sent the message as a new turn. Pass the user's words for the time nearly as they said them; they're read in this machine's timezone (${timezone()}), ` +
-  `and the answer says what was understood, so check it. Accepted: ${FORMS}. Calendar repeats ("every weekday at 9") and cron aren't supported yet. ` +
+const SCHEDULE_DESCRIPTION = `Schedule something for this thread: once ("in 30m", "tomorrow 9am"), repeating ("every 30m") or on the calendar ("every weekday at 9", cron). ` +
+  `\`action\` says what it does when due. "wake" (default): you're sent the message as a new turn, to do something ("check CI", "look at the deploy"). ` +
+  `"notify": the user is reminded of the message (a notice in the thread, notified, no turn for you): for "remind me …", "ping me …", where nothing needs doing but telling them; write the message to them ("Review Mia's PR"). ` +
+  `"both": reminds them and wakes you. Pick from the user's wording. ` +
+  `Pass the user's words for the time nearly as they said them; they're read in this machine's timezone (${timezone()}), ` +
+  `and the answer says what was understood, so check it. Accepted: ${FORMS}. ` +
   `A repeating one needs a way to stop: give \`until\` (a condition you check on each run, then call ${TOOLS.cancel} once it holds), ` +
-  `and it stops anyway after maxRuns (default ${DEFAULTS.maxRuns}) or at \`ends\` (default ${DEFAULTS.days} days). At most every ${DEFAULTS.minIntervalMinutes} minutes. ` +
-  `For "remind me …", schedule a message like "Remind the user: …" and answer it briefly when it fires.`
+  `and it stops anyway after maxRuns (default ${DEFAULTS.maxRuns}) or at \`ends\` (default ${DEFAULTS.days} days). A wake at most every ${DEFAULTS.minIntervalMinutes} minutes.`
 
 /** The extension, on `clock` (the real one unless a test gives its own; `id`, its schedules' ids, for a test too). */
 export const schedulesExtension = ({ clock = REAL, id }: { clock?: Clock; id?: () => string } = {}) => defineDaemonExtension({
@@ -52,6 +55,7 @@ export const schedulesExtension = ({ clock = REAL, id }: { clock?: Clock; id?: (
   async setup(superego) {
     const file = join(superego.dir, FILE)
     const value = superego.scopedValue<Json>(THREAD_VALUE, [])
+    const everything = superego.value<Json>(ALL_VALUE, [])
     // The threads in a run, as the hooks tell it; one resumed after a restart (no turnStart) shows working.
     const running = new Set<string>()
     let stopped = false
@@ -117,10 +121,14 @@ export const schedulesExtension = ({ clock = REAL, id }: { clock?: Clock; id?: (
           throw error
         }
       },
-      notice: (thread, text, { agent, actions }) => superego.threads.notice(thread, { text, ...(agent ? {} : { agent: false }), ...(actions ? { actions } : {}) }),
+      notice: (thread, text, { agent, actions, kind, data }) => superego.threads.notice(thread, {
+        text, ...(agent === true ? {} : { agent }), ...(actions ? { actions } : {}), ...(kind ? { kind } : {}), ...(data ? { data: data as unknown as Json } : {}),
+      }),
+      tz: timezone,
       save,
       changed(threads) {
         for (const thread of threads) value.set(thread, sched.active(thread) as unknown as Json)
+        everything.set(sched.going() as unknown as Json)
         superego.invalidate()
         arm()
       },
@@ -149,6 +157,7 @@ export const schedulesExtension = ({ clock = REAL, id }: { clock?: Clock; id?: (
       }
     }
     for (const thread of new Set(sched.list().map((s) => s.thread))) value.set(thread, sched.active(thread) as unknown as Json)
+    everything.set(sched.going() as unknown as Json)
     superego.invalidate()
     superego.signal.addEventListener('abort', () => { stopped = true; timer?.() })
     // Catch up on what came due while Superego wasn't running, then keep time.
@@ -166,9 +175,11 @@ export const schedulesExtension = ({ clock = REAL, id }: { clock?: Clock; id?: (
     const names = () => new Set(superego.extensions().map((e) => e.name))
     const byOf = (context: { source: string; from?: string }) => context.from ? 'agent' : names().has(context.source) ? context.source : 'user'
 
+    const ACTION_PARAM = oneOf(['wake', 'notify', 'both'] as const, { description: 'wake: a message that starts a run; notify: a reminder for the user, no run; both' })
     const NEW_PARAMS = {
       when: str({ minLength: 1, description: `When, in words: ${FORMS}` }),
-      message: str({ minLength: 1, description: 'What the agent is told when it fires' }),
+      message: str({ minLength: 1, description: 'What the agent is told (wake), or the user reminded of (notify), when it fires' }),
+      action: opt(ACTION_PARAM),
       label: opt(str({ maxLength: 60, description: 'A short name for the UI ("Check CI"); default: the first words of the message' })),
       until: opt(str({ description: 'Repeating: a condition the agent checks each run, cancelling it once it holds ("CI is green")' })),
       maxRuns: opt(int({ minimum: 1, maximum: CAPS.maxRuns, description: `Repeating: how many runs at most (default ${DEFAULTS.maxRuns})` })),
@@ -176,13 +187,22 @@ export const schedulesExtension = ({ clock = REAL, id }: { clock?: Clock; id?: (
     }
     const ID = { id: str({ minLength: 1 }) }
     superego.action(defineAction({
-      id: ACTIONS.add, title: 'Schedule a wake', expose: ['ui', 'cli'],
-      description: 'Wake a thread at a time, or every so often, with a message.',
+      id: ACTIONS.add, title: 'Schedule a wake or a reminder', expose: ['ui', 'cli'],
+      description: 'Wake a thread with a message, or remind you of it, at a time, every so often or on the calendar.',
       params: obj({ thread: str({ minLength: 1 }), ...NEW_PARAMS }),
       async run(params, context) {
         await superego.threads.get(params.thread)
         return await sched.add(params as NewSchedule, byOf(context)) as unknown as Json
       },
+    }))
+    superego.action(defineAction({
+      id: ACTIONS.update, title: 'Change a schedule', expose: ['ui', 'cli'],
+      description: 'Change what a schedule says, when it runs, what it does, its runs or its end: what\'s given changes. A new time counts from now.',
+      params: obj({
+        ...ID, when: opt(str({ minLength: 1 })), message: opt(str({ minLength: 1 })), label: opt(str({ maxLength: 60 })), action: opt(ACTION_PARAM),
+        until: opt(str({ description: 'Empty: no condition' })), maxRuns: opt(int({ minimum: 1, maximum: CAPS.maxRuns })), ends: opt(str({ minLength: 1 })),
+      }),
+      run: async ({ id, ...change }) => await sched.update(id, change as ScheduleChange) as unknown as Json,
     }))
     superego.action(defineAction({
       id: ACTIONS.pause, title: 'Pause a schedule', expose: ['ui', 'cli'], params: obj(ID),
@@ -202,6 +222,8 @@ export const schedulesExtension = ({ clock = REAL, id }: { clock?: Clock; id?: (
       run: async ({ id, reason }, context) => await sched.cancel(id, { ...(reason ? { reason } : {}), who: byOf(context) }) as unknown as Json,
     }))
     superego.method(LIST_METHOD, ({ thread }) => sched.list(thread) as unknown as Json, { params: obj({ thread: opt(str()) }) })
+    superego.method(UNDERSTAND_METHOD, ({ when, action }) => sched.understand(when, action ?? 'wake') as unknown as Json, { params: obj({ when: str({ minLength: 1 }), action: opt(ACTION_PARAM) }) })
+    superego.method(SPLIT_METHOD, ({ text }) => (splitSaid(text, clock.now()) ?? null) as Json, { params: obj({ text: str() }) })
 
     superego.agent(agentPart(superego, sched, () => clock.now()))
   },
@@ -227,7 +249,8 @@ function agentPart(superego: DaemonApi, sched: ReturnType<typeof scheduler>, now
         description: SCHEDULE_DESCRIPTION,
         parameters: obj({
           when: str({ minLength: 1, description: `When, in the user's words: ${FORMS}` }),
-          message: str({ minLength: 1, description: "What you're told when it fires: say what to do, as a note to yourself" }),
+          message: str({ minLength: 1, description: "What you're told when it fires (wake: what to do, as a note to yourself), or what the user is reminded of (notify: to them)" }),
+          action: opt(oneOf(['wake', 'notify', 'both'] as const, { description: '"wake" (default): a turn for you, to do something; "notify": remind the user, no turn ("remind me …"); "both"' })),
           label: opt(str({ maxLength: 60, description: 'A short name the user sees ("Check CI"); default: the first words of the message' })),
           until: opt(str({ description: 'Repeating: a condition you check on each run, cancelling it once it holds ("CI is green")' })),
           maxRuns: opt(int({ minimum: 1, maximum: CAPS.maxRuns, description: `Repeating: how many runs at most (default ${DEFAULTS.maxRuns}, at most ${CAPS.maxRuns})` })),
@@ -239,14 +262,16 @@ function agentPart(superego: DaemonApi, sched: ReturnType<typeof scheduler>, now
           const at = now()
           const times = upcoming(s)
           const details: ScheduleDetails = {
-            id: s.id, label: s.label, said: s.said, next: s.next, times, maxRuns: s.maxRuns,
+            id: s.id, label: s.label, said: s.said, action: s.action, next: s.next, times, how: howWords(s.when), maxRuns: s.maxRuns,
             ...('every' in s.when ? { every: s.when.every } : {}), ...(s.until ? { until: s.until } : {}), ...(s.ends !== undefined ? { ends: s.ends } : {}),
           }
-          const text = 'every' in s.when
-            ? `Scheduled ${s.id} "${s.label}": ${everyWords(s.when.every)}, first ${localWords(s.next!, at)}; then ${times.slice(1).map(clockTime).join(', ')}. ` +
+          const does = s.action === 'notify' ? 'a reminder for the user' : s.action === 'both' ? 'a reminder for the user that wakes you too' : 'a wake'
+          const zone = 'cron' in s.when && s.when.tz !== timezone() ? s.when.tz : timezone()
+          const text = repeats(s.when)
+            ? `Scheduled ${s.id} "${s.label}", ${does}: ${howWords(s.when)}, first ${localWords(s.next!, at)}; then ${times.slice(1).map(clockTime).join(', ')}. ` +
               `At most ${plural(s.maxRuns, 'run')}, until ${localWords(s.ends!, at)}${s.until ? `, or until: ${s.until}` : ''}.`
-            : `Scheduled ${s.id} "${s.label}": once, ${localWords(s.next!, at)}.`
-          return { output: [{ type: 'text', text: `${text} Times are ${timezone()}. If that's not what was meant, cancel it and schedule again.` }], details: details as unknown as Json }
+            : `Scheduled ${s.id} "${s.label}", ${does}: once, ${localWords(s.next!, at)}.`
+          return { output: [{ type: 'text', text: `${text} Times are ${zone}. If that's not what was meant, cancel it and schedule again.` }], details: details as unknown as Json }
         },
       }),
       defineTool({

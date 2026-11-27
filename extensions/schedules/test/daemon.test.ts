@@ -51,7 +51,7 @@ it('schedules a wake from the agent, says what it understood, fires it into the 
   const thread = await daemon.thread('Open the PR and check CI every 30 min until green')
   const [call] = await daemon.toolCalls(thread)
   expect(call!.result!.isError).toBe(false)
-  expect(call!.result!.text).toMatch(/^Scheduled s_ci "Check CI": every 30 min, first (today|tomorrow) \d\d:\d\d \(in 30m\); then \d\d:\d\d, \d\d:\d\d\. /)
+  expect(call!.result!.text).toMatch(/^Scheduled s_ci "Check CI", a wake: every 30 min, first (today|tomorrow) \d\d:\d\d \(in 30m\); then \d\d:\d\d, \d\d:\d\d\. /)
   expect(call!.result!.text).toMatch(/At most 48 runs, until .+, or until: CI is green\. Times are /)
   const facts = (await daemon.facts(thread)).schedules as Facts
   expect(facts).toMatchObject({ count: 1, label: 'Check CI', next: clock.now() + 30 * MINUTE })
@@ -113,4 +113,26 @@ it('fires a run missed while Superego was down once it starts, saying how late',
   const messages = await said(thread.id)
   expect(messages.find((m) => m.notice)).toEqual({ notice: "Deploy ran 2h late, as Superego wasn't running.", by: 'schedules' })
   expect(messages.find((m) => m.by === 'schedules' && m.message)?.message).toMatch(/^Check the deploy\.⏰ Scheduled: Deploy \(once, .+\nLate: it was due .+ and ran \d\d:\d\d\.$/)
+}, 30_000)
+
+it('reminds the user with a notice, no run, the thread made unread; changes a schedule; reads a time and what was said', async () => {
+  const clock = testClock()
+  daemon = await testDaemon({ extensions: [schedulesExtension({ clock })], model: 'echo' })
+  const thread = await daemon.thread()
+  const s = await daemon.dispatch<Schedule>('schedules.add', { thread: thread.id, when: 'in 2h', message: 'Review Mia’s PR.', action: 'notify' })
+  // Changed: a reminder for another time, saying more.
+  const changed = await daemon.dispatch<Schedule>('schedules.update', { id: s.id, when: 'in 30m', message: 'Review Mia’s PR (#209).' })
+  expect(changed).toMatchObject({ action: 'notify', next: clock.now() + 30 * MINUTE, label: 'Review Mia’s PR (#209)' })
+  clock.advance(30 * MINUTE)
+  await daemon.until(async () => (await entries(thread.id)).some((e) => e.kind === 'superego.note'), 'the reminder', 10_000)
+  const note = (await entries(thread.id)).find((e) => e.kind === 'superego.note')!
+  expect(note.data).toMatchObject({ text: 'Review Mia’s PR (#209).', by: 'schedules', kind: 'schedules.reminder' })
+  // No run: what the agent has of it is the notice, as context.
+  expect((await said(thread.id)).filter((m) => m.message)).toEqual([])
+  expect((await daemon.info(thread)).status).toMatchObject({ state: 'done' })
+
+  expect(await daemon.call('schedules.understand', { when: 'every weekday at 9' })).toMatchObject({ how: 'every weekday at 09:00', repeats: true })
+  await expect(daemon.call('schedules.understand', { when: 'whenever' })).rejects.toThrow(/isn't a time I understand/)
+  expect(await daemon.call('schedules.split', { text: 'remind me in 1h to stretch' })).toEqual({ when: 'in 1h', message: 'Stretch', action: 'notify' })
+  expect(await daemon.call('schedules.split', { text: 'check the deploy sometime' })).toBeNull()
 }, 30_000)

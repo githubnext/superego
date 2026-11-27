@@ -1,8 +1,9 @@
 // schedules: the scheduler, apart from the daemon so tests drive it with their own clock and threads. It keeps every
-// schedule of the machine, says which are due (`tick`, from the daemon's timer and its minute's tick), and wakes a
-// thread once it's free: not in a run, not waiting on the user (a question, a permission, a sign-in), not stuck. A
-// schedule due while its thread is busy waits (`pending`), one firing at most: what comes due meanwhile is missed, not
-// stacked, and a repeating one's next run counts from when it went, so a long run doesn't bring two back to back.
+// schedule of the machine, says which are due (`tick`, from the daemon's timer and its minute's tick), and fires them.
+// A wake goes once its thread is free: not in a run, not waiting on the user (a question, a permission, a sign-in), not
+// stuck. A wake due while its thread is busy waits (`pending`), one firing at most: what comes due meanwhile is missed,
+// not stacked, and an interval's next run counts from when it went, so a long run doesn't bring two back to back. A
+// reminder (notify) doesn't wait: a notice in the thread, no run, is fine while it works.
 //
 // Missed runs (the machine asleep, Superego not running) fire once, late, saying how late and how many were skipped; a
 // one-shot fires however late. A repeating one whose end passed meanwhile ends instead, saying so. An archived thread's
@@ -11,11 +12,21 @@
 //
 // Every change is saved at once (`host.save`) and told (`host.changed`), so the window and the facts follow.
 import { RpcError, type ThreadInfo } from '@superego/protocol'
-import { CAPS, SCHEDULED, type EndedWhy, type Facts, type Schedule } from './shared.ts'
-import { clockTime, DAY, everyWords, MINUTE, parseAt, parseWhen, shortDuration, shortWhen, WhenError } from './when.ts'
+import { CAPS, REMINDER, SCHEDULED, type Action, type EndedWhy, type Facts, type Reminder, type Schedule, type When } from './shared.ts'
+import { clockTime, DAY, firstRun, howWords, MINUTE, nextAfter, parseAt, parseWhen, repeats, runsBetween, shortDuration, shortestGap, shortWhen, WhenError } from './when.ts'
 
 /** The guards, as this machine's settings say (`CAPS` bound them). */
 export type Limits = { minInterval: number; maxRuns: number; days: number; perThread: number }
+
+/** What a notice in a thread says, beyond its text. */
+export type NoticeOptions = {
+  /** Tell the agent too: its text (`true`), or these words. */
+  agent: boolean | string
+  actions?: NoticeButton[]
+  /** Drawn by the window as this kind (a reminder), given `data`. */
+  kind?: string
+  data?: Reminder
+}
 
 /** What the scheduler needs of the daemon. */
 export type SchedulerHost = {
@@ -31,12 +42,14 @@ export type SchedulerHost = {
    * it for the agent alone: which schedule, which run, how late, when to stop.
    */
   wake(schedule: Schedule, firing: { message: string; context: string }): Promise<void>
-  /** Tell the user in the thread (a notice); `agent`: tell its agent too. */
-  notice(thread: string, text: string, options: { agent: boolean; actions?: NoticeButton[] }): Promise<void>
+  /** Tell the user in the thread (a notice: unread, notified, no run). */
+  notice(thread: string, text: string, options: NoticeOptions): Promise<void>
   save(all: Schedule[]): Promise<void>
   /** The threads whose schedules changed. */
   changed(threads: string[]): void
   limits(): Limits
+  /** The machine's timezone now: a calendar schedule keeps the one it was made in. */
+  tz?(): string
   /** A new schedule's id (`s_<rand>`, unless a test names them). */
   id?(): string
 }
@@ -45,7 +58,9 @@ export type SchedulerHost = {
 export type NoticeButton = { label: string; action: string; params: { id: string }; style?: 'primary' | 'danger' }
 
 /** What `schedules.add` and the `schedule` tool take. */
-export type NewSchedule = { thread: string; when: string; message: string; label?: string; until?: string; maxRuns?: number; ends?: string }
+export type NewSchedule = { thread: string; when: string; message: string; label?: string; action?: Action; until?: string; maxRuns?: number; ends?: string }
+/** What `schedules.update` changes: what's given (`until: ''` clears it). */
+export type ScheduleChange = Partial<Omit<NewSchedule, 'thread'>>
 
 /** How late a run may go before it says so: a little over the minute's tick. */
 export const LATE = 2 * MINUTE
@@ -55,6 +70,7 @@ export const HELD_FOR = 30 * DAY
 export const KEPT_FOR = 7 * DAY
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`
+const ACTIONS: readonly Action[] = ['wake', 'notify', 'both']
 
 /** A short name from a message: its first words. */
 export function labelOf(message: string) {
@@ -65,12 +81,15 @@ export function labelOf(message: string) {
 /** Whether it's still going (paused or held too): not ended. */
 export const live = (s: Schedule) => !s.ended
 
+/** Whether it wakes the agent (alone, or as well as reminding): what waits for its thread to be free. */
+export const wakes = (s: Pick<Schedule, 'action'>) => s.action !== 'notify'
+
 /** Its next runs from `next` on, `count` at most, within its runs and end. */
 export function upcoming(s: Pick<Schedule, 'when' | 'next' | 'runs' | 'maxRuns' | 'ends'>, count = 3): number[] {
   if (s.next === null) return []
-  if ('at' in s.when) return [s.next]
+  if (!repeats(s.when)) return [s.next]
   const times: number[] = []
-  for (let at = s.next; times.length < count && s.runs + times.length < s.maxRuns && (s.ends === undefined || at <= s.ends); at += s.when.every) times.push(at)
+  for (let at: number | null = s.next; at !== null && times.length < count && s.runs + times.length < s.maxRuns && (s.ends === undefined || at <= s.ends); at = nextAfter(s.when, at)) times.push(at)
   return times
 }
 
@@ -86,6 +105,14 @@ export function factsOf(list: Schedule[]): Facts | undefined {
 }
 
 const invalid = (message: string) => new RpcError('invalid', message)
+
+/** A time in words, read; a `WhenError` as an `invalid` one, saying `what` it was for. */
+function read<T>(work: () => T, what?: string): T {
+  try { return work() } catch (error) {
+    if (error instanceof WhenError) throw invalid(what ? `${what}: ${error.message}` : error.message)
+    throw error
+  }
+}
 
 export function scheduler(host: SchedulerHost) {
   const all = new Map<string, Schedule>()
@@ -111,9 +138,10 @@ export function scheduler(host: SchedulerHost) {
     return s
   }
   /** A notice in the thread; one that can't be given (the thread archived meanwhile, say) is logged, and scheduling goes on. */
-  const tell = (thread: string, text: string, options: Parameters<SchedulerHost['notice']>[2]) =>
+  const tell = (thread: string, text: string, options: NoticeOptions) =>
     host.notice(thread, text, options).catch((error: unknown) => console.error(`schedules: telling ${thread} "${text}" failed:`, error))
   const of = (thread: string) => [...all.values()].filter((s) => s.thread === thread)
+  const tz = () => host.tz?.() ?? Intl.DateTimeFormat().resolvedOptions().timeZone
 
   function end(s: Schedule, why: EndedWhy, reason?: string) {
     s.ended = { at: host.now(), why, ...(reason ? { reason } : {}) }
@@ -129,13 +157,51 @@ export function scheduler(host: SchedulerHost) {
     }
   }
 
+  /**
+   * What a schedule is from what was said (`input`), checked against the guards: its time read (unless `kept`, the
+   * time it has, which stands), its runs and end. `was`: the schedule it changes, whose runs count. Throws `invalid`.
+   */
+  function shape(input: Omit<NewSchedule, 'thread'>, now: number, { kept, was }: { kept?: { when: When; next: number | null }; was?: Schedule } = {}) {
+    const limits = host.limits()
+    const message = input.message.trim()
+    if (!message) throw invalid('A schedule needs a message: what the agent is told, or you are reminded of, when it fires.')
+    const action = input.action ?? 'wake'
+    if (!ACTIONS.includes(action)) throw invalid(`action is wake, notify or both, not ${String(action)}.`)
+    const when = kept?.when ?? read(() => parseWhen(input.when, now, tz()))
+    const next = kept ? kept.next : firstRun(when, now)
+    if (next === null) throw invalid(`"${input.when}" never comes.`)
+    const out: Pick<Schedule, 'label' | 'message' | 'action' | 'when' | 'said' | 'next' | 'maxRuns' | 'until' | 'ends'> = {
+      label: input.label?.trim() || labelOf(message), message, action, when, said: input.when.trim(), next, maxRuns: 1,
+    }
+    if (repeats(when)) {
+      const min = action === 'notify' ? CAPS.minIntervalMinutes : limits.minInterval
+      const gap = shortestGap(when, now)
+      if (gap !== undefined && gap < min * MINUTE) throw invalid(`${howWords(when)} is too often: at most every ${min} min${action === 'notify' ? '' : ' for a wake'}.`)
+      const maxRuns = input.maxRuns ?? was?.maxRuns ?? limits.maxRuns
+      if (!Number.isInteger(maxRuns) || maxRuns < 1) throw invalid('maxRuns is a whole number of runs, 1 or more.')
+      if (maxRuns > CAPS.maxRuns) throw invalid(`maxRuns is ${CAPS.maxRuns} at most.`)
+      if (was && maxRuns <= was.runs) throw invalid(`It has run ${plural(was.runs, 'time')} already: give it more runs than that.`)
+      let ends = was?.ends ?? now + limits.days * DAY
+      if (input.ends) ends = read(() => parseAt(input.ends!, now), 'ends')
+      if (ends > now + CAPS.days * DAY) throw invalid(`A schedule ends ${CAPS.days} days ahead at most.`)
+      if (ends < next) throw invalid(`It ends (${shortWhen(ends, now)}) before its next run (${shortWhen(next, now)}).`)
+      out.maxRuns = maxRuns
+      out.ends = ends
+      if (input.until?.trim()) out.until = input.until.trim()
+    } else if (input.until?.trim() || input.maxRuns !== undefined || input.ends) {
+      throw invalid('until, maxRuns and ends are for a repeating schedule ("every 30m", "every weekday at 9"); this one runs once.')
+    }
+    return out
+  }
+
   /** What the agent is told with a firing's words: which schedule and run it is, how late, and when to stop. */
   function wakeContext(s: Schedule, { run, next, due, now, missed, late }: { run: number; next: number | null; due: number; now: number; missed: number; late: boolean }) {
-    const what = 'every' in s.when
-      ? `run ${run} of up to ${s.maxRuns}, ${everyWords(s.when.every)}; ${next !== null ? `next ${shortWhen(next, now)}` : 'its last run'}`
+    const what = repeats(s.when)
+      ? `run ${run} of up to ${s.maxRuns}, ${howWords(s.when)}; ${next !== null ? `next ${shortWhen(next, now)}` : 'its last run'}`
       : `once, for ${shortWhen(due, now)}`
     return [
       `${SCHEDULED} ${s.label} (${what}). The message is this schedule's (${s.id}), sent for the user, not typed by them.`,
+      s.action === 'both' && 'The user was shown it as a reminder too.',
       late && `Late: it was due ${shortWhen(due, now)} and ran ${clockTime(now)}${missed ? `; ${plural(missed, 'run')} missed` : ''}.`,
       s.until && `Stop when: ${s.until}. If that now holds, call schedule_cancel({ id: "${s.id}", reason }) after you've checked.`,
     ].filter(Boolean).join('\n')
@@ -144,29 +210,41 @@ export function scheduler(host: SchedulerHost) {
   /** Why a run was late, in words. */
   const lateWords = (due: number, now: number) => `${shortDuration(now - due)} late, ${due < host.started ? "as Superego wasn't running" : 'as this machine was asleep'}`
 
-  /** Fire `s` (pending) into its thread, now free. */
+  /** Fire `s` (pending): its reminder, its wake (its thread free), or both. */
   async function fire(s: Schedule, now: number) {
     const pending = s.pending!
-    const every = 'every' in s.when ? s.when.every : undefined
     // Runs that came due while it waited for the thread are missed, not stacked.
-    const missed = pending.missed + (every ? Math.floor((now - pending.since) / every) : 0)
+    const missed = pending.missed + runsBetween(s.when, pending.since, now)
     const late = pending.since - pending.due > LATE
     const run = s.runs + 1
-    let next: number | null = every ? now + every : null
-    let ended: EndedWhy | undefined = every ? undefined : 'done'
-    if (every && run >= s.maxRuns) { ended = 'maxRuns'; next = null }
-    else if (every && s.ends !== undefined && next! > s.ends) { ended = 'ends'; next = null }
-    if (late && !pending.told) {
-      pending.told = true
-      await tell(s.thread, `${s.label} ran ${lateWords(pending.due, pending.since)}.${missed ? ` ${plural(missed, 'run')} skipped.` : ''}`, { agent: false })
-    }
+    let next = nextAfter(s.when, now)
+    let ended: EndedWhy | undefined = repeats(s.when) ? next === null ? 'done' : undefined : 'done'
+    if (repeats(s.when) && run >= s.maxRuns) { ended = 'maxRuns'; next = null }
+    else if (next !== null && s.ends !== undefined && next > s.ends) { ended = 'ends'; next = null }
     try {
-      await host.wake(s, { message: s.message, context: wakeContext(s, { run, next, due: pending.due, now, missed, late }) })
+      if (s.action !== 'wake' && !pending.reminded) {
+        const data: Reminder = {
+          id: s.id, label: s.label, message: s.message, run, ...(repeats(s.when) ? { maxRuns: s.maxRuns, how: howWords(s.when) } : {}), ...(late ? { late: pending.due } : {}),
+        }
+        await host.notice(s.thread, s.message, {
+          // Doing both, the wake tells it; else it's told the user was reminded, as context.
+          agent: s.action === 'both' ? false : `Reminded the user, as scheduled (${s.id}, "${s.label}"): ${s.message}`,
+          kind: REMINDER, data,
+        })
+        pending.reminded = true
+        pending.told = true
+      }
+      if (late && !pending.told) {
+        pending.told = true
+        await tell(s.thread, `${s.label} ran ${lateWords(pending.due, pending.since)}.${missed ? ` ${plural(missed, 'run')} skipped.` : ''}`, { agent: false })
+      }
+      if (wakes(s)) await host.wake(s, { message: s.message, context: wakeContext(s, { run, next, due: pending.due, now, missed, late }) })
     } catch (error) {
       // It stays due, and goes again with the next tick; its row says why it didn't.
       const message = error instanceof Error ? error.message : String(error)
-      console.error(`schedules: waking ${s.thread} for ${s.id} failed:`, error)
-      if (s.error !== message) { s.error = message; touch(s) }
+      console.error(`schedules: firing ${s.id} into ${s.thread} failed:`, error)
+      if (s.error !== message) s.error = message
+      touch(s)
       return
     }
     delete s.error
@@ -174,7 +252,7 @@ export function scheduler(host: SchedulerHost) {
     s.runs = run
     s.lastRun = now
     s.missed += missed
-    s.awaiting = true
+    if (wakes(s)) s.awaiting = true
     s.next = next
     touch(s)
     if (ended) end(s, ended)
@@ -182,7 +260,7 @@ export function scheduler(host: SchedulerHost) {
     if (ended === 'ends') await tell(s.thread, `${s.label} stopped: it reached its end, ${shortWhen(s.ends!, now)}.`, { agent: false })
   }
 
-  /** Fire what's pending for a thread, if it's free. */
+  /** Fire what's pending for a thread: its reminders at once, its wakes if it's free. */
   async function deliver(thread: string) {
     const waiting = of(thread).filter((s) => s.pending && live(s) && (!s.paused || s.pending.now) && s.held === undefined)
     if (!waiting.length) return
@@ -197,8 +275,9 @@ export function scheduler(host: SchedulerHost) {
       await deliver(info.continuedIn)
       return
     }
-    if (info.archived || info.without?.includes('schedules') || host.busy(info)) return
-    for (const s of waiting) await fire(s, host.now())
+    if (info.archived || info.without?.includes('schedules')) return
+    const busy = host.busy(info)
+    for (const s of waiting) if (!busy || !wakes(s)) await fire(s, host.now())
   }
 
   async function due() {
@@ -213,13 +292,12 @@ export function scheduler(host: SchedulerHost) {
         continue
       }
       if (s.paused || s.pending || s.next === null || s.next > now) continue
-      if ('every' in s.when && s.ends !== undefined && now >= s.ends) {
+      if (repeats(s.when) && s.ends !== undefined && now >= s.ends) {
         end(s, 'ends')
         await tell(s.thread, `${s.label} ended: its end, ${shortWhen(s.ends, now)}, passed ${s.ends < host.started ? "while Superego wasn't running" : 'while this machine was asleep'}.`, { agent: true })
         continue
       }
-      const missed = 'every' in s.when ? Math.floor((now - s.next) / s.when.every) : 0
-      s.pending = { since: now, due: s.next, missed }
+      s.pending = { since: now, due: s.next, missed: runsBetween(s.when, s.next, now) }
       touch(s)
     }
     for (const thread of new Set([...all.values()].filter((s) => s.pending).map((s) => s.thread))) {
@@ -228,6 +306,9 @@ export function scheduler(host: SchedulerHost) {
     }
   }
 
+  /** Its next run from now, going on (resumed, back from archived): an interval's from now, the calendar's next. */
+  const goOn = (s: Schedule, now: number) => repeats(s.when) ? nextAfter(s.when, now) : now
+
   return {
     load(list: Schedule[]) { for (const s of list) all.set(s.id, s) },
     /** Every schedule, or a thread's, ended ones too. */
@@ -235,6 +316,8 @@ export function scheduler(host: SchedulerHost) {
     get: (id: string) => all.get(id),
     /** A thread's schedules that are going (paused ones too), soonest first. */
     active: (thread: string) => of(thread).filter((s) => live(s)).sort((a, b) => (a.next ?? Infinity) - (b.next ?? Infinity)),
+    /** Every thread's schedules that are going, soonest first. */
+    going: () => [...all.values()].filter((s) => live(s)).sort((a, b) => (a.next ?? Infinity) - (b.next ?? Infinity)),
     facts: (thread: string) => factsOf(of(thread)),
     /** The soonest a schedule comes due, for the timer. */
     soonest() {
@@ -242,46 +325,54 @@ export function scheduler(host: SchedulerHost) {
       for (const s of all.values()) if (live(s) && !s.paused && s.held === undefined && !s.pending && s.next !== null && (soonest === undefined || s.next < soonest)) soonest = s.next
       return soonest
     },
+    /** What `when` comes to now, as a form shows it while it's typed; throws `invalid` saying what's wrong. */
+    understand(when: string, action: Action = 'wake') {
+      const now = host.now()
+      const s = shape({ when, message: '-', action }, now)
+      return { how: repeats(s.when) ? howWords(s.when) : 'once', times: upcoming({ ...s, runs: 0 }), repeats: repeats(s.when), tz: 'cron' in s.when ? s.when.tz : tz() }
+    },
 
     /** Make one, from the user's words; throws an `RpcError` saying what's wrong. */
     add: (input: NewSchedule, by: string) => serial(async () => {
       const now = host.now()
       const limits = host.limits()
-      const message = input.message.trim()
-      if (!message) throw invalid('A schedule needs a message: what the agent is told when it fires.')
-      let when
-      try { when = parseWhen(input.when, now) } catch (error) {
-        if (error instanceof WhenError) throw invalid(error.message)
-        throw error
-      }
+      const shaped = shape(input, now)
       const going = [...all.values()].filter(live)
       if (going.filter((s) => s.thread === input.thread).length >= limits.perThread) throw invalid(`This thread has ${limits.perThread} schedules already, the most it may: cancel one first.`)
       if (going.length >= CAPS.perMachine) throw invalid(`This machine has ${CAPS.perMachine} schedules already, the most it may: cancel one first.`)
-      const s: Schedule = {
-        id: newId(), thread: input.thread, label: input.label?.trim() || labelOf(message), message, action: 'wake', when, said: input.when.trim(),
-        maxRuns: 1, next: 'at' in when ? when.at : when.anchor + when.every, runs: 0, missed: 0, paused: false, by, created: now,
-      }
-      if ('every' in when) {
-        if (when.every < limits.minInterval * MINUTE) throw invalid(`${everyWords(when.every)} is too often: at least every ${limits.minInterval} min.`)
-        const maxRuns = input.maxRuns ?? limits.maxRuns
-        if (!Number.isInteger(maxRuns) || maxRuns < 1) throw invalid('maxRuns is a whole number of runs, 1 or more.')
-        if (maxRuns > CAPS.maxRuns) throw invalid(`maxRuns is ${CAPS.maxRuns} at most.`)
-        let ends = now + limits.days * DAY
-        if (input.ends) {
-          try { ends = parseAt(input.ends, now) } catch (error) {
-            if (error instanceof WhenError) throw invalid(`ends: ${error.message}`)
-            throw error
-          }
-        }
-        if (ends > now + CAPS.days * DAY) throw invalid(`A schedule ends ${CAPS.days} days ahead at most.`)
-        if (ends < s.next!) throw invalid(`It ends (${shortWhen(ends, now)}) before its first run (${shortWhen(s.next!, now)}).`)
-        s.maxRuns = maxRuns
-        s.ends = ends
-        if (input.until?.trim()) s.until = input.until.trim()
-      } else if (input.until?.trim() || input.maxRuns !== undefined || input.ends) {
-        throw invalid('until, maxRuns and ends are for a repeating schedule ("every 30m"); this one runs once.')
-      }
+      const s: Schedule = { id: newId(), thread: input.thread, ...shaped, runs: 0, missed: 0, paused: false, by, created: now }
       all.set(s.id, s)
+      touch(s)
+      await commit()
+      return s
+    }),
+
+    /**
+     * Change one: what's given of what it says, when, what it does, its runs and end (`until: ''` clears its
+     * condition). A new time counts from now; the same words keep the time it has. Throws `invalid` saying what's wrong.
+     */
+    update: (id: string, change: ScheduleChange) => serial(async () => {
+      const s = find(id)
+      if (s.ended) throw invalid(`${s.label} has ended.`)
+      const now = host.now()
+      const said = change.when?.trim()
+      const retimed = said !== undefined && said !== s.said
+      const repeating = retimed ? repeats(read(() => parseWhen(said, now, tz()))) : repeats(s.when)
+      const input: Omit<NewSchedule, 'thread'> = {
+        when: said ?? s.said, message: change.message ?? s.message, action: change.action ?? s.action,
+        // A new message names it anew, unless it had a name of its own.
+        label: change.label ?? (change.message !== undefined && s.label === labelOf(s.message) ? '' : s.label),
+        ...(repeating ? { until: change.until ?? s.until ?? '' } : change.until ? { until: change.until } : {}),
+        ...(change.maxRuns !== undefined ? { maxRuns: change.maxRuns } : {}),
+        ...(change.ends ? { ends: change.ends } : {}),
+      }
+      const shaped = shape(input, now, { ...(retimed ? {} : { kept: { when: s.when, next: s.next } }), ...(repeating ? { was: s } : {}) })
+      Object.assign(s, shaped)
+      if (!shaped.until) delete s.until
+      if (!repeating) { delete s.ends; s.maxRuns = 1 }
+      // Its error was the old one's; a firing waiting goes with the new time (a new time, it waits no longer).
+      delete s.error
+      if (retimed) delete s.pending
       touch(s)
       await commit()
       return s
@@ -313,14 +404,14 @@ export function scheduler(host: SchedulerHost) {
       s.paused = false
       s.failures = 0
       // A repeating one goes on from now; a one-shot past its time fires now (not late: it waited on purpose).
-      if (s.next !== null && s.next <= now) s.next = 'every' in s.when ? now + s.when.every : now
+      if (s.next !== null && s.next <= now) s.next = goOn(s, now)
       touch(s)
       await commit()
       await due()
       await commit()
       return s
     }),
-    /** Fire it now (once its thread is free), whatever its time; paused, it stays paused after. */
+    /** Fire it now (a wake once its thread is free), whatever its time; paused, it stays paused after. */
     run: (id: string) => serial(async () => {
       const s = find(id)
       if (s.ended) throw invalid(`${s.label} has ended.`)
@@ -366,7 +457,7 @@ export function scheduler(host: SchedulerHost) {
         delete s.held
         touch(s)
         if (s.next === null || s.next > now) continue
-        if ('every' in s.when) s.next = now + s.when.every
+        if (repeats(s.when)) s.next = goOn(s, now)
         else if (!s.paused) { s.paused = true; missed.push(s) }
       }
       await commit()

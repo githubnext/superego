@@ -68,7 +68,7 @@ Extensions) or per profile (`without`).
 | `mentions` | `@` in the composer names another thread, a file, or an extension's thing (`composer.mention`) |
 | `skills` | skills from `~/.agents/skills`: in the prompt, `$name` in the composer, a view listing them |
 | `suggestions` | after each answer, what you might send next |
-| `schedules` | wake a thread at a time or every so often (`schedule`); the clock in its header and on its row |
+| `schedules` | wake a thread or remind the user at a time, every so often or on the calendar (`schedule`); the clock in its header and on its row, its form, `/schedule`, every schedule on the machine |
 | `tasks` | `task_start`/`task_finish`, and the transcript folded by task |
 | `terminal` | a shell beside a thread, run by the machine; drawn by ghostty-web |
 | `processes` | servers, watchers and long builds a thread (or a folder) runs, outliving the daemon; `process_*`, the chip, the Processes pane, reports when one ends |

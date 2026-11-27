@@ -6,7 +6,7 @@ import type { InboxState } from '@earendil-works/pi-durable'
 import type { Attachment, ThreadInfo } from '@superego/protocol'
 import { autoFocusOnOpen, ArrowDownIcon, ArrowElbowRightIcon, ArrowUpIcon, Button, IconButton, ListIcon, useUnderFinger, XIcon } from '@superego/ui'
 import type { MachineEntry } from '../shared/bridge.ts'
-import { useRegistry } from './registry.tsx'
+import { extensionCommands, useRegistry } from './registry.tsx'
 import { sentWithIn, shownPanes } from './lookups.ts'
 import { Slot } from './placement.tsx'
 import { NoModel } from './Setup.tsx'
@@ -17,6 +17,7 @@ import { readSent } from './composer.ts'
 import { ComposerBox } from './composer-box.tsx'
 import { composerItems, focusTaken, takeInserted, setComposerItems, useComposerItems, useFocusAsked } from './composer-items.ts'
 import { commandIn } from './slash-commands.ts'
+import type { ComposerCommand } from './composer.ts'
 import { ArchiveFailed } from './clear-thread.ts'
 import { onGivenBack, takeBack } from './returned.ts'
 import { ProfileSwitch } from './profile-pick.tsx'
@@ -186,16 +187,22 @@ export function ComposerView({ machine, thread, busy, inbox, onJump }: { machine
     picked: offering ? offers.picked : undefined,
   }), [text, setText, suggest, offering, offers.picked])
 
-  /** Send what the box holds (`typed`: a suggestion picked instead). */
-  const send = async (whenBusy: 'steer' | 'followUp' = 'steer', typed?: string) => {
+  /**
+   * Send what the box holds (`typed`: a suggestion picked instead, or what an extension's command handed back to send,
+   * `plain`: as a message, not read as a command again).
+   */
+  const send = async (whenBusy: 'steer' | 'followUp' = 'steer', typed?: string, plain = false) => {
     // What the box holds now: a keypress straight after typing can come before the typing's render.
     const value = (typed ?? input.current?.value ?? text).trim()
     const sending = claim ? [] : files
     const sendingItems = claim ? [] : items
     const attachments = [...sending, ...sendingItems.flatMap((item) => item.files)]
     if (!value && !attachments.length) return
-    // A command runs instead: `/clear` with what's typed after it and what goes with it, `/compact` with what's typed.
-    const command = claim ? undefined : commandIn(value, thread)
+    // A command runs instead: `/clear` with what's typed after it and what goes with it, `/compact` with what's typed,
+    // an extension's with what's typed.
+    const found = claim || plain ? undefined : commandIn(value, thread, extensionCommands(registry, machine.id, thread))
+    if (found && typeof found.command === 'object') return runCommand(found.command, found.rest, value, whenBusy)
+    const command = found as { command: 'clear' | 'compact'; rest: string } | undefined
     if (command?.command === 'compact') return compact(value, command.rest)
     setText('')
     setFiles([])
@@ -221,6 +228,22 @@ export function ComposerView({ machine, thread, busy, inbox, onJump }: { machine
         if (sendingItems.length) setComposerItems(where, [...sendingItems, ...composerItems(where)])
       }
       setError(error as { kind?: string; message: string })
+    }
+  }
+  /**
+   * Run an extension's command (`/schedule in 30m …`) with what follows its name; what it hands back to send goes as a
+   * message. If it can't run, what's typed comes back, and why it couldn't shows under the box.
+   */
+  const runCommand = async (command: ComposerCommand, rest: string, typed: string, whenBusy: 'steer' | 'followUp') => {
+    setText('')
+    setError(undefined)
+    try {
+      const result = await command.run(rest, { machine, thread })
+      if (result && typeof result.send === 'string') await send(whenBusy, result.send, true)
+    } catch (error) {
+      console.error(`The command /${command.name} failed`, error)
+      setText((now) => now || typed)
+      setError({ message: error instanceof Error ? error.message : String(error) })
     }
   }
   /** Compact the thread's conversation (`/compact`), `instructions` saying what to keep; what's typed back if it can't. */

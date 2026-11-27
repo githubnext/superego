@@ -17,7 +17,7 @@ function setUp() {
   let now = START
   const threads = new Map<string, ThreadInfo>([['1', thread('1')], ['2', thread('2')]])
   const woken: [string, string][] = []
-  const notices: { thread: string; text: string; agent: boolean; actions?: unknown[] }[] = []
+  const notices: { thread: string; text: string; agent: boolean | string; actions?: unknown[]; kind?: string; data?: unknown }[] = []
   let saved: Schedule[] = []
   const changed: string[][] = []
   const host: SchedulerHost = {
@@ -26,7 +26,7 @@ function setUp() {
     info: async (id) => threads.get(id),
     busy: (t) => t.status.state === 'working' || t.status.state === 'blocked',
     wake: async (s, { message, context }) => { woken.push([s.thread, `${message}\n---\n${context}`]) },
-    notice: async (id, text, { agent, actions }) => { notices.push({ thread: id, text, agent, ...(actions ? { actions } : {}) }) },
+    notice: async (id, text, { agent, actions, kind, data }) => { notices.push({ thread: id, text, agent, ...(actions ? { actions } : {}), ...(kind ? { kind, data } : {}) }) },
     save: async (all) => { saved = structuredClone(all) },
     changed: (ids) => { changed.push(ids) },
     limits: () => ({ minInterval: 5, maxRuns: 48, days: 7, perThread: 10 }),
@@ -206,7 +206,7 @@ it('follows its thread where it continues', async () => {
 
 it('keeps to the guards', async () => {
   const { sched } = world
-  await expect(sched.add({ thread: '1', when: 'every 2m', message: 'x' }, 'agent')).rejects.toThrow('every 2 min is too often: at least every 5 min.')
+  await expect(sched.add({ thread: '1', when: 'every 2m', message: 'x' }, 'agent')).rejects.toThrow('every 2 min is too often: at most every 5 min for a wake.')
   await expect(sched.add({ thread: '1', when: 'every 30m', message: 'x', maxRuns: 501 }, 'agent')).rejects.toThrow(/500 at most/)
   await expect(sched.add({ thread: '1', when: 'every 30m', message: 'x', ends: 'in 40 days' }, 'agent')).rejects.toThrow(/30 days ahead at most/)
   await expect(sched.add({ thread: '1', when: 'in 1h', message: 'x', until: 'done' }, 'agent')).rejects.toThrow(/for a repeating schedule/)
@@ -217,4 +217,71 @@ it('keeps to the guards', async () => {
   for (let i = 1; i < 10; i++) await sched.add({ thread: '1', when: `in ${i}h`, message: 'x' }, 'agent')
   await expect(sched.add({ thread: '1', when: 'in 1h', message: 'x' }, 'agent')).rejects.toThrow(/has 10 schedules already/)
   await sched.add({ thread: '2', when: 'in 1h', message: 'x' }, 'agent')
+})
+
+it('reminds the user without a run, even while the thread works, late or not', async () => {
+  const { sched, woken, notices, advance, set } = world
+  set('1', { status: { state: 'working' } })
+  const s = await sched.add({ thread: '1', when: 'in 30m', message: "Review Mia's PR", action: 'notify' }, 'agent')
+  await advance(30 * MINUTE)
+  expect(woken).toEqual([])
+  expect(notices).toEqual([{
+    thread: '1', text: "Review Mia's PR", agent: `Reminded the user, as scheduled (${s.id}, "Review Mia's PR"): Review Mia's PR`,
+    kind: 'schedules.reminder', data: { id: s.id, label: "Review Mia's PR", message: "Review Mia's PR", run: 1 },
+  }])
+  expect(sched.get(s.id)).toMatchObject({ runs: 1, ended: { why: 'done' } })
+  expect(sched.get(s.id)?.awaiting).toBeUndefined()
+  // A repeating one, missed while asleep: once, said late in its own notice.
+  const every = await sched.add({ thread: '1', when: 'every 2m', message: 'Stretch.', action: 'notify' }, 'user')
+  await advance(10 * MINUTE + 30_000)
+  expect(notices.at(-1)).toMatchObject({ text: 'Stretch.', data: { run: 1, maxRuns: 48, how: 'every 2 min', late: every.created + 2 * MINUTE } })
+  expect(notices).toHaveLength(2)
+  expect(sched.get(every.id)).toMatchObject({ runs: 1, missed: 4 })
+})
+
+it('does both: the reminder once the thread is free, then the wake', async () => {
+  const { sched, woken, notices, advance, set } = world
+  set('1', { status: { state: 'working' } })
+  const s = await sched.add({ thread: '1', when: 'in 10m', message: 'Standup in 5.', action: 'both' }, 'user')
+  await advance(10 * MINUTE)
+  expect([woken, notices]).toEqual([[], []])
+  set('1', { status: { state: 'done' } })
+  await sched.turnEnded(world.threads.get('1')!)
+  expect(notices).toEqual([expect.objectContaining({ text: 'Standup in 5.', agent: false, kind: 'schedules.reminder' })])
+  expect(woken).toEqual([['1', expect.stringContaining('The user was shown it as a reminder too.')]])
+  expect(sched.get(s.id)?.ended?.why).toBe('done')
+})
+
+it('repeats on the calendar, in the zone it was made in', async () => {
+  const { sched, woken, advance } = world
+  // Tuesday 14:00: next is Wednesday 09:00, then Thursday's.
+  const s = await sched.add({ thread: '1', when: 'every weekday at 9', message: 'Morning check.' }, 'user')
+  const wednesday = new Date(2026, 4, 6, 9, 0).getTime()
+  expect(s).toMatchObject({ when: { cron: '0 9 * * 1-5' }, next: wednesday })
+  await advance(wednesday - START)
+  expect(woken[0]![1]).toMatch(/run 1 of up to 48, every weekday at 09:00; next tomorrow 09:00\)/)
+  await sched.turnEnded(world.threads.get('1')!)
+  expect(sched.get(s.id)?.next).toBe(new Date(2026, 4, 7, 9, 0).getTime())
+  // Asleep from Thursday morning to Monday noon: Thu, Fri and Mon came due; it fires once, two missed.
+  await advance(new Date(2026, 4, 11, 12, 0).getTime() - world.now)
+  expect(woken).toHaveLength(2)
+  expect(sched.get(s.id)).toMatchObject({ runs: 2, missed: 2, next: new Date(2026, 4, 12, 9, 0).getTime() })
+  await expect(sched.add({ thread: '1', when: '* * * * *', message: 'x' }, 'user')).rejects.toThrow(/too often/)
+})
+
+it('changes what a schedule says, when and what it does, and keeps its time when that stays', async () => {
+  const { sched, advance } = world
+  const s = await sched.add({ thread: '1', when: 'every 30m', message: 'Check CI.', until: 'CI is green' }, 'agent')
+  await advance(10 * MINUTE)
+  const same = await sched.update(s.id, { message: 'Check CI on #212.', action: 'both', when: 'every 30m' })
+  expect(same).toMatchObject({ message: 'Check CI on #212.', label: 'Check CI on #212', action: 'both', next: START + 30 * MINUTE, until: 'CI is green' })
+  const retimed = await sched.update(s.id, { when: 'every 2 hours', until: '' })
+  expect(retimed).toMatchObject({ said: 'every 2 hours', next: world.now + 2 * HOUR })
+  expect(retimed.until).toBeUndefined()
+  const once = await sched.update(s.id, { when: 'tomorrow 9:00', action: 'notify' })
+  expect(once).toMatchObject({ when: { at: new Date(2026, 4, 6, 9, 0).getTime() }, maxRuns: 1, action: 'notify' })
+  expect(once.ends).toBeUndefined()
+  await expect(sched.update(s.id, { when: 'every 1m', action: 'wake' })).rejects.toThrow(/too often/)
+  expect(sched.understand('every weekday at 9')).toMatchObject({ how: 'every weekday at 09:00', repeats: true, times: [new Date(2026, 4, 6, 9).getTime(), new Date(2026, 4, 7, 9).getTime(), new Date(2026, 4, 8, 9).getTime()] })
+  expect(() => sched.understand('whenever')).toThrow(/isn't a time I understand/)
 })

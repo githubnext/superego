@@ -9,7 +9,7 @@ import './app.css'
 import { bool, obj, opt, str, type AppConfig, type SettingsSnapshot } from '@superego/protocol'
 import { watched } from './client.ts'
 import type { UiExtension } from './extension-api.ts'
-import { createRegistry, RegistryProvider, type Registry } from './registry.tsx'
+import { createRegistry, extensionCommands, RegistryProvider, type Registry } from './registry.tsx'
 import { layoutOf, placeScope, scopedViews } from './placement.tsx'
 import { APP, LAYOUT } from '../shared/app-settings.ts'
 import { placeView, type Place } from '../shared/layout.ts'
@@ -125,8 +125,8 @@ export function windowRegistry(app: AppConfig, extensions: UiExtension[]) {
     for (const action of coreActions(app)) core.action(action)
     // The registry when it runs: being made, it isn't there yet.
     core.action(clearThreadAction(() => registry))
-    // Its own commands, `/clear`, completed before the skills a `/` also names.
-    core.composer.complete(commandCompletions)
+    // Its own commands, `/clear`, and extensions', completed before the skills a `/` also names.
+    core.composer.complete(commandCompletions((machine, thread) => extensionCommands(registry, machine, thread)))
     // Every thread in a menu, and a new one: at the title bar's start while there's no sidebar.
     core.view('core.picker', { title: 'Threads', context: 'window', fits: ['titlebar'], withoutSidebar: 'titlebar', component: ThreadPicker })
     // A view put in a place, or taken out (toggled, unless `on` says); `from`: taken out of that one too, moved there.

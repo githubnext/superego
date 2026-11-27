@@ -15,9 +15,12 @@
 - A thread says when its pull request's checks fail, a reviewer asks for changes or approves, or it's merged, with
   "Fix it" to hand the failure or the review to the agent. The agent isn't woken unless you choose Watch… on the pull
   request's chip (or ask it to watch): then it's woken when checks finish or a review comes in, until it's merged.
-- **Schedules.** Ask an agent to "check CI every 30 minutes until it's green" or "remind me tomorrow at 9", and it
-  wakes the thread then with a message. A clock in the thread's header and on its row in the sidebar shows the next
-  run; click it to run one now, pause it or cancel it. Runs missed while the computer slept fire once when it wakes,
+- **Schedules.** Ask an agent to "check CI every 30 minutes until it's green" and it wakes the thread then with a
+  message; "remind me tomorrow at 9 to review Mia's PR" just reminds you, without a turn. Times can repeat on the
+  calendar too ("every weekday at 9", or cron). A clock in the thread's header and on its row in the sidebar shows the
+  next run; click it to run one now, pause, edit or cancel it, or make a new one, the form saying what your time comes
+  to as you type it. `/schedule in 30m check the deploy` in the composer, "Schedule…" in a thread's menu and ⌘K make
+  one too, and "All schedules" lists every thread's. Runs missed while the computer slept fire once when it wakes,
   saying how late. It's the new Schedules extension, which Settings → Extensions can turn off.
 - **Processes.** Agents run servers, watchers and long builds as processes of their thread (`process_start`), not with
   `&`: they keep running through Superego's updates and restarts, and the thread is woken with the last lines when a
@@ -33,6 +36,8 @@
 - Dialogs have room around what's in them: text no longer touches the edge, and a field's focus ring isn't cut off.
 - Messages an extension sent for you (a child thread's report, say) show as an outlined bubble with the extension's
   name over it, so they don't read as typed by you.
+- New for extensions (extension API 5.19): `superego.composer.command({ name, detail, takes?, run })` adds a
+  `/<name>` command to the composer, run with what follows it instead of being sent.
 - New for extensions (extension API 5.17): `superego.threads.notice(id, { text, kind?, data?, actions?, agent? })`
   tells the user something in a thread without a run: a card under the extension's name, drawn by its `entry(kind)` or
   as text, with buttons that send the agent a message or dispatch an action; the thread turns unread and notifies, and

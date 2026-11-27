@@ -1,18 +1,29 @@
-// schedules: what both halves agree on. A schedule belongs to one thread and, when due, wakes it with a message: once
-// ("in 30m", "tomorrow 9:00") or every so often ("every 30m"), until the agent cancels it, a number of runs or an end
-// time. The daemon half keeps them (a file of its own, per machine) and fires them; the UI half draws a thread's.
+// schedules: what both halves agree on. A schedule belongs to one thread and, when due, wakes it with a message, reminds
+// the user (a notice, no run), or both: once ("in 30m", "tomorrow 9:00"), every so often ("every 30m") or on the
+// calendar ("every weekday at 9", cron), until the agent cancels it, a number of runs or an end time. The daemon half keeps them (a file of its own, per machine) and fires them; the UI half draws a thread's.
 import type { ExtensionAbout } from '@superego/protocol'
 
 export const about = {
-  name: 'schedules', version: '1.0.0', api: '^5.17', title: 'Schedules',
-  description: 'Wake a thread at a time, or every so often: "check CI every 30 minutes", "remind me tomorrow at 9".',
+  name: 'schedules', version: '1.1.0', api: '^5.19', title: 'Schedules',
+  description: 'Wake a thread or remind you at a time, every so often or on the calendar: "check CI every 30 minutes", "remind me tomorrow at 9".',
 } satisfies ExtensionAbout
 
 export const TOOLS = { schedule: 'schedule', list: 'schedule_list', cancel: 'schedule_cancel' } as const
 
 export const ACTIONS = {
-  add: 'schedules.add', pause: 'schedules.pause', resume: 'schedules.resume', run: 'schedules.run', cancel: 'schedules.cancel',
+  add: 'schedules.add', update: 'schedules.update', pause: 'schedules.pause', resume: 'schedules.resume', run: 'schedules.run', cancel: 'schedules.cancel',
+  /** The window's: the form for a new schedule in the shown thread, and the machine's every schedule. */
+  new: 'schedules.new', all: 'schedules.all',
 } as const
+
+/** What a schedule does when due: wake the agent with its message (a run), remind the user (a notice, no run), or both. */
+export type Action = 'wake' | 'notify' | 'both'
+export const ACTION_WORDS: Record<Action, string> = { wake: 'Wake the agent', notify: 'Remind me', both: 'Both' }
+
+/** The kind of a reminder's notice (`threads.notice`), drawn by the window. */
+export const REMINDER = 'schedules.reminder'
+/** A reminder's notice's data: which schedule, its run (of how many, repeating), and when it was due if it went late. */
+export type Reminder = { id: string; label: string; message: string; run: number; maxRuns?: number; how?: string; late?: number }
 
 /** How the context a firing gives the agent starts (`⏰ Scheduled: Check CI (run 1 of up to 48, …).`), for the window to find it. */
 export const SCHEDULED = '⏰ Scheduled:'
@@ -27,6 +38,15 @@ export function readFiring(text: string): { label: string; what: string; late: b
 export const THREAD_VALUE = 'schedules.thread'
 /** The method listing schedules (`{ thread? }`), ended ones too. */
 export const LIST_METHOD = 'schedules.list'
+/** The live value of the machine's schedules that are going, every thread's, soonest first. */
+export const ALL_VALUE = 'schedules.all'
+/** The method saying what a time in words comes to (`{ when, action? }` → `Understood`), for a form to show as it's typed. */
+export const UNDERSTAND_METHOD = 'schedules.understand'
+/** The method finding a time in what was said (`{ text }` → `{ when, message, action? }` or null), for `/schedule …`. */
+export const SPLIT_METHOD = 'schedules.split'
+
+/** What a time in words comes to: how it repeats in words, its next runs, and the zone they're in. */
+export type Understood = { how: string; times: number[]; repeats: boolean; tz: string }
 
 /** Machine settings (Settings → Schedules). */
 export const SETTINGS = {
@@ -41,8 +61,11 @@ export const CAPS = { maxRuns: 500, days: 30, perMachine: 100, minIntervalMinute
 /** The settings' defaults. */
 export const DEFAULTS = { minIntervalMinutes: 5, maxRuns: 48, days: 7, perThread: 10 } as const
 
-/** When a schedule fires: once, at a time (epoch ms); or every `every` ms, the first at `anchor + every`. */
-export type When = { at: number } | { every: number; anchor: number }
+/**
+ * When a schedule fires: once, at a time (epoch ms); every `every` ms, the first at `anchor + every`; or on the
+ * calendar, as `cron` says (five fields), on the wall clock of `tz` (the machine's zone when it was made).
+ */
+export type When = { at: number } | { every: number; anchor: number } | { cron: string; tz: string }
 
 /** Why a schedule ended. */
 export type EndedWhy = 'done' | 'cancelled' | 'maxRuns' | 'ends' | 'archived'
@@ -54,10 +77,10 @@ export type Schedule = {
   thread: string
   /** A short name for the UI ("Check CI"). */
   label: string
-  /** What the agent is told when it fires. */
+  /** What the agent is told when it fires (wake), or the user is reminded of (notify). */
   message: string
-  /** What it does when due. Only `wake` for now: a message that starts a run. */
-  action: 'wake'
+  /** What it does when due. */
+  action: Action
   when: When
   /** The words it was made from ("every 30m"), as the user or agent said them. */
   said: string
@@ -82,9 +105,9 @@ export type Schedule = {
   /**
    * Due, and waiting for its thread to be free (not working, not waiting on the user): `since` when it came due,
    * `due` the time it was due, `missed` the runs it skipped to get here; `now`, run now by the user (paused or not);
-   * `told`, its lateness said already.
+   * `told`, its lateness said already; `reminded`, its reminder given already (one that does both, its wake yet to go).
    */
-  pending?: { since: number; due: number; missed: number; now?: boolean; told?: boolean }
+  pending?: { since: number; due: number; missed: number; now?: boolean; told?: boolean; reminded?: boolean }
   /** Why its last firing couldn't be sent, if it couldn't: it's tried again with the next tick. */
   error?: string
   /** Wakes in a row whose run failed: two pause it. */
@@ -98,4 +121,4 @@ export type Schedule = {
 export type Facts = { next: number | null; label?: string; count: number; paused: number; pending: number }
 
 /** A `schedule` call's details, for its row: what was understood. */
-export type ScheduleDetails = { id: string; label: string; said: string; next: number | null; times: number[]; every?: number; until?: string; maxRuns: number; ends?: number }
+export type ScheduleDetails = { id: string; label: string; said: string; action: Action; next: number | null; times: number[]; how: string; every?: number; until?: string; maxRuns: number; ends?: number }

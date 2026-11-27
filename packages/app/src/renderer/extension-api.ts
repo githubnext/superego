@@ -14,7 +14,7 @@ import type { SetupFound } from './Setup.tsx'
 import type { Dispatch, WindowAction } from './actions.tsx'
 import type { Store } from './local-state.ts'
 import type { Place, Placement } from '../shared/layout.ts'
-import type { CompletionProvider, CompletionWord, ComposerWhere, MentionSource, SentWith } from './composer.ts'
+import type { CompletionProvider, CompletionWord, ComposerCommand, ComposerWhere, MentionSource, SentWith } from './composer.ts'
 import type { ImageItem } from './images.tsx'
 import type { Theme } from '@superego/ui/themes'
 
@@ -555,6 +555,12 @@ export type UiApi = {
      * (none of an extension its thread goes without). For a provider that completes `@` (the Mentions extension's).
      */
     mentionSources(where: ComposerWhere): readonly MentionSource[]
+    /**
+     * (API ^5.19) A command, `/<name>` opening a message (`ComposerCommand`): completed as `/` is typed, beside the
+     * composer's own (`/clear`, `/compact`) and skills, in the threads it `takes` (of a profile: its threads'); sent, it
+     * runs with what follows the name, instead of going to the agent. One per name; the composer's own can't be taken.
+     */
+    command(command: ComposerCommand): void
   }
 }
 
