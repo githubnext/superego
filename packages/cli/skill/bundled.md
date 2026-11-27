@@ -55,7 +55,7 @@ the window from `@superego/app/ui` (`defineAction` for window actions, hooks, co
 <!-- check: module; import type { ExtensionAbout } from 'superego' -->
 ```ts
 export const about = {
-  name: 'orders', version: '1.0.0', api: '^5', title: 'Orders', description: 'Look orders up.',
+  name: 'orders', version: '1.0.0', api: '^5.22', title: 'Orders', description: 'Look orders up.', group: 'beside',
   panes: { order: 'an order, with its lines and status. Params: { id }' },   // the kinds its UI half draws, for pane_open
 } satisfies ExtensionAbout
 // daemon.ts: defineDaemonExtension({ ...about, setup(superego) { … } })
@@ -71,6 +71,18 @@ the daemon lists its `about` alone (from its `shared.ts`, which has no UI code),
 start, window or not: lists it in Settings, tells the agent of its `panes`, and lets profiles do without it. A window
 also declares its extensions to each machine it connects to (`extension.declare`), for a daemon that doesn't bundle
 them.
+An optional one also says (API ^5.22) where Settings → Extensions lists it and which preset turns it on. A machine
+starts from a preset (`extensions.preset`: `core` or `full`, Full unless picked), and each switch is the preset's until
+the user changes it, so an extension new to a machine follows the preset:
+
+- `group`: what it's for, `'beside'` a thread (panes and what fills them), `'agent'` (what the agent can do and is
+  told), `'thread'` (what the transcript and composer show) or `'around'` (getting around the app). Unset: listed
+  under Other.
+- `core: true`: in Core, the few a newcomer starts with (coding tools, Git, panes, Ego…), as well as Full. Keep it for
+  what a first thread needs. Unset: in Full only.
+- `experimental: true`: in neither preset, so off until the user turns it on, and tagged Experimental. Picking a
+  preset again leaves its switch as it is. `testDaemon` turns on an experimental extension it's given.
+
 Where a window part and a machine part should differ, make them two extensions, a folder and an `about` each:
 `threads` is the required sidebar (UI only), and `thread-tools`, the agent's thread tools, is optional (daemon only).
 

@@ -6,6 +6,10 @@
   from your profile (its folder and its entries in `profile.ts`). Agents use the `process_*` tools on the process named
   `run`; the `run_status`, `run_logs`, `run_restart` and `run_stop` tools are gone. The old logs in `~/.superego/run/`
   can be deleted.
+- **Upgrade:** Claude Agent is experimental, so it's off unless you turn it on: in Settings → Extensions, or by using
+  Claude Code in setup.
+- **Core or Full.** Setup and Settings → Extensions let you start with Core, the few extensions a newcomer needs, or
+  Full, all of them, then switch any one on or off. Extensions added in a later release follow what you picked.
 - **Pull requests on threads.** A thread shows its pull request's state, checks and review in its title bar and row;
   Show pull request opens what's failing beside it. Agents' pull requests are attached by themselves; attach others
   from a thread's menu or ⌘K. It uses the machine's `gh`.
@@ -52,6 +56,8 @@
   saved safely and never written over when it doesn't read; `threads.send` takes `context`, what the agent alone is
   told with the words; every unattended wake (a send's or a notice's `wake`) counts in the thread's wake budget, which
   says when it held one; an action's `context.by` names the extension that dispatched it.
+- New for extensions (extension API 5.22): `about` takes `group` (where Settings → Extensions lists it), `core` (in
+  the Core preset as well as Full) and `experimental` (in neither: off until turned on).
 - New for extensions (extension API 5.14): `superego.codeBlock(languages, component)` draws fenced code blocks of a
   language.
 - New for extensions (extension API 5.16): `@` in the composer can mention an extension's things (`@note:roadmap`,

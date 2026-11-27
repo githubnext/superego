@@ -1,0 +1,51 @@
+/* A machine's extensions (extensions-view.tsx). The switches: under quiet group headings, a line each with its name
+   (its id beside it in Settings), what it does on one line (all of it on hover) and its switch; one that differs from
+   the preset filled, in Settings. Setup's preset cards: two (three with Custom) side by side, the picked one raised
+   with an accent ring, a row of dots saying how much each turns on; stacked, without dots, on a phone. */
+.extensions { display: flex; flex-direction: column; gap: var(--superego-space-4); }
+.extensions ul { list-style: none; margin: 0; padding: 0; }
+.extensions h3 { margin: 0 0 var(--superego-space-1); font-size: inherit; font-weight: 400; color: var(--superego-muted); }
+.extensions__row { display: flex; align-items: center; gap: var(--superego-space-4); padding: 7px 0; border-top: 1px solid var(--superego-line); }
+.extensions__row:last-child { border-bottom: 1px solid var(--superego-line); }
+.extensions__row.is-changed { background: var(--superego-hover); margin-inline: calc(-1 * var(--superego-space-2)); padding-inline: var(--superego-space-2); border-radius: 6px; }
+.extensions__what { flex: 1; min-width: 0; }
+.extensions__title { font-weight: 500; }
+.extensions__detail { color: var(--superego-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.extensions__tag { margin-left: 6px; font-size: var(--superego-text-sm); color: var(--superego-status-blocked-text); }
+.extensions code { margin-left: 4px; font-family: var(--superego-mono); font-size: var(--superego-text-sm); color: var(--superego-faint); }
+
+/* In Settings: under "Start from", in Settings' own type. */
+.settings-section .extensions { margin-top: var(--superego-space-4); font-size: calc(13px * var(--superego-text-scale)); }
+.settings-section .extensions__detail { font-size: calc(12px * var(--superego-text-scale)); }
+.extensions__start .superego-segmented__item { padding: 0 10px; }
+
+.presets__cards { display: grid; grid-template-columns: repeat(var(--count, 2), minmax(0, 1fr)); gap: var(--superego-space-2); }
+.presets__cards[data-count='3'] { --count: 3; }
+.presets__card {
+  position: relative; display: flex; flex-direction: column; gap: 2px; min-height: 84px; padding: 12px 14px 13px;
+  border-radius: 12px; background: var(--superego-fill); cursor: pointer;
+}
+.presets__card.is-on { background: var(--superego-raised); box-shadow: 0 0 0 1.5px var(--superego-accent), 0 1px 3px light-dark(rgb(0 0 0 / .06), rgb(0 0 0 / .3)); }
+.presets__pick { display: flex; flex-direction: column; gap: 2px; padding: 0 22px 0 0; font: inherit; color: inherit; text-align: left; background: none; border: 0; cursor: inherit; }
+.presets__pick:focus-visible { outline: none; }
+.presets__card:has(.presets__pick:focus-visible) { outline: 2px solid var(--superego-ring); outline-offset: 2px; }
+.presets__title { font-weight: 600; }
+.presets__line { color: var(--superego-muted); }
+.presets__check {
+  position: absolute; top: 12px; right: 12px; display: grid; place-items: center; width: 18px; height: 18px; border-radius: 50%;
+  box-shadow: inset 0 0 0 1.5px var(--superego-border);
+}
+.presets__card.is-on .presets__check { background: var(--superego-accent); box-shadow: none; color: #fff; }
+.presets__by { display: inline-flex; align-items: center; gap: 5px; margin-top: 4px; font-size: var(--superego-text-sm); color: var(--superego-muted); }
+.presets__by img { width: 14px; height: 14px; border-radius: 50%; box-shadow: 0 0 0 .5px var(--superego-border); }
+.presets__by a { color: inherit; text-decoration: underline; text-decoration-color: var(--superego-faint); text-underline-offset: 2px; }
+.presets__by a:hover { color: var(--superego-link); text-decoration-color: currentColor; }
+.presets__dots { display: flex; gap: 3px; margin-top: auto; padding-top: 8px; }
+.presets__cards[data-count='3'] .presets__dots { gap: 2px; }
+.presets__dots i { flex: 0 1 6px; min-width: 0; aspect-ratio: 1; border-radius: 50%; background: var(--superego-track); }
+.presets__dots i.is-on { background: var(--superego-text); opacity: .7; }
+.setup__extensions > p:has(.setup__link) { margin-top: 10px; }
+.setup__extensions > .extensions { margin-top: var(--superego-space-3); }
+
+.app.is-narrow .presets__cards { grid-template-columns: 1fr; }
+.app.is-narrow .presets__dots { display: none; }

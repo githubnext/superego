@@ -5,7 +5,7 @@ import type { ExtensionAbout } from '@superego/protocol'
 export const PANE = 'processes'
 
 export const about = {
-  name: 'processes', version: '1.0.0', api: '^5.21', title: 'Processes',
+  name: 'processes', version: '1.0.0', api: '^5.21', title: 'Processes', group: 'beside',
   description: 'Servers, watchers and long builds a thread starts, run by the machine: their output, and a word when one ends.',
   panes: { [PANE]: "the processes of this thread and its folder, the selected one's output below. Params: {} or { id }" },
 } satisfies ExtensionAbout

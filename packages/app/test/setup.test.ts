@@ -3,7 +3,7 @@
 // First-run setup, against a real daemon: it shows at once on a fresh data folder (on the model that works, if one
 // does, done once it has answered), finds a local model server (a mock, as Ollama), uses it, has it say hi, stars a model, and goes for good once
 // done. Set up models… brings it back; from a composer that couldn't send, it goes back to that thread once done. After
-// the model, the machine's extensions with their switches (Settings → Extensions' own), whichever state it's in.
+// the model, the machine's extensions to start with (Core or Full, Custom once a switch differs), whichever state it's in.
 import { mkdtemp, rm } from 'node:fs/promises'
 import { createServer, type Server } from 'node:http'
 import { tmpdir } from 'node:os'
@@ -17,6 +17,7 @@ import type { MachineEntry, SuperegoEvent } from '../src/shared/bridge.ts'
 import { RegistryProvider } from '../src/renderer/registry.tsx'
 import { windowRegistry } from '../src/renderer/index.tsx'
 import { NoModel, SetupPage, useSetup, type SetupFound } from '../src/renderer/Setup.tsx'
+import { ExtensionsSettings } from '../src/renderer/extensions-view.tsx'
 import { SignInFlow } from '../src/renderer/sign-in-flow.tsx'
 import { ShellStateProvider, useMachines, useSelection } from '../src/renderer/state.tsx'
 import { NO_SHELL, useWindowContext } from '../src/renderer/window-context.ts'
@@ -358,31 +359,43 @@ it("asks for a GitHub Enterprise's address on its own, not blank for github.com"
   expect(button('Continue').disabled).toBe(true)
 })
 
-const extensionRows = () => [...container.querySelectorAll<HTMLElement>('.setup__extension')]
+const extensionRows = () => [...container.querySelectorAll<HTMLElement>('.extensions__row')]
 const switchOf = (name: string) => container.querySelector<HTMLElement>(`[data-extension="${name}"] [role="switch"]`)!
-const allAre = (checked: boolean) => extensionRows().every((row) => row.querySelector('[role="switch"]')!.getAttribute('aria-checked') === String(checked))
+const card = (title: string) => [...container.querySelectorAll<HTMLElement>('.presets__card')].find((c) => c.querySelector('.presets__title')?.textContent === title)
+const pickedCard = () => container.querySelector('.presets__card.is-on .presets__title')?.textContent
 
-it("has the machine's extensions after the model, Settings → Extensions' switches one by one and all at once", async () => {
+it("has the machine's extensions after the model: Full picked, Core or Full by a card, Custom once a switch differs", async () => {
   await start()
   await mount()
-  await until(() => Boolean(rowOf('Paste an API key')) && extensionRows().length > 0, 'the ways in, and the extensions')
-  // The machine's own optional extensions, as Settings lists them.
-  const listed = (await daemon.settings.snapshot()).sections.find((s) => s.id === 'extensions')!.settings.filter((s) => !s.hidden).map((s) => s.key.slice('extensions.'.length))
-  expect(extensionRows().map((row) => row.dataset.extension)).toEqual(listed)
-  const name = listed[0]!
-  expect(switchOf(name).getAttribute('aria-checked')).toBe('true')
+  await until(() => Boolean(rowOf('Paste an API key')) && Boolean(card('Full')), 'the ways in, and the extensions')
+  expect(pickedCard()).toBe('Full')
+  expect(card('Custom')).toBeUndefined()
+  expect(card('Full')!.textContent).toContain('Picked by Mikkel')
+  expect(card('Full')!.querySelector('a')!.getAttribute('href')).toBe('https://githubnext.com/people/mikker/')
+  expect(card('Core')!.textContent).toContain('Coding tools, Panes and 1 more')
 
-  await click(switchOf(name))
-  await until(() => switchOf(name).getAttribute('aria-checked') === 'false', 'the switch off')
-  expect(await value(`extensions.${name}`)).toBe(false)
+  // Every one, under its group, as Settings has them.
+  const listed = ((await daemon.settings.snapshot()).sections.find((s) => s.id === 'extensions')!.data as { name: string }[]).map((e) => e.name)
+  await click(button(`Show all ${listed.length}`))
+  expect(extensionRows().map((row) => row.dataset.extension).sort()).toEqual([...listed].sort())
+  expect([...container.querySelectorAll('.extensions__group h3')].map((h) => h.textContent)).toContain('The agent')
 
-  await click(button('Disable all'))
-  await until(() => allAre(false), 'all off')
-  for (const n of listed) expect(await value(`extensions.${n}`)).toBe(false)
-  expect(button('Disable all').disabled).toBe(true)
-  await click(button('Enable all'))
-  await until(() => allAre(true), 'all on')
-  for (const n of listed) expect(await value(`extensions.${n}`)).toBe(true)
+  await click(card('Core')!)
+  await until(() => pickedCard() === 'Core', 'Core picked')
+  expect(await value('extensions.preset')).toBe('core')
+  expect(await value('extensions.coding-tools')).toBe(true)
+  expect(switchOf('panes').getAttribute('aria-checked')).toBe('true')
+
+  // A switch differing from Core: Custom, saying what it is.
+  await click(switchOf('panes'))
+  await until(() => pickedCard() === 'Custom', 'Custom')
+  expect(card('Custom')!.textContent).toContain('Core without Panes')
+  expect(await value('extensions.panes')).toBe(false)
+  // Full again: all on, the change undone.
+  await click(card('Full')!)
+  await until(() => pickedCard() === 'Full' && !card('Custom'), 'Full picked again')
+  expect(await value('extensions.panes')).toBe(true)
+  expect(await value('extensions.preset')).toBe('full')
   // Switching extensions isn't setup done: that's a model's answer, or Skip.
   expect(await value(ONBOARDED)).toBe(false)
 })
@@ -390,7 +403,35 @@ it("has the machine's extensions after the model, Settings → Extensions' switc
 it('has the extensions on a first run that finds a model already', async () => {
   await start({ faux: true })
   await mount()
-  await until(() => text().includes('echo: Say hi') && extensionRows().length > 0, 'the model saying hi, and the extensions')
-  await click(button('Disable all'))
-  await until(() => allAre(false), 'all off')
+  await until(() => text().includes('echo: Say hi') && Boolean(card('Core')), 'the model saying hi, and the extensions')
+  await click(card('Core')!)
+  await until(() => pickedCard() === 'Core', 'Core picked')
+})
+
+it('has Settings → Extensions start from a preset: Custom lit only while a switch differs, which is marked', async () => {
+  await start()
+  await daemon.settings.set(ONBOARDED, true)
+  const registry = windowRegistry(app, [])
+  container = document.createElement('div')
+  document.body.append(container)
+  root = createRoot(container)
+  const section = (await daemon.settings.snapshot()).sections.find((s) => s.id === 'extensions')!
+  await act(async () => { root!.render(h(RegistryProvider, { registry, children: h(ShellStateProvider, { children: h(ExtensionsSettings, { target: 'local', section }) }) })) })
+  const segment = (label: string) => container.querySelector<HTMLButtonElement>(`.superego-segmented [aria-label="${label}"]`)!
+  const note = () => container.querySelector('.extensions__start .settings__note')?.textContent
+  // Full, this machine's (a watch of the machine before this test's may answer first).
+  await until(() => Boolean(container.querySelector('.extensions__row')) && segment('Full').hasAttribute('data-pressed'), 'the switches, from Full')
+  expect(segment('Custom').hasAttribute('data-disabled')).toBe(true)
+  expect(container.querySelector('[data-extension="panes"] code')?.textContent).toBe('panes')
+
+  await click(switchOf('panes'))
+  await until(() => segment('Custom').hasAttribute('data-pressed'), 'Custom')
+  expect(note()).toBe('Full without Panes. Pick Core or Full to start over.')
+  expect(container.querySelector('[data-extension="panes"]')!.classList.contains('is-changed')).toBe(true)
+
+  await click(segment('Core'))
+  await until(() => segment('Core').hasAttribute('data-pressed'), 'Core')
+  expect(await value('extensions.preset')).toBe('core')
+  expect(container.querySelector('.is-changed')).toBeNull()
+  expect(segment('Custom').hasAttribute('data-disabled')).toBe(true)
 })

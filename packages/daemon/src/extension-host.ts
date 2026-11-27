@@ -7,11 +7,12 @@ import { defineExtension, type Extension, hook, ToolTask } from '@earendil-works
 import { DEFAULT_IMAGE_LIMITS } from '@earendil-works/pi-durable/tools'
 import {
   type ChannelAcceptor, Channels, compareVersion, Teardown, type TeardownReason, consentRefused, contractProblem, dataViewProblem, machineConsent, EXTENSION_API, FEATURES, Lifetime, manifestOf, mentionKindProblem, paramsParser,
-  parseVersion, RpcError, UNVERSIONED, DATA_VIEWS, type DataViewInfo, type ExtensionAbout, type ExtensionReport, type ExtensionsReport, type Json,
+  lit, obj, parseVersion, RpcError, union, UNVERSIONED, DATA_VIEWS, type DataViewInfo, type ExtensionAbout, type ExtensionGroup, type ExtensionReport, type ExtensionsReport, type Json,
   type AgentKindMenu, type RpcPeer, type ThreadInfo,
 } from '@superego/protocol'
-import { registerExtensionSettings } from './extension-settings.ts'
+import { pickPreset, registerExtensionSettings } from './extension-settings.ts'
 import type { AgentChoice, AgentKind, AgentKindDescription, AgentPartsThread, DaemonApi, DaemonExtension, LiveValue, MentionResolve, ScopedValue, SendTransform, StatusContribution, ThreadHooks, ToolCallRecord } from './extension.ts'
+import { defineAction } from './extension.ts'
 import { clone, stateOf, type Host, type ThreadMeta } from './host.ts'
 import type { ProfileHost } from './profile-host.ts'
 import { CORE_KEYS, type LoadedProfile, type ProfileRef } from './profiles.ts'
@@ -31,6 +32,8 @@ export const RESERVED = new Set([
   'outside', 'onboarding',
   // A connection's own (heartbeat, channels), who is connected, and the machines this one reaches.
   'ping', 'ch', 'clients', 'client', 'machine', 'machines', 'relay',
+  // Not a namespace: an extension of this name would have the machine's preset (`extensions.preset`) as its switch.
+  'preset',
 ])
 
 /** An agent part as set up: as installed, how to take it away, and how to put another (of its name) in its place. */
@@ -66,13 +69,17 @@ type ExtensionRecord = {
  */
 type Owned<T> = { value: T; owner: string; profiles?: Set<string> }
 
+/** The groups an extension can be listed under (`ExtensionAbout.group`). */
+const GROUPS = new Set<string>(['beside', 'agent', 'thread', 'around'] satisfies ExtensionGroup[])
+
 /** What an extension says of itself, and only that: the fields `ExtensionAbout` has, each of its type (a window's declaration is anyone's JSON). */
 function aboutOf(about: ExtensionAbout): ExtensionAbout {
-  const { name, title, description, required, version, api, panes, secrets } = about
+  const { name, title, description, required, group, core, experimental, version, api, panes, secrets } = about
   const kinds = panes && typeof panes === 'object' && !Array.isArray(panes) ? Object.entries(panes).filter(([, about]) => typeof about === 'string' && about) : []
   const files = Array.isArray(secrets) ? secrets.filter((file) => typeof file === 'string' && file && !/[\\/]/.test(file)) : []
   return {
     name, ...(typeof title === 'string' && title ? { title } : {}), ...(typeof description === 'string' && description ? { description } : {}), ...(required === true ? { required } : {}),
+    ...(typeof group === 'string' && GROUPS.has(group) ? { group } : {}), ...(core === true ? { core } : {}), ...(experimental === true ? { experimental } : {}),
     ...(typeof version === 'string' ? { version } : {}), ...(typeof api === 'string' ? { api } : {}), ...(kinds.length ? { panes: Object.fromEntries(kinds) } : {}),
     ...(files.length ? { secrets: files } : {}),
   }
@@ -921,6 +928,13 @@ export function createExtensionHost(host: Host, later: { profiles(): ProfileHost
     }, undefined, { source })
   }
 
+  // Starting from a preset again: it, and none of the user's changes but to experimental extensions'.
+  router.register(defineAction({
+    id: 'extensions.preset', title: 'Start from a preset of extensions', expose: ['ui', 'cli'],
+    description: 'Turn on the extensions `preset` has (core: the few a newcomer starts with; full: every one but the experimental), and undo every change to them made since. Experimental ones stay as they are.',
+    params: obj({ preset: union([lit('core'), lit('full')]) }),
+    async run({ preset }) { await pickPreset(settings, switchable(), preset); return null },
+  }))
   /** A switch in Settings for each optional extension: set again as windows declare more. */
   let unregisterSwitches = () => {}
   const registerSwitches = () => {

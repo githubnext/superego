@@ -5,7 +5,7 @@
 import { mentionHref, type ExtensionAbout } from '@superego/protocol'
 
 export const about = {
-  name: 'mentions', version: '1.1.0', api: '^5.16', title: 'Mentions',
+  name: 'mentions', version: '1.1.0', api: '^5.16', title: 'Mentions', group: 'thread',
   description: '@ in the composer names another thread, a file, or something an extension names, and the agent is told what it is.',
 } satisfies ExtensionAbout
 

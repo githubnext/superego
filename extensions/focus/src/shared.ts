@@ -3,7 +3,7 @@
 import type { ExtensionAbout } from '@superego/protocol'
 
 export const about = {
-  name: 'focus', version: '1.0.0', api: '^5.13', title: 'Focus',
+  name: 'focus', version: '1.0.0', api: '^5.13', title: 'Focus', group: 'around',
   description: 'A few threads to focus on: focus mode (⌘⇧F) narrows the sidebar to them and to what needs you.',
 } satisfies ExtensionAbout
 

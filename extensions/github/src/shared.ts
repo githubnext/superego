@@ -7,7 +7,7 @@ import type { ExtensionAbout } from '@superego/protocol'
 export const PANE = 'pull-request'
 
 export const about = {
-  name: 'github', version: '1.0.0', api: '^5.21', title: 'GitHub',
+  name: 'github', version: '1.0.0', api: '^5.21', title: 'GitHub', group: 'beside',
   description: "A thread's pull requests: their state in the title bar and sidebar, checks and reviews beside it. Uses this machine's gh.",
   panes: { [PANE]: 'a GitHub pull request: its state, description, checks, reviews, conversation and unresolved review comments. Params: { url }' },
 } satisfies ExtensionAbout

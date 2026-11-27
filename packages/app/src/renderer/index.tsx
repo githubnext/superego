@@ -15,6 +15,7 @@ import { APP, LAYOUT } from '../shared/app-settings.ts'
 import { placeView, type Place } from '../shared/layout.ts'
 import { registerLayoutText } from './layout-text.tsx'
 import { Profiles } from './settings/profiles.tsx'
+import { ExtensionsSettings } from './extensions-view.tsx'
 import { Providers } from './settings/providers.tsx'
 import { ModelFavourites } from './settings/models.tsx'
 import { CommandLine } from './command-line.tsx'
@@ -96,6 +97,7 @@ export function windowRegistry(app: AppConfig, extensions: UiExtension[]) {
     core.settings('web', WebAccess)
     core.settings('clients', ConnectedClients)
     core.settings('profiles', Profiles)
+    core.settings('extensions', ExtensionsSettings)
     core.settings('command-line', CommandLine)
     core.settings('sites', SitePermissions)
     core.settings('about', About)

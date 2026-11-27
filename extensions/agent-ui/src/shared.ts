@@ -52,6 +52,6 @@ export type ThreadPanes = Record<string, PaneSpec>
 
 /** What this extension is, for both halves: optional, so a machine can turn it off and a profile can do without it. */
 export const about = {
-  name: 'agent-ui', version: '1.0.0', api: '^5', title: 'Agent UI',
+  name: 'agent-ui', version: '1.0.0', api: '^5', title: 'Agent UI', group: 'agent', core: true,
   description: 'Let the agent ask you things, and show you UI of its own: in answers, above the message box, and in panes.',
 } satisfies ExtensionAbout

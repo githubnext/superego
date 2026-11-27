@@ -4,12 +4,12 @@ import { cp, mkdir, mkdtemp, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { connectSocket, listen, openDaemon, type DaemonExtension } from '@superego/daemon'
-import { defineApp, envName, PROTOCOL_VERSION, type AppConfig, type ExtensionManifest, type Hello, type Json, type Notifications, type ProfileRef, type RpcPeer, type ThreadInfo } from '@superego/protocol'
+import { defineApp, envName, extensionSwitch, PROTOCOL_VERSION, type AppConfig, type ExtensionManifest, type Hello, type Json, type Notifications, type ProfileRef, type RpcPeer, type ThreadInfo } from '@superego/protocol'
 import type { Turn } from './model.ts'
 
 /** What `testDaemon` sets up: your extensions or your profile, and the model's script. */
 export type TestDaemonOptions = {
-  /** Extensions set up as the app's own (bundled), for the daemon's life. */
+  /** Extensions set up as the app's own (bundled), for the daemon's life: on, an experimental one too. */
   extensions?: DaemonExtension[]
   /**
    * A profile: its folder (copied, so edits in the test don't touch yours), or its files by path (`{ 'profile.ts': … }`).
@@ -249,6 +249,12 @@ export async function testDaemon(options: TestDaemonOptions = {}): Promise<TestD
     // Its threads' profiles loaded first, as a window reconnecting finds them once the app's daemon is up a moment: what
     // the test checks right after a start or `restart` (its extensions, a profile's values) is there, not on its way.
     await daemon.profilesLoaded
+    // The extensions given are what's tested: an experimental one is turned on, as no preset turns it on. Once: a test
+    // that turns it off again finds it off after a restart.
+    for (const extension of options.extensions ?? []) {
+      const key = extensionSwitch(extension.name)
+      if (extension.experimental && !extension.required && !daemon.settings.isSet(key)) await daemon.settings.set(key, true)
+    }
     const socket = join(dataDir, `d${opened}.sock`)
     const server = await listen(daemon, socket)
     const { peer, socket: connection } = await connectSocket(socket)

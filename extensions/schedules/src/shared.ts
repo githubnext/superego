@@ -4,7 +4,7 @@
 import type { ExtensionAbout } from '@superego/protocol'
 
 export const about = {
-  name: 'schedules', version: '1.1.0', api: '^5.21', title: 'Schedules',
+  name: 'schedules', version: '1.1.0', api: '^5.21', title: 'Schedules', group: 'agent',
   description: 'Wake a thread or remind you at a time, every so often or on the calendar: "check CI every 30 minutes", "remind me tomorrow at 9".',
 } satisfies ExtensionAbout
 

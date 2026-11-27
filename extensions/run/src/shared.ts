@@ -3,7 +3,7 @@
 import type { ExtensionAbout } from '@superego/protocol'
 
 export const about = {
-  name: 'run', version: '1.0.0', api: '^5.18', title: 'Run',
+  name: 'run', version: '1.0.0', api: '^5.18', title: 'Run', group: 'beside',
   description: "Each folder's dev command, from its .superego/run.json, run by Processes (⌃R starts or restarts it).",
 } satisfies ExtensionAbout
 

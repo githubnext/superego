@@ -1,19 +1,46 @@
-// What Settings shows about a machine's extensions and profiles. Extensions: a switch for each optional one (the
-// core's own agent parts and the bundled extensions), off for every thread here. Required ones aren't listed: they're
-// part of what the app is. Profiles: each one threads here can start as, what it is and what it changes.
-import type { ExtensionAbout, Json } from '@superego/protocol'
+// What Settings shows about a machine's extensions and profiles. Extensions: the preset the machine starts from (Core or
+// Full), and a switch for each optional one (the core's own agent parts and the bundled extensions), off for every
+// thread here. Required ones aren't listed: they're part of what the app is. Profiles: each one threads here can start
+// as, what it is and what it changes.
+import { EXTENSIONS_PRESET, extensionSwitch, inPreset, type ExtensionAbout, type ExtensionPreset, type Json } from '@superego/protocol'
 import type { SettingsRegistry } from '@superego/settings'
 import { hashProfile, loadProfile, type Allowances, type ProfileKeys, type ProfileRef, type UserRoot } from './profiles.ts'
 
-/** One switch per optional extension, `extensions.<name>`, on unless turned off. It applies from a thread's next message. */
+/**
+ * The machine's preset (`extensions.preset`, Full unless picked) and one switch per optional extension,
+ * `extensions.<name>`: what the preset says of it until the user changes it, so one that's new follows the preset. Both
+ * drawn by the section's own component (`extensions`), from the rows it's given. A switch applies from a thread's next
+ * message.
+ */
 export function registerExtensionSettings(settings: SettingsRegistry, extensions: ExtensionAbout[]) {
+  const optional = extensions.filter((e) => !e.required)
+  const preset = () => settings.get<ExtensionPreset>(EXTENSIONS_PRESET)
   return settings.register({
-    id: 'extensions', title: 'Extensions', order: 70,
+    id: 'extensions', title: 'Extensions', order: 70, ui: 'extensions',
     description: 'What threads here are given. A profile can do without more.',
-    settings: extensions.filter((e) => !e.required).map(({ name, title, description }) => ({
-      key: `extensions.${name}`, title: title ?? name, ...(description ? { description } : {}), default: true, type: { type: 'boolean' as const },
+    data: () => optional.map(({ name, title, description, group, core, experimental }): Json => ({
+      name, ...(title ? { title } : {}), ...(description ? { description } : {}), ...(group ? { group } : {}), ...(core ? { core } : {}), ...(experimental ? { experimental } : {}),
     })),
+    settings: [
+      {
+        key: EXTENSIONS_PRESET, title: 'Start from', default: 'full', hidden: () => true,
+        type: { type: 'choice', options: [{ value: 'core', label: 'Core' }, { value: 'full', label: 'Full' }] },
+      },
+      ...optional.map((about) => ({
+        key: extensionSwitch(about.name), title: about.title ?? about.name, ...(about.description ? { description: about.description } : {}),
+        default: () => inPreset(about, preset()), type: { type: 'boolean' as const }, hidden: () => true,
+      })),
+    ],
   })
+}
+
+/**
+ * Start from `preset` again: it, and none of the user's changes but to experimental extensions', which no preset has.
+ * Saved as one change.
+ */
+export function pickPreset(settings: SettingsRegistry, extensions: ExtensionAbout[], preset: ExtensionPreset) {
+  const reset = extensions.filter((e) => !e.required && !e.experimental).map((e) => [extensionSwitch(e.name), undefined] as const)
+  return settings.change({ [EXTENSIONS_PRESET]: preset, ...Object.fromEntries(reset) })
 }
 
 /**

@@ -51,6 +51,26 @@ export const agentName = (app: AppConfig) => app.agent ?? app.name
 export const remoteCommand = (app: AppConfig) => `${app.id} connect --start`
 
 /**
+ * What an optional extension is for, as Settings → Extensions groups it: `beside` a thread (panes and what fills them),
+ * `agent` (what the agent can do and is told), `thread` (what the transcript and the composer show), `around` (getting
+ * around the app: help, what's unread, focus).
+ */
+export type ExtensionGroup = 'beside' | 'agent' | 'thread' | 'around'
+
+/**
+ * Which optional extensions a machine turns on, before the user's own changes: `core`, the few a newcomer starts with
+ * (an extension's `core: true`), or `full`, every one but the experimental.
+ */
+export type ExtensionPreset = 'core' | 'full'
+/** The setting a machine keeps its preset in. */
+export const EXTENSIONS_PRESET = 'extensions.preset'
+/** The setting that turns an optional extension on or off on a machine. */
+export const extensionSwitch = (name: string) => `extensions.${name}`
+/** Whether `preset` turns an optional extension on: never an experimental one. */
+export const inPreset = (about: Pick<ExtensionAbout, 'core' | 'experimental'>, preset: ExtensionPreset) =>
+  !about.experimental && (preset === 'full' || Boolean(about.core))
+
+/**
  * What an extension is, as both its halves declare it (spread into `defineDaemonExtension` and `defineUiExtension`).
  * `required`: part of what the app is. It can't be turned off on a machine (Settings → Extensions lists only the
  * others), a profile can't do without it, and nothing else decides that. Unset: optional.
@@ -62,6 +82,15 @@ export type ExtensionAbout = {
   title?: string
   description?: string
   required?: boolean
+  /** (API ^5.22) What it's for: where Settings → Extensions lists it. Unset: after the groups, on its own. */
+  group?: ExtensionGroup
+  /** (API ^5.22) In the Core preset, the few a newcomer starts with, as well as Full. Unset: Full only. */
+  core?: boolean
+  /**
+   * (API ^5.22) Experimental: in neither preset, so off until it's turned on, and listed as such. Picking Core or Full
+   * leaves its switch as it is.
+   */
+  experimental?: boolean
   /**
    * Its own version, semver: a major for a change its other half, a profile or a script relying on its methods,
    * actions, values or data can't follow; a minor for something added. Machines announce it. The window draws a UI

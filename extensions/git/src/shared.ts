@@ -31,6 +31,6 @@ export const baseLabel = ({ base, branch }: BaseChoice) =>
   base === 'uncommitted' ? 'Uncommitted' : base === 'staged' ? 'Staged' : `Since ${branch}`
 
 export const about = {
-  name: 'git', version: '1.0.0', api: '^5', title: 'Git', description: 'Changes (⌘⇧D): what changed in a thread\'s folder, beside it.',
+  name: 'git', version: '1.0.0', api: '^5', title: 'Git', group: 'beside', core: true, description: 'Changes (⌘⇧D): what changed in a thread\'s folder, beside it.',
   panes: { [CHANGES]: `the changes in the working folder; optional { base: ${BASES.map((b) => `"${b}"`).join(' | ')} }` },
 } satisfies ExtensionAbout

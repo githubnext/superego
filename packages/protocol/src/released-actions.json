@@ -753,5 +753,24 @@
       "thread"
     ],
     "additionalProperties": false
+  },
+  "extensions.preset": {
+    "type": "object",
+    "properties": {
+      "preset": {
+        "anyOf": [
+          {
+            "const": "core"
+          },
+          {
+            "const": "full"
+          }
+        ]
+      }
+    },
+    "required": [
+      "preset"
+    ],
+    "additionalProperties": false
   }
 }

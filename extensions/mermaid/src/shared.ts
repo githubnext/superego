@@ -3,6 +3,6 @@
 import type { ExtensionAbout } from '@superego/protocol'
 
 export const about = {
-  name: 'mermaid', version: '1.0.0', api: '^5.14', title: 'Mermaid',
+  name: 'mermaid', version: '1.0.0', api: '^5.14', title: 'Mermaid', group: 'thread',
   description: 'Renders ```mermaid fenced blocks as diagrams in threads and Markdown files.',
 } satisfies ExtensionAbout

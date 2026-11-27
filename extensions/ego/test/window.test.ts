@@ -40,6 +40,8 @@ it('goes from setup when Ego is switched off there', async () => {
   ui = await mountUi({ window: true, machines: [daemon], extensions: [egoUi] })
   await ui.registry.router.dispatch('app.setup')
   await ui.until(() => Boolean($('.ego__welcome')), 'the welcome')
+  $$('.setup__extensions .setup__link').find((b) => b.textContent?.startsWith('Show all'))!.click()
+  await ui.until(() => Boolean($('[data-extension="ego"] [role="switch"]')), 'the switches')
   $('[data-extension="ego"] [role="switch"]')!.click()
   await ui.until(() => !$('.ego__welcome'), 'the welcome gone')
   expect((await daemon.call<{ value: SettingsSnapshot }>('settings.watch', {})).value.values['extensions.ego']).toBe(false)

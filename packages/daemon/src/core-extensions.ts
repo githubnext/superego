@@ -63,7 +63,7 @@ export function coreExtensions({ agentsDir, where, panesOf, openPane, images, no
     })],
   })
   return [
-    { name: 'coding-tools', version: '1.0.0', api: '^5', title: 'Coding tools', description: 'Read, write and edit files, and run commands.', setup: (s) => s.agent(createCodingTools({ images })) },
+    { name: 'coding-tools', version: '1.0.0', api: '^5', title: 'Coding tools', group: 'agent', core: true, description: 'Read, write and edit files, and run commands.', setup: (s) => s.agent(createCodingTools({ images })) },
     {
       // An image the model was refused is left out of what it's sent from then on, and a request its provider refused as
       // too large is asked again smaller: the user is told, in the thread. A lean thread is sent only its newest images.
@@ -96,13 +96,13 @@ export function coreExtensions({ agentsDir, where, panesOf, openPane, images, no
       setup: (s) => s.agent(defineExtension({ name: 'where', sections: [section('where', () => where())] })),
     },
     {
-      name: 'panes', version: '1.0.0', api: '^5', title: 'Panes', description: 'Open panes beside a thread: files, other threads, and the kinds extensions add.',
+      name: 'panes', version: '1.0.0', api: '^5', title: 'Panes', group: 'beside', core: true, description: 'Open panes beside a thread: files, other threads, and the kinds extensions add.',
       // The window's built-in kinds (its panes.tsx); extensions describe their own (git's Changes, browser's).
       panes: { editor: '{ path }: a file, for the user to read and edit', thread: '{ thread }: another conversation' },
       setup: (s) => s.agent(panesPart),
     },
     {
-      name: 'agents-md', version: '1.0.0', api: '^5', title: 'AGENTS.md', description: 'Follow the standing instructions in AGENTS.md files.',
+      name: 'agents-md', version: '1.0.0', api: '^5', title: 'AGENTS.md', group: 'agent', core: true, description: 'Follow the standing instructions in AGENTS.md files.',
       setup: (s) => s.agent(defineExtension({ name: 'agents-md', sections: [section('agents_md', async ({ env }) => agentsInstructions(agentsDir, env?.cwd))] })),
     },
   ]

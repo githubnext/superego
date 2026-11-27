@@ -24,7 +24,8 @@ export type SettingSpec = {
   /** Why a value of the right type is still refused, if it is: a hostname that isn't one. */
   validate?: (value: Json) => string | undefined
 } & (
-  | { type: PlainSettingType | (() => PlainSettingType); default: Json }
+  /** `default` may be computed: what applies until a value is chosen depends on another setting (a preset). */
+  | { type: PlainSettingType | (() => PlainSettingType); default: Json | (() => Json) }
   /** A secret: always the user's to set (consent), its default not set. Its type is never computed. */
   | { type: SecretSettingType; default?: undefined }
 )
@@ -103,6 +104,7 @@ export function declaredSpec(section: DeclaredSection): SectionSpec {
 }
 
 const resolveType = (spec: SettingSpec): SettingType => typeof spec.type === 'function' ? spec.type() : spec.type
+const resolveDefault = (spec: SettingSpec | undefined): Json | undefined => typeof spec?.default === 'function' ? spec.default() : spec?.default
 const isSecret = (spec: SettingSpec | undefined): spec is SettingSpec & { type: SecretSettingType } => typeof spec?.type === 'object' && spec.type.type === 'secret'
 
 function check(spec: SettingSpec, value: Json): void {
@@ -210,7 +212,7 @@ export class SettingsRegistry {
   get<T extends Json>(key: string): T {
     const spec = this.#settings.get(key)
     if (isSecret(spec)) return this.#secrets!.has(key) as T
-    return (key in this.#values ? this.#values[key] : spec?.default) as T
+    return (key in this.#values ? this.#values[key] : resolveDefault(spec)) as T
   }
 
   /** The setting `key`, as registered. */
@@ -309,16 +311,30 @@ export class SettingsRegistry {
   }
 
   async set(key: string, value: Json): Promise<void> {
-    const spec = this.#settings.get(key)
-    if (!spec) throw new RpcError('unknown_setting', `No setting ${key}`)
-    if (isSecret(spec)) throw new RpcError('secret', `${spec.title} is a secret: it's set with secrets.set, not settings.set`, { hint: `In Settings, or in your own terminal: superego secrets set ${key}` })
-    const disabled = spec.disabled?.()
-    if (disabled) throw new RpcError('setting_disabled', `${spec.title}: ${disabled}`)
-    check(spec, value)
-    const invalid = spec.validate?.(value)
-    if (invalid) throw new RpcError('invalid_setting', `${spec.title}: ${invalid}`)
-    if (this.#closed) throw new RpcError('closing', `Settings are closed: ${key} wasn't changed`)
-    this.#values = { ...this.#values, [key]: value }
+    await this.change({ [key]: value })
+  }
+
+  /**
+   * Change several settings at once, saved together and heard as one change: each to its value, or back to its default
+   * (`undefined`: no value chosen). Refused whole when one is.
+   */
+  async change(changes: Record<string, Json | undefined>): Promise<void> {
+    const next = { ...this.#values }
+    for (const [key, value] of Object.entries(changes)) {
+      const spec = this.#settings.get(key)
+      if (!spec) throw new RpcError('unknown_setting', `No setting ${key}`)
+      if (isSecret(spec)) throw new RpcError('secret', `${spec.title} is a secret: it's set with secrets.set, not settings.set`, { hint: `In Settings, or in your own terminal: superego secrets set ${key}` })
+      const disabled = spec.disabled?.()
+      if (disabled) throw new RpcError('setting_disabled', `${spec.title}: ${disabled}`)
+      if (value === undefined) { delete next[key]; continue }
+      check(spec, value)
+      const invalid = spec.validate?.(value)
+      if (invalid) throw new RpcError('invalid_setting', `${spec.title}: ${invalid}`)
+      next[key] = value
+    }
+    const keys = Object.keys(changes)
+    if (this.#closed) throw new RpcError('closing', `Settings are closed: ${keys.join(', ')} ${keys.length === 1 ? "wasn't" : "weren't"} changed`)
+    this.#values = next
     const saving = this.#store.save(this.#values)
     this.#saving.add(saving)
     try { await saving } finally { this.#saving.delete(saving) }
@@ -340,7 +356,7 @@ export class SettingsRegistry {
         const note = secret ? this.#secrets!.about?.(spec.key) : undefined
         const problem = this.#problems.get(spec.key) ?? (secret ? this.#secrets!.problem?.() : undefined)
         return {
-          ...resolveType(spec), key: spec.key, title: spec.title, default: secret ? false : spec.default,
+          ...resolveType(spec), key: spec.key, title: spec.title, default: secret ? false : resolveDefault(spec)!,
           ...(spec.description ? { description: spec.description } : {}),
           ...(disabled ? { disabled } : {}),
           ...(spec.hidden?.() ? { hidden: true } : {}),

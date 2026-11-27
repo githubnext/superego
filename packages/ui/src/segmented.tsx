@@ -4,7 +4,8 @@ import { ToggleGroup } from '@base-ui/react/toggle-group'
 import type { Icon } from './icons.tsx'
 import { Tooltip } from './tooltip.tsx'
 
-export type SegmentedOption<T extends string> = { value: T; label: string; icon?: Icon; content?: ReactNode }
+/** `disabled`: shown, not picked (one that only says what's so, as a Custom that's chosen by changing something else). */
+export type SegmentedOption<T extends string> = { value: T; label: string; icon?: Icon; content?: ReactNode; disabled?: boolean }
 
 /**
  * A row of segments, one chosen (Base UI's toggle group): macOS's segmented control. A segment with an icon shows only
@@ -20,7 +21,7 @@ export function SegmentedControl<T extends string>({ options, value, onChange, l
       {options.map((option) => {
         const Glyph = option.icon
         const segment = (
-          <Toggle<T> key={option.value} value={option.value} className="superego-segmented__item" aria-label={option.label}>
+          <Toggle<T> key={option.value} value={option.value} disabled={option.disabled ?? false} className="superego-segmented__item" aria-label={option.label}>
             {Glyph ? <Glyph size={15} aria-hidden /> : option.content ?? option.label}
           </Toggle>
         )

@@ -1,6 +1,6 @@
 #!/bin/bash
 # The window's layout in the states the design covers, screenshotted:
-# `test/look.sh <dir> [look|focus|focus-mode|panes|panehead|composer|images|mcp|web|terminal|toolbar|titlebar|titlebar-fit|pins|folds|states|cards|dialogs|machines|staff|picker|providers|keptpage|themes|theme-ui|mac-look|claude-agent|setup|phone-look|header|files|github|schedules|processes|rail]` (look, unless given), each a script of
+# `test/look.sh <dir> [look|focus|focus-mode|panes|panehead|composer|images|mcp|web|terminal|toolbar|titlebar|titlebar-fit|pins|folds|states|cards|dialogs|machines|staff|picker|providers|keptpage|themes|theme-ui|mac-look|claude-agent|setup|extensions|phone-look|header|files|github|schedules|processes|rail]` (look, unless given), each a script of
 # that name here:
 # - `look`: the sidebar shown, dragged and hidden, the thread alone and with panes, details, a phone; ⌘N's dialog, Settings' General, Appearance and Hotkeys (a clash too);
 # - `focus`: each region holding the focus;
@@ -34,6 +34,8 @@
 # - `providers`: Settings → Providers (signed in, added, searched, the add form), Favourite models, ⌘N's model menu.
 # - `setup`: first-run setup on a fresh home with no model: what it finds (a stand-in Ollama and `claude`), a key's
 #   field, a composer's card when sending failed, a model saying hi, Claude Code used.
+# - `extensions`: first-run setup's extensions: Core and Full as cards, Full's whole list, GitHub switched off making it
+#   Custom, a phone's; Settings → Extensions from Custom (the changed switch marked) and from Full; light and dark.
 # - `claude-agent`: a Claude Agent thread waiting on a permission, its model card, the plan's limit noted, a thread
 #   waiting for Claude Code to be signed in, Settings → Claude Agent, and ⌘N's model menu with its group (needs `claude`
 #   installed; nothing is signed in or spent).
@@ -64,7 +66,7 @@ cd "$(dirname "$0")/.."
 # seconds), and builds the app first if its sources changed.
 [ "$SUPEREGO_CHECK_COMMAND" = test/look.sh ] || exec node ../scripts/check.ts --timeout SUPEREGO_SHOWCASE_TIMEOUT=480 test/look.sh "$@"
 node scripts/build.ts
-OUT="$(cd "$(dirname "${1:?usage: look.sh <dir> [look|focus|focus-mode|panes|panehead|composer|images|mcp|web|terminal|toolbar|titlebar|titlebar-fit|pins|folds|states|cards|dialogs|machines|staff|picker|keptpage|themes|theme-ui|mac-look|claude-agent|setup|phone-look|header|files|github|schedules|processes|rail]}")" && pwd)/$(basename "$1")"
+OUT="$(cd "$(dirname "${1:?usage: look.sh <dir> [look|focus|focus-mode|panes|panehead|composer|images|mcp|web|terminal|toolbar|titlebar|titlebar-fit|pins|folds|states|cards|dialogs|machines|staff|picker|keptpage|themes|theme-ui|mac-look|claude-agent|setup|extensions|phone-look|header|files|github|schedules|processes|rail]}")" && pwd)/$(basename "$1")"
 mkdir -p "$OUT"
 unset ANTHROPIC_API_KEY ANTHROPIC_OAUTH_TOKEN OPENAI_API_KEY
 export SUPEREGO_HOME="$(mktemp -d)" SUPEREGO_HEADLESS=1 SUPEREGO_SHOWCASE_OUT="$OUT" SUPEREGO_REPLAY_SPEED=0 TZ=Europe/Copenhagen

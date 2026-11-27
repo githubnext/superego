@@ -30,7 +30,7 @@ it('is listed in Settings → Extensions, and switched off there the agent goes 
   const daemon = await testDaemon({ extensions: [tasks], model: [callTool('task_start', { title: 'Looking around' }), say('Done.')] })
   const { value: settings } = await daemon.call<{ value: SettingsSnapshot }>('settings.watch')
   const section = settings.sections.find((s) => s.id === 'extensions')!
-  expect(section.settings.map((s) => s.key)).toEqual(['extensions.coding-tools', 'extensions.panes', 'extensions.agents-md', 'extensions.tasks'])
+  expect(section.settings.map((s) => s.key)).toEqual(['extensions.preset', 'extensions.coding-tools', 'extensions.panes', 'extensions.agents-md', 'extensions.tasks'])
   expect(section.settings.at(-1)).toMatchObject({ title: 'Task reporting', default: true })
   expect(settings.sections.find((s) => s.id === 'profiles')?.data).toEqual([])
 

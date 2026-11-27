@@ -1,6 +1,6 @@
 // Screenshots of first-run setup (run by test/look.sh <dir> setup), on a fresh home with no model: the page as it
 // opens, with Claude Code (a stand-in `claude`, signed in) and Ollama (a stand-in server) found, Ego's welcome and the
-// extensions' switches after them, whole (a tall window) and as it opens, wide and on a phone; a
+// extensions to start with after them, whole (a tall window) and as it opens, wide and on a phone; a
 // key pasted, whose it is told; More providers searched; a composer that couldn't send, and its card; Ollama used,
 // saying hi; Claude Code used, and ⌘N starting on it; Set up models… again, on Claude Code, with the welcome after it.
 // Light and dark, into $SUPEREGO_SHOWCASE_OUT.
@@ -42,7 +42,7 @@ await openApp({ name: 'setup', timeout: 180_000, firstRun: true }, async (t) => 
   const row = (title) => `[...document.querySelectorAll('.setup__row')].find((r) => r.querySelector('.setup__what')?.firstElementChild?.textContent === ${JSON.stringify(title)})`
   const way = (title) => `${row(title)}.querySelector('button.setup__line').click()`
   await until(`Boolean(${row('Ollama')}) && Boolean(${row('Claude Code')}?.querySelector('button'))`, 'setup, with Ollama and Claude Code found', 30_000)
-  await until(`Boolean(document.querySelector('.ego__welcome')) && document.querySelectorAll('.setup__extension').length > 0`, "Ego's welcome and the extensions")
+  await until(`Boolean(document.querySelector('.ego__welcome')) && document.querySelectorAll('.presets__card').length > 0`, "Ego's welcome and the extensions")
   await t.both('setup')
   // The whole page: the model, Ego's welcome and the extensions.
   await t.resize(1100, 1500)

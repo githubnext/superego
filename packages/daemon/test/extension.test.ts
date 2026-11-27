@@ -109,8 +109,8 @@ it('lists optional extensions in Settings, and tells clients what each thread go
   const { peer, close } = await open([sidebar, links])
   const { value } = await peer.call<{ value: { sections: { id: string; settings: { key: string }[] }[] } }>('settings.watch', {})
   const keys = value.sections.find((s) => s.id === 'extensions')!.settings.map((s) => s.key)
-  // The core's own parts and the optional bundled one; never a required one.
-  expect(keys).toEqual(['extensions.coding-tools', 'extensions.panes', 'extensions.agents-md', 'extensions.links'])
+  // The machine's preset, then the core's own parts and the optional bundled one; never a required one.
+  expect(keys).toEqual(['extensions.preset', 'extensions.coding-tools', 'extensions.panes', 'extensions.agents-md', 'extensions.links'])
   const thread = await peer.call<ThreadInfo>('thread.start', {})
   expect(thread.without).toBeUndefined()
   await peer.call('settings.set', { key: 'extensions.links', value: false })
@@ -203,9 +203,9 @@ it("knows the extensions a window declares that have no daemon half: a switch fo
   await peer.call('extension.declare', { extensions: [{ name: 'links', title: 'Links' }, { name: 'threads', required: true }, { name: 'coding-tools', title: 'Mine' }] })
   const { value } = await peer.call<{ value: { sections: { id: string; settings: { key: string; title: string }[] }[] } }>('settings.watch', {})
   const switches = value.sections.find((s) => s.id === 'extensions')!.settings
-  expect(switches.map((s) => s.key)).toEqual(['extensions.coding-tools', 'extensions.panes', 'extensions.agents-md', 'extensions.links'])
+  expect(switches.map((s) => s.key)).toEqual(['extensions.preset', 'extensions.coding-tools', 'extensions.panes', 'extensions.agents-md', 'extensions.links'])
   // One the daemon sets up keeps its own declaration.
-  expect(switches[0]!.title).toBe('Coding tools')
+  expect(switches[1]!.title).toBe('Coding tools')
   // A newer window's word on one it declared is taken (see contract.test.ts).
   await peer.call('extension.declare', { extensions: [{ name: 'links', version: '1.0.0', title: 'Web links' }] })
   const again = await peer.call<{ value: { sections: { id: string; settings: { key: string; title: string }[] }[] } }>('settings.watch', {})

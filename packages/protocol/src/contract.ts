@@ -102,11 +102,14 @@ import type { ExtensionAbout } from './app.ts'
  * and `threads.notice`'s `wake` as a `WakeBudget` (`{ source, most }`), both counted in the thread's wake budget
  * (`WAKES_PER_HOUR`) and answering `Woken` (a held notice shown saying why: `Note.held`); `DaemonContext.by`, the
  * extension that dispatched an action.
+ * 5.22: presets of extensions: `ExtensionAbout`'s `group` (where Settings → Extensions lists it), `core` (in the Core
+ * preset as well as Full) and `experimental` (in neither); a machine's preset is `extensions.preset`, and each switch
+ * follows it until the user changes it.
  * Minor: something added (an extension that uses it asks for `^3.<minor>`); major: something an extension could rely
  * on changed or went, from 2.5 on without exception. An extension whose `api` range this doesn't satisfy is refused
  * when it's set up.
  */
-export const EXTENSION_API = '5.21.0'
+export const EXTENSION_API = '5.22.0'
 
 /** What a machine says of an extension set up there: `hello.extensions` and `features.changed` carry one each. */
 /** `title`: what the window calls it (over a message it sent, a notice of its), when it says. */

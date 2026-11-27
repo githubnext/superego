@@ -17,7 +17,7 @@ export type Viewport = { width: number; height?: number }
 export type BrowserParams = { url?: string; path?: string; viewport?: Viewport }
 
 export const about = {
-  name: 'browser', version: '1.4.0', api: '^5.4', title: 'Browser', description: 'Web pages and HTML files the agent wrote, shown beside a thread.',
+  name: 'browser', version: '1.4.0', api: '^5.4', title: 'Browser', group: 'beside', description: 'Web pages and HTML files the agent wrote, shown beside a thread.',
   panes: {
     [BROWSER]: '{ url } (a web page: a dev server running here at its localhost address, or any site, which loads once the user says so) or { path } (an HTML file in the working folder; write it first); optional viewport: { width, height? } in px, to show it at that size',
   },

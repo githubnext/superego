@@ -12,17 +12,20 @@
 // to start with), a few starred, and a test request showing it works. Then the first thread, in ⌘N.
 //
 // After the model, what extensions say of themselves (the `welcome` slot: Ego's word on asking it for things), and the
-// machine's bundled extensions, each with its switch (the very switches of Settings → Extensions, `extensions.<name>`):
-// in every state, so a first run that finds a model already still shows them. Not when it was opened from a thread that
-// couldn't send: that wants a model, nothing else.
+// machine's extensions to start with: Core or Full (the machine's `extensions.preset`), or every switch of Settings →
+// Extensions on asking, Custom once one differs (extensions-view.tsx). In every state, so a first run that finds a model
+// already still shows them. Not when it was opened from a thread that couldn't send: that wants a model, nothing else.
+// Using what an extension found (Claude Code) turns that extension on, an experimental one too.
 import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
-import { ONBOARDED, type Json, type ModelCatalog, type ModelTest, type ProviderAuthInfo, type SettingInfo, type SettingsSnapshot, type SetupProbe } from '@superego/protocol'
-import { Button, CheckIcon, GlobeIcon, KeyIcon, LaptopIcon, MagnifyingGlassIcon, Select, StarIcon, Switch, TerminalIcon, TextField, WarningIcon } from '@superego/ui'
+import { extensionSwitch, ONBOARDED, type ModelCatalog, type ModelTest, type ProviderAuthInfo, type SettingsSnapshot, type SetupProbe } from '@superego/protocol'
+import { Button, CheckIcon, GlobeIcon, KeyIcon, LaptopIcon, MagnifyingGlassIcon, Select, StarIcon, TerminalIcon, TextField, WarningIcon } from '@superego/ui'
 import { has, machine as client, useSettings } from './client.ts'
 import { keyProblem, keyProvider, pastedKey } from './key-shapes.ts'
 import { useApp, useRegistry } from './registry.tsx'
 import { Slot } from './placement.tsx'
 import { firstWindow } from './local-state.ts'
+import { extensionsOf } from './extension-presets.ts'
+import { SetupExtensions } from './extensions-view.tsx'
 import { ModelPicker } from './model-picker.tsx'
 import { ProviderForm } from './settings/provider-form.tsx'
 import { SignInFlow } from './sign-in-flow.tsx'
@@ -139,6 +142,8 @@ export function SetupPage({ machine: machineId }: { machine: string }) {
   const [looked, setLooked] = useState(false)
   // Whether the default model answered the test.
   const [talks, setTalks] = useState(false)
+  // Whether every extension's switch is shown: kept as setup moves from looking to a model and back.
+  const [listed, setListed] = useState(false)
   const providers = (snapshot?.sections.find((s) => s.id === 'providers')?.data ?? []) as ProviderAuthInfo[]
   const nameOf = (id: string) => providers.find((p) => p.id === id)?.name ?? id
   const on = { machine: machineId, source: 'setup' }
@@ -202,6 +207,9 @@ export function SetupPage({ machine: machineId }: { machine: string }) {
   const useFound = async (found: SetupFound) => {
     setProblem(undefined); setOpen(undefined)
     try {
+      // Its kind's extension (`<extension>.<kind>/<model>`), on: an experimental one is off until it's picked.
+      const owner = extensionSwitch(found.model.slice(0, found.model.indexOf('/')).split('.')[0]!)
+      if (snapshot?.values[owner] === false) await dispatch('settings.set', { key: owner, value: true }, on)
       await dispatch('settings.set', { key: 'agent.model', value: found.model }, on)
       await Promise.all([models(), look()])
       setReady({ provider: found.model.slice(0, found.model.indexOf('/')), name: found.label, detail: found.detail })
@@ -250,7 +258,7 @@ export function SetupPage({ machine: machineId }: { machine: string }) {
   const rest = !back && (
     <>
       <Slot name="welcome" props={{ machine }} />
-      <Extensions machine={machineId} snapshot={snapshot} />
+      <Extensions machine={machineId} snapshot={snapshot} open={listed} onOpen={setListed} />
     </>
   )
   const foot = (
@@ -356,48 +364,13 @@ export function SetupPage({ machine: machineId }: { machine: string }) {
   )
 }
 
-const EXTENSION = 'extensions.'
-
 /**
- * The machine's bundled extensions, each with its switch as Settings → Extensions has it (`extensions.<name>`), and all
- * of them at once.
+ * The machine's extensions, as Core, Full or Custom, once its settings say what they are; their list `open` as setup
+ * kept it, through its views.
  */
-function Extensions({ machine, snapshot }: { machine: string; snapshot: SettingsSnapshot | undefined }) {
-  const dispatch = useRegistry().router.dispatch
-  const [error, setError] = useState<string>()
-  const switches = snapshot?.sections.find((s) => s.id === 'extensions')?.settings.filter((s) => !s.hidden && s.key.startsWith(EXTENSION)) ?? []
-  if (!switches.length) return null
-  const on = (setting: SettingInfo) => snapshot?.values[setting.key] === true
-  const set = (key: string, value: Json) => dispatch('settings.set', { key, value }, { machine, source: 'setup' })
-  const change = (settings: SettingInfo[], value: boolean) => {
-    setError(undefined)
-    Promise.all(settings.filter((s) => on(s) !== value).map((s) => set(s.key, value))).catch((failed: Error) => {
-      console.error('Switching extensions failed', failed)
-      setError(failed.message)
-    })
-  }
-  return (
-    <section className="setup__extensions" aria-label="Extensions">
-      <div className="setup__head">
-        <h2>Extensions</h2>
-        <Button variant="ghost" disabled={switches.every(on)} onClick={() => change(switches, true)}>Enable all</Button>
-        <Button variant="ghost" disabled={!switches.some(on)} onClick={() => change(switches, false)}>Disable all</Button>
-      </div>
-      <ul>
-        {switches.map((setting) => (
-          <li key={setting.key} className="setup__extension" data-extension={setting.key.slice(EXTENSION.length)}>
-            <div className="setup__what">
-              <div><span className="setup__title">{setting.title}</span> <code>{setting.key.slice(EXTENSION.length)}</code></div>
-              {setting.description && <div className="setup__detail" title={setting.description}>{setting.description}</div>}
-            </div>
-            <Switch label={setting.title} checked={on(setting)} onChange={(value) => change([setting], value)} />
-          </li>
-        ))}
-      </ul>
-      {error && <p className="setup__error" role="alert">{error}</p>}
-      <p className="setup__note">Change them any time in Settings.</p>
-    </section>
-  )
+function Extensions({ machine, snapshot, open, onOpen }: { machine: string; snapshot: SettingsSnapshot | undefined; open: boolean; onOpen(open: boolean): void }) {
+  const extensions = extensionsOf(snapshot)
+  return extensions?.rows.length ? <SetupExtensions machine={machine} extensions={extensions} open={open} onOpen={onOpen} /> : null
 }
 
 const rank = (id: string) => { const at = FIRST_KEYS.indexOf(id); return at < 0 ? Infinity : at }
