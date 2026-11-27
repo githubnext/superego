@@ -44,9 +44,15 @@ export function paneParams(params: unknown): Json {
 /** How long a message just sent may wait for its run to start before `thread.read`'s wait stops waiting for it. */
 const STARTING = 10_000
 
-/** A notice as its thread's agent is told it (`threads.notice`): whose it is, and that it isn't the user's words. */
-export const noticeForAgent = (from: string, text: string) =>
-  `<notice from="${from.replace(/"/g, "'")}">\n${text}\n</notice>\n(A notice ${from} showed the user in this thread, not a message from them.)`
+/**
+ * A notice as its thread's agent is told it (`threads.notice`): whose it is, and that it isn't the user's words. Its
+ * text may carry others' words (a process's output, a pull request's title): a `<notice` or `</notice` tag in it is
+ * defused (`&lt;`), so it can't close the wrapper and read as from outside it, nor open one of its own.
+ */
+export const noticeForAgent = (from: string, text: string) => {
+  const by = from.replace(/["<>\r\n]/g, (c) => c === '"' ? "'" : ' ')
+  return `<notice from="${by}">\n${text.replace(/<(?=\s*\/?\s*notice\b)/gi, '&lt;')}\n</notice>\n(A notice ${by} showed the user in this thread, not a message from them.)`
+}
 
 const originOf = ({ by, from, exposure }: MessageOrigin): MessageOrigin => ({ ...(by ? { by } : {}), ...(from ? { from } : {}), ...(exposure ? { exposure } : {}) })
 

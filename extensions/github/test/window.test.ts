@@ -45,7 +45,7 @@ it('draws a notice of failed checks, its Fix it asking the agent; Watch… from 
   expect(card.querySelector('.github-check.is-fail')).not.toBeNull()
   expect([...card.querySelectorAll('.notice__actions button')].map((b) => b.textContent)).toEqual(['Fix it', 'Show'])
   await ui.window!.click('Fix it')
-  await ui.until(() => $$('.msg__text').some((m) => m.textContent?.includes('echo: Checks failed on acme/app#7')), 'the agent asked')
+  await ui.until(() => $$('.msg__text').some((m) => m.textContent?.includes('echo: 1 check failed on acme/app#7')), 'the agent asked')
 
   // Watch…: both, saved; the chip rings its bell, and the menu says what it's watching.
   await ui.window!.click('.header__chip--menu')

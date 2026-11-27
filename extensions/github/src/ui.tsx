@@ -366,6 +366,7 @@ function GhSection({ target, section }: SettingsComponentProps) {
             {status.version && h === status.hosts[0] && <span className="github-settings__version"> · gh {status.version}</span>}
           </p>
         ))}
+      {status?.troubles?.map((t) => <p key={t} className="github-settings__line is-problem">{t}</p>)}
       {failed && <p className="github-settings__line is-problem">{failed}</p>}
       <Button onClick={check} disabled={checking}>{checking ? 'Checking…' : 'Check again'}</Button>
     </div>

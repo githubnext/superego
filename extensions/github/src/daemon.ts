@@ -3,9 +3,10 @@
 // (never attached again by themselves then). Each kept with its thread (`superego.state`) and shown as its facts
 // (`facts.github`), the summary the marks draw. One poller per machine asks this machine's `gh` about every pull
 // request its threads have, in one GraphQL query per host: often while checks run or something just happened, rarely
-// otherwise, never once merged or closed; backing off a failing host, waiting out a rate limit, and resting while gh
-// is missing or signed out (Settings says so, and each pull request's tooltip). The full snapshot of each (checks,
-// reviews, comments) is kept once per machine, in `<dir>/prs.json`, for the pane and the agent (`pr_view`, its prompt).
+// otherwise, never once merged or closed; backing off a failing host, waiting out a rate limit (only the user's Refresh
+// asks one that's held), resting while gh is missing or signed out (Settings says so, and each pull request's tooltip),
+// and never asking a host gh isn't signed in to. The full snapshot of each (checks, reviews, comments) is kept once per
+// machine, in `<dir>/prs.json`, for the pane and `pr_view`; the agent's prompt only names the thread's pull requests.
 import { execFile } from 'node:child_process'
 import { readFile, rename, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -87,10 +88,25 @@ export function githubExtension(options: GithubOptions = {}) {
       /** What's wrong with gh for every pull request, while it's missing or signed out. */
       let ghProblem: GhProblem | undefined
       let recheckAt = 0
+      /** gh as last asked, and what went wrong lately besides (a save, a poll, a branch looked at): Settings says both. */
+      let ghNow: GhStatus | null = null
+      const troubles = new Map<string, string>()
+      const showStatus = () => status.set(ghNow && { ...ghNow, ...(troubles.size ? { troubles: [...troubles.values()] } : {}) })
+      /** Say what went wrong with `what` (logged too), or, with no message, that it's gone right again. */
+      const trouble = (what: string, message?: string, error?: unknown) => {
+        if (message !== undefined) console.error(`github: ${message}`, ...(error === undefined ? [] : [error]))
+        if (message === undefined ? !troubles.delete(what) : troubles.get(what) === message) return
+        if (message !== undefined) troubles.set(what, message)
+        showStatus()
+      }
+      const messageOf = (error: unknown) => error instanceof Error ? error.message : String(error)
+      /** Whether gh is to be asked about a host's pull requests: github.com, or one it's signed in to (`gh auth status`). */
+      const known = (host: string) => host === 'github.com' || Boolean(ghNow?.hosts.some((h) => h.host.toLowerCase() === host))
       async function checkGh() {
         const now = Date.now()
         const next = await ghStatus(gh, now)
-        status.set(next)
+        ghNow = next
+        showStatus()
         recheckAt = now + intervals.recheck
         const was = ghProblem
         ghProblem = !next.installed ? { kind: 'missing', message: next.problem ?? "gh isn't installed" }
@@ -107,11 +123,12 @@ export function githubExtension(options: GithubOptions = {}) {
       const problems = new Map<PrKey, GhProblem>()
       /** What's kept of each in prs.json: as last fetched, the events told of it, when it last woke an agent. */
       type Kept = { detail: PrDetail; told?: string[]; woke?: number[] }
+      // Unreadable, it's said, and what it kept is fetched again (its told events lost: those of a first fetch aren't news).
       const loaded = readFile(file, 'utf8').then((text) => {
         for (const [key, { detail, told, woke }] of Object.entries(JSON.parse(text) as Record<string, Kept>)) {
           if (detail) entries.set(key, { detail, ...(detail.polledAt ? { checkedAt: detail.polledAt } : {}), ...(told ? { told } : {}), ...(woke ? { woke } : {}) })
         }
-      }, (error: NodeJS.ErrnoException) => { if (error.code !== 'ENOENT') console.error(`github: reading ${file} failed:`, error) })
+      }).catch((error: NodeJS.ErrnoException) => { if (error.code !== 'ENOENT') trouble('read', `reading ${file} failed: ${messageOf(error)}`, error) })
       let saving: ReturnType<typeof setTimeout> | undefined
       /** Written now: what's known of every pull request a thread has. */
       const flush = () => {
@@ -120,7 +137,7 @@ export function githubExtension(options: GithubOptions = {}) {
         const kept = Object.fromEntries([...entries].flatMap(([key, e]): [PrKey, Kept][] => e.detail && linked.has(key)
           ? [[key, { detail: e.detail, ...(e.told?.length ? { told: e.told } : {}), ...(e.woke?.length ? { woke: e.woke } : {}) }]] : []))
         const temp = `${file}.${process.pid}.tmp`
-        return writeFile(temp, JSON.stringify(kept)).then(() => rename(temp, file)).catch((error: unknown) => console.error(`github: saving ${file} failed:`, error))
+        return writeFile(temp, JSON.stringify(kept)).then(() => rename(temp, file)).then(() => trouble('save'), (error: unknown) => trouble('save', `saving ${file} failed: ${messageOf(error)}`, error))
       }
       const save = () => { saving ??= setTimeout(() => void flush(), 500) }
       const entry = (key: PrKey) => entries.get(key) ?? entries.set(key, {}).get(key)!
@@ -158,7 +175,7 @@ export function githubExtension(options: GithubOptions = {}) {
           const kept = await keptOf(thread)
           if (!kept?.prs.some((p) => p.key === key) || same(kept.summaries[key], summary)) continue
           await state.update(thread, (s) => s && { ...s, summaries: { ...s.summaries, [key]: summary } })
-            .catch((error: unknown) => console.error(`github: updating thread ${thread} failed:`, error))
+            .then(() => trouble(`update ${thread}`), (error: unknown) => trouble(`update ${thread}`, `updating thread ${thread}'s pull requests failed: ${messageOf(error)}`, error))
         }
       }
       const publishAll = async () => { for (const key of [...linked.keys()]) await publish(key) }
@@ -204,8 +221,10 @@ export function githubExtension(options: GithubOptions = {}) {
       }
 
       // ── The poller ───────────────────────────────────────────────────────────────────────────────────────────────
-      /** Per host: failures in a row, and until when it's left alone. */
+      /** Per host: failures in a row, and until when it's left alone (but for what the user asks about now). */
       const holds = new Map<string, { failures: number; until: number }>()
+      /** What the user asked about now (Refresh): asked even of a host that's held, or while gh isn't to be rechecked yet. */
+      const pressed = new Set<PrKey>()
       let ticking: Promise<void> | undefined
       let again = false
       let timer: ReturnType<typeof setTimeout> | undefined
@@ -215,25 +234,29 @@ export function githubExtension(options: GithubOptions = {}) {
         timer = setTimeout(() => void poll(), intervals.tick)
       }
 
-      /** Ask about what's due now, `keys` among it whatever their schedule. Resolves once asked. */
-      function poll(keys: PrKey[] = []): Promise<void> {
-        for (const key of keys) entry(key).forced = true
+      /**
+       * Ask about what's due now, `keys` among it whatever their schedule; a host that's held (backing off, rate-limited)
+       * is left alone unless `asked` (the user's Refresh). Resolves once asked.
+       */
+      function poll(keys: PrKey[] = [], { asked = false } = {}): Promise<void> {
+        for (const key of keys) { entry(key).forced = true; if (asked) pressed.add(key) }
         if (ticking) { again = true; return ticking }
         ticking = (async () => {
           await indexed
           do { again = false; await pollDue() } while (again && !signal.aborted)
-        })().catch((error: unknown) => console.error('github: polling failed:', error)).finally(() => { ticking = undefined; later() })
+        })().then(() => trouble('poll'), (error: unknown) => trouble('poll', `polling failed: ${messageOf(error)}`, error)).finally(() => { ticking = undefined; later() })
         return ticking
       }
 
       async function pollDue() {
         const now = Date.now()
-        const forced = [...entries].filter(([, e]) => e.forced).map(([key]) => key)
+        prune(now)
         // Not looked at while gh is missing or signed out, but every so often, and when asked.
-        if (ghProblem || !status.get()) {
-          if (!forced.length && now < recheckAt && status.get()) return
+        if (ghProblem || !ghNow) {
+          if (!pressed.size && now < recheckAt && ghNow) return
           if (!(await checkGh()).installed || ghProblem) {
-            for (const key of forced) { entry(key).forced = false; entry(key).checkedAt = now }
+            for (const [key, e] of entries) if (e.forced) { e.forced = false; e.checkedAt = now }
+            pressed.clear()
             return
           }
         }
@@ -250,16 +273,28 @@ export function githubExtension(options: GithubOptions = {}) {
         }
         for (const [host, keys] of byHost) {
           const hold = holds.get(host)
-          const asked = keys.some((k) => entry(k).forced)
-          if (hold && hold.until > now && !asked) continue
+          if (hold && hold.until > now && !keys.some((k) => pressed.has(k))) continue
           for (let i = 0; i < keys.length && !signal.aborted; i += BATCH) await ask(host, keys.slice(i, i + BATCH))
+        }
+      }
+
+      /** Pull requests no thread has (⌘-clicked, looked at), forgotten an hour after they were last asked about. */
+      function prune(now: number) {
+        for (const [key, e] of entries) {
+          if (!linked.has(key) && !e.forced && now - (e.checkedAt ?? now) > HOUR) { entries.delete(key); problems.delete(key) }
         }
       }
 
       /** One query to `host` for these pull requests; what it found published, what failed said. */
       async function ask(host: string, keys: PrKey[]) {
         const now = Date.now()
-        for (const key of keys) { const e = entry(key); e.forced = false; e.checkedAt = now }
+        for (const key of keys) { const e = entry(key); e.forced = false; e.checkedAt = now; pressed.delete(key) }
+        // A host gh isn't signed in to isn't asked: with GH_ENTERPRISE_TOKEN set, gh would send it that token.
+        if (!known(host)) {
+          const problem: GhProblem = { kind: 'unknown-host', message: `gh isn't signed in to ${host}: run \`gh auth login --hostname ${host}\` to follow its pull requests.` }
+          for (const key of keys) { problems.set(key, problem); await publish(key) }
+          return
+        }
         try {
           const found = await fetchPrs(gh, host, keys.map((k) => refOf(k)!), now, signal)
           holds.delete(host)
@@ -301,7 +336,7 @@ export function githubExtension(options: GithubOptions = {}) {
         save()
         for (const thread of linked.get(key) ?? []) {
           if (archived.has(thread)) continue
-          await tellThread(thread, key, now, events).catch((error: unknown) => console.error(`github: telling thread ${thread} about ${key} failed:`, error))
+          await tellThread(thread, key, now, events).then(() => trouble(`tell ${thread}`), (error: unknown) => trouble(`tell ${thread}`, `telling thread ${thread} about ${key} failed: ${messageOf(error)}`, error))
         }
       }
 
@@ -383,8 +418,15 @@ export function githubExtension(options: GithubOptions = {}) {
         const thread = await threadOf(id)
         const tree = thread?.facts?.worktrees as { branch?: string; removed?: boolean } | undefined
         if (!thread || thread.archived || !tree?.branch || tree.removed || ghProblem) return
-        // No upstream: not pushed, so no pull request yet.
-        const upstream = await git(thread.cwd, ['rev-parse', '-q', '--verify', '@{upstream}']).catch(() => undefined)
+        const what = `branch ${id}`
+        let upstream: string
+        try {
+          upstream = await git(thread.cwd, ['rev-parse', '-q', '--verify', '@{upstream}'])
+        } catch (error) {
+          // Exit 1: no upstream, so not pushed, and no pull request yet. Anything else is git failing.
+          if ((error as { code?: unknown }).code !== 1) trouble(what, `looking at ${tree.branch}'s upstream failed: ${messageOf(error)}`, error)
+          return
+        }
         if (!upstream || (await state.get(id))?.looked === upstream) return
         let urls: string[]
         try {
@@ -392,9 +434,10 @@ export function githubExtension(options: GithubOptions = {}) {
         } catch (error) {
           // gh missing or signed out: Settings says so, and it's looked at again once it's fixed.
           if (error instanceof GhError && (error.problem.kind === 'missing' || error.problem.kind === 'signed-out')) { await checkGh(); return }
-          if (!signal.aborted) console.error(`github: looking for ${tree.branch}'s pull request failed:`, (error as Error).message)
+          if (!signal.aborted) trouble(what, `looking for ${tree.branch}'s pull request failed: ${messageOf(error)}`)
           return
         }
+        trouble(what)
         for (const url of urls) await attach(id, url, 'branch')
         await state.update(id, (s) => ({ ...s ?? empty(), looked: upstream }))
       }
@@ -403,25 +446,31 @@ export function githubExtension(options: GithubOptions = {}) {
         clearTimeout(settling.get(id))
         settling.set(id, setTimeout(() => {
           settling.delete(id)
-          void lookAtBranch(id).catch((error: unknown) => console.error(`github: thread ${id}'s branch:`, error))
+          void lookAtBranch(id).catch((error: unknown) => trouble(`branch ${id}`, `looking at thread ${id}'s branch failed: ${messageOf(error)}`, error))
         }, ms))
       }
-      /** A thread's pull requests, hot (asked about often) and asked about now. */
-      async function stir(id: string) {
+      /**
+       * A thread's pull requests, hot (asked about often); `now`, asked about now too (it pushed), a held host still
+       * left alone. Else asked about once they're due, as hot ones are soon.
+       */
+      async function stir(id: string, { now = false } = {}) {
         const kept = await keptOf(id)
         const keys = kept?.prs.map((p) => p.key) ?? []
         for (const key of keys) entry(key).hotUntil = Date.now() + intervals.hot
-        if (keys.length) await poll(keys)
+        if (keys.length) await poll(now ? keys : [])
+      }
+      const stirred = (id: string, now?: boolean) => {
+        stir(id, { now }).catch((error: unknown) => trouble('poll', `polling thread ${id}'s pull requests failed: ${messageOf(error)}`, error))
       }
 
       superego.thread({
         started(thread) { lookSoon(thread.id, 0) },
         turnEnd(thread) {
           lookSoon(thread.id)
-          void stir(thread.id)
+          stirred(thread.id)
         },
         archived(thread) { archived.add(thread.id) },
-        unarchived(thread) { archived.delete(thread.id); void stir(thread.id) },
+        unarchived(thread) { archived.delete(thread.id); stirred(thread.id, true) },
       })
 
       // What the agent runs: a pull request it opened, attached; a push, its pull requests asked about now.
@@ -433,7 +482,7 @@ export function githubExtension(options: GithubOptions = {}) {
         }
         if (/\bgit\s+push\b|\bgh\s+pr\b/.test(command)) {
           lookSoon(thread, 0)
-          await stir(thread)
+          await stir(thread, { now: true })
         }
       })
 
@@ -493,7 +542,7 @@ export function githubExtension(options: GithubOptions = {}) {
           await checkGh()
           const keys = pr ? [parsePr(pr)?.key ?? pr] : thread ? (await state.get(thread))?.prs.map((p) => p.key) ?? [] : [...linked.keys()]
           if (thread) lookSoon(thread, 0)
-          await poll(keys)
+          await poll(keys, { asked: true })
           return status.get()
         },
       }))
@@ -541,6 +590,11 @@ export function githubExtension(options: GithubOptions = {}) {
             parameters: obj({ url: str({ description: "the pull request's URL" }) }),
             async execute({ url }, api) {
               const thread = threadOfCall(api.conversationId)
+              const ref = parsePr(url)
+              if (ref) {
+                if (!ghNow) await checkGh()
+                if (!known(ref.host)) throw new Error(`gh isn't signed in to ${ref.host}, so its pull requests can't be followed. The user can run \`gh auth login --hostname ${ref.host}\`.`)
+              }
               const summary = await attach(thread, url, 'agent')
               return { output: [{ type: 'text', text: `Attached ${summary.repo}#${summary.number} to this thread.` }], details: { key: summary.key, url: summary.url } }
             },
@@ -586,14 +640,11 @@ export function githubExtension(options: GithubOptions = {}) {
             },
           }),
         ],
+        // Which pull requests, and how to look: never how they stand, which would change it, and the prompt's cache with it.
         sections: [section(PROMPT_SECTION, async ({ conversationId }) => {
           const id = superego.threads.of(conversationId)
           const kept = id ? await keptOf(id) : undefined
-          if (!kept?.prs.length) return undefined
-          return promptLine([...kept.prs].sort((a, b) => b.at - a.at).map((p) => {
-            const detail = entries.get(p.key)?.detail
-            return { summary: kept.summaries[p.key] ?? summaryOf(p.key, entries.get(p.key), ghProblem), ...(detail ? { detail } : {}) }
-          }))
+          return promptLine([...kept?.prs ?? []].sort((a, b) => b.at - a.at).flatMap((p) => refOf(p.key) ?? []))
         })],
       }))
 
@@ -605,9 +656,9 @@ export function githubExtension(options: GithubOptions = {}) {
         later()
         for (const thread of await superego.threads.list() as ThreadInfo[]) {
           if (signal.aborted) return
-          await lookAtBranch(thread.id).catch((error: unknown) => console.error(`github: thread ${thread.id}'s branch:`, error))
+          await lookAtBranch(thread.id).catch((error: unknown) => trouble(`branch ${thread.id}`, `looking at thread ${thread.id}'s branch failed: ${messageOf(error)}`, error))
         }
-      })().catch((error: unknown) => { if (!signal.aborted) console.error('github: starting failed:', error) })
+      })().catch((error: unknown) => { if (!signal.aborted) trouble('start', `starting failed: ${messageOf(error)}`, error) })
 
       return async () => {
         clearTimeout(timer)

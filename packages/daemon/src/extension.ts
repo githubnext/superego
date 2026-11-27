@@ -644,7 +644,8 @@ export type DaemonApi = {
      * from this extension (the window names it), which makes the thread unread and notifies as a finished run does, its
      * `text` saying why. Its agent is told it with the next turn (as context, not as the user's words): at once when
      * the thread is idle, else where its run can next take it, which is when the entry shows. `archived` for an
-     * archived thread. To wake the agent too, `send` it a message as well.
+     * archived thread. `wake` (API ^5.18) starts its run on it too. Its words are framed as a notice (a tag in them
+     * defused), but others' words (a pull request's title, a comment) are best left to a tool that quotes them.
      */
     notice(id: string, notice: ThreadNotice): Promise<void>
     /**

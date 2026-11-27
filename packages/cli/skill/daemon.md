@@ -285,6 +285,14 @@ at once when the thread is idle, else where its run can next take it, which is a
 To wake the agent as well, give it `wake: true` (API ^5.18): its run starts on the notice (Processes' reports do).
 An archived thread refuses a notice (`archived`).
 
+**Others' words.** What the agent is told is framed as a notice (`<notice from="…">`), and a `<notice`/`</notice` in
+it is defused, so it can't pass for words from outside the notice. Framing doesn't make it safe to act on, though: a
+pull request's title, a review comment or a webhook's payload is written by whoever can write there, and a notice that
+wakes the agent runs on it unattended. So in `agent`, and in a button's `send` (it goes as the user's message), say
+what happened in your own words, with facts you control: names, counts, ids, states, who did it. Leave others' words
+to a tool the agent calls, which hands them over quoted as data, not instructions (GitHub's notices name the pull
+request and what happened; `pr_view` quotes its title and review comments).
+
 <!-- check: module -->
 ```ts
 import { defineAction, defineDaemonExtension, obj, str } from 'superego'

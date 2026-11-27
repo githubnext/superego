@@ -31,7 +31,7 @@ What each half of an extension registers, a line each. The [guide](guide.md) bui
 | `auth.flow(context, async (flow) => …)` → `{ flow }` | a sign-in flow for the client running an action: `flow.emit({ type: 'auth_url', url, callback })`, `await flow.prompt({ type: 'manual_code', message })`, `flow.signal`. Drawn with `SignInFlow` |
 | `threads.list({ archived, hidden })`, `get(id)`, `of(conversationId)`, `conversation(id)`, `attachments(id)` | reach threads, and the folder a thread keeps files in |
 | `threads.start({ …, parent, hidden, options })`, `send(id, text)`, `lastAnswer(id)`, `idle(id)`, `entries(id, limit)`, `archive(id, { whenIdle })`, `unarchive(id)`, `clear(id)` | run threads as the thread tools do. `hidden`: an agent of its own, in no list (find it by `owner`); `entries`: not a stable shape; `clear`: start over. A message `send` sends shows your title over it |
-| `threads.notice(id, { text, kind?, data?, actions?, agent? })` | (API ^5.17) tell the user in a thread, no run: unread and notified, the agent told as context; buttons send a message or dispatch an action ([Notices](daemon.md#notices)) |
+| `threads.notice(id, { text, kind?, data?, actions?, agent?, wake? })` | (API ^5.17) tell the user in a thread, no run (`wake`, API ^5.18: start one): unread and notified, the agent told as context; buttons send a message or dispatch an action ([Notices](daemon.md#notices)) |
 | `machines.list()`, `machines.call(machine, method, params)` | the other machines this daemon reaches, and a call to one (no consent actions) |
 | `agentsDir`, `dataDir` | `~/.agents` (skills, `AGENTS.md`); `~/.superego` |
 

@@ -1,6 +1,6 @@
 // A stand-in for `gh`, for tests and look.sh's github scene: run as `node fake-gh.cjs <dir> <gh's arguments>` by a `gh`
 // on a PATH of its own (fake-gh.ts writes one). It answers from <dir>/github.json (who's signed in, the pull requests
-// GitHub has as GraphQL nodes by `owner/repo#number`, each branch's, a rate limit, a failure) and logs each call to
+// GitHub has as GraphQL nodes by `owner/repo#number` on any host, each branch's, a rate limit, a failure) and logs each call to
 // <dir>/calls.jsonl.
 const fs = require('node:fs')
 const path = require('node:path')
@@ -14,11 +14,13 @@ const signedOut = 'You are not logged into any GitHub hosts. To log in, run: gh 
 if (args[0] === '--version') { out('gh version 2.99.0 (fake)\n'); process.exit(0) }
 if (args[0] === 'auth' && args[1] === 'status') {
   if (!world.login) fail(signedOut)
-  out(JSON.stringify({ hosts: { 'github.com': [{ state: 'success', active: true, host: 'github.com', login: world.login }] } }))
+  const hosts = Object.fromEntries(['github.com', ...(world.hosts ?? [])].map((host) => [host, [{ state: 'success', active: true, host, login: world.login }]]))
+  out(JSON.stringify({ hosts }))
   process.exit(0)
 }
 if (!world.login) fail('To get started with GitHub CLI, please run:  gh auth login', 4)
 if (args[0] === 'pr' && args[1] === 'list') {
+  if (world.listFailing) fail(world.listFailing)
   const branch = args[args.indexOf('--head') + 1]
   out(JSON.stringify((world.branches?.[branch] ?? []).map((url, i) => ({ url, createdAt: new Date(Date.UTC(2026, 0, 1 + i)).toISOString() }))))
   process.exit(0)

@@ -6,12 +6,16 @@ import { join } from 'node:path'
 /** What the fake GitHub holds. `prs`: GraphQL pull request nodes by `owner/repo#number`. */
 export type FakeGitHub = {
   login?: string | null
+  /** Hosts it's signed in to besides github.com (GitHub Enterprise's). */
+  hosts?: string[]
   prs?: Record<string, Record<string, unknown>>
   branches?: Record<string, string[]>
   /** Every API call fails with a rate limit until this time (seconds since the epoch). */
   rateLimitedUntil?: number
   /** Every API call fails with this. */
   failing?: string
+  /** Every `gh pr list` fails with this. */
+  listFailing?: string
 }
 
 /** A fake gh in `dir/bin`: `env()` is an environment with only it on PATH; `set` changes what GitHub holds; `calls` what it was asked. */

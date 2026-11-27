@@ -6,17 +6,13 @@
   from your profile (its folder and its entries in `profile.ts`). Agents use the `process_*` tools on the process named
   `run`; the `run_status`, `run_logs`, `run_restart` and `run_stop` tools are gone. The old logs in `~/.superego/run/`
   can be deleted.
-- **Pull requests on threads.** A pull request the agent opens, or the one a worktree thread's branch has, is
-  attached to its thread: its state, checks and review show in the title bar and on its row, and Show pull request
-  opens what's failing and the unresolved review comments beside it. Attach one by hand from a row's menu or ⌘K, and
-  go to any thread's with "Go to pull request…". Pull request links in messages show their state; ⌘-click shows one
-  beside. It uses the machine's `gh` (Settings says whether it's signed in), and Settings → Extensions can turn it off.
+- **Pull requests on threads.** A thread shows its pull request's state, checks and review in its title bar and row;
+  Show pull request opens what's failing beside it. Agents' pull requests are attached by themselves; attach others
+  from a thread's menu or ⌘K. It uses the machine's `gh`.
 - Claude Agent threads attach the pull requests they open, and extensions that watch what an agent runs see what
   Claude Code runs too.
-- The agent can look at a thread's pull request (`pr_view`), and knows how its checks and review stand.
-- A thread says when its pull request's checks fail, a reviewer asks for changes or approves, or it's merged, with
-  "Fix it" to hand the failure or the review to the agent. The agent isn't woken unless you choose Watch… on the pull
-  request's chip (or ask it to watch): then it's woken when checks finish or a review comes in, until it's merged.
+- A thread tells you when its pull request's checks fail, a reviewer asks for changes or approves, or it's merged, with
+  Fix it to hand it to the agent. Watch… on the pull request wakes the agent instead.
 - **Schedules.** Ask an agent to check something every 30 minutes, or to remind you tomorrow at 9: it wakes the
   thread or just reminds you then. A clock in the title bar and on the thread's row shows the next run, to run, pause,
   edit or cancel it; `/schedule in 30m check the deploy` makes one too.

@@ -41,7 +41,10 @@ export const PROMPT_SECTION = 'pull_request'
 export type PrKey = string
 export type PrRef = { key: PrKey; url: string; host: string; owner: string; repo: string; number: number }
 
-/** A pull request's URL, anywhere in a text (GitHub Enterprise's too: any host). */
+/**
+ * A pull request's URL, anywhere in a text (GitHub Enterprise's too: any host). Only a host gh is signed in to is asked
+ * about (`unknown-host` otherwise): a URL is anyone's to write.
+ */
 export const PR_URL = /https?:\/\/([\w.-]+(?::\d+)?)\/([\w.-]+)\/([\w.-]+)\/pull\/(\d+)/g
 
 /** A pull request's URL taken apart, or undefined when it isn't one. Anything after its number (`/files`, `#…`) is left off. */
@@ -90,10 +93,11 @@ export type Mergeable = 'mergeable' | 'conflicting' | 'unknown'
 
 /**
  * Why a pull request's state isn't known (or isn't current): `gh` isn't installed (`missing`) or signed in
- * (`signed-out`) on the thread's machine, GitHub says there's no such pull request or no access (`not-found`), it's
- * rate-limited, or the call failed. `message` is what went wrong, as said.
+ * (`signed-out`) on the thread's machine, or not to its host (`unknown-host`: it isn't asked), GitHub says there's no
+ * such pull request or no access (`not-found`), it's rate-limited, or the call failed. `message` is what went wrong, as
+ * said.
  */
-export type GhProblem = { kind: 'missing' | 'signed-out' | 'not-found' | 'rate-limited' | 'failed'; message: string }
+export type GhProblem = { kind: 'missing' | 'signed-out' | 'unknown-host' | 'not-found' | 'rate-limited' | 'failed'; message: string }
 
 /**
  * What the marks and the card need of a pull request: small. `title` and `state` are unknown until it was first
@@ -159,6 +163,8 @@ export type GhStatus = {
   hosts: { host: string; login?: string; ok: boolean; error?: string }[]
   /** What's wrong, when something is: not installed, not signed in, or it couldn't be asked. */
   problem?: string
+  /** What else went wrong lately (saving what it knows, a poll, looking at a thread's branch), until it goes right. */
+  troubles?: string[]
   checkedAt: number
 }
 

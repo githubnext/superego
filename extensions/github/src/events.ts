@@ -2,8 +2,10 @@
 // or all passed) on a head commit, a review submitted (changes requested, approved), review comments new since, merged,
 // closed. Each event has keys, remembered once it's told, so it's told once (a restart, a re-run of the same checks on
 // the same commit, never repeat it). Said three ways: a notice to the user (a headline, a line of detail, the thread's
-// status line too), the message "Fix it" sends the agent, and what a watching agent is told as it's woken.
-import { digest } from './digest.ts'
+// status line too), the message "Fix it" sends the agent, and what a watching agent is told as it's woken. What the
+// agent is told (and Fix it sends, as the user's words) is facts only: which pull request, what happened, counts, who,
+// run ids. Never others' words (its title, a check's name, a comment's body): anyone who can comment writes those, and
+// a wake runs unattended. pr_view hands them over, quoted.
 import type { Check, PrDetail, PrLink, ReviewComment } from './shared.ts'
 
 export type PrEvent =
@@ -72,7 +74,6 @@ export function wakes(watch: NonNullable<PrLink['watch']>, event: PrEvent): bool
 // ── Saying it ────────────────────────────────────────────────────────────────────────────────────────────────────
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`
 const names = (who: string[]) => who.length <= 2 ? who.join(' and ') : `${who.slice(0, -1).join(', ')} and ${who.at(-1)}`
-const short = (text: string, max: number) => { const flat = text.replace(/\s+/g, ' ').trim(); return flat.length > max ? `${flat.slice(0, max - 1)}…` : flat }
 
 /** What a notice says of an event: its headline and a line of detail. */
 export function said(pr: PrDetail, event: PrEvent): { headline: string; detail?: string } {
@@ -88,42 +89,55 @@ export function said(pr: PrDetail, event: PrEvent): { headline: string; detail?:
   }
 }
 
-/** The notice's text (the thread's status line, its notification, the agent's context): its headline and detail. */
-export function noticeText(pr: PrDetail, event: PrEvent): string {
-  const { headline, detail } = said(pr, event)
-  return detail ? `${headline}: ${detail}` : headline
+/** A login as said to the agent: GitHub's are letters, digits and hyphens (a bot's `[bot]`); anything else is dropped. */
+const login = (who: string) => who.replace(/[^\w.[\]-]/g, '') || 'someone'
+const logins = (who: string[]) => names(who.map(login))
+
+/** What happened, for the agent: facts only (which, what, how many, who), none of others' words. */
+export function agentSaid(pr: PrDetail, event: PrEvent): string {
+  const n = `${pr.repo}#${pr.number}`
+  switch (event.kind) {
+    case 'checks-failed': return `${plural(event.failed.length, 'check')} failed on ${n}`
+    case 'checks-passed': return `Checks passed on ${n}`
+    case 'changes': return `${logins(event.who)} requested changes on ${n}${event.comments.length ? `, with ${plural(event.comments.length, 'review comment')}` : ''}`
+    case 'approved': return `${logins(event.who)} approved ${n}`
+    case 'comments': return `${plural(event.comments.length, 'new review comment')} on ${n}, from ${logins([...new Set(event.comments.map((c) => c.who))])}`
+    case 'merged': return `${n} was merged`
+    case 'closed': return `${n} was closed`
+  }
 }
 
-/** What the agent's told of a notice: which pull request, what happened. */
+/** What the agent's told of a notice: which pull request, what happened, and where to read it. */
 export function noticeForAgent(pr: PrDetail, event: PrEvent): string {
-  return `${noticeText(pr, event)} (${pr.repo}#${pr.number}${pr.title ? ` ${JSON.stringify(pr.title)}` : ''}). pr_view has the details.`
+  return `${agentSaid(pr, event)}. pr_view has the details.`
 }
 
-/** A review comment, a line: where, who, what. */
-const commentLine = (c: ReviewComment) => `- ${c.path}${c.line ? `:${c.line}` : ''}${c.outdated ? ' (outdated)' : ''} (${c.who}): ${short(c.body, 300)}${c.url ? ` ${c.url}` : ''}`
+/** The commands for a failed check run's logs, each run once: its id is GitHub's, a number. */
+const logCommands = (failed: Check[]) => [...new Set(failed.flatMap((c) => c.runId ? [c.runId] : []))].map((id) => `\`gh run view ${id} --log-failed\``)
 
-/** The message "Fix it" sends the agent: what failed or was asked, and how to see it; nothing for an event with nothing to fix. */
+/**
+ * The message "Fix it" sends the agent (as the user's words): what failed or was asked, and how to see it; nothing for
+ * an event with nothing to fix. Facts only: the checks' names and the comments are pr_view's to show.
+ */
 export function fixText(pr: PrDetail, event: PrEvent): string | undefined {
   const name = `${pr.repo}#${pr.number}`
   if (event.kind === 'checks-failed') {
-    const each = event.failed.map((c) => `- ${c.name}${c.runId ? ` (logs: \`gh run view ${c.runId} --log-failed\`)` : c.url ? ` ${c.url}` : ''}`)
-    return `Checks failed on ${name}:\n${each.join('\n')}\n\nFind out why, fix it, and push.`
+    const logs = logCommands(event.failed)
+    return `${plural(event.failed.length, 'check')} failed on ${name}. See which with pr_view${logs.length ? `, and their logs with ${logs.join(', ')}` : ''}. Find out why, fix it, and push.`
   }
   if (event.kind === 'changes' || event.kind === 'comments') {
-    const comments = event.kind === 'changes' && !event.comments.length ? pr.comments : event.comments
-    const head = event.kind === 'changes' ? `${names(event.who)} requested changes on ${name}.` : `New review comments on ${name}.`
-    const list = comments.slice(0, 12).map(commentLine)
-    const more = comments.length > list.length ? [`- …and ${comments.length - list.length} more (pr_view has them all)`] : []
-    return `${head}${list.length ? ` Address the review comments:\n${list.join('\n')}${more.length ? `\n${more.join('\n')}` : ''}` : ' Read the review with pr_view and address it.'}\n\nThen push.`
+    return `${agentSaid(pr, event)}. Read the review with pr_view, address it, and push.`
   }
   return undefined
 }
 
-/** What a watching agent is told as it's woken: what happened, then the pull request as pr_view has it. */
+/** What a watching agent is told as it's woken: what happened, what to do, and that pr_view has the rest. */
 export function wakeText(pr: PrDetail, events: PrEvent[], { stopped }: { stopped: boolean }): string {
-  const lines = events.map((e) => `${noticeText(pr, e)}.`)
-  const ask = events.some((e) => e.kind === 'checks-failed') ? 'Fix what failed and push.'
+  const lines = events.map((e) => `${agentSaid(pr, e)}.`)
+  const failed = events.flatMap((e) => e.kind === 'checks-failed' ? e.failed : [])
+  const logs = logCommands(failed)
+  const ask = failed.length ? `Fix what failed and push${logs.length ? ` (logs: ${logs.join(', ')})` : ''}.`
     : events.some((e) => e.kind === 'changes' || e.kind === 'comments') ? 'Address the review and push.' : undefined
   const watch = stopped ? "You're no longer watching it." : "You're watching it: pr_watch with stop: true stops that."
-  return `${lines.join('\n')}${ask ? ` ${ask}` : ''}\n(${watch})\n\n${digest(pr)}`
+  return `${lines.join('\n')}${ask ? ` ${ask}` : ''}\npr_view has the details: its checks, reviews and review comments.\n(${watch})`
 }
