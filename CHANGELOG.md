@@ -2,64 +2,29 @@
 
 ## Unreleased
 
-- **Core or Full.** Setup and Settings → Extensions let you start with Core, the few extensions a newcomer needs, or
-  Full, all of them, then switch any one on or off. Extensions added in a later release follow what you picked. Claude
-  Agent, experimental, keeps a switch of its own.
-- **Pull requests on threads.** A thread shows its pull request's state, checks and review in its title bar and row;
-  Show pull request opens what's failing beside it. Agents' pull requests are attached by themselves; attach others
-  from a thread's menu or ⌘K. It uses the machine's `gh`.
-- Claude Agent threads attach the pull requests they open, and extensions that watch what an agent runs see what
-  Claude Code runs too.
-- A thread tells you when its pull request's checks fail, a reviewer asks for changes or approves, or it's merged, with
-  Fix it to hand it to the agent. Watch… on the pull request wakes the agent instead.
-- The pull request pane shows its description and conversation (comments and reviews), as GitHub's Conversation tab
-  does.
-- **Schedules.** Ask an agent to check something every 30 minutes, or to remind you tomorrow at 9: it wakes the
-  thread or just reminds you then. A clock in the title bar and on the thread's row shows the next run, to run, pause,
-  edit or cancel it; `/schedule in 30m check the deploy` makes one too.
-- **Processes.** Agents run servers and long builds that keep running through Superego's restarts, and are woken
-  when one ends or fails; the Processes pane shows them. It's the new Processes extension, which Settings → Extensions
-  can turn off.
-- **The rail picks the whole window.** A rail button (Threads, Notes, Staff…) changes the sidebar and the main area
-  together, and comes back to what you last had there; only one is lit. A project's spaces open from their rows in
-  Threads, no longer from rail buttons of their own. Files and Skills go beside the thread or in a pane, not the sidebar.
-- **Mermaid diagrams.** ```` ```mermaid ```` blocks in threads and Markdown files show as diagrams, in the window's
-  colours, light or dark. Their corner shows the source or copies it. It's the new Mermaid extension, which Settings →
-  Extensions can turn off.
-- Dialogs have room around what's in them: text no longer touches the edge, and a field's focus ring isn't cut off.
-- Messages an extension sent for you (a child thread's report, say) show as an outlined bubble with the extension's
-  name over it, so they don't read as typed by you.
-- New for extensions (extension API 5.19): `superego.composer.command({ name, detail, takes?, run })` adds a
-  `/<name>` command to the composer, run with what follows it instead of being sent.
-- New for extensions (extension API 5.17): `superego.threads.notice(id, { text, kind?, data?, actions?, agent? })`
-  tells the user something in a thread without a run: a card under the extension's name, drawn by its `entry(kind)` or
-  as text, with buttons that send the agent a message or dispatch an action; the thread turns unread and notifies, and
-  the agent is told it with its next turn. `HeaderChip` takes a `menu` of `ThreadMenuItem`s: a menu on the desktop,
-  rows of the thread's sheet on a phone.
-- New for extensions (extension API 5.17): a sidebar mark (`ThreadBadge`) can say how a thread's card spells it out
-  (`spelled`).
-- New for extensions (extension API 5.18): run a command as a thread's, a folder's or the machine's process with the
-  Processes extension's actions and methods (`processes.start`, `processes.wait`, …; see the skill's daemon page);
-  keep a process group of your own through a daemon restart with `spawnGroup`'s `outlive`, `adoptGroup` and
-  `processTable`; `superego.signal.reason.why` says why an extension is torn down; a notice with `wake: true` starts
-  the agent's run on it.
-- New for extensions (extension API 5.20): `superego.toolCalls` hears a Claude Agent thread's calls, Claude Code's own
-  too (its Bash as `bash`); an agent kind reports its own agent's calls with `superego.reportToolCall`.
-- New for extensions (extension API 5.21): `superego.jsonFile(name, …)` keeps an extension's state in a JSON file,
-  saved safely and never written over when it doesn't read; `threads.send` takes `context`, what the agent alone is
-  told with the words; every unattended wake (a send's or a notice's `wake`) counts in the thread's wake budget, which
-  says when it held one; an action's `context.by` names the extension that dispatched it.
-- New for extensions (extension API 5.22): `about` takes `group` (where Settings → Extensions lists it), `core` (in
-  the Core preset as well as Full) and `experimental` (in neither, with a switch of its own: on, or `'off'`).
-- New for extensions (extension API 5.14): `superego.codeBlock(languages, component)` draws fenced code blocks of a
-  language.
-- New for extensions (extension API 5.16): `@` in the composer can mention an extension's things (`@note:roadmap`,
-  `@canvas:"Fox & Rhino"`): `superego.composer.mention` offers them, `superego.mention` tells the agent what a sent one
-  is, and the transcript links it. `@<kind>:` offers that kind alone.
-- New for extensions (extension API 5.15): `ConfirmDialog` and `PromptDialog`, ready-made dialogs to ask before doing
-  something and to ask for a name; `Button`'s `danger` variant; and `Dialog`'s `footer` and `flush`.
-- For extensions: a sidebar is a `window` view's only; a `thread` view that fits `sidebar` loses that place (a data
-  view's declaration is refused). A sidebar shows the spaces its extension declares, else threads.
+## 0.7.0
+
+### Onboarding
+
+- **Choose Core or Full.** Start with the few basics or everything, in setup or Settings → Extensions, and switch any one on or off.
+- Claude Agent gets a switch of its own, as it's experimental.
+
+### Core
+
+- **The rail picks the whole window.** Each rail button brings its own sidebar and main area, and remembers where you were.
+- A project's spaces open from Threads; Files and Skills open beside the thread.
+- Messages an extension sent for you show as an outlined bubble with its name.
+- Fix dialogs' padding.
+
+### Extensions
+
+- **Pull requests on threads.** A thread shows its pull request's checks and review, and tells you when checks fail or a review comes in, with Fix it. Uses `gh`.
+- Claude Agent threads attach the pull requests they open.
+- **Schedules.** "Check CI every 30 minutes", "remind me tomorrow at 9", or `/schedule`. A clock on the thread shows the next run.
+- **Processes.** Servers and long builds keep running through Superego's restarts, and the agent hears when one fails.
+- **Mermaid diagrams** in threads and Markdown files.
+
+- **API note** (API 5.14–5.22): thread notices, chip menus, slash commands, `@` mentions, code block renderers, ready-made dialogs, processes, `jsonFile`, a wake budget, Claude Agent's tool calls in `toolCalls`, and presets (`group`, `core`, `experimental`). A sidebar is a window view's only. See the skill's docs.
 
 ## 0.6.0
 
