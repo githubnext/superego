@@ -78,3 +78,4 @@ span.schedules-row__icon { display: inline-flex; }
 .schedules-reminder__bell { flex: none; margin-top: 3px; color: var(--superego-accent); }
 .schedules-reminder__caption { margin-top: 2px; font-size: var(--superego-text-xs); color: var(--superego-muted); font-variant-numeric: tabular-nums; }
 .schedules-form__says { min-height: calc(3em + 8px); line-height: 1.5; }
+.schedules-problem { margin: 4px 0 8px; padding: 8px 10px; border-radius: var(--superego-radius); background: var(--superego-hover); color: var(--superego-status-error); font-size: var(--superego-text-sm); overflow-wrap: anywhere; }

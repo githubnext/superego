@@ -42,6 +42,11 @@ export const LIST_METHOD = 'schedules.list'
 export const ALL_VALUE = 'schedules.all'
 /** The method saying what a time in words comes to (`{ when, action? }` → `Understood`), for a form to show as it's typed. */
 export const UNDERSTAND_METHOD = 'schedules.understand'
+/** The live value of what's wrong with the machine's schedules, if anything (its file unreadable): a string, or null. */
+export const PROBLEM_VALUE = 'schedules.problem'
+/** Its section in Settings (the machine's), and the UI drawn under it. */
+export const SECTION = 'schedules'
+
 /** The method finding a time in what was said (`{ text }` → `{ when, message, action? }` or null), for `/schedule …`. */
 export const SPLIT_METHOD = 'schedules.split'
 
@@ -56,8 +61,11 @@ export const SETTINGS = {
   perThread: 'schedules.perThread',
 } as const
 
-/** The guards no setting goes past: what a recurring schedule may cost at most. */
-export const CAPS = { maxRuns: 500, days: 30, perMachine: 100, minIntervalMinutes: 1 } as const
+/**
+ * The guards no setting goes past: what a recurring schedule may cost at most, and how often schedules may wake one
+ * thread in an hour, all told (one-shots the agent chains one after another too).
+ */
+export const CAPS = { maxRuns: 500, days: 30, perMachine: 100, minIntervalMinutes: 1, wakesPerHour: 20 } as const
 /** The settings' defaults. */
 export const DEFAULTS = { minIntervalMinutes: 5, maxRuns: 48, days: 7, perThread: 10 } as const
 

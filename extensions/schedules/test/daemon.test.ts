@@ -3,7 +3,9 @@
 // up on a run missed while Superego wasn't running.
 import { afterEach, expect, it } from 'vitest'
 import { callTool, say, testDaemon, type TestDaemon } from '@superego/sdk/testing'
-import { schedulesExtension, type Clock } from '../src/daemon.ts'
+import { readFile, writeFile } from 'node:fs/promises'
+import { join } from 'node:path'
+import { schedulesExtension, stableLine, type Clock } from '../src/daemon.ts'
 import type { Facts, Schedule, ScheduleDetails } from '../src/shared.ts'
 import { HOUR, MINUTE } from '../src/when.ts'
 
@@ -135,4 +137,31 @@ it('reminds the user with a notice, no run, the thread made unread; changes a sc
   await expect(daemon.call('schedules.understand', { when: 'whenever' })).rejects.toThrow(/isn't a time I understand/)
   expect(await daemon.call('schedules.split', { text: 'remind me in 1h to stretch' })).toEqual({ when: 'in 1h', message: 'Stretch', action: 'notify' })
   expect(await daemon.call('schedules.split', { text: 'check the deploy sometime' })).toBeNull()
+}, 30_000)
+
+it("keeps the prompt's line for a schedule the same as it runs: where it stands is schedule_list's", () => {
+  const s: Schedule = {
+    id: 's_1', thread: 't', label: 'Check CI', message: 'Check CI.', action: 'wake', when: { every: 30 * MINUTE, anchor: 0 }, said: 'every 30m',
+    until: 'CI is green', maxRuns: 48, next: 30 * MINUTE, runs: 0, missed: 0, paused: false, by: 'agent', created: 0,
+  }
+  const line = stableLine(s)
+  expect(line).toBe('- s_1 "Check CI": every 30 min, until: CI is green')
+  expect(stableLine({ ...s, next: 90 * MINUTE, runs: 3, missed: 1, lastRun: HOUR, paused: true, pending: { since: 1, due: 1, missed: 0 }, awaiting: true })).toBe(line)
+})
+
+it("says when its file doesn't read: kept aside, the threads it names told, Settings shown it; and finishes a save before it's torn down", async () => {
+  const clock = testClock()
+  daemon = await testDaemon({ extensions: [schedulesExtension({ clock })], model: 'echo' })
+  const thread = await daemon.thread()
+  const file = join(daemon.dataDir, 'extensions', 'schedules', 'schedules.json')
+  await daemon.dispatch('schedules.add', { thread: thread.id, when: 'in 2h', message: 'Later.' })
+  // Torn down at once after a change: the change is in the file.
+  await daemon.restart()
+  expect(JSON.parse(await readFile(file, 'utf8')).schedules).toHaveLength(1)
+  await daemon.restart({ whileStopped: () => writeFile(file, `{"version":1,"schedules":[{"id":"s_1","thread":"${thread.id}",`) })
+  await daemon.until(async () => (await said(thread.id)).some((m) => m.notice?.includes("This thread's schedules couldn't be read")), 'the notice')
+  expect(await readFile(`${file}.bad`, 'utf8')).toContain(thread.id)
+  const problem = await daemon.watch<string | null>('schedules.problem')
+  await problem.until((p) => typeof p === 'string' && p.includes('kept as'), 'the problem')
+  expect(await daemon.call('schedules.list', {})).toEqual([])
 }, 30_000)

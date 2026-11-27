@@ -15,13 +15,9 @@
 - A thread says when its pull request's checks fail, a reviewer asks for changes or approves, or it's merged, with
   "Fix it" to hand the failure or the review to the agent. The agent isn't woken unless you choose Watch… on the pull
   request's chip (or ask it to watch): then it's woken when checks finish or a review comes in, until it's merged.
-- **Schedules.** Ask an agent to "check CI every 30 minutes until it's green" and it wakes the thread then with a
-  message; "remind me tomorrow at 9 to review Mia's PR" just reminds you, without a turn. Times can repeat on the
-  calendar too ("every weekday at 9", or cron). A clock in the thread's header and on its row in the sidebar shows the
-  next run; click it to run one now, pause, edit or cancel it, or make a new one, the form saying what your time comes
-  to as you type it. `/schedule in 30m check the deploy` in the composer, "Schedule…" in a thread's menu and ⌘K make
-  one too, and "All schedules" lists every thread's. Runs missed while the computer slept fire once when it wakes,
-  saying how late. It's the new Schedules extension, which Settings → Extensions can turn off.
+- **Schedules.** Ask an agent to check something every 30 minutes, or to remind you tomorrow at 9: it wakes the
+  thread or just reminds you then. A clock in the title bar and on the thread's row shows the next run, to run, pause,
+  edit or cancel it; `/schedule in 30m check the deploy` makes one too.
 - **Processes.** Agents run servers, watchers and long builds as processes of their thread (`process_start`), not with
   `&`: they keep running through Superego's updates and restarts, and the thread is woken with the last lines when a
   build ends or a server fails, with Restart. A chip in the title bar says how they stand (`● Failed · 3`) and opens

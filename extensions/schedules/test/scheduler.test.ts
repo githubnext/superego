@@ -285,3 +285,20 @@ it('changes what a schedule says, when and what it does, and keeps its time when
   expect(sched.understand('every weekday at 9')).toMatchObject({ how: 'every weekday at 09:00', repeats: true, times: [new Date(2026, 4, 6, 9).getTime(), new Date(2026, 4, 7, 9).getTime(), new Date(2026, 4, 8, 9).getTime()] })
   expect(() => sched.understand('whenever')).toThrow(/isn't a time I understand/)
 })
+
+it("keeps an agent from chaining one-shot wakes, and pauses what's over a thread's wake budget", async () => {
+  const { sched, woken, notices, advance } = world
+  // The agent's one-shot wakes are as far apart as its repeats; the user's, and reminders, needn't be.
+  await expect(sched.add({ thread: '1', when: 'in 1m', message: 'Again.' }, 'agent')).rejects.toThrow(/5 min ahead at least/)
+  await sched.add({ thread: '1', when: 'in 5m', message: 'Later.' }, 'agent')
+  await sched.add({ thread: '1', when: 'in 1m', message: 'Nudge.', action: 'notify' }, 'agent')
+  await sched.add({ thread: '2', when: 'in 1m', message: 'Mine.' }, 'user')
+  // Three every 5 minutes: 36 wakes an hour, past the budget of 20.
+  const ids = []
+  for (const k of [1, 2, 3]) ids.push((await sched.add({ thread: '1', when: 'every 5m', message: `Poll ${k}.` }, 'user')).id)
+  for (let i = 0; i < 12; i++) await advance(5 * MINUTE)
+  const ones = woken.filter(([t]) => t === '1')
+  expect(ones).toHaveLength(20)
+  expect(ids.filter((id) => sched.get(id)?.paused)).not.toEqual([])
+  expect(notices.find((n) => /woke this thread 20 times in the last hour/.test(n.text))).toMatchObject({ thread: '1', agent: true })
+})

@@ -16,12 +16,12 @@ import {
   ArrowClockwiseIcon, BellIcon, Button, call, ChatCircleIcon, Chip, defineAction, defineUiExtension, Dialog, factsOf, IconButton, PauseIcon,
   PencilSimpleIcon, PlusIcon, Popover, TextArea, TextField, ThreadBadge, ThreadMenuItem, useDispatch, useMachines, useMethod, useNarrow,
   useSelection, useThreads, useValue, XIcon,
-  type EntryProps, type MachineEntry, type SentBlock, type SlotProps, type Store, type ThreadInfo, type ToolRowCall, type ViewProps,
+  type EntryProps, type MachineEntry, type SettingsComponentProps, type SentBlock, type SlotProps, type Store, type ThreadInfo, type ToolRowCall, type ViewProps,
 } from '@superego/app/ui'
 import { SegmentedControl } from '@superego/ui'
 import { ClockFace, PlayGlyph } from './clock.tsx'
 import {
-  about, ACTION_WORDS, ACTIONS, ALL_VALUE, readFiring, REMINDER, SCHEDULED, SPLIT_METHOD, THREAD_VALUE, TOOLS, UNDERSTAND_METHOD,
+  about, ACTION_WORDS, ACTIONS, ALL_VALUE, PROBLEM_VALUE, readFiring, REMINDER, SCHEDULED, SECTION, SPLIT_METHOD, THREAD_VALUE, TOOLS, UNDERSTAND_METHOD,
   type Action, type Facts, type Reminder, type Schedule, type ScheduleDetails, type Understood,
 } from './shared.ts'
 import { clockTime, dayWord, howWords, relative, repeats, shortWhen, HOUR } from './when.ts'
@@ -71,6 +71,8 @@ export default defineUiExtension({
       },
     })
     superego.entry(REMINDER, ReminderNotice)
+    // Under Settings → Schedules: what's wrong with the machine's schedules, if anything.
+    superego.settings(SECTION, ({ section }: SettingsComponentProps) => typeof section.data === 'string' ? <Problem text={section.data} /> : null)
     // A firing's message: what the agent alone is told with it stays out of the bubble; under it, which schedule and run.
     superego.composer.sentWith({ read: readFirings, component: FiringChip })
     superego.tool(TOOLS.schedule, {
@@ -421,28 +423,40 @@ function AllOverlay({ open }: { open: Open }) {
 /** A machine's schedules, by thread, soonest first: each thread's name goes to it. */
 export function MachineSchedules({ machine, named, onEdit, onGo }: { machine: MachineEntry; named: boolean; onEdit(machine: string, thread: string, id: string): void; onGo(): void }) {
   const list = useValue<Schedule[]>(machine, ALL_VALUE)
+  const problem = useValue<string | null>(machine, PROBLEM_VALUE)
   const threads = useThreads(machine.id)
-  const { select } = useSelection()
+  if (problem) return <>{named && <h4 className="schedules-machine__name">{machine.label}</h4>}<Problem text={problem} />{list?.length ? <Grouped machine={machine} list={list} threads={threads} onEdit={onEdit} onGo={onGo} /> : null}</>
   if (list === undefined && !named) return <div className="schedules-list__empty">Loading…</div>
   if (!list?.length) return named ? null : <div className="schedules-list__empty">No schedules on this machine.</div>
-  const byThread = new Map<string, Schedule[]>()
-  for (const s of list) byThread.set(s.thread, [...byThread.get(s.thread) ?? [], s])
   return (
     <section className="schedules-machine">
       {named && <h4 className="schedules-machine__name">{machine.label}</h4>}
-      {[...byThread].map(([id, schedules]) => {
-        const thread = threads?.find((t) => t.id === id)
-        return (
-          <div key={id} className="schedules-thread">
-            <button type="button" className="schedules-thread__title" onClick={() => { select({ machine: machine.id, thread: id }); onGo() }}>
-              {thread?.title ?? (schedules[0]!.held !== undefined ? 'An archived thread' : id)}
-            </button>
-            <Rows machine={machine} list={schedules} thread={() => thread ?? { status: { state: 'idle' } }} sheet={false} onEdit={(sid) => onEdit(machine.id, id, sid)} />
-          </div>
-        )
-      })}
+      <Grouped machine={machine} list={list} threads={threads} onEdit={onEdit} onGo={onGo} />
     </section>
   )
+}
+
+/** Schedules by thread: each thread's name goes to it. */
+function Grouped({ machine, list, threads, onEdit, onGo }: { machine: MachineEntry; list: Schedule[]; threads: ThreadInfo[] | undefined; onEdit(machine: string, thread: string, id: string): void; onGo(): void }) {
+  const { select } = useSelection()
+  const byThread = new Map<string, Schedule[]>()
+  for (const s of list) byThread.set(s.thread, [...byThread.get(s.thread) ?? [], s])
+  return [...byThread].map(([id, schedules]) => {
+    const thread = threads?.find((t) => t.id === id)
+    return (
+      <div key={id} className="schedules-thread">
+        <button type="button" className="schedules-thread__title" onClick={() => { select({ machine: machine.id, thread: id }); onGo() }}>
+          {thread?.title ?? (schedules[0]!.held !== undefined ? 'An archived thread' : id)}
+        </button>
+        <Rows machine={machine} list={schedules} thread={() => thread ?? { status: { state: 'idle' } }} sheet={false} onEdit={(sid) => onEdit(machine.id, id, sid)} />
+      </div>
+    )
+  })
+}
+
+/** What's wrong with a machine's schedules (its file unreadable). */
+function Problem({ text }: { text: string }) {
+  return <div className="schedules-problem" role="alert">{text}</div>
 }
 
 // ── In the transcript ────────────────────────────────────────────────────────────────────────────────────────────

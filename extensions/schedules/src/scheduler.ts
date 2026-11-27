@@ -13,7 +13,7 @@
 // Every change is saved at once (`host.save`) and told (`host.changed`), so the window and the facts follow.
 import { RpcError, type ThreadInfo } from '@superego/protocol'
 import { CAPS, REMINDER, SCHEDULED, type Action, type EndedWhy, type Facts, type Reminder, type Schedule, type When } from './shared.ts'
-import { clockTime, DAY, firstRun, howWords, MINUTE, nextAfter, parseAt, parseWhen, repeats, runsBetween, shortDuration, shortestGap, shortWhen, WhenError } from './when.ts'
+import { clockTime, DAY, firstRun, HOUR, howWords, MINUTE, nextAfter, parseAt, parseWhen, repeats, runsBetween, shortDuration, shortestGap, shortWhen, WhenError } from './when.ts'
 
 /** The guards, as this machine's settings say (`CAPS` bound them). */
 export type Limits = { minInterval: number; maxRuns: number; days: number; perThread: number }
@@ -141,6 +141,13 @@ export function scheduler(host: SchedulerHost) {
   const tell = (thread: string, text: string, options: NoticeOptions) =>
     host.notice(thread, text, options).catch((error: unknown) => console.error(`schedules: telling ${thread} "${text}" failed:`, error))
   const of = (thread: string) => [...all.values()].filter((s) => s.thread === thread)
+  // When schedules last woke each thread, the past hour's: the wake budget (\`CAPS.wakesPerHour\`), whichever schedules did.
+  const woke = new Map<string, number[]>()
+  const wokeLately = (thread: string, now: number) => {
+    const times = (woke.get(thread) ?? []).filter((at) => now - at < HOUR)
+    woke.set(thread, times)
+    return times
+  }
   const tz = () => host.tz?.() ?? Intl.DateTimeFormat().resolvedOptions().timeZone
 
   function end(s: Schedule, why: EndedWhy, reason?: string) {
@@ -161,7 +168,7 @@ export function scheduler(host: SchedulerHost) {
    * What a schedule is from what was said (`input`), checked against the guards: its time read (unless `kept`, the
    * time it has, which stands), its runs and end. `was`: the schedule it changes, whose runs count. Throws `invalid`.
    */
-  function shape(input: Omit<NewSchedule, 'thread'>, now: number, { kept, was }: { kept?: { when: When; next: number | null }; was?: Schedule } = {}) {
+  function shape(input: Omit<NewSchedule, 'thread'>, now: number, { kept, was, by }: { kept?: { when: When; next: number | null }; was?: Schedule; by?: string } = {}) {
     const limits = host.limits()
     const message = input.message.trim()
     if (!message) throw invalid('A schedule needs a message: what the agent is told, or you are reminded of, when it fires.')
@@ -188,6 +195,9 @@ export function scheduler(host: SchedulerHost) {
       out.maxRuns = maxRuns
       out.ends = ends
       if (input.until?.trim()) out.until = input.until.trim()
+    } else if (by === 'agent' && action !== 'notify' && !kept && next - now < limits.minInterval * MINUTE) {
+      // A run that schedules the next one-shot, over and over, is a loop: the agent's wakes are as far apart as a repeat's.
+      throw invalid(`A wake you schedule is ${limits.minInterval} min ahead at least. To repeat, schedule "every …" with \`until\`, not one-shot after one-shot.`)
     } else if (input.until?.trim() || input.maxRuns !== undefined || input.ends) {
       throw invalid('until, maxRuns and ends are for a repeating schedule ("every 30m", "every weekday at 9"); this one runs once.')
     }
@@ -221,6 +231,14 @@ export function scheduler(host: SchedulerHost) {
     let ended: EndedWhy | undefined = repeats(s.when) ? next === null ? 'done' : undefined : 'done'
     if (repeats(s.when) && run >= s.maxRuns) { ended = 'maxRuns'; next = null }
     else if (next !== null && s.ends !== undefined && next > s.ends) { ended = 'ends'; next = null }
+    // Over the thread's wake budget: paused, said, not fired (a loop, or more schedules than a thread should run).
+    if (wakes(s) && !pending.now && wokeLately(s.thread, now).length >= CAPS.wakesPerHour) {
+      s.paused = true
+      delete s.pending
+      touch(s)
+      await tell(s.thread, `${s.label} paused: schedules woke this thread ${CAPS.wakesPerHour} times in the last hour, the most they may. Resume it from the clock if that's meant.`, { agent: true })
+      return
+    }
     try {
       if (s.action !== 'wake' && !pending.reminded) {
         const data: Reminder = {
@@ -252,7 +270,7 @@ export function scheduler(host: SchedulerHost) {
     s.runs = run
     s.lastRun = now
     s.missed += missed
-    if (wakes(s)) s.awaiting = true
+    if (wakes(s)) { s.awaiting = true; wokeLately(s.thread, now).push(now) }
     s.next = next
     touch(s)
     if (ended) end(s, ended)
@@ -310,7 +328,14 @@ export function scheduler(host: SchedulerHost) {
   const goOn = (s: Schedule, now: number) => repeats(s.when) ? nextAfter(s.when, now) : now
 
   return {
-    load(list: Schedule[]) { for (const s of list) all.set(s.id, s) },
+    load(list: Schedule[]) {
+      for (const s of list) {
+        all.set(s.id, s)
+        if (s.lastRun !== undefined && wakes(s)) woke.set(s.thread, [...woke.get(s.thread) ?? [], s.lastRun])
+      }
+    },
+    /** Once what's under way is done: for teardown. */
+    settled: () => chain.then(() => undefined),
     /** Every schedule, or a thread's, ended ones too. */
     list: (thread?: string) => [...all.values()].filter((s) => !thread || s.thread === thread),
     get: (id: string) => all.get(id),
@@ -336,7 +361,7 @@ export function scheduler(host: SchedulerHost) {
     add: (input: NewSchedule, by: string) => serial(async () => {
       const now = host.now()
       const limits = host.limits()
-      const shaped = shape(input, now)
+      const shaped = shape(input, now, { by })
       const going = [...all.values()].filter(live)
       if (going.filter((s) => s.thread === input.thread).length >= limits.perThread) throw invalid(`This thread has ${limits.perThread} schedules already, the most it may: cancel one first.`)
       if (going.length >= CAPS.perMachine) throw invalid(`This machine has ${CAPS.perMachine} schedules already, the most it may: cancel one first.`)
