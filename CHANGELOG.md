@@ -6,7 +6,8 @@
   colours, light or dark. Their corner shows the source or copies it. It's the new Mermaid extension, which Settings →
   Extensions can turn off.
 - Dialogs have room around what's in them: text no longer touches the edge, and a field's focus ring isn't cut off.
-- Messages an extension sent to a thread (a child's report, say) show its name over them, so they don't read as yours.
+- Messages an extension sent for you (a child thread's report, say) show as an outlined bubble with the extension's
+  name over it, so they don't read as typed by you.
 - New for extensions (extension API 5.17): `superego.threads.notice(id, { text, kind?, data?, actions?, agent? })`
   tells the user something in a thread without a run: a card under the extension's name, drawn by its `entry(kind)` or
   as text, with buttons that send the agent a message or dispatch an action; the thread turns unread and notifies, and

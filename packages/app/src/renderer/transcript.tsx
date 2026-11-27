@@ -207,9 +207,8 @@ function Sent({ entry, blocks, className, by, children }: { entry: number; block
   const { text, files } = splitMessage(rest, at)
   const drawn = found.filter(({ reader }) => reader.component)
   if (!text && !drawn.length && !files.length && !children) return null
-  return (
-    <div className={className}>
-      {by && <div className="msg__by">{extensionTitle(registry, by, here.machine.id)}</div>}
+  const said = (
+    <>
       {text && <Markdown text={sentWords(found, text, { machine: here.machine, thread: here.thread })} breaks />}
       {(drawn.length > 0 || files.length > 0) && (
         <div className="msg__files">
@@ -218,8 +217,19 @@ function Sent({ entry, blocks, className, by, children }: { entry: number; block
         </div>
       )}
       {children}
-    </div>
+    </>
   )
+  // Sent by an extension on the thread's behalf (a schedule, a child's report): yours, but not typed by you. An
+  // outlined bubble, the extension's name over it.
+  if (by) {
+    return (
+      <div className={`${className} msg--by`}>
+        <div className="msg__by">{extensionTitle(registry, by, here.machine.id)}</div>
+        <div className="msg__bubble">{said}</div>
+      </div>
+    )
+  }
+  return <div className={className}>{said}</div>
 }
 
 /** The files that went with a message (its `entry`). */

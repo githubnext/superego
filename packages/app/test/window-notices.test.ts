@@ -93,7 +93,7 @@ it('draws a notice as a card naming its extension, drawn by it or as text, and i
   expect($$('.notice')[1]!.querySelector('strong')!.textContent).toBe('done')
 })
 
-it("names the extension over a message it sent, so it doesn't read as the user's", async () => {
+it("draws a message an extension sent as an outlined bubble, its name over it, so it doesn't read as the user's", async () => {
   const thread = await daemon.thread('hello', { title: 'PR' })
   ui = await mountUi({ window: true, extensions: [checksUi], machines: [daemon], select: { thread: thread.id } })
   await ui.until(() => answers().some((a) => a?.includes('echo: hello')), 'the first answer')
@@ -102,6 +102,10 @@ it("names the extension over a message it sent, so it doesn't read as the user's
   const [mine, its] = $$('.msg--user')
   expect(mine!.querySelector('.msg__by')).toBeNull()
   expect(its!.querySelector('.msg__by')!.textContent).toBe('Checks')
+  // Outlined, not filled: yours, but not typed by you.
+  expect(mine!.classList.contains('msg--by')).toBe(false)
+  expect(its!.classList.contains('msg--by')).toBe(true)
+  expect(its!.querySelector('.msg__bubble')!.textContent).toBe('Checks finished: 2 failing.')
 })
 
 it('opens a header chip with a menu as a menu', async () => {

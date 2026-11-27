@@ -217,7 +217,14 @@
 .msg--note { color: var(--superego-muted); font: var(--superego-text-xs) var(--superego-mono); }
 /* Who sent it, when it wasn't you or Superego: an extension's name, quietly over its message or notice. */
 .msg__by { color: var(--superego-muted); font-size: var(--superego-text-xs); line-height: 1.4; white-space: normal; }
-.msg--user > .msg__by { margin-bottom: 2px; }
+/* A message an extension sent on the thread's behalf (a schedule's, a child's report): an outlined bubble, its name
+   over it, both on the right. */
+.msg--user.msg--by { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; padding: 0; border-radius: 0; background: none; }
+.msg--by > .msg__by { padding-right: 6px; color: var(--superego-faint); }
+.msg--by > .msg__bubble { max-width: 100%; border-radius: 14px; padding: 7px 12px; box-shadow: inset 0 0 0 1px var(--superego-border); }
+.msg--by > .msg__bubble:has(.msg__files) { display: flex; flex-direction: column; align-items: flex-end; }
+.msg--by .md .md__copy { background: var(--superego-raised); }
+.msg--by .md a { color: var(--superego-link); }
 /* An extension's notice: a card in the column, not a bubble (nobody said it), its buttons under it. */
 .notice { border: 1px solid var(--superego-border); border-radius: var(--superego-radius-lg); padding: 8px 12px 10px; }
 .notice > .msg__by { margin-bottom: 4px; }
