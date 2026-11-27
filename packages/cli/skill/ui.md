@@ -247,7 +247,9 @@ function DbMark({ thread }: SlotProps['thread.badge']) {
 export default defineUiExtension({ name: 'db', setup: (superego) => superego.slot('thread.badge', DbMark) })
 ```
 
-It shows before the thread is opened, since [the UI loads](#when-the-ui-loads) when the window lists it.
+It shows before the thread is opened, since [the UI loads](#when-the-ui-loads) when the window lists it. A thread's
+card (its row pointed at) spells each mark out: its icon and its tooltip's words, or what its `spelled` prop draws in
+their place (API ^5.17: a line of its own; a window from before draws the icon and words).
 
 ### Inside a pane
 

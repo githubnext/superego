@@ -1,7 +1,7 @@
 // Superego's own tools in a Claude Agent thread: the thread's own agent tools (thread-tools', panes', agent-ui's,
-// images', tasks'), the same ones a Superego thread has, run for its Claude Code over an in-process MCP server bound to
-// the thread, so `thread_start` starts a child of this thread, `pane_open` opens beside it, `ask_user` waits in its
-// question card. And what Superego says of itself in a thread's prompt, appended to Claude Code's own.
+// images', tasks', github's), the same ones a Superego thread has, run for its Claude Code over an in-process MCP server
+// bound to the thread, so `thread_start` starts a child of this thread, `pane_open` opens beside it, `ask_user` waits in
+// its question card. And what Superego says of itself in a thread's prompt, appended to Claude Code's own.
 //
 // Pi-only, for now: the coding tools (Claude Code has its own), skills (Claude Code reads its own `.claude/skills`, and
 // gets Superego's `superego` skill as a plugin: plugin.ts), AGENTS.md (it reads `CLAUDE.md`), the MCP servers of
@@ -27,14 +27,15 @@ export const OFFERED = new Set([
   'ask_user', 'ask_ui', 'show_ui', 'open_ui', 'update_ui',
   'show_images',
   'task_start', 'task_finish',
+  'pr_view', 'pr_attach', 'pr_detach',
 ])
 
 /**
  * The sections of a thread's prompt appended to Claude Code's: how the thread shows messages and where it runs, what
- * the tools above need said (the panes there are, the threads around, the blocks UI is drawn with, images, tasks),
- * and the profile's own instructions, last.
+ * the tools above need said (the panes there are, the threads around, the blocks UI is drawn with, images, tasks, the
+ * thread's pull request), and the profile's own instructions, last.
  */
-export const SECTIONS = ['markdown', 'where', 'panes', 'threads', 'ui_blocks', 'images', 'task_reporting', 'instructions']
+export const SECTIONS = ['markdown', 'where', 'panes', 'threads', 'ui_blocks', 'images', 'task_reporting', 'pull_request', 'instructions']
 
 /** A tool's name in Claude Code: on the `superego` server. */
 export const mcpName = (name: string) => `mcp__${SERVER}__${name}`

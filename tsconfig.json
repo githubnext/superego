@@ -19,6 +19,7 @@
     { "path": "extensions/agent-ui" },
     { "path": "extensions/files" },
     { "path": "extensions/git" },
+    { "path": "extensions/github" },
     { "path": "extensions/tasks" },
     { "path": "extensions/suggestions" },
     { "path": "extensions/links" },

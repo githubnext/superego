@@ -86,8 +86,8 @@ import type { ExtensionAbout } from './app.ts'
  * 5.17: notices: the daemon half's `threads.notice(id, ThreadNotice)` tells the user something in a thread without a
  * run (an entry that makes it unread and notifies, drawn by the extension's `entry(kind)` or as text, with buttons,
  * `NoticeAction`; the agent told it as context), `Note` and `NoticeAction` from both; `HeaderChip`'s `menu`
- * (`ThreadMenuItem`s: a menu, or rows of a phone's sheet). Messages an extension sent, and its notices, are drawn under
- * its title.
+ * (`ThreadMenuItem`s: a menu, or rows of a phone's sheet), and `ThreadBadge`'s `spelled` (how a thread's card spells a
+ * mark out). Messages an extension sent, and its notices, are drawn under its title.
  * Minor: something added (an extension that uses it asks for `^3.<minor>`); major: something an extension could rely
  * on changed or went, from 2.5 on without exception. An extension whose `api` range this doesn't satisfy is refused
  * when it's set up.

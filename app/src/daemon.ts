@@ -15,6 +15,7 @@ import { claudeAgent } from '@superego/claude-agent/daemon'
 import ego from '@superego/ego/daemon'
 import files from '@superego/files/daemon'
 import git from '@superego/git/daemon'
+import github from '@superego/github/daemon'
 import images from '@superego/images/daemon'
 import { about as links } from '@superego/links/shared'
 import { about as mermaid } from '@superego/mermaid/shared'
@@ -45,7 +46,7 @@ const claude = claudeAgent({ skills: [SKILL_DIR] })
 // them to browsers and agents (see the daemon's relay.ts).
 serveDaemon({
   app, defaultCwd: homedir(), extensions: [
-    worktrees, agentUi, claude, ego, files, git, images, links, mcpServers, mentions, mermaid, skills, suggestions, tasks, terminal, threadTools, threadReports, unread, focus, browser,
+    worktrees, agentUi, claude, ego, files, git, github, images, links, mcpServers, mentions, mermaid, skills, suggestions, tasks, terminal, threadTools, threadReports, unread, focus, browser,
   ], ...(webRoot ? { webRoot } : {}),
   reach: (dataDir, self) => machineHub({ app, dataDir, self }),
 }).catch((error) => {

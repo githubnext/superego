@@ -20,6 +20,7 @@
     "@superego/files": "workspace:*",
     "@superego/focus": "workspace:*",
     "@superego/git": "workspace:*",
+    "@superego/github": "workspace:*",
     "@superego/images": "workspace:*",
     "@superego/links": "workspace:*",
     "@superego/mcp-servers": "workspace:*",

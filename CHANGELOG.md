@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **Pull requests on threads.** A pull request the agent opens, or the one a worktree thread's branch has, is
+  attached to its thread: its state, checks and review show in the title bar and on its row, and Show pull request
+  opens what's failing and the unresolved review comments beside it. Attach one by hand from a row's menu or ⌘K, and
+  go to any thread's with "Go to pull request…". Pull request links in messages show their state; ⌘-click shows one
+  beside. It uses the machine's `gh` (Settings says whether it's signed in), and Settings → Extensions can turn it off.
+- The agent can look at a thread's pull request (`pr_view`), and knows how its checks and review stand.
 - **Mermaid diagrams.** ```` ```mermaid ```` blocks in threads and Markdown files show as diagrams, in the window's
   colours, light or dark. Their corner shows the source or copies it. It's the new Mermaid extension, which Settings →
   Extensions can turn off.
@@ -13,6 +19,8 @@
   as text, with buttons that send the agent a message or dispatch an action; the thread turns unread and notifies, and
   the agent is told it with its next turn. `HeaderChip` takes a `menu` of `ThreadMenuItem`s: a menu on the desktop,
   rows of the thread's sheet on a phone.
+- New for extensions (extension API 5.17): a sidebar mark (`ThreadBadge`) can say how a thread's card spells it out
+  (`spelled`).
 - New for extensions (extension API 5.14): `superego.codeBlock(languages, component)` draws fenced code blocks of a
   language.
 - New for extensions (extension API 5.16): `@` in the composer can mention an extension's things (`@note:roadmap`,

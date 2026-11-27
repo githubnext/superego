@@ -1,0 +1,125 @@
+/* A pull request's colours: its state (open green, draft grey, merged purple, closed red), its checks, a review's ask. */
+:root {
+  --github-open: var(--superego-status-success);
+  --github-draft: var(--superego-faint);
+  --github-merged: light-dark(#7a4cc2, #b89cf6);
+  --github-closed: var(--superego-status-error-text);
+  --github-fail: var(--superego-status-error);
+  --github-pending: light-dark(#c98a00, #ffcc00);
+  --github-pass: var(--superego-status-success);
+  --github-changes: var(--superego-status-blocked-text);
+}
+.github-glyph { flex: none; color: var(--superego-faint); }
+.github-glyph.is-open { color: var(--github-open); }
+.github-glyph.is-draft { color: var(--github-draft); }
+.github-glyph.is-merged { color: var(--github-merged); }
+.github-glyph.is-closed { color: var(--github-closed); }
+
+/* The sidebar's mark: the glyph, its checks a dot at its foot, ringed in the row's colour to stand off the glyph. */
+.github-mark { position: relative; display: inline-grid; place-items: center; flex: none; }
+.github-mark__dot { position: absolute; right: -2px; bottom: -2px; width: 6px; height: 6px; border-radius: 50%; box-shadow: 0 0 0 1.5px var(--superego-sidebar-bg, var(--superego-bg)); }
+.github-mark__dot.is-passing { background: var(--github-pass); }
+.github-mark__dot.is-failing { background: var(--github-fail); }
+.github-mark__dot.is-pending { background: var(--superego-sidebar-bg, var(--superego-bg)); box-shadow: inset 0 0 0 1.5px var(--github-pending), 0 0 0 1.5px var(--superego-sidebar-bg, var(--superego-bg)); }
+
+/* The road to merge: checks · review · merge. */
+.github-road { display: inline-flex; gap: 2px; flex: none; }
+.github-road i { width: 9px; height: 4px; border-radius: 2px; background: var(--superego-faint); opacity: .45; }
+.github-road.is-small i { width: 6px; }
+.github-road i:not(.is-todo) { opacity: 1; }
+.github-road .is-pass { background: var(--github-pass); }
+.github-road .is-fail { background: var(--github-fail); }
+.github-road .is-pending, .github-road .is-ready { background: var(--github-pending); }
+.github-road .is-changes { background: var(--superego-status-blocked); }
+.github-road .is-merged { background: var(--github-merged); }
+
+/* The title bar's chip: inside the window's, which opens its menu. */
+.github-chip { display: inline-flex; align-items: center; gap: 6px; font-variant-numeric: tabular-nums; }
+.github-chip.is-closed .github-chip__n { text-decoration: line-through; }
+.github-chip__more { color: var(--superego-faint); }
+
+/* Its menu: the pull request's title, then checks, review and merge, each how it stands. */
+.github-menu__head { min-width: 240px; max-width: 300px; padding: 4px 10px 2px; display: grid; gap: 2px; font-size: var(--superego-text-sm); }
+.github-menu__title { font-weight: 500; color: var(--superego-text); margin-bottom: 4px; overflow-wrap: anywhere; }
+.github-menu__problem { color: var(--superego-status-error-text); margin-bottom: 4px; }
+.github-menu__stage { display: flex; align-items: center; gap: 8px; color: var(--superego-text); }
+.github-menu__said { margin-left: auto; color: var(--superego-muted); }
+.github-menu__dot { width: 9px; height: 4px; border-radius: 2px; background: var(--superego-faint); opacity: .45; }
+.github-menu__dot:not(.is-todo) { opacity: 1; }
+.github-menu__dot.is-pass { background: var(--github-pass); }
+.github-menu__dot.is-fail { background: var(--github-fail); }
+.github-menu__dot.is-pending, .github-menu__dot.is-ready { background: var(--github-pending); }
+.github-menu__dot.is-changes { background: var(--superego-status-blocked); }
+
+/* Spelled out on a thread's card: the mark, its number, the road, a word. */
+.github-spelled { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+.github-spelled__word { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Thread details: a line each. */
+.github-details { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.github-details li { display: grid; gap: 1px; }
+.github-details__pr { display: inline-flex; align-items: center; gap: 6px; min-width: 0; padding: 0; border: 0; background: none; color: var(--superego-text); font: inherit; text-align: start; cursor: default; }
+.github-details__pr:hover .github-details__title { text-decoration: underline; }
+.github-details__title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.github-details__said { padding-left: 19px; color: var(--superego-muted); font-size: var(--superego-text-sm); }
+
+/* A pull request's URL in a message: its glyph before it. */
+.github-link { white-space: nowrap; }
+.github-link .github-glyph { display: inline-block; vertical-align: -1px; margin-right: 3px; }
+
+/* Settings → GitHub. */
+.github-settings { display: grid; gap: 8px; justify-items: start; }
+.github-settings__line { margin: 0; }
+.github-settings__line.is-problem { color: var(--superego-status-error-text); }
+.github-settings__version { color: var(--superego-muted); }
+
+/* The pane: what to fix first, then what runs, then what's done, folded. */
+.github-pane { flex: 1; min-height: 0; overflow: auto; }
+.github-pane__body { padding: var(--superego-space-3) var(--superego-space-4) var(--superego-space-5); display: grid; gap: 6px; align-content: start; }
+.github-pane__title { margin: 0; font-size: calc(15px * var(--superego-text-scale, 1)); font-weight: 600; line-height: 1.35; overflow-wrap: anywhere; }
+.github-pane__sub { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; color: var(--superego-muted); font-size: var(--superego-text-sm); }
+.github-pane__sub code { font-family: var(--superego-mono); font-size: 0.95em; color: var(--superego-text); }
+.github-pane__problem { padding: 8px 10px; border-radius: var(--superego-radius); background: color-mix(in srgb, var(--superego-status-error) 10%, transparent); color: var(--superego-status-error-text); }
+.github-pane__summary { display: flex; align-items: center; gap: 10px; margin-top: 6px; padding: 10px 12px; border-radius: var(--superego-radius); background: var(--superego-fill); }
+.github-pane__summary b { font-weight: 500; }
+.github-pane__h { display: flex; justify-content: space-between; margin: 14px 0 2px; font-size: var(--superego-text-sm); font-weight: 500; color: var(--superego-muted); }
+.github-pane__h span { color: var(--superego-faint); font-weight: 400; }
+.github-pane__meta { margin-top: 14px; color: var(--superego-faint); font-size: var(--superego-text-sm); }
+.github-pane__meta code { font-family: var(--superego-mono); }
+
+.github-word.is-fail, .github-word.is-closed { color: var(--github-fail); }
+.github-word.is-changes { color: var(--github-changes); }
+.github-word.is-pending { color: var(--github-pending); }
+.github-word.is-pass, .github-word.is-open { color: var(--github-pass); }
+.github-word.is-merged { color: var(--github-merged); }
+.github-word.is-draft { color: var(--superego-muted); }
+
+/* A thing to do: its glyph, what, a time at its end, and under it where (a run's link, a comment's file and line). */
+.github-todo { display: grid; grid-template-columns: 16px 1fr auto; column-gap: 8px; row-gap: 1px; align-items: baseline; padding: 4px 0; }
+.github-todo > svg { align-self: start; margin-top: 2px; }
+.github-todo__what { min-width: 0; overflow-wrap: anywhere; }
+.github-todo__comment { font-size: var(--superego-text-ui, inherit); }
+.github-todo__end { color: var(--superego-faint); font-size: var(--superego-text-sm); font-variant-numeric: tabular-nums; }
+.github-todo small { grid-column: 2 / -1; color: var(--superego-muted); font-size: var(--superego-text-sm); }
+.github-todo small code, .github-todo__where { font-family: var(--superego-mono); font-size: 11px; }
+.github-todo a, .github-row a { color: var(--superego-link, var(--superego-accent)); text-decoration: none; }
+.github-todo a:hover, .github-row a:hover { text-decoration: underline; }
+
+.github-row { display: flex; align-items: center; gap: 8px; min-height: 24px; }
+.github-row__end { margin-left: auto; color: var(--superego-faint); font-size: var(--superego-text-sm); font-variant-numeric: tabular-nums; }
+.github-row__link { padding: 0; border: 0; background: none; font: inherit; color: var(--superego-link, var(--superego-accent)); cursor: default; text-align: start; }
+.github-row__link:hover { text-decoration: underline; }
+.github-fold summary { display: flex; align-items: center; gap: 8px; min-height: 24px; color: var(--superego-muted); cursor: default; list-style: none; }
+.github-fold summary::-webkit-details-marker { display: none; }
+.github-fold summary::before { content: '›'; width: 8px; color: var(--superego-faint); transition: rotate .12s; }
+.github-fold[open] summary::before { rotate: 90deg; }
+.github-fold .github-row { padding-left: 16px; }
+
+.github-check { flex: none; }
+.github-check.is-pass { color: var(--github-pass); }
+.github-check.is-fail { color: var(--github-fail); }
+.github-check.is-pending { color: var(--github-pending); }
+.github-check.is-skipped { color: var(--superego-faint); }
+.github-comment { flex: none; color: var(--superego-faint); }
+.github-comment.is-changes { color: var(--github-changes); }
+.github-comment.is-approved { color: var(--github-pass); }

@@ -31,10 +31,11 @@ export function HeaderChip({ children, title, menu }: { children: ReactNode; tit
 
 /**
  * In `thread.badge`: a mark on a thread's row in the sidebar, an icon about 12px (`size={12}`). `label` says what it
- * means, to a screen reader and in its tooltip (`title` for a tooltip of its own).
+ * means, to a screen reader and in its tooltip (`title` for a tooltip of its own). Where it's spelled out (a thread's
+ * card), it's the icon and its tooltip's words, or `spelled` when given: a line of its own, in place of both.
  */
-export function ThreadBadge({ children, label, title }: { children: ReactNode; label: string; title?: string }) {
-  if (useContext(Spelled)) return <span className="thread-badge is-spelled">{children}<span>{title ?? label}</span></span>
+export function ThreadBadge({ children, label, title, spelled }: { children: ReactNode; label: string; title?: string; spelled?: ReactNode }) {
+  if (useContext(Spelled)) return <span className="thread-badge is-spelled">{spelled ?? <>{children}<span>{title ?? label}</span></>}</span>
   return <span className="thread-badge" title={title ?? label} role="img" aria-label={label}>{children}</span>
 }
 
