@@ -146,10 +146,13 @@ Before releasing, consolidate the changelog: move `## Unreleased`'s notes under 
 leave an empty `## Unreleased` above it, and merge that to main. `pnpm release` stops before building if main's
 `CHANGELOG.md` has no section for the version. The notes are for users, not for us:
 
-- Short and direct, one line each where it can be: what you can now do, or what's fixed ("Fix pasting into a
-  terminal"). No how it works, no internal names, no list of every way to reach it.
-- Upgrade warnings first. Then what users notice, then what's new for extension authors (with the extension API's
-  version). Not as headings: the order is the grouping.
+- Short and direct, one line each: what you can now do, or what's fixed ("Fix pasting into a terminal"). No how it
+  works, no internal names, no list of every way to reach it. A bullet isn't wrapped.
+- Upgrade warnings first, if any. Then a `###` section for each area the release touches, as 0.7.0's: `Onboarding`,
+  `Core` (the app itself), `Extensions` (by what they add). A headline feature leads with its name in bold
+  (**Schedules.**); smaller changes and fixes follow it plainly.
+- Last, under Extensions, one **API note** bullet for extension authors: the extension API's versions and what's new
+  in them, in a line, pointing to the skill's docs.
 - The maintainer approves the notes before `pnpm release`: they go out in the release and the update feed, and a
   published release's notes are fixed in every app that has already fetched them.
 

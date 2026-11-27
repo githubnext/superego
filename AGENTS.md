@@ -19,7 +19,8 @@ notes are consolidated under the version (see `docs/releasing.md`). Put a plain 
 user has (a profile, an extension, a script) needs changing.
 
 A note says what the user can now do or what's fixed, in a line: "Fix pasting into a terminal", not how it works or
-every way to reach it. Users' changes first, then extension authors'.
+every way to reach it. Users' changes first, then extension authors'. At release they're grouped by area
+(`docs/releasing.md`).
 
 ## House rules
 
