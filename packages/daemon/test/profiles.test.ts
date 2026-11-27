@@ -830,7 +830,7 @@ export default defineDaemonExtension({
   name: 'board',
   setup(superego) {
     superego.value('board.cards', {})
-    superego.view('board.cards', { title: '${title}', context: 'thread', fits: ['sidebar', 'beside', 'pane'], default: 'beside', value: 'board.cards' })
+    superego.view('board.cards', { title: '${title}', context: 'thread', fits: ['beside', 'pane'], default: 'beside', value: 'board.cards' })
   },
 })
 `
@@ -858,7 +858,7 @@ export default defineDaemonExtension({
   setup(superego) {
     superego.value('${name}.sidebar', [])
     superego.view('${name}.sidebar', { title: 'Staff', context: 'window', fits: ['sidebar', 'beside'], default: 'sidebar', value: '${name}.sidebar' })
-    superego.view('${name}.mine', { title: 'Mine', context: 'thread', fits: ['sidebar', 'beside'], value: '${name}.sidebar' })
+    superego.view('${name}.mine', { title: 'Mine', context: 'thread', fits: ['beside'], value: '${name}.sidebar' })
   },
 })
 `

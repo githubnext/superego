@@ -1,6 +1,6 @@
 #!/bin/bash
 # The window's layout in the states the design covers, screenshotted:
-# `test/look.sh <dir> [look|focus|focus-mode|panes|panehead|composer|images|mcp|web|terminal|toolbar|titlebar|titlebar-fit|pins|folds|states|cards|dialogs|machines|staff|picker|providers|keptpage|themes|theme-ui|mac-look|claude-agent|setup|phone-look|header|files|github|schedules|processes]` (look, unless given), each a script of
+# `test/look.sh <dir> [look|focus|focus-mode|panes|panehead|composer|images|mcp|web|terminal|toolbar|titlebar|titlebar-fit|pins|folds|states|cards|dialogs|machines|staff|picker|providers|keptpage|themes|theme-ui|mac-look|claude-agent|setup|phone-look|header|files|github|schedules|processes|rail]` (look, unless given), each a script of
 # that name here:
 # - `look`: the sidebar shown, dragged and hidden, the thread alone and with panes, details, a phone; ⌘N's dialog, Settings' General, Appearance and Hotkeys (a clash too);
 # - `focus`: each region holding the focus;
@@ -56,13 +56,15 @@
 #   checks and a review, Settings → GitHub; light and dark.
 # - `schedules`: a thread's schedules: the agent's `schedule` row with its next times, the clock chip and its popover, the
 #   sidebar's clock, a firing, a run that went late while Superego wasn't running, and the phone's sheet; light and dark.
+# - `rail`: the rail picking the whole window: a thread and its pane in Threads, a profile's Pages empty then a page
+#   open, Threads again as it was, a rail button's board alone; one button lit in each, light and dark.
 set -e
 cd "$(dirname "$0")/.."
 # A heavy check: it waits for a slot (../scripts/check.ts), is stopped after 8 minutes (SUPEREGO_SHOWCASE_TIMEOUT, in
 # seconds), and builds the app first if its sources changed.
 [ "$SUPEREGO_CHECK_COMMAND" = test/look.sh ] || exec node ../scripts/check.ts --timeout SUPEREGO_SHOWCASE_TIMEOUT=480 test/look.sh "$@"
 node scripts/build.ts
-OUT="$(cd "$(dirname "${1:?usage: look.sh <dir> [look|focus|focus-mode|panes|panehead|composer|images|mcp|web|terminal|toolbar|titlebar|titlebar-fit|pins|folds|states|cards|dialogs|machines|staff|picker|keptpage|themes|theme-ui|mac-look|claude-agent|setup|phone-look|header|files|github|schedules|processes]}")" && pwd)/$(basename "$1")"
+OUT="$(cd "$(dirname "${1:?usage: look.sh <dir> [look|focus|focus-mode|panes|panehead|composer|images|mcp|web|terminal|toolbar|titlebar|titlebar-fit|pins|folds|states|cards|dialogs|machines|staff|picker|keptpage|themes|theme-ui|mac-look|claude-agent|setup|phone-look|header|files|github|schedules|processes|rail]}")" && pwd)/$(basename "$1")"
 mkdir -p "$OUT"
 unset ANTHROPIC_API_KEY ANTHROPIC_OAUTH_TOKEN OPENAI_API_KEY
 export SUPEREGO_HOME="$(mktemp -d)" SUPEREGO_HEADLESS=1 SUPEREGO_SHOWCASE_OUT="$OUT" SUPEREGO_REPLAY_SPEED=0 TZ=Europe/Copenhagen
@@ -116,6 +118,11 @@ if [ "$2" = processes ]; then
   export SUPEREGO_MODEL="replay:$SUPEREGO_HOME/processes-turns.jsonl"
   mkdir -p "$SUPEREGO_HOME/zdot"
   [ -x /bin/zsh ] && export SHELL=/bin/zsh ZDOTDIR="$SUPEREGO_HOME/zdot"
+fi
+# `rail`: a global profile of its own (test/showcase/rail): a sidebar of pages, and a rail button's board.
+if [ "$2" = rail ]; then
+  mkdir -p "$SUPEREGO_HOME/profiles"
+  cp -R test/showcase/rail/pages "$SUPEREGO_HOME/profiles/pages"
 fi
 # `header`: its scene's turns.
 if [ "$2" = header ]; then

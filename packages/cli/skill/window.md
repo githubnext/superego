@@ -17,8 +17,8 @@ superego.view('ego.button', { title: 'Ask Ego', icon: CircleIcon, context: 'wind
 
 | Place | What it is | A view there gets |
 |---|---|---|
-| `sidebar` | a rail button (its `icon`, or its own `railButton` component) and the sidebar while it's the open one; on a phone, the drawer. Hidden with ⌘/, its button, dragging its edge narrow, or a tight window: `railButton` is told (`sidebarHidden`) and can draw more in the rail meanwhile (Threads' status dots) | `{ place }`; a `thread` view, the thread shown |
-| `rail` | a rail button that isn't a sidebar (Ego's) | `{ place }` |
+| `sidebar` | a **section**: a rail button (its `icon`, or its own `railButton` component), the sidebar while it's the one shown, and what the main area shows from it ([Sections](#sections)); on a phone, the drawer. Hidden with ⌘/, its button, dragging its edge narrow, or a tight window: `railButton` is told (`sidebarHidden`) and can draw more in the rail meanwhile (Threads' status dots). `window` views only | `{ place }` |
+| `rail` | a rail button that isn't a sidebar (Ego's): it shows something alone, with no sidebar (Ego's thread, a space) | `{ place }` |
 | `drawer` | on a phone, at the drawer's foot beside Settings | `{ place }` |
 | `titlebar` | the title bar's start, standing in for a sidebar while there's none (the thread picker) | `{ place }` |
 | `beside` | a column beside the thread | `{ place, machine, thread }` |
@@ -55,7 +55,7 @@ now is kept, for when it's back. Its head of `//` comments lists the views and t
 
 ```jsonc
 {
-  "place": { "threads.details": "beside", "files.folder": ["sidebar", "pane"], "ego.button": null },
+  "place": { "threads.details": "beside", "files.folder": ["beside", "pane"], "ego.button": null },
   "order": { "pane": ["files.folder", "git.changes"] },
   "narrow": { "place": { "threads.details": "pane" } }
 }
@@ -121,6 +121,21 @@ superego.view('orders.open', { title: 'Orders', icon: 'list', context: 'window',
   the limits refuses the view, which shows its first error.
 - Example: the `skills` extension's *Skills* (`extensions/skills/src/daemon.ts`).
 
+### Sections
+
+The rail picks what the whole window is about. Each `sidebar` view is a **section**: its sidebar is where you pick,
+the main area what you picked there, and exactly one rail button is lit. Picking one shows its section as it was left:
+
+- a sidebar whose extension (or global profile) declares spaces holds those: Notes' list, the note last opened from it;
+  until one is, the main area says nothing's open;
+- any other sidebar holds threads: Threads, Staff's board of leads, each with the thread last picked in it and its panes.
+
+What's shown from elsewhere takes its section with it: a `note:` link lights Notes, a thread from ⌘L or a notification
+stays in the thread section shown (else goes to the last one), a project's space is the Threads section's (a row in its
+list). A rail button that opens something no sidebar holds (Ego's thread, a space of its own) shows it alone, with no
+sidebar and only that button lit: `<RailButton on>` while it's shown. A view about the thread shown isn't a section: it
+goes beside the thread or in a pane.
+
 ### Spaces
 
 A **space** fills the main area where a thread otherwise shows: a notes page, a canvas. An app extension's UI half,
@@ -138,15 +153,16 @@ superego.space('notes.page', {
   about: (params) => `The user has the note "${params.name}" open.`,  // a thread started on it is told this first
   profile: 'notes',                                // the profile that thread runs (default: the machine's)
   agent: 'docked',                                 // its thread as a column beside it, or 'floating': a card over it
-  entry: { name: 'Index' },                        // a project's: the params it opens with from the rail (default {})
+  entry: { name: 'Index' },                        // a project's: the params it opens with from its row (default {})
 })
 ```
 
 - **Open one** with the window action `space.open` (`{ kind, params, machine?, project? }`, default this computer):
   `superego.dispatch('space.open', { kind: 'notes.page', params: { name } })`. Another client can ask a window to
   (`client.perform`). In the component, `open(params)` replaces it with another of its kind.
-- The title bar shows its title and a button to show or hide its thread. Back and forward go through spaces as through
-  threads; selecting a thread leaves the space.
+- It opens in its section ([Sections](#sections)): the sidebar of its extension, if it has one; else alone. The title
+  bar shows its title and a button to show or hide its thread. Back and forward go through spaces as through threads;
+  selecting a thread leaves the space.
 - **Its thread:** one per space (kind, machine, params), remembered by the window. With none, sending in the column
   starts one on the space's `profile`, its first message `about(params)` then yours, and docks it. It's listed in the
   sidebar; ↗ opens it as the thread, ✕ undocks it. The component gets it as `thread`. The profile's daemon half gives
@@ -160,18 +176,17 @@ superego.space('notes.page', {
 - On a phone, a space is the whole screen; its thread opens as the thread, from the title.
 - **A project's:** a project's profile's spaces are that project's, on its machine (its root: the folder whose
   `.superego/profiles` holds the profile). Each kind is a row under the project's heading in Threads (▦ and its title,
-  above its threads) and, while you're in the project (its thread selected, or one of its spaces open), a rail button
-  in a group of their own after the app's, between lines; on a phone, at the drawer's foot. They open with `entry`
+  above its threads), opened in the Threads section, Threads lit. They open with `entry`
   (`space.open` with `project: <root>`). Their links open them only from the project's threads and spaces. Of two of
   the project's profiles declaring one kind, its `default`'s wins. A thread started on one starts in the project's
   folder, on its `profile` or the project's default. Testing: `mountUi({ profile: { ref: { scope: 'project', name,
   dir: '<root>/.superego/profiles/<name>' }, extensions } })`; `render({ space: { kind, params, project: root } })`.
-- While a space is open, only it is lit: its row and rail button, not the selected thread's row.
+- While a space is open, only it is lit: its row, not a thread's.
 
 ### On a phone
 
-Below 600px wide there's no rail and no title bar. `sidebar` views are the drawer, the others to switch to at its
-foot with `drawer` views (Ego, Unread) and Settings. The thread's title opens its **sheet**: `header` views, where it
+Below 600px wide there's no rail and no title bar. The section shown's sidebar is the drawer, the other sections to
+switch to at its foot (the main area with them) with `drawer` views (Ego, Unread) and Settings. The thread's title opens its **sheet**: `header` views, where it
 runs, archiving, the pane menu and `beside` views. With no sidebar there's no drawer: `titlebar` views and Settings
 go in the top bar. `narrow` moves a view elsewhere on a phone.
 

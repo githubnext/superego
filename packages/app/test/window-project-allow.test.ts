@@ -8,14 +8,13 @@ import { defineUiExtension } from '../src/renderer/sdk-ui.ts'
 import { setLoader } from '../src/renderer/profile-ui.ts'
 import { fakeMachine, mountUi, testThread, type TestWindow } from '../../sdk/src/testing.ts'
 
-const $ = (selector: string) => document.querySelector<HTMLElement>(selector)
 const root = '/src/shop'
 const ref = { scope: 'project' as const, name: 'default', dir: `${root}/.superego/profiles/default` }
 
 let ui: TestWindow
 afterEach(async () => { await ui?.unmount() })
 
-it("loads a project's profile as it's allowed, its spaces in the rail at once", async () => {
+it("loads a project's profile as it's allowed, its spaces there at once", async () => {
   let allowed = false
   const listed: unknown[] = []
   const machine = fakeMachine({
@@ -38,11 +37,14 @@ it("loads a project's profile as it's allowed, its spaces in the rail at once", 
   await ui.until(() => listed.length > 0, "the project's profiles listed")
   // Not allowed yet: nothing of it runs.
   expect(loaded).toEqual([])
-  expect($('.app__project-spaces')).toBeNull()
+  const open = () => ui.dispatch('space.open', { kind: 'shop.board', machine: 'local', project: root })
+  await expect(open()).rejects.toThrow('No space shop.board in /src/shop')
   // Allowed on the machine (as `superego profile allow` does), which says so: its board shows.
   allowed = true
   machine.setValue(PROFILES_ALLOWED, [{ dir: ref.dir, hash: 'h1' }] as Json)
-  await ui.until(() => Boolean($('.app__rail .app__project-spaces [aria-label="Board"]')), "the project's board in the rail")
+  await ui.until(() => loaded.length > 0, "the project's profile loaded")
+  await open()
+  expect(ui.space()).toEqual({ machine: 'local', kind: 'shop.board', params: {}, project: root })
   expect(loaded).toEqual([ref.dir])
   expect(listed.every((cwd) => cwd === root)).toBe(true)
 })

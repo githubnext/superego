@@ -1,7 +1,7 @@
 # How the window is put together
 
-The window has fixed **places**, and extensions put **views** in them. The main area shows a **thread** (with its
-**panes** beside it) or a **space**. For the API, see [The window](../packages/cli/skill/window.md) and
+The window has fixed **places**, and extensions put **views** in them. The rail picks a **section**: its sidebar and
+what the main area shows, a **thread** (with its **panes** beside it) or a **space**. For the API, see [The window](../packages/cli/skill/window.md) and
 [The UI half](../packages/cli/skill/ui.md).
 
 <figure class="wide">
@@ -25,15 +25,41 @@ Each view goes where its `default` says, unless you moved it (right-click it, or
 
 | Place | Is | Example | Whose |
 |---|---|---|---|
-| `sidebar` | a rail button, and the sidebar it opens (one open at a time) | Threads, Staff, Notes | the window's |
-| `rail` | a rail button that isn't a sidebar | Ask Ego | the window's |
+| `sidebar` | a rail button, the sidebar it opens and what the main area shows from it: a [section](#sections) (one at a time) | Threads, Staff, Notes | the window's |
+| `rail` | a rail button that isn't a sidebar: it shows something alone, no sidebar | Ask Ego, Vault | the window's |
 | `titlebar` | the title bar's start, standing in when there's no sidebar | the thread picker | the window's |
 | `header` | right of the thread's title | the model chip | the thread's |
 | `beside` | a column right of the thread | thread details (`⌘I`) | the thread's |
 | `pane` | the thread's pane menu; the view opens as a pane | Changes | the thread's |
 
 The window's places are the same whatever thread is shown. A thread's places show views about that thread, and a
-profile's views only in that profile's threads.
+profile's views only in that profile's threads. A view about the thread (Files: its folder) goes in a thread's place,
+never the sidebar.
+
+## Sections
+
+The rail picks what the whole window is about. Each sidebar is a **section**: the sidebar is where you pick, the main
+area what you picked there. One rail button is lit, and picking one changes both. Coming back to a section shows what
+you last had there.
+
+<figure class="steps">
+<img src="interface/section-threads.svg" alt="Threads lit: its list in the sidebar, the thread picked there in the main area, its pane beside it">
+<img src="interface/section-notes.svg" alt="Notes lit: its list in the sidebar, the note opened in the main area, its thread docked">
+<img src="interface/section-alone.svg" alt="Ego's button lit: no sidebar, its thread or space filling the window">
+<figcaption>Threads: its thread and panes · Notes: its note · alone: a rail button that isn't a sidebar</figcaption>
+</figure>
+
+| Rail button | Sidebar | Main area |
+|---|---|---|
+| Threads | the threads | the thread last picked there, with its panes; a project's space from its rows |
+| Staff, any sidebar of no spaces | its list | the thread last picked there |
+| Notes, Canvases: a sidebar whose extension declares spaces | its list | the note or canvas last opened; until then, nothing |
+| Ask Ego, Vault: a rail button that isn't a sidebar | none | its thread or space, alone |
+| Settings | none | Settings |
+
+What's shown from elsewhere takes its section along: a `note:` link in a thread shows Notes, and back shows Threads
+again. A thread from ⌘L, a notification or a docked thread's ↗ stays in the thread section shown, else goes to the last
+one. Pressing the lit button hides or shows its sidebar (⌘/).
 
 ## Threads and panes
 
@@ -64,8 +90,8 @@ number. Switch threads and you switch panes.
 
 ## Spaces
 
-A space fills the main area: a notes page, a canvas. Back and forward go through spaces as through threads; picking a
-thread leaves the space.
+A space fills the main area: a notes page, a canvas. It opens in its [section](#sections): its extension's sidebar's,
+else alone. Back and forward go through spaces as through threads; picking a thread leaves the space.
 
 <figure class="steps">
 <img src="interface/step-thread.svg" alt="The main area shows a thread">
@@ -86,8 +112,8 @@ the space's profile, told what you have open. It's listed in the sidebar like an
 
 ## Sidebars and spaces together
 
-A sidebar is where you pick something; a space is the thing you picked. Notes uses both: its sidebar lists notes, and
-each note opens as a space with a thread docked beside it.
+A sidebar is where you pick something; a space is the thing you picked: together, a section. Notes uses both: its
+sidebar lists notes, and each note opens as a space with a thread docked beside it, Notes lit.
 
 <figure class="wide">
 <img src="interface/notes.svg" alt="Notes: its list is a sidebar, the note it opens a space in the main area, a thread docked beside it">
@@ -114,21 +140,21 @@ only once allowed (`superego profile allow`), again after its files change.
 
 ### A project's spaces
 
-Under the project's heading in Threads, each kind is a row (▦ and its title) above its threads. In the rail, while
-you're *in* the project (one of its threads selected, or one of its spaces open), they're a group of their own after
-the app's buttons, between lines, each lit while open; leave for another project and the group goes. On a phone,
-they're at the drawer's foot. Their links open them only from the project's threads and spaces. Of two of the
+Under the project's heading in Threads, each kind is a row (▦ and its title) above its threads. It opens in the Threads
+section, Threads lit and its row too, as a thread picked there would. Their links open them only from the project's
+threads and spaces. Of two of the
 project's profiles declaring one kind, its default profile's wins. A thread docked to one starts in the project's
 folder. A project shows once it has a thread, and its spaces with it.
 
 <figure class="wide">
-<img src="interface/project-spaces.svg" alt="A project's spaces: a group in the rail between lines, and rows under the project's heading in the Threads sidebar">
-<figcaption>In the shop: Board and Docs are a group in the rail, between lines, and rows under its heading above its threads. Board is open.</figcaption>
+<img src="interface/project-spaces.svg" alt="A project's spaces: rows under the project's heading in the Threads sidebar, one open in the Threads section">
+<figcaption>In the shop: Board and Docs are rows under its heading, above its threads. Board is open, Threads lit.</figcaption>
 </figure>
 
 ## On a phone
 
-No rail, no title bar. The open sidebar is a **drawer** over the thread, with the other sidebars at its foot. A
+No rail, no title bar. The section's sidebar is a **drawer** over the main area, with the other sections at its foot:
+picking one shows its main area too, the drawer staying open on its list. A
 thread's title opens its **sheet**: what the title bar and the column beside would hold. A space fills the screen, and
 its thread opens as the thread.
 
@@ -147,6 +173,7 @@ its thread opens as the thread.
 | **View** | something an extension draws, by id, that the layout places |
 | **Layout** | where each view goes: views' defaults, then your changes (`layout.json`) |
 | **Sidebar** | a rail button and the panel it opens |
+| **Section** | a sidebar and what the main area shows from it: what the rail picks |
 | **Pane** | a column beside a thread, opened in it with params |
 | **Space** | a view that fills the main area, opened with params, with a thread of its own |
 | **Slot** | a spot inside another part (above the message box, after a thread's title in the sidebar) that extensions add to; the layout doesn't move it |

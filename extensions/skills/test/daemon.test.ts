@@ -37,9 +37,9 @@ it('offers the skills to the agent, sends one a message names, and lists them fo
   expect(await daemon.call('skills.list', {})).toEqual([
     { name: 'commit', description: 'Write commit messages.' }, { name: 'secret', description: 'Only by name.', manual: true },
   ])
-  // To browse, as a data view the window draws: offered for a sidebar or beside the thread, not placed.
+  // To browse, as a data view the window draws: offered beside the thread, not placed.
   const views = await daemon.watch<DataViewInfo[]>(DATA_VIEWS)
-  expect(views.value).toEqual([{ id: 'skills.view', extension: 'skills', title: 'Skills', icon: 'sparkle', context: 'window', fits: ['sidebar', 'beside'], method: 'skills.view' }])
+  expect(views.value).toEqual([{ id: 'skills.view', extension: 'skills', title: 'Skills', icon: 'sparkle', context: 'window', fits: ['beside'], method: 'skills.view' }])
   expect(await daemon.call('skills.view', {})).toEqual([{ type: 'list', items: [
     { title: '$commit', subtitle: 'Write commit messages.' }, { title: '$secret', subtitle: 'Only by name.', detail: 'by name' },
   ] }])

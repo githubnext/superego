@@ -46,14 +46,14 @@ export default async function web(t, s) {
   await b.run(`[...document.querySelectorAll('.unread-list .palette__list li')].find((i) => i.textContent.includes('unread on the phone')).click()`)
   await b.until(`document.querySelector('.app__mobilebar')?.textContent.includes('unread on the phone') && !document.querySelector('.app__sidebar')`, 'Unread went to the thread')
   await b.until(`!document.querySelector('.unread-list')`, 'the unread list closed')
-  // A data view on a phone: the skills, placed as a sidebar, switched to from the drawer's foot and drawn from data.
-  await b.call('app.settings.set', { key: 'app.layout', value: { place: { 'skills.view': 'sidebar' } } }, 'app')
+  // A data view on a phone: the skills, placed beside the thread, in its sheet and drawn from data.
+  await b.call('app.settings.set', { key: 'app.layout', value: { place: { 'skills.view': 'beside' } } }, 'app')
+  await b.click('button.app__mobiletitle')
+  await b.until(`document.querySelector('.thread-sheet .data-view--beside')?.textContent.includes('$smoke-skill') && document.querySelector('.thread-sheet .data-view--beside')?.textContent.includes('Checks the smoke.')`, "the skills data view in the thread's sheet")
+  await b.click('.app__scrim--sheet')
+  await b.until(`!document.querySelector('.thread-sheet')`, 'the sheet closed')
   await b.click('.app__mobilebar button')
-  await b.until(`Boolean(document.querySelector('.app__drawer-bar [aria-label="Skills"]'))`, 'Skills among the sidebars in the drawer')
-  await b.click('.app__drawer-bar [aria-label="Skills"]')
-  await b.until(`document.querySelector('.data-view--sidebar')?.textContent.includes('$smoke-skill') && document.querySelector('.data-view--sidebar')?.textContent.includes('Checks the smoke.')`, 'the skills data view in the drawer')
-  await b.click('.app__drawer-bar [aria-label="Threads"]')
-  await b.until(`Boolean(document.querySelector('.app__sidebar .superego-list-item'))`, 'back to the threads in the drawer')
+  await b.until(`Boolean(document.querySelector('.app__drawer > .app__sidebar'))`, 'drawer open again')
   // Ego from the drawer: its thread shown, and its Clear in the thread's sheet (the title bar's, on a phone).
   await b.click('.app__footer .ego__button')
   await b.until(`!document.querySelector('.app__sidebar') && Boolean(document.querySelector('button.app__mobiletitle'))`, "Ego's thread shown on a phone")

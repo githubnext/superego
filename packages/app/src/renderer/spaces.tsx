@@ -1,8 +1,8 @@
 // Spaces: views that fill the window's main area where a thread otherwise shows (an app extension's, a global
 // profile's or a project's profile's `superego.space`: a notes page, a canvas), each with the thread docked to it: a
 // column beside it, or a card over its right side (`agent: 'floating'`). Which thread is docked to which space is the
-// window's (state.tsx); with none, the column asks what to start one with. A project's spaces are its own: in the rail
-// while you're in it (`ProjectSpaceButtons`), under its heading in the Threads sidebar (`useProjectSpaces`).
+// window's (state.tsx); with none, the column asks what to start one with. A project's spaces are its own: rows under
+// its heading in the Threads sidebar (`useProjectSpaces`), shown in the Threads section (sections.ts).
 import { createContext, useContext, useEffect, useMemo, useState, type CSSProperties } from 'react'
 import type { ThreadInfo } from '@superego/protocol'
 import { ArrowSquareOutIcon, Button, ChatCircleIcon, IconButton, StatusGlyph, TextArea, XIcon } from '@superego/ui'
@@ -16,7 +16,6 @@ import { useProfileUi } from './profile-ui.ts'
 import { scopeOfEntry, useRegistry, whose, type InProject, type Owned } from './registry.tsx'
 import { projectSpaces, spaceFor } from './lookups.ts'
 import { LinkPlace, type LinkPlaceValue } from './links.tsx'
-import { RailButton } from './marks.tsx'
 import { useAllThreads, useMachines, useSelection, useSpace } from './state.tsx'
 import { ThreadBody } from './thread-body.tsx'
 
@@ -180,7 +179,7 @@ function AskAbout({ machine, at, kind, started }: { machine: MachineEntry; at: S
   )
 }
 
-/** A project's space kind, as the rail and the Threads sidebar offer it: opened with its `entry` params. */
+/** A project's space kind, as the Threads sidebar offers it: opened with its `entry` params. */
 export type ProjectSpace = {
   kind: string; title: string; icon?: SpaceKind['icon']
   /** Its kind as the registry has it, with its owner. */
@@ -193,8 +192,7 @@ export type ProjectSpace = {
 
 /**
  * A project's spaces (its profiles' `superego.space`, one per kind: the project's default profile's of two), each with
- * how to open it and whether it's open: for the rail while you're in the project, and under its heading in the Threads
- * sidebar. None while the project isn't given.
+ * how to open it and whether it's open: under its heading in the Threads sidebar. None while the project isn't given.
  */
 export function useProjectSpaces(project: InProject | undefined): ProjectSpace[] {
   const registry = useRegistry()
@@ -213,32 +211,4 @@ export function useProjectSpaces(project: InProject | undefined): ProjectSpace[]
       },
     }
   })
-}
-
-/**
- * The rail's group of the project you're in: one button per space kind (its icon, else its title's first letter), lit
- * while it's open, between separators. Nothing while the project has no spaces, or you're in none.
- */
-export function ProjectSpaceButtons({ project, narrow = false }: { project: InProject | undefined; narrow?: boolean }) {
-  const spaces = useProjectSpaces(project)
-  if (!spaces.length) return null
-  const sep = <span className={narrow ? 'app__drawer-sep' : 'app__rail-sep'} aria-hidden />
-  return (
-    <>
-      {sep}
-      <span className={narrow ? 'app__project-spaces is-narrow' : 'app__project-spaces'} role="group" aria-label="The project's spaces" data-project={project?.root}>
-        {spaces.map((space) => {
-          const Icon = space.icon
-          return (
-            <Inspected key={space.kind} info={() => spaceInfo(space.of, space.title, space.of.entry ?? {}, narrow ? 'drawer' : 'rail')}>
-              <RailButton label={space.title} on={space.open} onClick={space.show}>
-                {Icon ? <Icon size={18} aria-hidden /> : space.title.slice(0, 1)}
-              </RailButton>
-            </Inspected>
-          )
-        })}
-      </span>
-      {!narrow && sep}
-    </>
-  )
 }

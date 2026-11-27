@@ -10,7 +10,7 @@ import {
 import type { MachineEntry, SuperegoBridge, SuperegoEvent } from '@superego/app/shared'
 import {
   bound, closeWebViews, DescribedCall, describeRun, LAYOUT, layoutOf, linkHandler, mainKind, normalize, pageApp, PaneBody, paneKind, placedFor, PlacedViews, NO_SHELL, profileUisLoaded, provideProfileUi, RegistryProvider, resetProfileUi, spaceFor,
-  scopedViews, seenIn, setLocalState, Shell as Window, ShellStateProvider, Slot, SpaceMain, toolRow, urlKind, ViewScopeProvider, useAllThreads, useMachines, useSelection, useSpace, useWindowContext, windowRegistry,
+  scopedViews, seenIn, Shell as Window, ShellStateProvider, Slot, SpaceMain, toolRow, urlKind, ViewScopeProvider, useAllThreads, useMachines, useSelection, useSpace, useWindowContext, windowRegistry,
   type BehaviourSlot, type SpaceAt, type Layout, type Place, type Registry, type SlotProps, type UiExtension, type ViewProps,
 } from '@superego/app/internals'
 import type { LinkHandler, LinkWhere, ToolRow, ToolRowCall } from '@superego/app/ui'
@@ -470,7 +470,6 @@ export async function mountUi(options: MountOptions = {}): Promise<TestWindow> {
     addEventListener() {}, removeEventListener() {}, addListener() {}, removeListener() {}, dispatchEvent: () => false,
   })) as unknown as typeof window.matchMedia
   localStorage.clear()
-  if (options.select) setLocalState('selection', { machine: options.select.machine ?? machines[0]?.id, thread: options.select.thread }, undefined)
 
   // The window logs a profile's UI that fails to start and goes on without it; a test fails on it.
   const install = (into: Registry, machine: string, ref: ProfileRef, extensions: UiExtension[], global = false) => {
@@ -500,7 +499,7 @@ export async function mountUi(options: MountOptions = {}): Promise<TestWindow> {
   // The shell's state as the window has it, for the router's context and for `select`.
   let shell: {
     select(selection: { machine: string; thread: string } | undefined): void; selection?: { machine: string; thread: string }; threads: Record<string, ThreadInfo[] | undefined>
-    space?: SpaceAt; openSpace(space: SpaceAt | undefined): void
+    space?: SpaceAt; openSpace(space: SpaceAt): void
   } = { select() {}, threads: {}, openSpace() {} }
   function Shell({ children }: { children: ReactNode }) {
     const { selection, select } = useSelection()
@@ -535,6 +534,12 @@ export async function mountUi(options: MountOptions = {}): Promise<TestWindow> {
   }
   // The shell's state, drawn once: machines and their threads followed, selection and context kept. The whole window, if asked.
   const base = await draw(options.window ? <Window /> : null)
+  // The thread asked for, selected as the window starts: in the section it goes to (sections.ts).
+  if (options.select) {
+    const { machine, thread } = options.select
+    await inAct(async () => { shell.select({ machine: machine ?? machines[0]!.id, thread }) })
+    await settle()
+  }
   const machineOf = (id?: string) => id ?? machines[0]!.id
 
   /** What's drawn in `container`, to look in and click. */

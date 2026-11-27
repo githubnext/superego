@@ -29,7 +29,8 @@ export default defineUiExtension({
     const chosen = superego.store<string>('machine', 'local', { persist: true })
     // Whether first-run setup shows its word on Ego: meanwhile the button in the rail breathes, to be found.
     const welcoming = superego.store<boolean>('welcoming', false)
-    // A button, not a sidebar: it shows a thread, and the sidebar keeps what it shows. First in the rail, its tab ⌘1.
+    // A button, not a sidebar: it shows its thread alone, no sidebar, the Threads section keeping what it showed. First
+    // in the rail, its tab ⌘1.
     superego.view('ego.button', {
       title: `Ask ${agentName(superego.app)}`, icon: CircleIcon, context: 'window', fits: ['rail', 'drawer'], default: 'rail', narrow: 'drawer', order: 10, action: OPEN,
       component: (props) => <EgoButton {...props} chosen={chosen.use()} beckon={welcoming.use()} />,

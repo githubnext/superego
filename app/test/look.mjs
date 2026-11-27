@@ -174,29 +174,23 @@ await openApp({ name: 'look', timeout: 180_000 }, async (t) => {
   await run(`document.querySelector('.app__mobilebar button')?.click()`)
   await until(`!!document.querySelector('.app__sidebar')`, 'drawer')
   await both('phone-drawer')
-  // A data view (the skills, placed as a sidebar): in the drawer, switched to from its foot.
-  await setting('app.layout', { place: { 'skills.view': 'sidebar' } })
-  await until(`!!document.querySelector('.app__drawer-bar [aria-label="Skills"]')`, 'Skills in the drawer')
-  await run(`document.querySelector('.app__drawer-bar [aria-label="Skills"]').click()`)
-  await until(`document.querySelector('.data-view--sidebar')?.textContent.includes('$release')`, 'skills listed')
-  await both('phone-data-view')
-  await run(`document.querySelector('.app__drawer-bar [aria-label="Threads"]').click()`)
   await run(`document.querySelector('.app__scrim').click()`)
-  // The thread's sheet: what the title bar holds wide as a menu, the panes to open, and (the model's row pressed) the details.
+  // A data view (the skills, placed beside the thread): on a phone, in the thread's sheet.
+  await setting('app.layout', { place: { 'skills.view': 'beside' } })
+  // The thread's sheet: what the title bar holds wide as a menu, the panes to open, what's beside the thread, and (the
+  // model's row pressed) the details.
   await run(`document.querySelector('button.app__mobiletitle').click()`)
-  await until(`!!document.querySelector('.thread-sheet')`, 'sheet')
+  await until(`document.querySelector('.thread-sheet .data-view--beside')?.textContent.includes('$release')`, 'sheet, the skills in it')
   await both('phone-sheet')
   await run(`document.querySelector('.thread-sheet [data-item="view:threads.model"]').click()`)
   await until(`!!document.querySelector('.thread-sheet .threads-details')`, 'details in the sheet')
   await both('phone-sheet-details')
   await run(`document.querySelector('.thread-sheet [data-item="view:threads.model"]').click()`)
   await run(`document.querySelector('.app__scrim--sheet').click()`)
-  // Wide again: the data view as a sidebar, its button in the rail.
+  // Wide again: the data view beside the thread.
   await t.zoom(1)
   await t.resize(width, height)
-  await until(`!!document.querySelector('.app__rail [aria-label="Skills"]')`, 'Skills in the rail')
-  await run(`document.querySelector('.app__rail [aria-label="Skills"]').click()`)
-  await until(`document.querySelector('.data-view--sidebar')?.textContent.includes('$release')`, 'skills sidebar')
+  await until(`document.querySelector('.app__beside .data-view--beside')?.textContent.includes('$release')`, 'skills beside the thread')
   await t.settled()
   await both('data-view')
   await setting('app.layout', {})

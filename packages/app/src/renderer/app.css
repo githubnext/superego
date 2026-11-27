@@ -40,9 +40,6 @@
 .app__rail[data-tab="settings"] .app__rail-button.is-on:not(.app__settings) { color: var(--superego-muted); background: none; }
 .app__rail .app__rail-button svg { width: 17px; height: 17px; }
 /* The project you're in, its spaces: a group of their own after the app's, between lines (spaces.tsx). */
-.app__rail-sep { flex: none; width: 18px; height: 1px; margin: 2px 0; background: var(--superego-line); }
-.app__project-spaces { display: contents; }
-.app__project-spaces.is-narrow { display: flex; align-items: center; gap: 6px; }
 /* The notices, wide (rail-notice.tsx): above Settings, a quiet icon with a dot in its tone; quiet (put off), no dot.
    Opened, all it says in a popover beside the rail. */
 .rail-notice { position: relative; display: grid; place-items: center; width: 30px; height: 30px; padding: 0; border: 0; border-radius: 8px; background: none; color: var(--superego-muted); -webkit-app-region: no-drag; }
@@ -906,7 +903,6 @@ button.app__mobiletitle > .superego-status { font-size: 12px; }
 .app__drawer > .app__sidebar .app__drawer-bar .superego-icon-button.is-on { color: var(--superego-accent); }
 .app__drawer > .app__sidebar .app__drawer-sep { display: none; }
 /* There, without lines, the project's spaces stand apart by room. */
-.app__drawer > .app__sidebar .app__project-spaces { margin-inline: 10px; }
 /* Where a swipe from the left edge pulls it out: a strip down the thread's margin (at the start of the row of columns,
    Shell.tsx), under the composer; on a finger-sized device only (with a mouse it would only eat clicks). */
 .app__swipe-edge { display: none; position: absolute; z-index: 1; top: 0; bottom: 0; left: 0; width: var(--superego-space-4); }

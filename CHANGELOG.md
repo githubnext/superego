@@ -30,6 +30,9 @@
   Extensions can turn off.
 - A folder's dev command (`.superego/run.json`, `⌃R`) is one of these processes: it keeps running through Superego's
   updates, starts again after the computer restarts if it was running, and wakes the thread working there if it dies.
+- **The rail picks the whole window.** A rail button (Threads, Notes, Staff…) changes the sidebar and the main area
+  together, and comes back to what you last had there; only one is lit. A project's spaces open from their rows in
+  Threads, no longer from rail buttons of their own. Files and Skills go beside the thread or in a pane, not the sidebar.
 - **Mermaid diagrams.** ```` ```mermaid ```` blocks in threads and Markdown files show as diagrams, in the window's
   colours, light or dark. Their corner shows the source or copies it. It's the new Mermaid extension, which Settings →
   Extensions can turn off.
@@ -57,6 +60,8 @@
   is, and the transcript links it. `@<kind>:` offers that kind alone.
 - New for extensions (extension API 5.15): `ConfirmDialog` and `PromptDialog`, ready-made dialogs to ask before doing
   something and to ask for a name; `Button`'s `danger` variant; and `Dialog`'s `footer` and `flush`.
+- For extensions: a sidebar is a `window` view's only; a `thread` view that fits `sidebar` loses that place (a data
+  view's declaration is refused). A sidebar shows the spaces its extension declares, else threads.
 
 ## 0.6.0
 

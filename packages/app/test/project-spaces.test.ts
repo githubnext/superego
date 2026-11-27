@@ -21,7 +21,7 @@ const board = (title = 'Board', extra: Partial<SpaceKind> = {}) => defineUiExten
   setup(superego) {
     superego.space('board.main', { title, component: None, match: 'board:', params: (href) => ({ card: href.slice(6) }), ...extra })
     superego.tool('board_move', { verbs: ['Moved', 'Moving', 'Move failed'] })
-    superego.view('board.cards', { title: 'Cards', context: 'thread', fits: ['beside', 'sidebar'], component: None })
+    superego.view('board.cards', { title: 'Cards', context: 'thread', fits: ['beside', 'titlebar'], component: None })
   },
 })
 

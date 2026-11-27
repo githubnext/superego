@@ -30,9 +30,9 @@ export type WindowContext = {
   machines: MachineEntry[]
   selection: Selection | undefined
   select(selection: Selection | undefined): void
-  /** The space the main area shows instead of the selected thread, if one is open; and opening one (none: the thread). */
+  /** The space the main area shows, if one is open (then no thread is selected); and opening one, in its section. */
   space: SpaceAt | undefined
-  openSpace(space: SpaceAt | undefined): void
+  openSpace(space: SpaceAt): void
   /** Whether a space of `kind` is registered in this window: the app's, or (`project`, its root on `machine`) a project's. */
   hasSpace(kind: string, at?: { machine?: string; project?: string }): boolean
   /** The thread docked to the space open, if one is. */

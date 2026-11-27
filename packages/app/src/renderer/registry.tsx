@@ -303,10 +303,11 @@ export function createRegistry(app: AppConfig, extensions: UiExtension[], core: 
       if (taken) return console.warn(`Extension ${extension.name}: ${what} ${item[key]} is already drawn by ${taken.owner.extension}; keeping that one`)
       add(list, item, by)
     }
-    /** A view, checked: a profile's fit only the places that show one of its threads. */
+    /** A view, checked: a profile's fit only the places that show one of its threads; a thread's, no sidebar (a window's section). */
     const declare = (id: string, view: View) => {
       if (view.fits.some((place) => !PLACES.includes(place))) console.warn(`Extension ${extension.name}: view ${id} fits a place there isn't (${view.fits.join(', ')})`)
-      const fits = profile ? view.fits.filter((place) => THREAD_PLACES.includes(place)) : view.fits
+      if (view.context === 'thread' && view.fits.includes('sidebar')) console.warn(`Extension ${extension.name}: view ${id} is a thread's, and a sidebar is the window's: it goes beside the thread or in a pane`)
+      const fits = (profile ? view.fits.filter((place) => THREAD_PLACES.includes(place)) : view.fits).filter((place) => view.context === 'window' || place !== 'sidebar')
       if (!fits.length) return console.warn(`Profile extension ${extension.name}: view ${id} fits no place a profile's UI draws in`)
       // A global profile's window view is told the machine its profile is on.
       const on = global && scope && view.context === 'window' ? scope.slice(0, scope.indexOf('\u0000')) : undefined

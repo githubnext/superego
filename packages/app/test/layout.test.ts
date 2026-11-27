@@ -1,6 +1,6 @@
 // Where views go: the views' defaults, the user's layout (`app.layout`) on top, the narrow layout on a phone; what
 // stands in for a sidebar while there's none; placing and taking out; settings from before the layout read into it.
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { defineApp, type Json, type ThreadInfo } from '@superego/protocol'
 import { defineUiExtension, type UiExtension } from '../src/renderer/extension-api.ts'
 import { createRegistry } from '../src/renderer/registry.tsx'
@@ -18,7 +18,7 @@ const bundled: Placeable[] = [
   { id: 'threads.model', fits: ['header'], default: 'header' },
   { id: 'ego.button', fits: ['rail', 'drawer'], default: 'rail', narrow: 'drawer', order: 10 },
   { id: 'ego.clear', fits: ['header'], default: 'header' },
-  { id: 'files.folder', fits: ['sidebar', 'beside', 'pane'] },
+  { id: 'files.folder', fits: ['beside', 'pane'] },
   { id: 'git.changes', fits: ['pane'], default: 'pane' },
   { id: 'unread.bell', fits: ['rail', 'drawer'], withoutSidebar: 'rail', narrow: 'drawer' },
 ]
@@ -121,7 +121,7 @@ const moving: Placeable[] = [
   { id: 'threads.list', fits: ['sidebar'], default: 'sidebar' },
   { id: 'threads.details', fits: ['beside', 'pane'] },
   { id: 'ego.button', fits: ['rail', 'drawer'], default: 'rail', narrow: 'drawer', order: 10 },
-  { id: 'files.folder', fits: ['sidebar', 'beside', 'pane'] },
+  { id: 'files.folder', fits: ['beside', 'pane'] },
   { id: 'git.changes', fits: ['pane'], default: 'pane' },
 ]
 const resolvedMoving = (layout: Layout, narrow = false) => resolveLayout(moving, layout, { narrow })
@@ -185,6 +185,15 @@ describe('views in the registry', () => {
     expect(paneMenu(registry, resolveLayout(registry.views, { place: { 'orders.log': null } }), where).map((m) => m.kind)).toEqual(['orders.order'])
     // A thread view that fits a pane is a pane kind of its id.
     expect(registry.panes.map((p) => p.kind)).toEqual(['orders.order', 'orders.log'])
+  })
+
+  it("keeps a thread's view out of the sidebar, a window's section, saying so", () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const tree = defineUiExtension({ name: 'tree', setup(superego) { superego.view('tree.files', { title: 'Files', context: 'thread', fits: ['sidebar', 'beside'], component: None }) } })
+    const registry = createRegistry(app, [tree], () => {})
+    expect(registry.views.find((v) => v.id === 'tree.files')?.fits).toEqual(['beside'])
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("a sidebar is the window's"))
+    warn.mockRestore()
   })
 
   it('names views after their extension', () => {

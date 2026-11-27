@@ -101,9 +101,13 @@ export type SidebarRailProps = { open: boolean; sidebarHidden: boolean; show(ope
 export type View<C extends ViewContext = ViewContext> = {
   title: string
   icon?: ComponentType<{ size?: number; 'aria-hidden'?: boolean }>
-  /** `thread`: drawn only where there's a thread (beside, pane, header; in a sidebar, the one shown). */
+  /** `thread`: drawn only where there's a thread (beside, pane, header). */
   context: C
-  /** The places it can be drawn in. A `thread` view that fits `pane` is a pane kind too, of its id. */
+  /**
+   * The places it can be drawn in. A `thread` view that fits `pane` is a pane kind too, of its id. A sidebar is a
+   * `window` view's only: it's a section of the window (where you pick what the main area shows), the same whatever
+   * thread is shown. Its section holds the spaces its extension declares (Notes' notes), else threads.
+   */
   fits: Place[]
   default?: Placement
   /** On a phone or narrow window, where it goes by default instead (unset: as wide). */

@@ -194,21 +194,45 @@ function notes() {
 }
 
 /**
- * A project's spaces, while you're in the project: a group of the rail's own after the app's buttons, between lines;
- * rows under the project's heading in the Threads sidebar, above its threads. Its Board is open.
+ * A section: one rail button lit, its sidebar (where you pick) and the main area (what you picked there). Threads: a
+ * thread and its pane; Notes: a note, its thread docked; alone (Ego's, a space of a rail button's): no sidebar.
+ */
+function section(which: 'threads' | 'notes' | 'alone') {
+  const alone = which === 'alone'
+  const on = which === 'threads' ? 1 : which === 'notes' ? 2 : 0
+  const body: Box = alone ? { x: 17, y: 15, w: 138, h: 80 } : { ...sMain }
+  const parts = [r(sBar, 'soft'), r(sRail, 'soft'), sButtons(4, on)]
+  if (!alone) parts.push(r(sSide, 'tile focus'), lines(21, 24, [22, 26, 18, 24, 20], 7), t(sSide.x + sSide.w / 2, 88, which === 'threads' ? 'threads' : 'notes', 'mark'))
+  if (which === 'threads') {
+    const thread: Box = { ...body, w: 62 }
+    const pane: Box = { x: thread.x + thread.w + 3, y: body.y, w: body.w - thread.w - 3, h: body.h }
+    parts.push(r(thread, 'tile focus'), t(thread.x + thread.w / 2, thread.y + 7, 'its thread', 'mark'), `<rect class="bubble" x="${thread.x + 26}" y="${thread.y + 16}" width="28" height="6" rx="2" />`,
+      lines(thread.x + 5, thread.y + 30, [44, 38, 48]), r(pane), t(pane.x + pane.w / 2, pane.y + 7, 'pane', 'small'), lines(pane.x + 4, pane.y + 18, [24, 18, 28]))
+  } else {
+    const space: Box = { ...body, w: body.w - 31 }
+    const dock: Box = { x: space.x + space.w + 3, y: body.y, w: 28, h: body.h }
+    parts.push(r(space, 'tile focus'), t(space.x + space.w / 2, space.y + 7, alone ? 'its space' : 'its note', 'mark'), lines(space.x + 8, space.y + 20, [40, 52, 30, 46]),
+      r(dock), t(dock.x + dock.w / 2, dock.y + 7, 'thread', 'small'), `<rect class="bubble" x="${dock.x + 8}" y="${dock.y + 16}" width="16" height="6" rx="2" />`, lines(dock.x + 4, dock.y + 30, [18, 14, 20]))
+  }
+  const label = which === 'threads' ? 'Threads: its sidebar lists threads, the main area the one picked there, with its panes'
+    : which === 'notes' ? 'Notes: its sidebar lists notes, the main area the note opened, its thread docked'
+    : 'Alone: a rail button that is no sidebar (Ego, Vault) lit, its thread or space with no sidebar'
+  return svg(w, h, label, parts.join(''))
+}
+
+/**
+ * A project's spaces: rows under the project's heading in the Threads sidebar, above its threads, opened in the Threads
+ * section, Threads lit. Its Board is open.
  */
 function projectSpaces() {
   const body: Box = { x: 77, y: 21, w: 105, h: 123 }
   const dock: Box = { x: 186, y: 21, w: 48, h: 123 }
-  const sep = (y: number) => `<line class="line" x1="${rail.x + 3}" y1="${y}" x2="${rail.x + rail.w - 3}" y2="${y}" />`
-  const project = (b: Box, on = false) => r(b, on ? 'tile focus' : 'soft', 1.5)
   const spaceRow = (y: number, label: string, on = false) => [
     r({ x: 26, y, w: 44, h: 8 }, on ? 'tile focus' : 'soft', 1.5), t(30, y + 4, '▦', on ? 'small mark' : 'small'), `<text class="small" x="34" y="${y + 4}" style="text-anchor: start">${label}</text>`,
   ].join('')
-  return svg(W, H, "A project's spaces: a group in the rail between lines while you're in the project, and rows under its heading in the Threads sidebar", [
+  return svg(W, H, "A project's spaces: rows under its heading in the Threads sidebar, opened in the Threads section, Threads lit", [
     r(bar, 'soft'), t(110, 11.5, 'Board', 'small'),
-    r(rail, 'soft'), r(railButton(0), 'tile', 1.5), r(railButton(1), 'soft', 1.5),
-    sep(46.5), project({ x: 8.5, y: 49, w: 8, h: 8 }, true), project({ x: 8.5, y: 60, w: 8, h: 8 }), sep(71.5),
+    r(rail, 'soft'), r(railButton(0), 'soft', 1.5), r(railButton(1), 'tile focus', 1.5), r(railButton(2), 'soft', 1.5),
     r(side, 'soft'),
     `<text class="small" x="27" y="27" style="text-anchor: start">shop</text>`,
     spaceRow(31, 'Board', true), spaceRow(42, 'Docs'),
@@ -265,6 +289,9 @@ write('docked', docked())
 write('floating', floating())
 write('notes', notes())
 write('project-spaces', projectSpaces())
+write('section-threads', section('threads'))
+write('section-notes', section('notes'))
+write('section-alone', section('alone'))
 write('step-thread', step('a thread', 'thread'))
 write('step-note-a', step('note:a', 'space'))
 write('step-note-b', step('note:b', 'space'))

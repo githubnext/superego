@@ -98,7 +98,7 @@ Notes and Canvas are global profiles. A project's profile can't be global (its `
 extending a global one isn't, unless it says so itself.
 
 **A project's spaces.** A project's profile (`.superego/profiles/<name>` in the repo) may add spaces too, with no
-key to set: they're its project's, on its machine, under its heading in Threads and in the rail while you're in it;
+key to set: they're its project's, on its machine, under its heading in Threads (opened in the Threads section);
 their links open them only from its threads and spaces. Of two of its profiles declaring one kind, its `default` wins.
 Its other UI stays its own threads', and nothing of it runs until it's allowed ([Allowing](#allowing)).
 

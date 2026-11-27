@@ -140,7 +140,7 @@ export default async function session(t, s) {
   const threadsTab = `document.querySelector('.app__rail [aria-label="Threads"]')`
   await t.click('.ego__button')
   await t.until(`document.querySelector('.thread__title')?.textContent === 'Ego' && document.querySelector('.ego__button').classList.contains('is-on') && !document.querySelector('.app__sidebar .superego-list-item.is-selected')`, 'Ego opened, not in the sidebar')
-  await t.until(`!document.querySelector('.app__sidebar') && !${threadsTab}.classList.contains('is-on') && document.querySelector('.app__rail').dataset.tab === 'thread'`, 'Ego alone, its tab in front')
+  await t.until(`!document.querySelector('.app__sidebar') && !${threadsTab}.classList.contains('is-on') && document.querySelector('.app__rail').dataset.tab === 'alone'`, 'Ego alone, its tab in front')
   const ego = (await t.call('ego.ask')).id
   await t.run(`${threadsTab}.click()`)
   await t.until(`document.querySelector('.thread__title')?.textContent === 'elsewhere'`, 'away from it')

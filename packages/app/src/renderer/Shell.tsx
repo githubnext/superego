@@ -18,7 +18,7 @@ import { focusSidebar } from './focus.ts'
 import { paneMenu, PlacedViews, Slot, useLayout, viewsIn } from './placement.tsx'
 import { Contained } from './contained.tsx'
 import { RailButton } from './marks.tsx'
-import { forgetWindows, useLocalState } from './local-state.ts'
+import { forgetWindows } from './local-state.ts'
 import { ServiceNotice } from './ServiceNotice.tsx'
 import { BuildNotice } from './BuildNotice.tsx'
 import { UpdateNotice } from './UpdateNotice.tsx'
@@ -45,9 +45,9 @@ import { SetupPage, useSetup } from './Setup.tsx'
 import { useWindowContext } from './window-context.ts'
 import { bound, RailTabNumber, shortcutOf, useActions, useRailShortcut, useShortcut, type Keymap } from './keys.ts'
 import { railTabs } from './rail-tabs.ts'
-import { useAllThreads, useFold, useHistory, useMachines, useNewThreadDialog, useSelection, useProjects, useSettingsDialog, useShell, useSidebar, useSpace, useThreadSheet, type Selection } from './state.tsx'
-import { ProjectSpaceButtons, SpaceMain, SpaceTitle } from './spaces.tsx'
-import type { InProject } from './registry.tsx'
+import { useAllThreads, useFold, useHistory, useMachines, useNewThreadDialog, useSelection, useProjects, useSections, useSettingsDialog, useShell, useSidebar, useSpace, useThreadSheet, type Selection } from './state.tsx'
+import { ALONE } from './sections.ts'
+import { SpaceMain, SpaceTitle } from './spaces.tsx'
 
 /** Dispatch an action from this window: `dispatch('app.sidebar')`, `dispatch('thread.select', { machine, thread })`. */
 export function useDispatch() {
@@ -66,8 +66,9 @@ export function Shell() {
   const fold = useFold()
   const [log, setLog] = useState(false)
   const machines = useMachines()
-  const { selection, select, machine, thread, hidden: alone, listed } = useSelection()
-  // A space open fills the main area instead of the thread.
+  const { selection, machine, thread, hidden } = useSelection()
+  // The rail's section shown (sections.ts): its sidebar, and in the main area what it holds, a thread or a space.
+  const sections = useSections()
   const { space, docked } = useSpace()
   const inspecting = useInspecting()
   const settings = useSettingsDialog()
@@ -84,13 +85,15 @@ export function Shell() {
   const [sheet, openSheet] = useThreadSheet()
   const setSheet = (open: boolean) => openSheet(open)
   const [sheetHandle] = useState(() => BaseUI.Drawer.createHandle())
-  // The sidebar views (each a rail button and the sidebar it opens), and the one shown: as the window was left, else the first.
+  // The sidebar views (each a rail button, the section it shows and the sidebar it opens), and the one shown: the
+  // section's; with none (a space shown alone), on a phone the last one shown, for the drawer.
   const sidebarViews = viewsIn(registry, placed, 'sidebar')
-  const [sidebarViewId, setSidebarView] = useLocalState<string | undefined>('sidebar.view', undefined)
-  const sidebarView = sidebarViews.find((view) => view.id === sidebarViewId) ?? sidebarViews[0]
-  // Wide, the rail is a row of tabs with one in front, joined to what's beside it: Settings while it's open; else a
-  // hidden thread's (Ego's: the thread alone, no sidebar); else the open sidebar.
-  const tab: 'settings' | 'thread' | 'sidebar' = narrow ? 'sidebar' : settings.open ? 'settings' : alone && !space ? 'thread' : 'sidebar'
+  const shownAlone = sections.section === ALONE || hidden
+  const sidebarView = sidebarViews.find((view) => view.id === (sections.section === ALONE ? sections.lastSidebar : sections.section)) ?? sidebarViews[0]
+  // Wide, the rail is a row of tabs with one in front, joined to what's beside it: Settings while it's open; else what's
+  // shown alone (a hidden thread, Ego's; a space no sidebar holds, Vault's), no sidebar, no section lit; else the
+  // section's sidebar.
+  const tab: 'settings' | 'alone' | 'sidebar' = narrow ? 'sidebar' : settings.open ? 'settings' : shownAlone ? 'alone' : 'sidebar'
   // Wide, the sidebar's edge resizes it, and hides it dragged narrow.
   const sidebarEdge = useSidebarEdge()
   // Narrow, the sidebar is a drawer (Base UI's): out from ☰ or a swipe from the screen's left edge, back with a swipe to
@@ -99,21 +102,21 @@ export function Shell() {
   const drawerPopup = useRef<HTMLDivElement>(null)
   // Closed by a thread picked in it, the focus is the thread's to take, not ☰'s again.
   const picked = useRef(false)
-  const where = selection && thread && machine && !space ? { machine: machine.id, thread } : undefined
-  // The project you're in, whose spaces the rail offers: the open space's, if it's a project's; else the selected thread's.
-  const inProject: InProject | undefined = space?.project ? { machine: space.machine, root: space.project }
-    : selection && thread?.project ? { machine: selection.machine, root: thread.project.root } : undefined
+  const where = selection && thread && machine ? { machine: machine.id, thread } : undefined
   // The sheet's thread: the one it was opened for, else the selected one.
   const sheetMachine = sheet.at ? machines.find((m) => m.id === sheet.at!.machine) : machine
   const sheetThread = sheet.at ? allThreads[sheet.at.machine]?.find((t) => t.id === sheet.at!.thread) : thread
-  // A sidebar view shown (\`open\`), or the sidebar hidden from its button: from Ego's thread, back to the
-  // listed one it left; from Settings, back to the thread.
+  // A sidebar view's section shown (\`open\`), sidebar and main area, as it was left; or the sidebar hidden from its
+  // button. Its own section, shown already (behind Settings, say), stays as it is.
   const showSidebarView = (view: (typeof sidebarViews)[number], open = true) => {
-    setSidebarView(view.id)
     sidebar.show(open)
-    if (open && alone) select(listed)
-    else if (open) settings.close()
+    if (!open) return
+    if (view.id !== sections.section || shownAlone) sections.show(view.id)
+    else settings.close()
   }
+  // The main area of a section holding nothing yet: its own word.
+  const emptyText = () => !sidebarViews.length ? `Start a thread with: ${registry.app.id}`
+    : sections.list.find((s) => s.id === sections.section)?.owns ? `Nothing open in ${sidebarView?.title ?? 'this section'}.` : 'Select or start a thread.'
   // The rail's tabs, which ⌘1–⌘9 go to (see rail-tabs.ts): as the rail is when asked.
   const tabsNow = () => narrow ? [] : railTabs(viewsIn(registry, placed, 'rail'), sidebarViews, {
     offered: registry.router.offered,
@@ -127,7 +130,16 @@ export function Shell() {
   const [swipeEdgeHost, setSwipeEdgeHost] = useState<HTMLElement | null>(null)
   // What the title bar gives way with, short of room (overflow.tsx).
   const [overflow] = useState(() => new Overflow())
-  useEffect(() => { setDrawer(false); openSheet(false); setPanePicker(false) }, [selection?.machine, selection?.thread, narrow])
+  // Another thread shown closes what was open over the last; the drawer stays while it's a section picked in it
+  // (its foot's buttons), on that section's list.
+  const shownSection = useRef(sections.section)
+  useEffect(() => {
+    const switched = shownSection.current !== sections.section
+    shownSection.current = sections.section
+    if (!switched) setDrawer(false)
+    openSheet(false)
+    setPanePicker(false)
+  }, [selection?.machine, selection?.thread, narrow, sections.section])
   // The installed fonts take seconds to list: read them in the background, for Settings' font pickers.
   useEffect(refreshFontsSoon, [])
   // Actions read the shell as it is when they run.
@@ -149,7 +161,7 @@ export function Shell() {
     focusSidebar: (id) => {
       const view = sidebarViews.find((v) => v.id === id)
       if (!view) throw new Error(`${id} isn't a sidebar in this window`)
-      if (narrow) { setSidebarView(id); setDrawer(true) } else showSidebarView(view)
+      if (narrow) { if (id !== sections.section) sections.show(id); setDrawer(true) } else showSidebarView(view)
       focusSidebar(id)
     },
     back: history.back, forward: history.forward,
@@ -178,18 +190,17 @@ export function Shell() {
   // What the sidebar holds: the sidebar view it shows; in the drawer, the notices, the other sidebars and Settings at its foot.
   const sidebarBody = <>
     {narrow && <div className="app__drag" />}
-    {sidebarView && <SidebarContent key={sidebarView.id} view={sidebarView} {...(where ? { machine, thread } : {})} />}
+    {sidebarView && <SidebarContent key={sidebarView.id} view={sidebarView} />}
     {narrow && <div className="app__footer">{notices}
       {/* A phone's drawer: the other sidebars to switch to, what the layout puts in the drawer, and Commands and Settings at the end. */}
       <div className="app__drawer-bar">
         {sidebarViews.length > 1 && <>
           {sidebarViews.map((view) => (
-            <ViewContextMenu key={view.id} view={view.id} place="sidebar"><SidebarButton view={view} open={view.id === sidebarView?.id} sidebarHidden={false} show={() => setSidebarView(view.id)} narrow /></ViewContextMenu>
+            <ViewContextMenu key={view.id} view={view.id} place="sidebar"><SidebarButton view={view} open={view.id === sections.section && !shownAlone} sidebarHidden={false} show={() => { if (view.id !== sections.section || shownAlone) sections.show(view.id) }} narrow /></ViewContextMenu>
           ))}
           <span className="app__drawer-sep" aria-hidden />
         </>}
         <PlacedViews place="drawer" frame={withContextMenu('drawer')} />
-        <ProjectSpaceButtons project={inProject} narrow />
         <span className="app__drawer-end">{commandsButton}{settingsButton}</span>
       </div>
     </div>}
@@ -228,7 +239,6 @@ export function Shell() {
                   </RailTabNumber.Provider>
                 </ViewContextMenu>
               ))}
-              <ProjectSpaceButtons project={inProject} />
             </div>
             <div className="app__rail-group">{notices}{settingsButton}</div>
           </nav>
@@ -289,7 +299,7 @@ export function Shell() {
                 <ThreadView key={`${selection.machine}/${selection.thread}`} machine={machine} thread={thread} />
               </SwipeEdgeRef.Provider></StripSlot.Provider>
             )
-            : setup ? <SetupPage key={setup} machine={setup} /> : <div className="app__empty">{sidebarViews.length ? 'Select or start a thread.' : `Start a thread with: ${registry.app.id}`}</div>}
+            : setup ? <SetupPage key={setup} machine={setup} /> : <div className="app__empty">{emptyText()}</div>}
         </main>}
         {tab !== 'settings' && !narrow && where && viewsIn(registry, threadPlaced, 'beside', where).length > 0 && (
           <aside className="app__beside"><PlacedViews place="beside" machine={machine} thread={thread} frame={withMenuButton('beside', where)} /></aside>
@@ -350,11 +360,10 @@ function SidebarButton({ view, open, sidebarHidden, show, narrow = false }: { vi
   )
 }
 
-/** The open sidebar's view: a view that needs a thread shows the selected one, and nothing without. */
-function SidebarContent({ view, machine, thread }: { view: Registry['views'][number]; machine?: MachineEntry; thread?: ThreadInfo }) {
+/** The open sidebar's view: a window's view (a thread's goes in the thread's places: a sidebar is a section's, whatever thread it shows). */
+function SidebarContent({ view }: { view: Registry['views'][number] }) {
   const Component = view.component as ComponentType<ViewProps>
-  if (view.context === 'thread' && !(machine && thread)) return null
-  return <Inspected info={() => viewInfo(view, 'sidebar')}><Contained name={whose(view)} scope={scopeOfEntry(view)}><Component place="sidebar" {...(machine && thread ? { machine, thread } : {})} /></Contained></Inspected>
+  return <Inspected info={() => viewInfo(view, 'sidebar')}><Contained name={whose(view)} scope={scopeOfEntry(view)}><Component place="sidebar" /></Contained></Inspected>
 }
 
 /** Without a sidebar (the core's `core.picker`, at the title bar's start): every thread in a menu, and a new one. */

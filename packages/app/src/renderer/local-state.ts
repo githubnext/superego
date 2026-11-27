@@ -34,9 +34,10 @@ if (windowId && address?.has('seed')) {
 
 /**
  * State no longer kept, dropped from every window's as one loads: `pane.widths`, the columns' shares of the row that
- * 0.1.10 kept per window (their widths are factors of the window's width now, see panes.tsx).
+ * 0.1.10 kept per window (their widths are factors of the window's width now, see panes.tsx); the thread selected, the
+ * space open and the sidebar shown, each on its own (one `sections` now, see sections.ts).
  */
-const RETIRED = ['pane.widths']
+const RETIRED = ['pane.widths', 'selection', 'selection.listed', 'space.open', 'sidebar.view']
 if (typeof localStorage !== 'undefined') {
   const retired: string[] = []
   for (let i = 0; i < localStorage.length; i++) {

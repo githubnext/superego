@@ -1,6 +1,7 @@
 // What the shell knows and shares: the machines, every connected machine's threads (one subscription each, whatever
-// number of components show them), which thread is selected, and the Settings dialog; those two kept in the window
-// across reloads; and where the window has been, to go back and forward.
+// number of components show them), the section shown and what each holds (the selected thread or the space open: see
+// sections.ts), and the Settings dialog; those kept in the window across reloads; and where the window has been, to go
+// back and forward.
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import { AUTH_REJECTED, DATA_VIEWS, GLOBAL_PROFILES, PROFILES_ALLOWED, type Json, type ProfileRef, type ProviderRejection, type ThreadInfo } from '@superego/protocol'
 import type { MachineEntry } from '../shared/bridge.ts'
@@ -12,7 +13,10 @@ import type { SidebarFilter } from './extension-api.ts'
 import { spaceFor } from './lookups.ts'
 import { useImageRechecks } from './images.tsx'
 import { useGlobalProfileUis, useListedProfileUis } from './profile-ui.ts'
-import { emptyHistory, sameSpace, step, visit, type History, type Place, type SpaceAt } from './history.ts'
+import { emptyHistory, step, visit, type History, type Place, type SpaceAt } from './history.ts'
+import { clear, keep, NO_SECTIONS, show, showSection as toSection, shownHeld as shownHeldIn, shownSection, type Section, type Sections } from './sections.ts'
+import { useLayout, viewsIn } from './placement.tsx'
+import type { Owner } from './registry.tsx'
 import { useLocalState } from './local-state.ts'
 import { focusProvider } from './provider-focus.ts'
 import { useWindowEvents } from './window-events.ts'
@@ -75,12 +79,17 @@ type ShellState = {
   hidden: ThreadInfo[] | undefined
   /** Every machine's, by machine id. */
   hiddenAll: Record<string, ThreadInfo[] | undefined>
-  /** The listed thread last selected: where the sidebars go back to from a hidden one (Ego's). */
-  listed: Selection | undefined
-  /** The space the main area shows instead of the selected thread, if one is open. */
+  /** The section shown (sections.ts): a sidebar's id, or none (`ALONE`); and showing one, as it was left. */
+  section: string
+  showSection(id: string): void
+  /** The window's sections, in the rail's order. */
+  sections: Section[]
+  /** The sidebar a phone's drawer shows while the section shown has none: the last one shown. */
+  lastSidebar: string | undefined
+  /** The space the main area shows, if the section shown holds one (then no thread is selected). */
   space: SpaceAt | undefined
-  /** Open a space (none: back to the selected thread). */
-  openSpace(space: SpaceAt | undefined): void
+  /** Open a space, in its section. */
+  openSpace(space: SpaceAt): void
   /** The thread docked to each space, by `spaceKey`. */
   docked: Record<string, Selection>
   dock(space: SpaceAt, thread: Selection | undefined): void
@@ -117,14 +126,14 @@ export const useHidden = (machine: string) => useShellState().hiddenAll[machine]
 export const useRejections = () => useShellState().rejections
 /** The selected thread, and a way to select another (or none). */
 export function useSelection() {
-  const { selection, select, machines, threads, archived, hidden, listed } = useShellState()
+  const { selection, select, machines, threads, archived, hidden } = useShellState()
   const machine = machines.find((m) => m.id === selection?.machine)
   const own = selection && hidden?.find((t) => t.id === selection.thread)
   const thread = selection && (threads[selection.machine]?.find((s) => s.id === selection.thread)
     ?? (archived?.id === selection.thread ? archived : undefined)
     ?? own)
-  /** `hidden`: the thread is one no list shows (an extension's own, like Ego's). `listed`: the listed one last selected. */
-  return { selection, select, machine, thread, hidden: Boolean(own), listed }
+  /** `hidden`: the thread is one no list shows (an extension's own, like Ego's). */
+  return { selection, select, machine, thread, hidden: Boolean(own) }
 }
 /**
  * Every project, in the sidebar's order, and the thread last shown in each; `sidebar`, what it lists: the pinned
@@ -145,8 +154,8 @@ export function useSidebar() {
 export const spaceKey = (space: SpaceAt) => `${space.machine}\u0000${space.project ? `${space.project}\u0000` : ''}${space.kind}\u0000${JSON.stringify(space.params)}`
 
 /**
- * The space the main area shows, if one is open; how to open one (or none); the thread docked to it, and whether
- * its thread shows.
+ * The space the main area shows, if one is open; how to open one; the thread docked to it, and whether its thread
+ * shows.
  */
 export function useSpace() {
   const { space, openSpace, docked, dock, redock, spaceAgent, showSpaceAgent, spaceTitles, titleSpace } = useShellState()
@@ -160,6 +169,15 @@ export function useSpace() {
     redock,
     agentShown: spaceAgent, showAgent: showSpaceAgent,
   }
+}
+
+/**
+ * The rail's sections (sections.ts): the one shown (a sidebar's id, or none: `ALONE`), showing one as it was left, the
+ * window's sections in order, and the one with a sidebar last shown (a phone's drawer shows it while there's none).
+ */
+export function useSections() {
+  const { section, showSection, sections, lastSidebar } = useShellState()
+  return { section, show: showSection, list: sections, lastSidebar }
 }
 
 /** Back and forward through the threads (and Settings) this window has shown. */
@@ -203,11 +221,16 @@ export function useShell() {
 export function ShellStateProvider({ children }: { children: ReactNode }) {
   const machines = useMachineList()
   const [threads, setThreads] = useState<Record<string, ThreadInfo[] | undefined>>({})
-  // Which thread and whether Settings is open: as the window was left, after a reload too.
-  const [selection, setSelection] = useLocalState<Selection | undefined>('selection', undefined)
+  // The section shown and what each holds (the selected thread, the space open), and whether Settings is open: as the
+  // window was left, after a reload too.
+  const sectionList = useSectionList()
+  const [sectionState, setSections] = useLocalState<Sections>('sections', NO_SECTIONS)
+  const section = shownSection(sectionState, sectionList)
+  const heldNow = shownHeldIn(sectionState, sectionList)
+  const selection = heldNow && 'thread' in heldNow ? heldNow.thread : undefined
+  const space = heldNow && 'space' in heldNow ? heldNow.space : undefined
   const [settingsOpen, setSettingsOpen] = useLocalState('settings.open', false)
-  // The space shown instead of the thread, the thread docked to each, and whether their threads show.
-  const [space, setSpace] = useLocalState<SpaceAt | undefined>('space.open', undefined)
+  // The thread docked to each space, and whether their threads show.
   const [docked, setDocked] = useLocalState<Record<string, Selection>>('space.docked', {})
   const [spaceAgent, setSpaceAgent] = useLocalState('space.agent', true)
   const [spaceTitles, setSpaceTitles] = useLocalState<Record<string, string>>('space.titles', {})
@@ -294,10 +317,11 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (shownKey && lastThread[shownKey] !== shown!.id) setLastThread((last) => ({ ...last, [shownKey]: shown!.id }))
   }, [shownKey, shown?.id])
-  const [listed, setListed] = useLocalState<Selection | undefined>('selection.listed', undefined)
+  // What the section shown holds of its own (a space, or a thread its sidebar lists: not Ego's, shown there from
+  // elsewhere) is what coming back to it shows.
   useEffect(() => {
-    if (shown && (listed?.machine !== selection!.machine || listed.thread !== shown.id)) setListed({ machine: selection!.machine, thread: shown.id })
-  }, [selection?.machine, shown?.id])
+    setSections((state) => keep(state, sectionList, (h) => 'space' in h || Boolean(threads[h.thread.machine]?.some((t) => t.id === h.thread.thread))))
+  }, [section, heldNow && JSON.stringify(heldNow), threads, sectionList])
   // Selecting a thread (from the sidebar, the navigator, a notification) unfolds the way to it, once: folded again
   // after, it stays selected, out from under the fold. The one selected as the window opens is where it was left.
   const unfoldedFor = useRef(selection && `${selection.machine}/${selection.thread}`)
@@ -346,7 +370,9 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
   const exists = (p: Place) => 'settings' in p || ('space' in p ? Boolean(spaceFor(registry, p.space))
     : Boolean(hiddenAll[p.thread.machine]?.some((t) => t.id === p.thread.thread)) || Boolean(threads[p.thread.machine]?.some((t) => t.id === p.thread.thread)))
   const value = useMemo<ShellState>(() => ({
-    machines, threads, rejections, selection, settingsOpen, settingsAtTab, newThread, projects, sidebar, pins, hold, fold, lastThread, sidebarHidden: sidebarIsHidden(sidebarMode, tight), archived, hidden, hiddenAll, listed,
+    machines, threads, rejections, selection, settingsOpen, settingsAtTab, newThread, projects, sidebar, pins, hold, fold, lastThread, sidebarHidden: sidebarIsHidden(sidebarMode, tight), archived, hidden, hiddenAll,
+    section, sections: sectionList, lastSidebar: sectionState.sidebar && sectionList.some((s) => s.id === sectionState.sidebar) ? sectionState.sidebar : sectionList[0]?.id,
+    showSection: (id) => { setSettingsOpen(false); setNewThread(undefined); setSections((state) => toSection(state, id, sectionList)) },
     canBack: Boolean(step(history, -1, place, exists)),
     canForward: Boolean(step(history, 1, place, exists)),
     go: (by) => {
@@ -356,16 +382,19 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
       setNewThread(undefined)
       if ('settings' in to.place) return setSettingsOpen(true)
       setSettingsOpen(false)
-      if ('space' in to.place) return setSpace(to.place.space)
-      setSpace(undefined)
-      setSelection(to.place.thread)
+      const held = to.place
+      setSections((state) => show(state, held, sectionList))
     },
-    select: (next) => { setSettingsOpen(false); setNewThread(undefined); setSpace(undefined); setSelection(next) },
+    select: (next) => {
+      setSettingsOpen(false)
+      setNewThread(undefined)
+      setSections((state) => next ? show(state, { thread: next }, sectionList) : clear(state, sectionList))
+    },
     space, docked, spaceAgent,
     openSpace: (next) => {
       setSettingsOpen(false)
       setNewThread(undefined)
-      setSpace((was) => sameSpace(was, next) ? was : next)
+      setSections((state) => show(state, { space: next }, sectionList))
     },
     dock: (at, thread) => setDocked((all) => {
       const { [spaceKey(at)]: _, ...rest } = all
@@ -394,7 +423,7 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
       setSidebarOpen(next.open)
       setSidebarShownTight(next.shownTight)
     },
-  }), [machines, threads, rejections, selection, settingsOpen, settingsAtTab, settingsTarget, newThread, projects, sidebar, pins, lastThread, sidebarOpen, sidebarShownTight, tight, archived, hidden, hiddenAll, history, listed, threadSheet, space, docked, spaceAgent, spaceTitles, registry.version])
+  }), [machines, threads, rejections, selection, settingsOpen, settingsAtTab, settingsTarget, newThread, projects, sidebar, pins, lastThread, sidebarOpen, sidebarShownTight, tight, archived, hidden, hiddenAll, history, threadSheet, sectionState, sectionList, space, docked, spaceAgent, spaceTitles, registry.version])
   return (
     <Context.Provider value={value}>
       {machines.filter((m) => m.state !== 'disabled').map((m) => <MachineThreads key={m.id} machine={m} onThreads={onThreads} onHidden={onHidden} onRejections={onRejections} />)}
@@ -404,6 +433,24 @@ export function ShellStateProvider({ children }: { children: ReactNode }) {
     </Context.Provider>
   )
 }
+
+/**
+ * The window's sections (sections.ts): its sidebars, in the rail's order; one whose extension (or profile) declares
+ * spaces holds those, any other holds threads.
+ */
+function useSectionList(): Section[] {
+  const registry = useRegistry()
+  const { placed } = useLayout()
+  const sidebars = viewsIn(registry, placed, 'sidebar')
+  const key = sidebars.map((view) => view.id).join('\u0000')
+  return useMemo(() => sidebars.map((view) => {
+    const kinds = registry.spaces.filter((space) => sameOwner(space.owner, view.owner)).map((space) => space.kind)
+    return kinds.length ? { id: view.id, owns: (at: SpaceAt) => kinds.includes(at.kind) } : { id: view.id }
+  }), [key, registry.version])
+}
+
+/** Whether two things are the same extension's: of one profile, if a profile's. */
+const sameOwner = (a: Owner, b: Owner) => a.extension === b.extension && a.profile === b.profile && a.global === b.global && !a.data && !b.data
 
 type FilterEntry = Owned<{ use: () => SidebarFilter | undefined }>
 /** Each narrowing's own key: one set up again (its extension reloaded) is another, its hook drawn afresh. */
