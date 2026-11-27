@@ -400,6 +400,10 @@ export function claudeAgent({ skills = [], executable, env = () => claudeEnv(), 
           },
           limit: (info) => limit.set(limitOf(info) as Limit & Json),
           signedOut: waitForSignIn,
+          // Claude Code's own calls never go through Superego's tool round: told to `toolCalls` from here.
+          ended: (record) => {
+            try { superego.reportToolCall(record) } catch (error) { console.error(`Claude Agent: telling extensions of thread ${record.thread}'s tool call ${record.call.name} failed:`, error) }
+          },
         }),
       })
       // What's still to be saved is, before the daemon goes.

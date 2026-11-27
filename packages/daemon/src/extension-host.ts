@@ -442,28 +442,35 @@ export function createExtensionHost(host: Host, later: { profiles(): ProfileHost
     hooks: [hook(ToolTask, {
       afterTool(call, result, api) {
         const id = String(api.conversationId)
-        const m = host.mounted.get(id)
-        if (!m || !toolWatchers.length) return undefined
-        const without = withoutFor(id, m.meta)
+        if (!toolWatchers.length) return undefined
         // What the model is told: the output's text, then what went wrong (an error's message comes as a diagnostic).
         const text = [
           ...(result.output ?? []).flatMap((block) => block.type === 'text' ? [block.text] : []),
           ...(result.diagnostics ?? []).map((d) => d.message),
         ].join('\n')
-        const record: ToolCallRecord = {
+        tellToolCall({
           thread: id,
           call: { id: call.id, name: call.name, args: call.arguments as Json },
           result: { isError: Boolean(result.isError), ...(text ? { text } : {}) },
-        }
-        for (const watcher of toolWatchers) {
-          if (!appliesTo(watcher, without, m.meta)) continue
-          void Promise.resolve().then(() => watcher.value(record)).catch((error: unknown) => console.error(`Extension ${watcher.owner}: toolCalls failed:`, error))
-        }
+        })
         return undefined
       },
     })],
   })
   registry.install(toolCallsPart)
+  /**
+   * Tell extensions' `toolCalls` of a call that ended, without waiting for them: those for its thread. From pi's tool
+   * round (`toolCallsPart`), and from an agent kind's runner for its agent's own calls (`reportToolCall`).
+   */
+  function tellToolCall(record: ToolCallRecord) {
+    const m = host.mounted.get(record.thread)
+    if (!m || !toolWatchers.length) return
+    const without = withoutFor(record.thread, m.meta)
+    for (const watcher of toolWatchers) {
+      if (!appliesTo(watcher, without, m.meta)) continue
+      void Promise.resolve().then(() => watcher.value(record)).catch((error: unknown) => console.error(`Extension ${watcher.owner}: toolCalls failed:`, error))
+    }
+  }
 
   // The core's own: extensions' data views (`superego.view`), as the window draws them (DataViewInfo[]).
   const setViews = values.core(DATA_VIEWS, [])
@@ -789,6 +796,12 @@ export function createExtensionHost(host: Host, later: { profiles(): ProfileHost
       },
       recap(describe) { own(recaps, describe, 'a recap'); note('recap', 'a recap') },
       toolCalls(watch) { own(toolWatchers, watch, 'a toolCalls watcher'); note('toolCalls', 'a toolCalls watcher') },
+      reportToolCall(record) {
+        life.live('a tool call')
+        const kind = host.mounted.get(record.thread)?.meta.agent
+        if (!kind || kinds.get(kind)?.owner !== extension.name) throw new Error(`Extension ${extension.name}: thread ${record.thread} isn't run by an agent kind of its own, so it can't report its tool calls`)
+        tellToolCall(record)
+      },
       agentFor(choose) { own(choosers, choose as (typeof choosers)[number]['value'], 'an agentFor'); note('agentFor', 'an agentFor'); changed() },
       extensions: () => switchable().map((about) => ({
         name: about.name, ...(about.title ? { title: about.title } : {}), ...(about.description ? { description: about.description } : {}),

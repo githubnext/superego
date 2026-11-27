@@ -93,11 +93,13 @@ import type { ExtensionAbout } from './app.ts'
  * `Teardown`: `stopping`, `reload` or `failed`); a notice's `wake`, starting the agent's run on it.
  * 5.19: composer commands: the UI half's `composer.command({ name, detail, takes?, run })` adds `/<name>` to the
  * composer, run with what follows it instead of being sent (`{ send }` hands it to the agent after all).
+ * 5.20: the daemon half's `reportToolCall(record)`: an agent kind telling `toolCalls` of its own agent's calls (Claude
+ * Code's Bash, Read…), so they're heard as a Superego thread's are.
  * Minor: something added (an extension that uses it asks for `^3.<minor>`); major: something an extension could rely
  * on changed or went, from 2.5 on without exception. An extension whose `api` range this doesn't satisfy is refused
  * when it's set up.
  */
-export const EXTENSION_API = '5.19.0'
+export const EXTENSION_API = '5.20.0'
 
 /** What a machine says of an extension set up there: `hello.extensions` and `features.changed` carry one each. */
 /** `title`: what the window calls it (over a message it sent, a notice of its), when it says. */

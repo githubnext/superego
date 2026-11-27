@@ -23,6 +23,7 @@
     "@superego/ui": "workspace:*"
   },
   "devDependencies": {
+    "@superego/github": "workspace:*",
     "@superego/sdk": "workspace:*",
     "@superego/thread-reports": "workspace:*",
     "@superego/thread-tools": "workspace:*",

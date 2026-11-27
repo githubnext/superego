@@ -596,6 +596,13 @@ export type DaemonApi = {
    */
   toolCalls(watch: (record: ToolCallRecord) => void | Promise<void>): void
   /**
+   * An agent kind's (`agentKind`): tell `toolCalls` of a call its own agent made, once it ended, for the calls its runner
+   * doesn't run through Superego's tool round (Claude Code's own Bash, Read…), so they're heard as a Superego thread's
+   * are. Name and arguments as its transcript has them: Superego's own where the tool is the same (`bash` with its
+   * `command`, `read` with its `path`). Throws for a thread that isn't of one of this extension's kinds.
+   */
+  reportToolCall(record: ToolCallRecord): void
+  /**
    * Choose a thread's agent, from this extension's state with it (no `id` yet while it's made; the state its `starting`
    * gave). Its instructions hold only while it answers. The first chooser to answer wins, in the order extensions were
    * set up; a profile's only for its own threads. Called often, so quick and without side effects; a throw is logged

@@ -11,6 +11,8 @@
   opens what's failing and the unresolved review comments beside it. Attach one by hand from a row's menu or ⌘K, and
   go to any thread's with "Go to pull request…". Pull request links in messages show their state; ⌘-click shows one
   beside. It uses the machine's `gh` (Settings says whether it's signed in), and Settings → Extensions can turn it off.
+- Claude Agent threads attach the pull requests they open, and extensions that watch what an agent runs see what
+  Claude Code runs too.
 - The agent can look at a thread's pull request (`pr_view`), and knows how its checks and review stand.
 - A thread says when its pull request's checks fail, a reviewer asks for changes or approves, or it's merged, with
   "Fix it" to hand the failure or the review to the agent. The agent isn't woken unless you choose Watch… on the pull
@@ -49,6 +51,8 @@
   machine's process; `spawnGroup`'s `outlive` and `adoptGroup` keep one of your own through a daemon restart;
   `superego.signal.reason.why` says why an extension is torn down; a notice with `wake: true` starts the agent's run
   on it.
+- New for extensions (extension API 5.20): `superego.toolCalls` hears a Claude Agent thread's calls, Claude Code's own
+  too (its Bash as `bash`); an agent kind reports its own agent's calls with `superego.reportToolCall`.
 - New for extensions (extension API 5.14): `superego.codeBlock(languages, component)` draws fenced code blocks of a
   language.
 - New for extensions (extension API 5.16): `@` in the composer can mention an extension's things (`@note:roadmap`,

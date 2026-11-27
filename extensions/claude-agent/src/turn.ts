@@ -21,6 +21,7 @@ import { NOTE_ENTRY, type Json } from '@superego/protocol'
 import type { Context } from '@earendil-works/chord/context'
 import { AssistantEntry, defineDoc, defineTask, InboxDoc, LiveDoc, placeSteers, ToolResultEntry, type EntryId, type EntryRecord, type LiveState, type TaskRuntime, type ToolSlot, type UserInput } from '@earendil-works/pi-durable'
 import type { Message, ToolCall } from '@earendil-works/pi-ai'
+import type { ToolCallRecord } from '@superego/daemon'
 import { approvalOf, askUserArgs, folderRules, questionsOf, resultOf } from './asks.ts'
 import { explain, NOT_INSTALLED, signedOut } from './claude.ts'
 import { assistantMessage, contentOf, partialAnswer, resultText, toolCall, toolResultMessage, type Block, type StreamEvent } from './messages.ts'
@@ -91,6 +92,11 @@ export type TurnHost = {
   limit(info: SDKRateLimitInfo): void
   /** A turn failed as Claude Code isn't signed in: the thread waits for it to be. */
   signedOut(thread: string): void
+  /**
+   * A tool call of the thread's Claude Code ended (one of its own, or Superego's; its subagents' too), named as the
+   * transcript has it: for extensions' `toolCalls`.
+   */
+  ended(record: ToolCallRecord): void
 }
 
 type Checkpoint = { phase: 'run' }
@@ -126,13 +132,16 @@ export function contentFor(content: UserInput): Content {
   })
 }
 
+/** A tool call of the transcript's: its name and arguments, as Superego names them where the tool is its own. */
+type Call = Pick<ToolCall, 'name' | 'arguments'>
+
 /** The tool calls of this run (from its first entry on) that have no result: cut off by a stop or a restart. */
 function openCalls(entries: readonly EntryRecord[], first: EntryId | undefined) {
-  const open = new Map<string, string>()
+  const open = new Map<string, Call>()
   for (const entry of entries) {
     if (first !== undefined && entry.id < first) continue
     for (const message of (entry.model ?? []) as Message[]) {
-      if (message.role === 'assistant') for (const c of message.content) if (c.type === 'toolCall') open.set(c.id, c.name)
+      if (message.role === 'assistant') for (const c of message.content) if (c.type === 'toolCall') open.set(c.id, { name: c.name, arguments: c.arguments })
       if (message.role === 'toolResult') open.delete(message.toolCallId)
     }
   }
@@ -157,7 +166,7 @@ export function turnTask(name: string, host: TurnHost) {
         // The daemon stopped during this turn (a crash, or a clean stop), and its `claude` with it: what it did is kept,
         // the rest isn't replayed. What it was waiting on (an approval, a tool) can't be answered by a new process: it
         // ends here, saying so. Known by the memo the turn leaves as it starts.
-        if (await runtime.memo<boolean>('ran', context)) return fail(runtime, INTERRUPTED, context, await openOf(runtime, context))
+        if (await runtime.memo<boolean>('ran', context)) return fail(runtime, host, INTERRUPTED, context, await openOf(runtime, context))
         // Its place among the turns running at once first: a restart while it waits for one just waits again.
         const thread = host.threadOf(runtime.conversationId) ?? String(runtime.conversationId)
         const release = await host.place(thread, runtime.signal)
@@ -165,8 +174,8 @@ export function turnTask(name: string, host: TurnHost) {
           await runtime.memo('ran', true, context)
           // Not found, or not looked for: the login shell couldn't be read (findClaude says why).
           const executable = await host.executable().catch((error: Error) => error)
-          if (executable instanceof Error) return fail(runtime, executable.message, context)
-          if (!executable) return fail(runtime, NOT_INSTALLED, context)
+          if (executable instanceof Error) return fail(runtime, host, executable.message, context)
+          if (!executable) return fail(runtime, host, NOT_INSTALLED, context)
           await runTurn(runtime, executable, host, context)
         } finally {
           release()
@@ -181,6 +190,7 @@ export function turnTask(name: string, host: TurnHost) {
         await appendClosed(tx, runtime, open, STOPPED)
         return { status: 'terminal', outcome: { status: 'aborted' } }
       }, context)
+      tellClosed(host, runtime, open, STOPPED)
     },
   })
 }
@@ -191,20 +201,28 @@ const STOPPED = 'Stopped'
 type Tx = Parameters<Parameters<Runtime['commit']>[0]>[0]
 
 /** A result for each of `open`'s calls, saying `why` it ended. */
-async function appendClosed(tx: Tx, runtime: Runtime, open: Map<string, string>, why: string) {
-  for (const [id, name] of open) {
+async function appendClosed(tx: Tx, runtime: Runtime, open: Map<string, Call>, why: string) {
+  for (const [id, { name }] of open) {
     await tx.appendEntry(ToolResultEntry, runtime.conversationId, {
       data: { diagnostics: [] }, model: [{ role: 'toolResult', toolCallId: id, toolName: name, content: [{ type: 'text', text: why }], isError: true, timestamp: runtime.now() }],
     })
   }
 }
 
+/** Tell extensions' `toolCalls` of `open`'s calls, closed as errors saying `why`. */
+function tellClosed(host: TurnHost, runtime: Runtime, open: Map<string, Call>, why: string) {
+  const thread = host.threadOf(runtime.conversationId)
+  if (!thread) return
+  for (const [id, { name, arguments: args }] of open) host.ended({ thread, call: { id, name, args: args as Json }, result: { isError: true, text: why } })
+}
+
 /** End the turn without an answer, saying why: the run fails with it (its open calls, if given, closed first). */
-async function fail(runtime: Runtime, message: string, context: Context, open?: Map<string, string>) {
+async function fail(runtime: Runtime, host: TurnHost, message: string, context: Context, open?: Map<string, Call>) {
   await runtime.commit(async (tx) => {
     if (open) await appendClosed(tx, runtime, open, message)
     return { status: 'terminal', outcome: { status: 'failed', error: { message } } }
   }, context)
+  if (open) tellClosed(host, runtime, open, message)
 }
 
 /** A promise with its resolve, to wait on something the loop sees. */
@@ -230,7 +248,7 @@ async function runTurn(runtime: Runtime, executable: string, host: TurnHost, con
     runtime.agent(context),
   ])
   const prompt = inputsOf(view.entries, live?.run?.first)
-  if (!prompt.length) return fail(runtime, 'Nothing to send', context)
+  if (!prompt.length) return fail(runtime, host, 'Nothing to send', context)
   const head = view.head?.id ?? null
   const resume = session?.id && session.head === head ? session.id : undefined
   const choices = host.options(thread)
@@ -299,8 +317,24 @@ async function runTurn(runtime: Runtime, executable: string, host: TurnHost, con
   }
 
   // ── Tool calls: their rows, and what they report ─────────────────────────────────────────────────────────────────
-  /** Tool calls by id: Claude Code's name for each, to name its result. */
+  /** Tool calls by id: Claude Code's name for each, to name its result, and what it was given. */
   const calls = new Map<string, string>()
+  const inputs = new Map<string, ToolCall['arguments']>()
+  /** A call Claude Code made, as it gave it. */
+  const made = (use: { id: string; name: string; input: unknown }) => {
+    const input = use.input && typeof use.input === 'object' ? use.input as ToolCall['arguments'] : {}
+    calls.set(use.id, use.name)
+    inputs.set(use.id, input)
+    return input
+  }
+  /** A call ended: told to extensions' `toolCalls`, named as the transcript has it. */
+  const tell = (block: { tool_use_id: string; content?: unknown; is_error?: boolean | null }) => {
+    const id = block.tool_use_id
+    const { name, arguments: args } = toolCall(calls.get(id) ?? '', inputs.get(id) ?? {})
+    const text = resultText(block)
+    host.ended({ thread, call: { id, name, args: args as Json }, result: { isError: Boolean(block.is_error), ...(text ? { text } : {}) } })
+    inputs.delete(id)
+  }
   /** Each call once its row is there (or it's a subagent's, which has none of its own): what asks about it waits for it. */
   const rows = new Map<string, ReturnType<typeof later>>()
   const row = (id: string) => rows.get(id) ?? rows.set(id, later()).get(id)!
@@ -351,6 +385,7 @@ async function runTurn(runtime: Runtime, executable: string, host: TurnHost, con
       return undefined
     })
     for (const call of started) row(call.id).resolve()
+    for (const { block } of results) tell(block)
   }
 
   /** A subagent's message, under the Agent call `parent`: its text and tool calls, then their results, as that call's steps. */
@@ -362,8 +397,7 @@ async function runTurn(runtime: Runtime, executable: string, host: TurnHost, con
         if (block.type === 'text' && typeof block.text === 'string' && block.text.trim()) work.steps.push({ type: 'text', text: block.text })
         if (block.type === 'tool_use') {
           const use = block as { id: string; name: string; input: unknown }
-          const input = use.input && typeof use.input === 'object' ? use.input as ToolCall['arguments'] : {}
-          const { name, arguments: args } = toolCall(use.name, input)
+          const { name, arguments: args } = toolCall(use.name, made(use))
           work.steps.push({ type: 'toolCall', id: use.id, name, arguments: args as Record<string, Json> })
           agentOf.set(use.id, top)
           // Its own call: what asks about it doesn't wait for a row of its own.
@@ -375,6 +409,7 @@ async function runTurn(runtime: Runtime, executable: string, host: TurnHost, con
         if (block.type !== 'tool_result') continue
         const text = resultText(block)
         work.results[block.tool_use_id] = { text: text.length > STEP_TEXT ? `${text.slice(0, STEP_TEXT)}…` : text, isError: Boolean(block.is_error) }
+        tell(block)
       }
     } else return
     keep(top)
@@ -495,8 +530,8 @@ async function runTurn(runtime: Runtime, executable: string, host: TurnHost, con
         pending ??= { id, blocks: [] }
         pending.blocks.push(...content)
         if (usage) pending.usage = usage
-        const uses = content.filter((block) => block.type === 'tool_use') as { id: string; name: string }[]
-        for (const use of uses) calls.set(use.id, use.name)
+        const uses = content.filter((block) => block.type === 'tool_use') as { id: string; name: string; input: unknown }[]
+        for (const use of uses) made(use)
         if (uses.length) await flush()
         break
       }
@@ -631,7 +666,7 @@ async function runTurn(runtime: Runtime, executable: string, host: TurnHost, con
     // A Claude Code that failed a turn isn't kept: what failed it (its sign-in, say) is read as it starts.
     claude.close()
     if (notSignedIn || signedOut(failure)) host.signedOut(thread)
-    return fail(runtime, failure, context, await openOf(runtime, context))
+    return fail(runtime, host, failure, context, await openOf(runtime, context))
   }
   const entryId = answer!
   await runtime.commit(async () => ({ status: 'terminal', outcome: { status: 'completed', result: { entryId } } }), context)

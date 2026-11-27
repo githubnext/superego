@@ -110,6 +110,7 @@ export default defineDaemonExtension({
 | `quiet(({ id, state }) => boolean)` | a thread whose runs someone else hears (thread-reports' child): its finishing or failing isn't unread or notified; needing the user still is. Worked out with its info; `invalidate()` when its inputs change |
 | `recap(({ thread, answer, calls }) => …)` | a line saying what a run did (`calls`: `{ name, arguments, failed }`, oldest first), carried by its `done` status and notification. First answer wins; default: the answer's first sentence. Quick, no side effects |
 | `toolCalls(({ thread, call, result }) => …)` | hear each tool call once it ends: [Watching tool calls](#watching-tool-calls) |
+| `reportToolCall({ thread, call, result })` | (API ^5.20) an agent kind's: tell `toolCalls` of a call its own agent made. See [A kind of agent](#a-kind-of-agent) |
 | `beforeSend(({ thread, text, attachments, content, by, exposure, from }) => …)` | rewrite what a message gives the agent before its turn. `content`: blocks so far (`{ type: 'text', text }`, `{ type: 'image', data, mimeType }`), text first; return new blocks, or nothing. `by`: the sending extension (absent for the user's); `exposure`: `outside` (an outside agent), `cli`, or what `threads.send` passed; `from`: the sending thread, or the parent for a child's prompt. Run in order, each given the last one's; a throw fails the send |
 
 | `mention(kind, ({ ref, kind, id, thread }) => …)` | (API ^5.16) say what `@<kind>:<id>` names in a message sent: [Mentions](#mentions) |
@@ -168,6 +169,10 @@ instead of a model. Claude Agent (`extensions/claude-agent`) is one.
   the machine's default, it starts new threads only while listed available; else they're refused with `unavailable`.
 - `profile: { name, make() }`: the profile a thread started on one of its models runs with, made if missing. The
   thread's model and thinking reach `agentParts` (`model`, `thinking`).
+- `superego.reportToolCall({ thread, call: { id, name, args }, result: { isError, text? } })` (API ^5.20): calls the
+  runner's agent makes itself, not through Superego's tool round, don't reach `toolCalls` on their own: report each as
+  it ends, named as its transcript has it (Superego's names where the tool is the same, its arguments as theirs:
+  `bash`'s `command`). Throws for a thread not of this extension's kinds.
 - `describe({ id, model?, thinking?, profile?, state? })` (API ^5.7): what a thread runs on, where its model shows:
   `{ model, provider?, thinking?, about?, context? }` ("Claude Opus", `anthropic`, `high`, "runs your Claude Code",
   `{ tokens, max }`), as `ThreadInfo.agent`, `model`, `provider`, `thinking`, `context`. Asked as the info is made:
@@ -303,7 +308,10 @@ export default defineDaemonExtension({
 ## Watching tool calls
 
 `superego.toolCalls(fn)` calls `fn({ thread, call: { id, name, args }, result: { isError, text? } })` after each tool
-call, errors too (`text`: what the model was told). It only watches: the run doesn't wait, and a throw is logged. This
+call, errors too (`text`: what the model was told). It only watches: the run doesn't wait, and a throw is logged. It
+hears a Claude Agent thread's calls too, Claude Code's own included, named as Superego's where they're the same tool
+(`bash` with its `command`, `read`, `edit` and `write` with their `path`; their other arguments Claude Code's: an
+`edit`'s are `old_string` and `new_string`); its other tools by Claude Code's names (`Grep`, `Skill`, `Agent`). This
 one marks threads that ran `sqlite3`, for the [sidebar mark in ui.md](ui.md#a-mark-in-the-sidebar):
 
 ```ts

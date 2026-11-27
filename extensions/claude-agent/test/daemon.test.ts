@@ -10,6 +10,9 @@ import { fileURLToPath } from 'node:url'
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import type { LiveState } from '@earendil-works/pi-durable'
 import type { ModelCatalog, ThreadInfo } from '@superego/protocol'
+import { defineDaemonExtension, type ToolCallRecord } from '@superego/daemon'
+import { githubExtension } from '@superego/github/daemon'
+import type { GithubFacts } from '@superego/github/shared'
 import { testDaemon, type TestDaemon } from '@superego/sdk/testing'
 import agentUi from '@superego/agent-ui/daemon'
 import threadTools from '@superego/thread-tools/daemon'
@@ -71,8 +74,10 @@ describe.skipIf(!claude)("a Claude Agent thread, on the user's claude against a 
    * A daemon with Claude Agent on the wrapper. `cli`: as the app's (its id `superego`, with its `superego` skill), and
    * this checkout's `superego` command line on the PATH Claude Code's Bash gets, pointed at this daemon.
    */
-  async function start({ signedIn = true, profile = profileOf(), cli = false, home, inject = false, idleMs }: {
+  async function start({ signedIn = true, profile = profileOf(), cli = false, home, inject = false, idleMs, extensions = [] }: {
     signedIn?: boolean | 'file'; profile?: Record<string, string>; cli?: boolean; home?: string; inject?: boolean; idleMs?: number
+    /** Other extensions the daemon has. */
+    extensions?: unknown[]
   } = {}) {
     const executable = wrapper(home ? 'claude-at-home' : inject ? 'claude-injecting' : signedIn === 'file' ? 'claude-signing-in' : signedIn ? 'claude' : 'claude-signed-out', signedIn, home, inject)
     const bin = join(dir, 'bin')
@@ -88,7 +93,7 @@ describe.skipIf(!claude)("a Claude Agent thread, on the user's claude against a 
     })
     const extension = claudeAgent({ executable: async () => executable, env, ...(cli ? { skills: [SKILL_DIR] } : {}), ...(idleMs !== undefined ? { idleMs } : {}) })
     made = daemon = await testDaemon({
-      extensions: [extension, agentUi, threadTools, threadReports({ quietMs: 50, maxMs: 200 })], profile,
+      extensions: [extension, agentUi, threadTools, threadReports({ quietMs: 50, maxMs: 200 }), ...extensions], profile,
       ...(cli ? { appId: 'superego' } : {}),
     } as Parameters<typeof testDaemon>[0])
     return daemon
@@ -155,6 +160,28 @@ describe.skipIf(!claude)("a Claude Agent thread, on the user's claude against a 
     const [call] = await d.toolCalls(thread)
     expect(call).toMatchObject({ name: 'read', args: { path: join(dir, 'notes.txt') }, result: { isError: false } })
     expect(call!.result!.text).toContain('The answer is 42.')
+  }, 60_000)
+
+  it("tells extensions' toolCalls of Claude Code's own calls, as Superego names them: GitHub attaches the PR its Bash opened", async () => {
+    const URL = 'https://github.com/acme/app/pull/7'
+    const heard: ToolCallRecord[] = []
+    const watcher = defineDaemonExtension({ name: 'watcher', setup(superego) { superego.toolCalls((record) => { heard.push(record) }) } })
+    // No gh here: the pull request is attached as created all the same, looked at once gh is there.
+    const github = githubExtension({ env: () => ({ PATH: join(dir, 'no-gh') }) })
+    const d = await start({ profile: profileOf({ permissionMode: 'bypassPermissions' }), extensions: [watcher, github] })
+    const thread = await d.thread(undefined, { cwd: dir })
+    // The command says `gh pr create`, and prints what it would: the URL (a real gh would need a repository and a network).
+    const command = `echo 'Creating pull request for feature into main' && echo ${URL} # gh pr create --fill`
+    expect((await d.send(thread, `Read ${join(dir, 'notes.txt')} then Run ${command}`)).status.state).toBe('done')
+    await d.until(async () => heard.length === 2, 'both calls heard', 10_000)
+    expect(heard).toEqual([
+      { thread: thread.id, call: { id: expect.any(String), name: 'read', args: { path: join(dir, 'notes.txt') } }, result: { isError: false, text: expect.stringContaining('The answer is 42.') } },
+      { thread: thread.id, call: { id: expect.any(String), name: 'bash', args: expect.objectContaining({ command }) }, result: { isError: false, text: expect.stringContaining(URL) } },
+    ])
+    // Each call's id is its row's in the transcript.
+    expect((await d.toolCalls(thread)).map((c) => c.id)).toEqual(heard.map((r) => r.call.id))
+    await d.until(async () => ((await d.facts(thread)).github as GithubFacts | undefined)?.prs[0]?.how === 'created', 'the pull request attached, as created', 10_000)
+    expect(((await d.facts(thread)).github as GithubFacts).prs[0]).toMatchObject({ key: 'github.com/acme/app#7', url: URL })
   }, 60_000)
 
   it('runs `claude` without the daemon\'s Anthropic credentials', async () => {

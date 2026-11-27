@@ -255,9 +255,11 @@ it("says what a run did in its done status, as clients first hear it's done: an 
 
 it("tells an extension of each tool call a thread's agent makes, once it ends, without waiting on it or letting it fail the run", async () => {
   const heard: Json[] = []
+  let report: DaemonApi['reportToolCall'] | undefined
   const watcher = defineDaemonExtension({
     name: 'watcher',
     setup(superego) {
+      report = superego.reportToolCall
       superego.agent(defineExtension({ name: 'watcher', tools: [
         defineTool({ name: 'query', description: 'Query.', parameters: obj({ sql: str() }), async execute({ sql }) { return { output: [{ type: 'text', text: `rows for ${sql}` }] } } }),
         defineTool({ name: 'broken', description: 'Fails.', parameters: obj({}), async execute() { throw new Error('no database') } }),
@@ -288,6 +290,8 @@ it("tells an extension of each tool call a thread's agent makes, once it ends, w
       { thread: thread.id, call: { id: 'c1', name: 'query', args: { sql: 'select 1' } }, result: { isError: false, text: 'rows for select 1' } },
       { thread: thread.id, call: { id: 'c2', name: 'broken', args: {} }, result: expect.objectContaining({ isError: true, text: expect.stringContaining('no database') }) },
     ])
+    // Only an agent kind reports calls of its own, for its own threads: this one's agent is Superego's.
+    expect(() => report!({ thread: thread.id, call: { id: 'c3', name: 'bash', args: { command: 'ls' } }, result: { isError: false } })).toThrow(/isn't run by an agent kind of its own/)
     socket.destroy(); server.close()
   } finally {
     delete process.env.SUPEREGO_REPLAY_SPEED

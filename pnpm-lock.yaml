@@ -403,6 +403,9 @@ importers:
         specifier: workspace:*
         version: link:../../packages/ui
     devDependencies:
+      '@superego/github':
+        specifier: workspace:*
+        version: link:../github
       '@superego/sdk':
         specifier: workspace:*
         version: link:../../packages/sdk
