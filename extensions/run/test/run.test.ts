@@ -124,4 +124,23 @@ describe.skipIf(process.platform === 'win32')('run', () => {
     expect(notes.processes).toBe('stopped its process')
     expect(isRunning(back.pid!)).toBe(false)
   })
+
+  it('wakes the thread working in the folder when the dev command fails', async () => {
+    const folder = await folderWith({ command: 'echo up; sleep 0.3; echo "port in use"; exit 1' })
+    daemon = await testDaemon({ extensions: [processes, run], model: [say('The dev server died: port in use.')] })
+    const earlier = await daemon.thread(undefined, { cwd: folder })
+    const working = await daemon.thread(undefined, { cwd: folder })
+    await daemon.dispatch('run.restart', { thread: earlier.id })
+    await daemon.until(async () => (await daemon!.info(working)).status.msg === 'The dev server died: port in use.', 'the report answered', 10_000)
+    expect(await daemon.transcript(working)).toContain('port in use')
+    expect(await daemon.transcript(earlier)).not.toContain('From process')
+  })
+
+  it('says a broken run.json in the thread working there, once', async () => {
+    const folder = await folderWith('{"command": ')
+    daemon = await testDaemon({ extensions: [processes, run] })
+    const thread = await daemon.thread(undefined, { cwd: folder })
+    await daemon.until(async () => (await daemon!.transcript(thread)).includes("The dev command’s config is broken"), 'said')
+    expect(await daemon.transcript(thread)).toMatch(/run\.json isn't JSON/)
+  })
 })

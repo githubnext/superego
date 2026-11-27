@@ -12,7 +12,7 @@ import { matcher, READ_AT_MOST, tail } from './log.ts'
 import { reporter, BATCHING, type Batching } from './reports.ts'
 import { Runner, type ProcessRecord, type ProcessSpec } from './runner.ts'
 import {
-  about, ended, endedHow, LIST, linkTo, live, OUTPUT, PANE, READ, REPORT, span, titleOf,
+  about, ended, endedHow, LIST, linkTo, live, OUTPUT, PANE, READ, REPORT, span, titleOf, TROUBLE,
   type OutputMark, type ReportData, type OutputSlice, type Owner, type ProcessFacts, type ProcessInfo,
 } from './shared.ts'
 
@@ -23,6 +23,8 @@ const REPORT_LINES = 20
 const OUTPUT_EVERY = 100
 /** The longest a tool waits, in seconds. */
 const MOST_WAIT = 600
+/** Reports wake a thread's agent at most this often; past it, they're told without waking it (a loop guard). */
+export const WAKES = { most: 5, within: 3600_000 }
 
 /** What a process shows: its record less what stays on the machine. */
 export function infoOf(record: ProcessRecord): ProcessInfo {
@@ -63,7 +65,7 @@ export function processesExtension({ batching = BATCHING, shell }: { batching?: 
     setup(superego) {
       const lists = superego.scopedValue<ProcessInfo[]>(LIST, [])
       const marks = superego.scopedValue<OutputMark>(OUTPUT, { end: 0, start: 0 })
-      const trouble = superego.value<string | null>('processes.trouble', null)
+      const trouble = superego.value<string | null>(TROUBLE, null)
       const fail = (message: string, error: unknown) => {
         console.error(`processes: ${message}:`, error)
         if (!superego.signal.aborted) trouble.set(`${message}: ${error instanceof Error ? error.message : String(error)}`)
@@ -143,15 +145,36 @@ export function processesExtension({ batching = BATCHING, shell }: { batching?: 
           if (!markTimer && !superego.signal.aborted) markTimer = setTimeout(flushMarks, OUTPUT_EVERY)
         },
         ended: (record) => {
-          if (!('thread' in record.owner)) return
           const wake = record.notify === 'exit' || (record.notify === 'failure' && record.state === 'failed')
-          if (wake && record.state !== 'lost') reports.report(record.owner.thread, record.id)
+          if (!wake || record.state === 'lost') return
+          const owner = record.owner
+          if ('thread' in owner) reports.report(owner.thread, record.id)
+          // A folder's (Run's): the thread working there is told.
+          else if ('folder' in owner) {
+            void workingIn(owner.folder).then((thread) => { if (thread) reports.report(thread, record.id) })
+              .catch((error) => fail(`couldn't find whom to tell ${record.id} ended`, error))
+          }
         },
         error: fail,
       }, shell ? { shell } : {})
 
       // ── Reports ─────────────────────────────────────────────────────────────────────────────────────────────────
       const running = new Set<string>()
+      /** The thread working in `folder`: of those there (not archived, not continued elsewhere), the last active. */
+      async function workingIn(folder: string): Promise<string | undefined> {
+        const there = (await superego.threads.list()).filter((t) => t.cwd === folder && !t.archived && !t.continuedIn)
+        return there.sort((a, b) => b.activeAt - a.activeAt)[0]?.id
+      }
+      /** When reports last woke each thread's agent: at most `WAKES.most` in `WAKES.within`. */
+      const woke = new Map<string, number[]>()
+      const mayWake = (thread: string) => {
+        const now = Date.now()
+        const recent = (woke.get(thread) ?? []).filter((at) => at > now - WAKES.within)
+        const may = recent.length < WAKES.most
+        if (may) recent.push(now)
+        woke.set(thread, recent)
+        return may
+      }
       /** A process's end as its thread is told it: a card for the user (`Report`), its Restart; the agent, how and its last lines. */
       async function report(id: string): Promise<ThreadNotice | undefined> {
         const record = runner.records.get(id)
@@ -168,22 +191,38 @@ export function processesExtension({ batching = BATCHING, shell }: { batching?: 
         }
       }
       const reports = reporter({
-        info: (id) => superego.threads.get(id).catch(() => undefined),
+        info: (id) => superego.threads.get(id).catch((error: { code?: string }) => {
+          // Deleted meanwhile: nobody to tell.
+          if (error.code === 'not_found') return undefined
+          throw error
+        }),
         busy: (thread) => running.has(thread.id) || thread.status.state === 'working',
         wanted: (id) => { const p = runner.records.get(id); return Boolean(p && !p.learnt && !live(p.state)) },
-        // A notice each, the last waking the agent: its run takes them all.
+        // A notice each, the last waking the agent (its run takes them all), unless it was woken too often lately.
         async send(thread, ids) {
           const notices = (await Promise.all(ids.map(report))).filter((notice): notice is ThreadNotice => Boolean(notice))
-          for (const [i, notice] of notices.entries()) await superego.threads.notice(thread, { ...notice, ...(i === notices.length - 1 ? { wake: true } : {}) })
+          const wake = notices.length > 0 && mayWake(thread)
+          for (const [i, notice] of notices.entries()) {
+            const last = i === notices.length - 1
+            const held = last && !wake ? ` (Not waking the agent: processes woke it ${WAKES.most} times in the last hour.)` : ''
+            await superego.threads.notice(thread, { ...notice, text: `${notice.text}${held}`, ...(last && wake ? { wake: true } : {}) })
+          }
           for (const id of ids) runner.learnt(id)
         },
         error: fail,
       }, batching)
 
-      // The records kept, read before anything acts on them (an action, a read, a tool): a definition put meanwhile would
-      // make a second of the same name.
+      // The records kept, read and taken back before anything acts on them (an action, a read, a tool): a definition
+      // put meanwhile would make a second of the same name, and a stop wouldn't find what to stop yet.
       const loaded = runner.load()
-      const fromLoaded = loaded.catch(() => undefined)
+      const adopted = loaded.then(() => runner.adopt())
+      // Unread (and said so, by `ready` below): what acts on them is refused, rather than losing track of what runs.
+      const fromLoaded = loaded.then(
+        // Taken back, or not (said by `ready`): either way, acting on them can go ahead.
+        () => adopted.then(() => undefined, () => undefined),
+        (error: Error) => { throw new RpcError('failed', `Processes couldn't read what it runs (${error.message}): see processes.json in ${superego.dir}.`) },
+      )
+      fromLoaded.catch(() => { /* each action waiting on it fails with it; the failure itself is said by `ready` */ })
 
       // ── Starting, finding, stopping ─────────────────────────────────────────────────────────────────────────────
       type SpecParams = { owner?: Owner; thread?: string; folder?: string; name?: string; command: string; cwd?: string; env?: Record<string, string>; ready?: string; grace?: number; notify?: ProcessInfo['notify']; restart?: ProcessInfo['restart']; keep?: boolean }
@@ -191,7 +230,7 @@ export function processesExtension({ batching = BATCHING, shell }: { batching?: 
         if (p.owner) return p.owner
         if (p.folder) return { folder: p.folder }
         if (p.thread) return { thread: p.thread }
-        throw new RpcError('invalid_params', 'Say whose it is: `thread`, `folder` or `owner`.')
+        throw new RpcError('invalid', 'Say whose it is: `thread`, `folder` or `owner`.')
       }
       async function specOf(p: SpecParams, by: ProcessInfo['by']): Promise<ProcessSpec> {
         const owner = ownerOf(p)
@@ -199,7 +238,7 @@ export function processesExtension({ batching = BATCHING, shell }: { batching?: 
         if ('folder' in owner) base = owner.folder
         else if ('thread' in owner) {
           const thread = await superego.threads.get(owner.thread)
-          if (thread.archived) throw new RpcError('invalid_params', `Thread ${owner.thread} is archived.`)
+          if (thread.archived) throw new RpcError('archived', `Thread ${owner.thread} is archived.`)
           base = thread.cwd
         } else base = superego.dataDir
         const cwd = p.cwd ? (isAbsolute(p.cwd) ? p.cwd : resolve(base, p.cwd)) : base
@@ -211,7 +250,7 @@ export function processesExtension({ batching = BATCHING, shell }: { batching?: 
         }
       }
       function refuseOff() {
-        if (superego.settings.get('extensions.processes') === false) throw new RpcError('unavailable', 'Processes is switched off on this machine (Settings → Extensions).')
+        if (superego.settings.get('extensions.processes') === false) throw new RpcError('refused', 'Processes is switched off on this machine (Settings → Extensions).')
       }
       /** Start one; a live one of its name: an error, kept as it is, or restarted, as `ifRunning` says. */
       async function start(spec: ProcessSpec, ifRunning: 'error' | 'keep' | 'restart' = 'error'): Promise<ProcessRecord> {
@@ -219,7 +258,7 @@ export function processesExtension({ batching = BATCHING, shell }: { batching?: 
         const known = spec.name ? runner.find(spec.owner, spec.name) : undefined
         if (known && live(known.state)) {
           if (ifRunning === 'keep') return known
-          if (ifRunning === 'error') throw new RpcError('conflict', `${known.name} (${known.id}) is ${known.state} already: restart it (process_restart), or give another name.`)
+          if (ifRunning === 'error') throw new RpcError('busy', `${known.name} (${known.id}) is ${known.state} already: restart it (process_restart), or give another name.`)
           runner.define(spec)
           return runner.restart(known.id)
         }
@@ -231,7 +270,7 @@ export function processesExtension({ batching = BATCHING, shell }: { batching?: 
           if (!record) throw new RpcError('not_found', `No process ${id}.`)
           return record
         }
-        if (!name) throw new RpcError('invalid_params', 'Say which: its `id`, or its `name` and owner.')
+        if (!name) throw new RpcError('invalid', 'Say which: its `id`, or its `name` and owner.')
         const record = runner.find(ownerOf({ ...(owner ? { owner } : {}), ...(thread ? { thread } : {}), ...(folder ? { folder } : {}) }), name)
         if (!record) throw new RpcError('not_found', `No process named ${name} there.`)
         return record
@@ -320,6 +359,11 @@ export function processesExtension({ batching = BATCHING, shell }: { batching?: 
         run: async (params) => { await fromLoaded; const record = find(params); await runner.remove(record.id).catch(rpc); return null },
       }))
       superego.action(defineAction({
+        id: 'processes.dismiss', title: 'Dismiss what went wrong', description: 'Clear the problem Processes shows.',
+        expose: ['ui'], params: obj({}),
+        run: () => { trouble.set(null); return null },
+      }))
+      superego.action(defineAction({
         id: 'processes.seen', title: 'Mark a failure seen', description: 'Its thread’s row stops showing it failed.',
         expose: ['ui'], params: obj({ id: str() }),
         run: ({ id }) => { runner.seen(id); return null },
@@ -328,7 +372,7 @@ export function processesExtension({ batching = BATCHING, shell }: { batching?: 
         id: 'processes.show', title: 'Show processes', description: 'Open the thread’s processes beside it.',
         expose: ['ui', 'cli'], thread: true, params: obj({ thread: opt(str()), id: opt(str()) }),
         run: ({ thread, id }) => {
-          if (!thread) throw new RpcError('invalid_params', 'Say which thread (--thread).')
+          if (!thread) throw new RpcError('invalid', 'Say which thread (--thread).')
           return superego.dispatch('pane.open', { thread, kind: PANE, ...(id ? { params: { id } } : {}) })
         },
       }))
@@ -341,7 +385,7 @@ export function processesExtension({ batching = BATCHING, shell }: { batching?: 
           return listOf(thread).map(infoOf)
         }
         if (folder) return [...runner.records.values()].filter((p) => 'folder' in p.owner && p.owner.folder === folder).map(infoOf)
-        throw new RpcError('invalid_params', 'Say whose: `thread`, `folder` or `all`.')
+        throw new RpcError('invalid', 'Say whose: `thread`, `folder` or `all`.')
       }, { params: obj({ thread: opt(str()), folder: opt(str()), all: opt(bool()) }) })
       superego.method(READ, async ({ id, since, lines, plain }) => (await fromLoaded, read(find({ id }), {
         ...(since !== undefined ? { since } : {}), ...(lines !== undefined ? { lines } : {}), ...(plain !== undefined ? { plain } : {}),
@@ -358,7 +402,8 @@ export function processesExtension({ batching = BATCHING, shell }: { batching?: 
           const record = await start(await specOf({ ...args, thread }, { thread }))
           return record
         },
-        find(thread, ref) {
+        async find(thread, ref) {
+          await fromLoaded
           const byId = runner.records.get(ref)
           if (byId) return byId
           // By its name, else by its command as it was given.
@@ -368,7 +413,7 @@ export function processesExtension({ batching = BATCHING, shell }: { batching?: 
           if (!found) throw new Error(`No process ${ref} here: process_list lists them.`)
           return found
         },
-        list: (thread, all) => all ? [...runner.records.values()] : listOf(thread),
+        list: async (thread, all) => (await fromLoaded, all ? [...runner.records.values()] : listOf(thread)),
         read: (record, options) => read(record, options),
         learnt: (record) => runner.learnt(record.id),
         wait,
@@ -405,8 +450,7 @@ export function processesExtension({ batching = BATCHING, shell }: { batching?: 
 
       // ── Set up: the records, then (not awaited) what an earlier daemon left running, the threads, a week's pruning ─
       const ready = (async () => {
-        await loaded
-        await runner.adopt()
+        await adopted
         await runner.prune(KEEP_ENDED)
         await relist()
       })().catch((error) => fail("couldn't take back its processes", error))
@@ -433,8 +477,8 @@ export default processesExtension()
 type ToolHost = {
   threadOf(conversationId: unknown): string
   start(thread: string, args: { command: string; name?: string; cwd?: string; ready?: string; notify?: ProcessInfo['notify']; env?: Record<string, string> }): Promise<ProcessRecord>
-  find(thread: string, ref: string): ProcessRecord
-  list(thread: string, all: boolean): ProcessRecord[]
+  find(thread: string, ref: string): Promise<ProcessRecord>
+  list(thread: string, all: boolean): Promise<ProcessRecord[]>
   read(record: ProcessRecord, options: { lines?: number; all?: boolean }): Promise<OutputSlice>
   learnt(record: ProcessRecord): void
   wait(record: ProcessRecord, what: string, timeout: number, signal?: AbortSignal): Promise<WaitOutcome>
@@ -490,7 +534,7 @@ function agentPart(superego: DaemonApi, host: ToolHost) {
         description: "This thread's processes and its folder's (the dev command's): id, name, state, command, how long up or how it ended. `all`: every process on this machine.",
         parameters: obj({ all: opt(bool()) }),
         async execute({ all }, api) {
-          const list = host.list(host.threadOf(api.conversationId), Boolean(all))
+          const list = await host.list(host.threadOf(api.conversationId), Boolean(all))
           return text(list.length ? list.map((p) => describe(infoOf(p))).join('\n') : 'No processes.')
         },
       }),
@@ -504,7 +548,7 @@ function agentPart(superego: DaemonApi, host: ToolHost) {
           all: opt(bool()),
         }),
         async execute({ id, lines, grep, all }, api) {
-          const record = host.find(host.threadOf(api.conversationId), id)
+          const record = await host.find(host.threadOf(api.conversationId), id)
           const slice = await host.read(record, { all: Boolean(all) })
           if (ended(record.state)) host.learnt(record)
           const test = grep ? matcher(grep) : undefined
@@ -524,7 +568,7 @@ function agentPart(superego: DaemonApi, host: ToolHost) {
         // Waited again after a restart: what it waits for may still come.
         replay: 'safe',
         async execute(args, api, context) {
-          const record = host.find(host.threadOf(api.conversationId), args.id)
+          const record = await host.find(host.threadOf(api.conversationId), args.id)
           const { outcome, process, tail: lines } = await host.wait(record, args.for, args.timeout, context.abortSignal)
           const said = outcome === 'matched' ? `matched ${JSON.stringify(args.for)}` : outcome === 'ready' ? 'ready'
             : outcome === 'timeout' ? `timed out after ${args.timeout}s (${process.state})` : endedHow(process)
@@ -537,7 +581,7 @@ function agentPart(superego: DaemonApi, host: ToolHost) {
         parameters: obj({ id: str({ description: 'its id, or its name (or its command)' }) }),
         executionMode: 'sequential',
         async execute({ id }, api) {
-          const record = await host.stop(host.find(host.threadOf(api.conversationId), id))
+          const record = await host.stop(await host.find(host.threadOf(api.conversationId), id))
           return text(describe(infoOf(record)))
         },
       }),
@@ -547,7 +591,7 @@ function agentPart(superego: DaemonApi, host: ToolHost) {
         parameters: obj({ id: str({ description: 'its id, or its name (or its command)' }) }),
         executionMode: 'sequential',
         async execute({ id }, api) {
-          const record = await host.restart(host.find(host.threadOf(api.conversationId), id))
+          const record = await host.restart(await host.find(host.threadOf(api.conversationId), id))
           return text(describe(infoOf(record)))
         },
       }),

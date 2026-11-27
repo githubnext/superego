@@ -59,10 +59,11 @@ export default defineDaemonExtension({
   process group, SIGTERM then SIGKILL after `grace`, and `exited` resolves once none of it is left. Stopping a shell
   alone leaves what it started running.
 - (API ^5.18) What should outlive the daemon (it restarts on every update): `spawnGroup(…, { outlive: true })`, its
-  output to a file rather than a pipe, its leader's pid and `processTable.info(pid).start` kept; after a restart,
-  check the pid is still that process and take it back with `adoptGroup(pid, { grace })` (`exited`, `stop()`). Leave
-  it running as `superego.signal.reason.why` says `'stopping'`. Most extensions want the bundled Processes instead
-  (`superego.dispatch('processes.start', …)`): it does all of this, and the user sees and stops them.
+  output to a file rather than a pipe, its leader's pid, `(await processTable.lookup(pid)).start` and
+  `await processTable.boot()` kept; after a restart, check the machine hasn't booted since and the pid is still that
+  process, and take it back with `adoptGroup(pid, { grace, start })` (`exited`, `stop()`). At teardown, `release()`
+  it: it runs on for the next daemon. Most extensions want the bundled Processes instead
+  ([Processes](#processes)): it does all of this, and the user sees and stops them.
 - After teardown, registering throws, and a live value's `set` and `update` do nothing.
 - An edit to any local file an extension imports reloads it with the new code; packages load once.
 
@@ -303,6 +304,32 @@ export default defineDaemonExtension({
     }))
   },
 })
+```
+
+## Processes
+
+(API ^5.18) The bundled Processes extension runs commands that outlive the daemon, and shows them in the Processes
+pane; call it with `superego.dispatch` (actions) and `superego.call` (methods). A process belongs to a thread
+(`{ thread }`, stopped as it's archived), a folder (`{ folder }`, shared by the threads there, stopped with the last
+of them; Run's dev command is one) or the machine (`{ machine: true }`). Each answers a `ProcessInfo`
+(`@superego/processes/shared`): `id`, `name`, `owner`, `command`, `cwd`, `state` (`idle`, `starting`, `running`,
+`stopping`, `exited`, `failed`, `lost`), `pid`, `run` (how many times it ran), `exitCode`, `error`, …
+
+| | |
+|---|---|
+| `processes.start` | start one: `command`, and whose it is (`thread`, `folder` or `owner`); `name` (unique among its owner's), `cwd` (relative to the thread's folder, or the folder), `env`, `ready` (text or `/regex/` in its output that says it's up: `starting` till then), `grace` (ms between SIGTERM and SIGKILL), `notify` (`exit`, `failure`, `never`: when its owner thread is woken by its end; a folder's wakes the thread last active there), `restart: 'on-failure'`, `keep` (started again after the machine restarts, if it was running). One of that name running: `ifRunning` `'error'` (`busy`), `'keep'` or `'restart'` |
+| `processes.define` | the same, without starting it: an idle one to start later, or a known one's next run changed |
+| `processes.restart`, `processes.stop`, `processes.remove` | by `id`, or `name` and its owner; `remove` forgets one that ended, and its output |
+| `processes.list` | `{ thread }` (its own and its folder's), `{ folder }` or `{ all: true }`: `ProcessInfo[]` |
+| `processes.read` | `{ id, since?, lines?, plain? }`: its output (ANSI colours kept unless `plain`) from a byte position, or its last `lines`: `{ text, from, end, start, first }` |
+| `processes.wait` | `{ id, for, timeout }`: `for` is `'ready'`, `'exit'`, or text or `/regex/` in this run's output; `timeout` in seconds (600 at most): `{ outcome: 'matched' \| 'ready' \| 'exited' \| 'timeout', process, tail }` |
+
+<!-- check: daemon -->
+```ts
+const dev = await superego.dispatch('processes.start', {
+  folder: '/src/app', name: 'preview', command: 'npm run preview', ready: 'Local:', notify: 'failure', ifRunning: 'keep',
+}) as { id: string }
+await superego.call('processes.wait', { id: dev.id, for: 'ready', timeout: 60 })
 ```
 
 ## Watching tool calls

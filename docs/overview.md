@@ -65,7 +65,8 @@ thread there.
 `{ "command": ["npm", "run", "dev"], "ready": "ready in", "grace": 5, "env": { "PORT": "3000" } }` (`command`, an argv
 or a shell line, run in your login shell where the file is; `ready`, text in its output that says it's up; `grace`,
 seconds between SIGTERM and SIGKILL). The setting `run.command` is the default where there's none. `⌃R` starts or
-restarts it, and it starts again after the computer restarts if it was running.
+restarts it; it starts again after the computer restarts if it was running, and if it fails, the thread last
+active in the folder is woken. A broken `run.json` is said in that thread.
 
 **Layout.** Where views sit (the rail, beside the thread, the pane menu, the header) is
 `~/.superego/layout.json`: Edit layout… in `⌘K` opens it, and it applies as you save. Or right-click a view to move it.

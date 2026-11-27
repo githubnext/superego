@@ -89,7 +89,8 @@ import type { ExtensionAbout } from './app.ts'
  * (`ThreadMenuItem`s: a menu, or rows of a phone's sheet), and `ThreadBadge`'s `spelled` (how a thread's card spells a
  * mark out). Messages an extension sent, and its notices, are drawn under its title.
  * 5.18: processes that outlive the daemon: `spawnGroup`'s `outlive`, `adoptGroup(pid)` to take one back after a
- * restart, and `processTable` (a pid's parent and start time); a daemon half's `signal.reason` at teardown (a
+ * restart (and `release()` it at teardown), and `processTable` (a pid's parent and start time, `lookup` without
+ * blocking, the machine's `boot`); a daemon half's `signal.reason` at teardown (a
  * `Teardown`: `stopping`, `reload` or `failed`); a notice's `wake`, starting the agent's run on it.
  * 5.19: composer commands: the UI half's `composer.command({ name, detail, takes?, run })` adds `/<name>` to the
  * composer, run with what follows it instead of being sent (`{ send }` hands it to the agent after all).

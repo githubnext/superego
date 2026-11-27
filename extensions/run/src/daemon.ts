@@ -1,10 +1,11 @@
 // run, daemon half: each folder's dev command, from its `.superego/run.json` (or the `run.command` setting), defined as
 // a process of Processes' that the folder owns (named `run`, `keep`: started again after a restart of the machine if
-// it was running, `notify: 'failure'`: its death wakes the thread working there). Processes runs, shows, follows and
-// stops it (archiving a folder's last thread stops it); Run keeps the definition in step with the file (looked at as a
-// thread there starts or runs a turn, and as the file changes), ⌃R (`run.restart`), `run.stop` and `run.logs`, and tells
-// the agent which process is the dev command.
+// it was running, `notify: 'failure'`: its death wakes the thread working there, the last active in the folder).
+// Processes runs, shows, follows and stops it (archiving a folder's last thread stops it); Run keeps the definition in
+// step with the file (looked at as a thread there starts or runs a turn, and as the file changes; a broken one said in
+// that thread), ⌃R (`run.restart`), `run.stop` and `run.logs`, and tells the agent which process is the dev command.
 import { watch, type FSWatcher } from 'node:fs'
+import { basename, dirname } from 'node:path'
 import { defineExtension, section } from '@earendil-works/pi-durable'
 import { obj, opt, str } from '@earendil-works/pi-schema'
 import { defineAction, defineDaemonExtension } from '@superego/daemon'
@@ -67,9 +68,28 @@ export default defineDaemonExtension({
       }
       return config
     }
-    const resync = (folder: string) => void sync(folder).catch((error: Error) => console.error(`run: ${folder}: ${error.message}`))
+    /** What each folder's config was last found to be wrong with, as said in a thread there: said once, until it's fixed. */
+    const broken = new Map<string, string>()
+    /** Every folder looked at: a change of the default command may give any of them a dev command. */
+    const looked = new Set<string>()
+    /** Put it in step; a broken config said in the thread working there (`thread`, else the last active in the folder). */
+    const resync = (folder: string, thread?: string) => void (looked.add(folder), sync(folder)).then(
+      () => { broken.delete(folder) },
+      async (error: Error) => {
+        console.error(`run: ${folder}: ${error.message}`)
+        if (broken.get(folder) === error.message) return
+        broken.set(folder, error.message)
+        const to = thread ?? (await superego.threads.list()).filter((t) => t.cwd === folder && !t.archived).sort((a, b) => b.activeAt - a.activeAt)[0]?.id
+        if (!to) return
+        const kept = defined.has(folder) ? ' Until it’s fixed, ⌃R runs the command it had before.' : ''
+        await superego.threads.notice(to, { text: `The dev command’s config is broken: ${error.message}.${kept}` })
+      },
+    ).catch((error: Error) => console.error(`run: couldn't say ${folder}'s config is broken: ${error.message}`))
 
-    /** Watch the file the config came from: an edit puts the definition in step. */
+    /**
+     * Watch the folder the config file is in, for that file: an edit puts the definition in step. Its folder, not the
+     * file: an editor's save writes a new file in its place, which a watch of the old one doesn't follow.
+     */
     function follow(folder: string, config: FoundConfig | undefined) {
       const path = config && !config.path.startsWith('settings:') ? config.path : undefined
       const now = watching.get(folder)
@@ -77,15 +97,27 @@ export default defineDaemonExtension({
       now?.watcher.close()
       watching.delete(folder)
       if (!path || superego.signal.aborted) return
+      const name = basename(path)
       try {
-        const watcher = watch(path, { signal: superego.signal }, () => resync(folder))
-        watcher.on('error', () => { watcher.close(); watching.delete(folder) })
+        const watcher = watch(dirname(path), { signal: superego.signal }, (_event, file) => { if (!file || file === name) resync(folder) })
+        watcher.on('error', (error) => {
+          console.error(`run: stopped watching ${path}: ${error.message}`)
+          watcher.close()
+          watching.delete(folder)
+        })
         watching.set(folder, { path, watcher })
       } catch (error) {
         console.error(`run: can't watch ${path}: ${(error as Error).message}`)
       }
     }
-    superego.settings.onChange(() => { for (const folder of defined.keys()) resync(folder) })
+    // The default command changed: every folder's that has none of its own may have changed with it.
+    let fallback = superego.settings.get<string>('run.command')
+    superego.settings.onChange(() => {
+      const now = superego.settings.get<string>('run.command')
+      if (now === fallback) return
+      fallback = now
+      for (const folder of looked) resync(folder)
+    })
 
     // ── Actions: ⌃R, ⌘K, `superego do` ──────────────────────────────────────────────────────────────────────────────
     const target = obj({
@@ -94,12 +126,12 @@ export default defineDaemonExtension({
     })
     async function folderOf({ thread, folder }: { thread?: string; folder?: string }) {
       if (folder) return folder
-      if (!thread) throw new RpcError('invalid_params', 'Say which thread (--thread) or folder (--folder).')
+      if (!thread) throw new RpcError('invalid', 'Say which thread (--thread) or folder (--folder).')
       return (await superego.threads.get(thread)).cwd
     }
     /** The folder's definition, put now (its config read again): refused, saying how to add one, when there's none. */
     async function ensure(folder: string) {
-      const config = await sync(folder).catch((error: Error) => { throw new RpcError('invalid_params', error.message) })
+      const config = await sync(folder).catch((error: Error) => { throw new RpcError('invalid', error.message) })
       if (!config) throw new RpcError('not_found', howToAdd(folder), { hint: 'Add .superego/run.json, then restart.' })
     }
 
@@ -121,7 +153,7 @@ export default defineDaemonExtension({
       id: 'run.logs', title: 'Show the dev command’s output', description: "Open the folder's dev command beside the thread, in Processes.",
       expose: ['ui', 'cli'], thread: true, params: obj({ thread: opt(str()) }),
       run: async ({ thread }) => {
-        if (!thread) throw new RpcError('invalid_params', 'Say which thread (--thread).')
+        if (!thread) throw new RpcError('invalid', 'Say which thread (--thread).')
         const folder = await folderOf({ thread })
         await ensure(folder)
         const known = await processOf(folder)
@@ -147,8 +179,8 @@ export default defineDaemonExtension({
     void superego.threads.list().then((threads) => { for (const folder of folders(threads)) resync(folder) },
       (error: Error) => console.error(`run: couldn't list threads: ${error.message}`))
     superego.thread({
-      started(thread) { resync(thread.cwd) },
-      turnStart(thread) { resync(thread.cwd) },
+      started(thread) { resync(thread.cwd, thread.id) },
+      turnStart(thread) { resync(thread.cwd, thread.id) },
     })
 
     return () => { for (const { watcher } of watching.values()) watcher.close() }

@@ -55,7 +55,9 @@
 .processes-bar__cwd { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left; font-family: var(--superego-mono); font-size: var(--superego-text-xs); color: var(--superego-muted); }
 .processes-bar__buttons { flex: none; margin-left: auto; display: inline-flex; gap: 6px; }
 .processes-bar__buttons button { display: inline-flex; align-items: center; gap: 5px; }
-.processes-problem { margin: 0 12px 6px; font-size: var(--superego-text-sm); color: var(--processes-red); }
+.processes-problem { margin: 0 12px 6px; font-size: var(--superego-text-sm); color: var(--processes-red); display: flex; align-items: flex-start; gap: 6px; }
+.processes-problem > span { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.processes-problems { flex: none; padding-top: 6px; }
 
 .processes-output-wrap { position: relative; flex: 1 1 auto; min-height: 0; display: flex; }
 .processes-output { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 4px 12px 24px; font-family: var(--superego-mono);

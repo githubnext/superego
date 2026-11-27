@@ -41,7 +41,7 @@ export type Resume = {
 }
 
 /** What a terminal asks of the machine about the processes in it: the daemon's process table, or a test's. */
-export type Processes = ProcessTable
+export type Processes = Pick<ProcessTable, 'info' | 'cwd'>
 
 /** What OSC 7577 says to a terminal: a program's report verified, its owner, and what it asks. */
 export type Report =

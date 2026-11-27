@@ -3,7 +3,7 @@
 // shaped like Changes: the list on top, the selected one's output below (live, in colour, following the end until
 // scrolled up). A report when one wakes the thread is a card with its last lines (a notice of kind `processes.report`,
 // its Restart under it); `process:<id>` links open it in the pane; the process_* tools have rows.
-import { memo, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { memo, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type CSSProperties, type ReactNode } from 'react'
 import {
   call, defineUiExtension, factsOf, HeaderChip, PaneMessage, ThreadBadge, ThreadMenuItem, useDispatch, useValue,
   type EntryProps, type MachineEntry, type PaneProps, type SlotProps, type ThreadInfo,
@@ -14,7 +14,7 @@ import {
 import './styles.css'
 import { parseLine, type Run, type Style } from './ansi.ts'
 import {
-  about, ended, endedHow, LIST, live, OUTPUT, PANE, READ, REPORT, SCHEME, span, titleOf,
+  about, ended, endedHow, LIST, live, OUTPUT, PANE, READ, REPORT, SCHEME, span, titleOf, TROUBLE,
   type OutputMark, type OutputSlice, type ProcessFacts, type ProcessInfo, type ReportData,
 } from './shared.ts'
 
@@ -49,10 +49,57 @@ export default defineUiExtension({
 
 const useList = (machine: MachineEntry, thread: ThreadInfo) => useValue<ProcessInfo[]>(machine, LIST, { scope: thread.id }) ?? undefined
 
-function useAct(machine: MachineEntry) {
+// What an action pressed in this window last failed with, by machine: shown in the pane until dismissed.
+const failures = new Map<string, string>()
+const failureListeners = new Set<() => void>()
+function setFailure(machine: string, message: string | undefined) {
+  if (message === undefined) failures.delete(machine)
+  else failures.set(machine, message)
+  for (const listener of failureListeners) listener()
+}
+const useFailure = (machine: string) => useSyncExternalStore((change) => {
+  failureListeners.add(change)
+  return () => { failureListeners.delete(change) }
+}, () => failures.get(machine))
+
+const DOING: Record<string, string> = {
+  'processes.restart': 'start it', 'processes.stop': 'stop it', 'processes.remove': 'remove it', 'processes.seen': 'mark it seen', 'pane.open': 'show it',
+}
+
+/**
+ * Dispatch an action of the pane's, the chip's or a report's: a failure is said in the pane, which `reveal` (a thread,
+ * where the pane isn't open: the chip's menu) opens to say it.
+ */
+function useAct(machine: MachineEntry, reveal?: string) {
   const dispatch = useDispatch()
-  return (id: string, params: Record<string, unknown>) =>
-    void dispatch(id, params, { machine: machine.id, source: about.name }).catch((error: Error) => console.error(`processes: ${id}: ${error.message}`))
+  const act = (id: string, params: Record<string, unknown>): void => void dispatch(id, params, { machine: machine.id, source: about.name }).then(
+    () => setFailure(machine.id, undefined),
+    (error: Error) => {
+      console.error(`processes: ${id}: ${error.message}`)
+      setFailure(machine.id, `Couldn’t ${DOING[id] ?? id}: ${error.message}`)
+      if (reveal && id !== 'pane.open') act('pane.open', { thread: reveal, kind: PANE })
+    },
+  )
+  return act
+}
+
+/** What went wrong: Processes' own trouble on the machine, and what this window last asked that failed; each dismissable. */
+function Problems({ machine, act }: { machine: MachineEntry; act: ReturnType<typeof useAct> }) {
+  const trouble = useValue<string | null>(machine, TROUBLE)
+  const failure = useFailure(machine.id)
+  if (!trouble && !failure) return null
+  return (
+    <div className="processes-problems">
+      {[[trouble, () => act('processes.dismiss', {})] as const, [failure, () => setFailure(machine.id, undefined)] as const]
+        .filter(([text]) => text)
+        .map(([text, dismiss], i) => (
+          <div key={i} className="processes-problem" role="alert">
+            <span>{text}</span>
+            <IconButton label="Dismiss" onClick={dismiss}><XIcon size={12} aria-hidden /></IconButton>
+          </div>
+        ))}
+    </div>
+  )
 }
 
 /** Seconds since, ticking while it's shown. */
@@ -110,7 +157,7 @@ function chipOf(list: ProcessInfo[]): { state: string; label: string } | undefin
 
 function ProcessesChip({ machine, thread }: SlotProps['header.chips']) {
   const list = useList(machine, thread)
-  const act = useAct(machine)
+  const act = useAct(machine, thread.id)
   const chip = list && chipOf(list)
   if (!list || !chip) return null
   const show = (id?: string) => act('pane.open', { thread: thread.id, kind: PANE, ...(id ? { params: { id } } : {}) })
@@ -156,7 +203,7 @@ function ProcessesPane({ machine, thread, pane }: PaneProps) {
   const asked = (pane.params as { id?: string } | undefined)?.id
   if (machine.state !== 'connected') return <PaneMessage>{machine.label} is offline.</PaneMessage>
   if (!list) return <PaneMessage>Loading…</PaneMessage>
-  if (!list.length) return <PaneMessage>No processes. An agent starts one with process_start; a folder’s dev command comes from its .superego/run.json.</PaneMessage>
+  if (!list.length) return <><Problems machine={machine} act={act} /><PaneMessage>No processes. An agent starts one with process_start; a folder’s dev command comes from its .superego/run.json.</PaneMessage></>
   const selected = list.find((p) => p.id === asked) ?? list.find((p) => p.state === 'failed' && !p.seen) ?? list.find((p) => live(p.state)) ?? list[0]!
   const pick = (id: string) => act('pane.update', { thread: thread.id, pane: pane.id, params: { id } })
   // Scope headings only once a folder's process is among them.
@@ -169,6 +216,7 @@ function ProcessesPane({ machine, thread, pane }: PaneProps) {
     : [{ items: list }]
   return (
     <div className="processes-pane">
+      <Problems machine={machine} act={act} />
       <div className="processes-list" role="listbox" aria-label="Processes">
         {groups.map((group, i) => (
           <div key={i} className="processes-group">
@@ -225,7 +273,7 @@ function Selected({ machine, p, act }: { machine: MachineEntry; p: ProcessInfo; 
             : p.state !== 'idle' && <Button onClick={() => act('processes.remove', { id: p.id })}>Remove</Button>}
         </span>
       </div>
-      {p.error && ended(p.state) && p.state !== 'lost' && p.exitCode === undefined && <div className="processes-problem" role="alert">{p.error}</div>}
+      {p.error && ended(p.state) && p.state !== 'lost' && p.exitCode === undefined && <div className="processes-problem" role="alert"><span>{p.error}</span></div>}
       <Output machine={machine} p={p} />
     </div>
   )

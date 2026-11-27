@@ -15,6 +15,9 @@ export const LIST = 'processes.list'
 /** Where a process's output stands, scoped by its id: `OutputMark`. Changes as output arrives (at most every 100ms). */
 export const OUTPUT = 'processes.output'
 
+/** What last went wrong that no action's caller heard of (a save, reading output, taking processes back), or null. */
+export const TROUBLE = 'processes.trouble'
+
 /** Its output, from a position: `processes.read`. */
 export const READ = 'processes.read'
 

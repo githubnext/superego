@@ -1,10 +1,12 @@
-// The processes of a machine: their records (`processes.json` in the extension's folder, written whole on each change),
-// starting and stopping them, following their output (the log each writes, tailed: for ready text, waiters and the
-// live mark), and taking them back after the daemon restarts (`adopt`): still running, ended while it was away (its
-// exit file says how), or gone with a restart of the machine (`lost`; started again if it's `keep`).
+// The processes of a machine: their records (`processes.json` in the extension's folder, written whole on each change,
+// and each run's own in its folder, `record.json`, to find them by if `processes.json` is lost), starting and stopping
+// them, following their output (the log each writes, tailed: for ready text, waiters and the live mark), and taking
+// them back after the daemon restarts (`adopt`): still running, ended while it was away (its exit file says how), or
+// gone with a restart of the machine or the end of the user's session (`lost`, not reported; started again if it's
+// `keep`).
 import { randomBytes } from 'node:crypto'
 import { watch, type FSWatcher } from 'node:fs'
-import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
+import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { StringDecoder } from 'node:string_decoder'
 import { adoptGroup, processTable, type ProcessTable } from '@superego/daemon/sdk'
@@ -24,6 +26,11 @@ export type ProcessRecord = ProcessInfo & {
   createdAt: number
   /** The thread learnt how it ended (process_wait or process_logs after): no report needed. */
   learnt?: boolean
+  /** The machine's boot its current (or last) run started in (`processTable.boot`): after another, it's gone. */
+  boot?: string
+  /** `restart: 'on-failure'`: when it's due to start again, and when it failed lately (it's given up on after too many). */
+  retryAt?: number
+  failures?: number[]
 }
 
 /** What a start or a definition says (and `define` keeps for the next start). */
@@ -40,6 +47,9 @@ export type ProcessSpec = {
   keep?: boolean
   by?: ProcessInfo['by']
 }
+
+/** Each run's copy of its record, in its folder. */
+const RECORD = 'record.json'
 
 /** What happens as it runs, for those waiting on it: output arriving, or its state changing. */
 export type ProcessEvent = { text?: string; state?: ProcessState }
@@ -63,6 +73,16 @@ const POLL = 1000
 const READY_WINDOW = 8192
 /** `restart: 'on-failure'`: given up after this many failures in this long. */
 const GIVE_UP = { failures: 5, within: 120_000 }
+/**
+ * An end by SIGTERM or SIGHUP (as the machine shuts down or the user logs out) is recorded this long after: if the
+ * daemon is stopping too meanwhile, it's left for the next daemon to find (`lost`), not reported as a failure.
+ */
+export const SETTLE = 3000
+/** Exit statuses of a shell whose command SIGHUP, SIGINT or SIGTERM ended. */
+const ENDED_BY_SESSION = new Set([129, 130, 143])
+const sessionEnd = (code: number | null | undefined, signal?: string | null) =>
+  (code !== undefined && code !== null && ENDED_BY_SESSION.has(code)) || signal === 'SIGTERM' || signal === 'SIGHUP' || signal === 'SIGINT'
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
 const sameOwner = (a: Owner, b: Owner) => JSON.stringify(a) === JSON.stringify(b)
 export const newId = () => `p_${randomBytes(4).toString('hex')}`
@@ -74,13 +94,12 @@ const line = (text: string) => `\u001b[2m── ${text} ──\u001b[0m\n`
 /** What follows a live process: its group, its log's tail, those waiting on it. */
 type Live = {
   generation: number
-  group?: { stop(): Promise<unknown> }
+  group?: { stop(): Promise<unknown>; release?(): void }
   /** Resolves once the run it's for has been recorded as ended. */
   finished?: Promise<void>
   tail?: Tail
   /** A restart's backoff timer (`on-failure`). */
   timer?: ReturnType<typeof setTimeout>
-  failures: number[]
   /** One change at a time: starts, stops and restarts of it queue. */
   queue: Promise<unknown>
 }
@@ -144,6 +163,10 @@ export class Runner {
   private readonly listeners = new Map<string, Set<(event: ProcessEvent) => void>>()
   private saving: Promise<void> = Promise.resolve()
   private closed = false
+  /** Which boot of the machine this is: asked once. */
+  private boot: Promise<string | undefined> | undefined
+  /** The records were read (or there were none): until then, writing them would lose what's in the file. */
+  private loaded = false
   readonly dir: string
   private readonly host: RunnerHost
   private readonly processes: ProcessTable
@@ -160,19 +183,73 @@ export class Runner {
   folderOf(id: string) { return join(this.dir, id) }
   logOf(record: ProcessRecord) { return new OutputLog(this.folderOf(record.id), record.base) }
 
-  /** Read the records kept. */
+  private bootNow() { return this.boot ??= this.processes.boot() }
+
+  /**
+   * Read the records kept. A `processes.json` that can't be read as one is put aside (`processes.json.bad-<time>`), said
+   * (`host.error`), and the records found again from each run's own (`<id>/record.json`), so what runs isn't lost track of.
+   */
   async load() {
     const text = await readFile(this.file, 'utf8').catch((error: NodeJS.ErrnoException) => {
       if (error.code === 'ENOENT') return undefined
       throw error
     })
-    if (text === undefined) return
-    const data = JSON.parse(text) as { processes?: ProcessRecord[] }
-    for (const record of data.processes ?? []) this.records.set(record.id, record)
+    if (text === undefined) { this.loaded = true; return }
+    let data: { processes?: unknown }
+    try {
+      data = JSON.parse(text) as typeof data
+      if (!data || typeof data !== 'object' || !Array.isArray(data.processes)) throw new Error('it has no list of processes')
+    } catch (error) {
+      const aside = `${this.file}.bad-${Date.now()}`
+      await rename(this.file, aside)
+      const found = await this.rebuild()
+      this.loaded = true
+      this.host.error(`processes.json couldn't be read (kept as ${aside}); found ${found} process${found === 1 ? '' : 'es'} again from their folders`, error)
+      await this.save()
+      return
+    }
+    for (const record of data.processes as ProcessRecord[]) this.records.set(record.id, record)
+    this.loaded = true
+  }
+
+  /** The records each run left in its folder: how many were found. What ended is taken as reported (none can say). */
+  private async rebuild(): Promise<number> {
+    const names = await readdir(this.dir).catch((error: NodeJS.ErrnoException) => {
+      if (error.code === 'ENOENT') return [] as string[]
+      throw error
+    })
+    for (const name of names.filter((n) => /^p_[0-9a-f]+$/.test(n))) {
+      let record: ProcessRecord
+      try {
+        record = JSON.parse(await readFile(join(this.folderOf(name), RECORD), 'utf8')) as ProcessRecord
+      } catch (error) {
+        // A run from before folders had one, or one that never started: nothing to find it by.
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') this.host.error(`couldn't read ${name}'s record`, error)
+        continue
+      }
+      if (record.id !== name) continue
+      if (!live(record.state)) record.learnt = true
+      this.records.set(record.id, record)
+    }
+    return this.records.size
+  }
+
+  /** Keep a copy of its record in its own folder: what `rebuild` finds it by. */
+  private async keep(record: ProcessRecord) {
+    const file = join(this.folderOf(record.id), RECORD)
+    const temp = `${file}.${process.pid}.tmp`
+    try {
+      await writeFile(temp, JSON.stringify(record), { mode: 0o600 })
+      await rename(temp, file)
+    } catch (error) {
+      this.host.error(`couldn't save ${record.id}'s record`, error)
+    }
   }
 
   /** Write every record, whole: one write at a time, the last always landing. */
   save(): Promise<void> {
+    // Not read (it failed, and said so): what's there stays, for the next daemon to read.
+    if (!this.loaded) return this.saving
     const text = `${JSON.stringify({ processes: [...this.records.values()] }, null, 1)}\n`
     this.saving = this.saving.then(async () => {
       await mkdir(this.dir, { recursive: true })
@@ -185,7 +262,7 @@ export class Runner {
 
   private liveOf(id: string): Live {
     let state = this.lives.get(id)
-    if (!state) this.lives.set(id, state = { generation: 0, failures: [], queue: Promise.resolve() })
+    if (!state) this.lives.set(id, state = { generation: 0, queue: Promise.resolve() })
     return state
   }
 
@@ -278,6 +355,7 @@ export class Runner {
     const record = this.get(id)
     if (live(record.state)) throw new Error(`${id} is ${record.state}: stop it first`)
     clearTimeout(this.lives.get(id)?.timer)
+    delete record.retryAt
     this.records.delete(id)
     this.lives.delete(id)
     this.listeners.delete(id)
@@ -321,8 +399,11 @@ export class Runner {
     record.run++
     if (record.run > 1) await log.note(`\n${line(`run ${record.run} · ${clock(Date.now())}`)}`)
     record.start = await log.end()
-    for (const key of ['endedAt', 'exitCode', 'signal', 'stopped', 'error', 'whileAway', 'seen', 'learnt', 'pid', 'pidStart'] as const) delete record[key]
+    for (const key of ['endedAt', 'exitCode', 'signal', 'stopped', 'error', 'whileAway', 'seen', 'learnt', 'pid', 'pidStart', 'retryAt'] as const) delete record[key]
     record.startedAt = Date.now()
+    const boot = await this.bootNow()
+    if (boot) record.boot = boot
+    else delete record.boot
     const group = await startDetached({
       dir: folder, log: log.path, command: record.command, cwd: record.cwd, env: record.env, grace: record.grace,
       ...(this.shell ? { shell: this.shell } : {}),
@@ -331,7 +412,7 @@ export class Runner {
     const pid = group.child.pid
     if (pid !== undefined) {
       record.pid = pid
-      const start = this.processes.info(pid)?.start
+      const start = (await this.processes.lookup(pid))?.start
       if (start) record.pidStart = start
     }
     record.state = pid === undefined ? 'failed' : record.ready ? 'starting' : 'running'
@@ -341,6 +422,7 @@ export class Runner {
       await this.finish(record, generation, { code, signal: exit.signal, stopped: exit.stopped, ...(exit.error ? { error: exit.error.message } : {}) })
     })
     this.touch(record)
+    await this.keep(record)
     return record
   }
 
@@ -367,6 +449,7 @@ export class Runner {
   private async halt(record: ProcessRecord) {
     const state = this.liveOf(record.id)
     clearTimeout(state.timer)
+    if (record.retryAt !== undefined) { delete record.retryAt; this.touch(record) }
     if (!live(record.state) || !state.group) return
     record.stopped = true
     record.state = 'stopping'
@@ -379,13 +462,18 @@ export class Runner {
   private async finish(record: ProcessRecord, generation: number, how: { code?: number | null; signal?: string | null; stopped: boolean; error?: string; whileAway?: boolean }) {
     const state = this.liveOf(record.id)
     if (this.closed || state.generation !== generation) return
+    const stopped = how.stopped || Boolean(record.stopped)
+    // An adopted one's code is in its exit file, if it got to write it.
+    const code = how.code !== undefined ? how.code : await this.exitCode(record)
+    // Ended as the machine shuts down or the session ends? Then the daemon is about to stop too: leave it to the next.
+    if (!stopped && !how.whileAway && sessionEnd(code, how.signal)) {
+      await sleep(SETTLE)
+      if (this.closed || state.generation !== generation) return
+    }
     await state.tail?.pull()
     state.tail?.stop()
     state.tail = undefined
     state.group = undefined
-    const stopped = how.stopped || Boolean(record.stopped)
-    // An adopted one's code is in its exit file, if it got to write it.
-    const code = how.code !== undefined ? how.code : await this.exitCode(record)
     const failed = !stopped && (how.error !== undefined || code !== 0)
     record.state = failed ? 'failed' : 'exited'
     record.endedAt = Date.now()
@@ -398,52 +486,76 @@ export class Runner {
     delete record.pidStart
     await this.logOf(record).note(line(endedHow(record))).catch((error) => this.host.error(`couldn't write ${record.id}'s output`, error))
     this.host.output(record, await this.mark(record))
-    this.touch(record)
-    if (!stopped) this.host.ended(record)
     if (failed && record.restart === 'on-failure') this.retry(record)
-  }
-
-  /** `on-failure`: start it again after a while, longer each time; given up after too many failures close together. */
-  private retry(record: ProcessRecord) {
-    const state = this.liveOf(record.id)
-    const now = Date.now()
-    state.failures = [...state.failures.filter((at) => at > now - GIVE_UP.within), now]
-    if (state.failures.length >= GIVE_UP.failures) {
-      record.error = `gave up after ${GIVE_UP.failures} failures in ${GIVE_UP.within / 60_000} minutes`
-      this.touch(record)
-      return
-    }
-    const delay = Math.min(60_000, 1000 * 2 ** (state.failures.length - 1))
-    state.timer = setTimeout(() => {
-      if (this.records.get(record.id) === record && record.state === 'failed') {
-        void this.queued(record.id, () => this.begin(record)).catch((error) => this.host.error(`couldn't restart ${record.id}`, error))
-      }
-    }, delay)
-    state.timer.unref()
-  }
-
-  /** What its exit file says: the code its last run exited with, if it got to write it. */
-  private async exitCode(record: ProcessRecord): Promise<number | null | undefined> {
-    const text = await readFile(exitFile(this.folderOf(record.id)), 'utf8').catch(() => undefined)
-    if (text === undefined) return undefined
-    const code = Number(text.trim())
-    return Number.isInteger(code) ? code : null
+    this.touch(record)
+    await this.keep(record)
+    if (!stopped) this.host.ended(record)
   }
 
   /**
+   * `on-failure`: start it again after a while, longer each time; given up after too many failures close together.
+   * When it's due is kept with it, so a daemon restart meanwhile doesn't drop it (`adopt` sets it again).
+   */
+  private retry(record: ProcessRecord) {
+    const now = Date.now()
+    record.failures = [...(record.failures ?? []).filter((at) => at > now - GIVE_UP.within), now]
+    if (record.failures.length >= GIVE_UP.failures) {
+      record.error = `gave up after ${GIVE_UP.failures} failures in ${GIVE_UP.within / 60_000} minutes`
+      delete record.retryAt
+      return
+    }
+    record.retryAt = now + Math.min(60_000, 1000 * 2 ** (record.failures.length - 1))
+    this.schedule(record)
+  }
+
+  /** Start it again once its `retryAt` comes. */
+  private schedule(record: ProcessRecord) {
+    const state = this.liveOf(record.id)
+    clearTimeout(state.timer)
+    state.timer = setTimeout(() => {
+      if (this.records.get(record.id) === record && record.state === 'failed' && record.retryAt !== undefined) {
+        void this.queued(record.id, () => this.begin(record)).catch((error) => this.host.error(`couldn't restart ${record.id}`, error))
+      }
+    }, Math.max(0, (record.retryAt ?? 0) - Date.now()))
+    state.timer.unref()
+  }
+
+  /** What its exit file says: the code its last run exited with, if it got to write it, and when it did. */
+  private async exitOf(record: ProcessRecord): Promise<{ code: number | null; at: number } | undefined> {
+    const file = exitFile(this.folderOf(record.id))
+    let text: string
+    let at: number
+    try {
+      [text, at] = await Promise.all([readFile(file, 'utf8'), stat(file).then((s) => s.mtimeMs)])
+    } catch (error) {
+      // None: it hasn't ended, or it went without writing one (killed outright, the machine restarted).
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') this.host.error(`couldn't read how ${record.id} ended`, error)
+      return undefined
+    }
+    const code = Number(text.trim())
+    return { code: Number.isInteger(code) ? code : null, at }
+  }
+  private async exitCode(record: ProcessRecord) { return (await this.exitOf(record))?.code }
+
+  /**
    * Take back what an earlier daemon left live: still running (its pid that same process), it's followed again; ended
-   * meanwhile (its exit file), it's recorded so and reported; neither, it went with a restart of the machine (`lost`),
-   * and a `keep` one is started again. Returns those started again.
+   * meanwhile (its exit file), it's recorded so and reported; started before the machine last booted, or ended by
+   * SIGTERM or SIGHUP while no daemon ran (a logout), or neither found, it went with the machine or the session
+   * (`lost`, not reported), and a `keep` one is started again. A failed `on-failure` one due to start again is set to.
+   * Returns those started again.
    */
   async adopt(): Promise<ProcessRecord[]> {
     const again: ProcessRecord[] = []
+    const boot = await this.bootNow()
     for (const record of this.records.values()) {
+      if (record.state === 'failed' && record.restart === 'on-failure' && record.retryAt !== undefined) { this.schedule(record); continue }
       if (!live(record.state)) continue
       const state = this.liveOf(record.id)
       const generation = ++state.generation
-      const there = record.pid !== undefined && record.pidStart !== undefined && this.processes.info(record.pid)?.start === record.pidStart
+      const rebooted = Boolean(boot && record.boot && record.boot !== boot)
+      const there = !rebooted && record.pid !== undefined && record.pidStart !== undefined && (await this.processes.lookup(record.pid))?.start === record.pidStart
       if (there) {
-        const group = adoptGroup(record.pid!, { grace: record.grace })
+        const group = adoptGroup(record.pid!, { grace: record.grace, start: record.pidStart! })
         state.group = group
         // Starting still: its ready text is looked for from its run's start.
         this.follow(record, record.state === 'starting' ? record.start : await this.logOf(record).end())
@@ -451,14 +563,16 @@ export class Runner {
         if (record.state === 'stopping') void this.queued(record.id, () => this.halt(record))
         continue
       }
-      const code = await this.exitCode(record)
-      if (code !== undefined) {
-        await this.finish(record, generation, { code, stopped: record.state === 'stopping', whileAway: true })
+      const exit = rebooted ? undefined : await this.exitOf(record)
+      // Ended by SIGTERM, SIGHUP or SIGINT while no daemon ran: sent to all as the session ended (a logout), not a failure.
+      const withSession = exit && sessionEnd(exit.code)
+      if (exit && !withSession) {
+        await this.finish(record, generation, { code: exit.code, stopped: record.state === 'stopping', whileAway: true })
         continue
       }
       record.state = 'lost'
-      record.endedAt = Date.now()
-      record.error = 'stopped by a restart of the machine'
+      record.endedAt = exit?.at ?? Date.now()
+      record.error = rebooted || !exit ? 'stopped by a restart of the machine' : 'stopped as the session ended'
       delete record.pid
       delete record.pidStart
       await this.logOf(record).note(line('gone with a restart')).catch((error) => this.host.error(`couldn't write ${record.id}'s output`, error))
@@ -482,6 +596,7 @@ export class Runner {
     this.closed = true
     for (const state of this.lives.values()) {
       state.tail?.stop()
+      state.group?.release?.()
       clearTimeout(state.timer)
     }
     return this.saving

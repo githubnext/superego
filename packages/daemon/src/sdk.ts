@@ -19,7 +19,7 @@ export { defineExtension, defineTool, GenerationTask, hook, section, wrapSection
 export type { Extension as AgentExtension } from '@earendil-works/pi-durable'
 export { arr, blockErrors, bool, int, lit, mentionHref, mentionRef, nullable, num, obj, opt, RpcError, str, union, unknown } from '@superego/protocol'
 export { adoptGroup, processTable, spawnGroup } from './process-group.ts'
-export type { AdoptedGroup, GroupExit, ProcessTable, SpawnedGroup, SpawnGroupOptions } from './process-group.ts'
+export type { AdoptedExit, AdoptedGroup, GroupExit, ProcessEntry, ProcessTable, SpawnedGroup, SpawnGroupOptions } from './process-group.ts'
 export type {
   Teardown, TeardownReason, ActionDef, ActionInfo, AuthEvent, AuthPrompt, DataIcon, DataPlace, DataView, ExtensionAbout, Exposure, Json, JsonSchema, MachineEntry, MessageOrigin, Note, NoticeAction, Static, ThreadInfo,
   Block, BlocksUse, Button, ListItem, Value,

@@ -5,7 +5,7 @@
 import { afterEach, expect, it } from 'vitest'
 import { fakeMachine, mountUi, testThread, type TestWindow } from '@superego/sdk/testing'
 import processes from '../src/ui.tsx'
-import { LIST, OUTPUT, PANE, READ, REPORT, type ProcessInfo } from '../src/shared.ts'
+import { LIST, OUTPUT, PANE, READ, REPORT, TROUBLE, type ProcessInfo } from '../src/shared.ts'
 
 let ui: TestWindow | undefined
 afterEach(async () => { await ui?.unmount(); ui = undefined })
@@ -59,4 +59,25 @@ it('keeps to one process’s list without headings, and draws a report as a card
   await ui.until(() => pane.text().includes('pnpm build'), 'the list')
   expect(pane.container.querySelector('.processes-group__title')).toBeNull()
   expect(ui.registry.entries.some((e) => e.kind === REPORT)).toBe(true)
+})
+
+it('says what went wrong in the pane: Processes’ own trouble, and an action that failed', async () => {
+  const fake = fakeMachine({
+    threads: [thread], extensions: ['processes'],
+    values: { [LIST]: { t1: [test] }, [TROUBLE]: "couldn't save its processes: EACCES" },
+    methods: {
+      [READ]: () => ({ text: '', from: 0, end: 0, start: 0, first: 0 }),
+      'processes.stop': () => { throw new Error('No process p_test.') },
+      'processes.dismiss': () => null,
+    },
+  })
+  ui = await mountUi({ extensions: [processes], machines: [fake] })
+  const pane = await ui.render({ pane: { kind: PANE }, thread: 't1' })
+  await ui.until(() => pane.text().includes("couldn't save its processes: EACCES"), 'the trouble')
+  const stop = [...pane.container.querySelectorAll('button')].find((b) => b.textContent === 'Stop')!
+  stop.click()
+  await ui.until(() => pane.text().includes('Couldn’t stop it: No process p_test.'), 'the failure')
+  const dismiss = pane.container.querySelector<HTMLButtonElement>('.processes-problem button[aria-label="Dismiss"]')!
+  dismiss.click()
+  await ui.until(() => fake.calls.some((c) => c.method === 'action.run' && c.params.id === 'processes.dismiss'), 'dismissed')
 })

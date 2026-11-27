@@ -20,14 +20,11 @@
 - **Schedules.** Ask an agent to check something every 30 minutes, or to remind you tomorrow at 9: it wakes the
   thread or just reminds you then. A clock in the title bar and on the thread's row shows the next run, to run, pause,
   edit or cancel it; `/schedule in 30m check the deploy` makes one too.
-- **Processes.** Agents run servers, watchers and long builds as processes of their thread (`process_start`), not with
-  `&`: they keep running through Superego's updates and restarts, and the thread is woken with the last lines when a
-  build ends or a server fails, with Restart. A chip in the title bar says how they stand (`● Failed · 3`) and opens
-  the Processes pane: each process, and the selected one's output, live and in colour. A thread's row is marked while
-  one runs or failed. Archiving a thread stops its processes. It's the new Processes extension, which Settings →
-  Extensions can turn off.
-- A folder's dev command (`.superego/run.json`, `⌃R`) is one of these processes: it keeps running through Superego's
-  updates, starts again after the computer restarts if it was running, and wakes the thread working there if it dies.
+- **Processes.** Agents run servers and long builds that keep running through Superego's restarts, and are woken
+  when one ends or fails; the Processes pane shows them. It's the new Processes extension, which Settings → Extensions
+  can turn off.
+- A folder's dev command (`.superego/run.json`, `⌃R`) is one of these processes: it starts again after the computer
+  restarts if it was running, and wakes the thread working there if it fails.
 - **The rail picks the whole window.** A rail button (Threads, Notes, Staff…) changes the sidebar and the main area
   together, and comes back to what you last had there; only one is lit. A project's spaces open from their rows in
   Threads, no longer from rail buttons of their own. Files and Skills go beside the thread or in a pane, not the sidebar.
@@ -46,11 +43,11 @@
   rows of the thread's sheet on a phone.
 - New for extensions (extension API 5.17): a sidebar mark (`ThreadBadge`) can say how a thread's card spells it out
   (`spelled`).
-- New for extensions (extension API 5.18): the Processes extension's actions (`processes.start`, `define`, `restart`,
-  `stop`, `remove`) and methods (`processes.list`, `read`, `wait`) run a command as a thread's, a folder's or the
-  machine's process; `spawnGroup`'s `outlive` and `adoptGroup` keep one of your own through a daemon restart;
-  `superego.signal.reason.why` says why an extension is torn down; a notice with `wake: true` starts the agent's run
-  on it.
+- New for extensions (extension API 5.18): run a command as a thread's, a folder's or the machine's process with the
+  Processes extension's actions and methods (`processes.start`, `processes.wait`, …; see the skill's daemon page);
+  keep a process group of your own through a daemon restart with `spawnGroup`'s `outlive`, `adoptGroup` and
+  `processTable`; `superego.signal.reason.why` says why an extension is torn down; a notice with `wake: true` starts
+  the agent's run on it.
 - New for extensions (extension API 5.20): `superego.toolCalls` hears a Claude Agent thread's calls, Claude Code's own
   too (its Bash as `bash`); an agent kind reports its own agent's calls with `superego.reportToolCall`.
 - New for extensions (extension API 5.14): `superego.codeBlock(languages, component)` draws fenced code blocks of a

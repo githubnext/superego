@@ -2,7 +2,7 @@
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { adoptGroup, processTable, spawnGroup } from '../src/process-group.ts'
 
 /** Whether a process is still there (as superego/testing's `isRunning`). */
@@ -89,5 +89,40 @@ describe.skipIf(process.platform === 'win32')('outliving the daemon', () => {
     const adopted = adoptGroup(run.child.pid!, { poll: 20 })
     expect(await adopted.exited).toEqual({ stopped: false })
     expect(isRunning(sleeper)).toBe(false)
+  })
+
+  it('lets an adopted group go on running when released', async () => {
+    const run = spawnGroup('bash', ['-c', 'sleep 30'], { cwd: dir, stdio: 'ignore', outlive: true })
+    const leader = run.child.pid!
+    const adopted = adoptGroup(leader, { poll: 20 })
+    adopted.release()
+    expect(await adopted.exited).toEqual({ stopped: false, released: true })
+    expect(isRunning(leader)).toBe(true)
+    await run.stop()
+  })
+
+  it("lets a pid that's another process's now go, without signalling it", async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    try {
+      const run = spawnGroup('bash', ['-c', 'sleep 30'], { cwd: dir, stdio: 'ignore', outlive: true })
+      const leader = run.child.pid!
+      const adopted = adoptGroup(leader, { poll: 20, start: 'a process started before' })
+      vi.advanceTimersByTime(20_000)
+      expect(await adopted.exited).toEqual({ stopped: false })
+      expect(isRunning(leader)).toBe(true)
+      await run.stop()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('says when a process started without blocking, and which boot this is', async () => {
+    const run = spawnGroup('bash', ['-c', 'sleep 30'], { cwd: dir, stdio: 'ignore' })
+    const pid = run.child.pid!
+    expect(await processTable.lookup(pid)).toEqual(processTable.info(pid))
+    expect(await processTable.boot()).toMatch(/\S/)
+    expect(await processTable.boot()).toBe(await processTable.boot())
+    await run.stop()
+    expect(await processTable.lookup(pid)).toBeUndefined()
   })
 })
